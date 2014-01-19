@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="linux" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Option virtualFolders="src/;src/core/;src/core/GIF/;" />
+		<Build>
+			<Target title="Release">
+				<Option output="../linux-gtk" prefix_auto="1" extension_auto="1" />
+				<Option working_dir=".." />
+				<Option object_output=".obj/" />
+				<Option type="0" />
+				<Option compiler="gcc" />
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-fexpensive-optimizations" />
+			<Add option="-O2" />
+			<Add option="-Wall" />
+			<Add option="`pkg-config gtk+-2.0 --cflags`" />
+		</Compiler>
+		<Linker>
+			<Add option="-s" />
+			<Add option="`pkg-config gtk+-2.0 --libs`" />
+		</Linker>
+		<Unit filename="../../../../../programs/gif_load_univ/GIF/common.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src/core/GIF/" />
+		</Unit>
+		<Unit filename="../../../../../programs/gif_load_univ/GIF/common.h">
+			<Option virtualFolder="src/core/GIF/" />
+		</Unit>
+		<Unit filename="../../../../../programs/gif_load_univ/GIF/gifstd.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src/core/GIF/" />
+		</Unit>
+		<Unit filename="../../../../../programs/gif_load_univ/GIF/gifstd.h">
+			<Option virtualFolder="src/core/GIF/" />
+		</Unit>
+		<Unit filename="../core/core.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src/core/" />
+		</Unit>
+		<Unit filename="../core/core.h">
+			<Option virtualFolder="src/core/" />
+		</Unit>
+		<Unit filename="main.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src/" />
+		</Unit>
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<lib_finder disable_auto="1" />
+			<debugger />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

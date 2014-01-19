@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="engine" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Option virtualFolders="src\;src\core\;src\core\GIF\;src\rsrc\;" />
+		<Build>
+			<Target title="Release">
+				<Option output="..\win32" prefix_auto="1" extension_auto="1" />
+				<Option working_dir=".." />
+				<Option object_output=".obj\" />
+				<Option type="0" />
+				<Option compiler="gcc" />
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-fexpensive-optimizations" />
+			<Add option="-Os" />
+			<Add option="-O2" />
+			<Add option="-Wall" />
+		</Compiler>
+		<Linker>
+			<Add option="-s" />
+			<Add library="gdi32" />
+			<Add library="user32" />
+			<Add library="kernel32" />
+			<Add library="comctl32" />
+			<Add library="winmm" />
+		</Linker>
+		<Unit filename="..\core\GIF\common.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src\core\GIF\" />
+		</Unit>
+		<Unit filename="..\core\GIF\common.h">
+			<Option virtualFolder="src\core\GIF\" />
+		</Unit>
+		<Unit filename="..\core\GIF\gifstd.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src\core\GIF\" />
+		</Unit>
+		<Unit filename="..\core\GIF\gifstd.h">
+			<Option virtualFolder="src\core\GIF\" />
+		</Unit>
+		<Unit filename="..\core\core.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src\core\" />
+		</Unit>
+		<Unit filename="..\core\core.h">
+			<Option virtualFolder="src\core\" />
+		</Unit>
+		<Unit filename="main.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src\" />
+		</Unit>
+		<Unit filename="rsrc\rsrc.h">
+			<Option virtualFolder="src\rsrc\" />
+		</Unit>
+		<Unit filename="rsrc\rsrc.rc">
+			<Option compilerVar="WINDRES" />
+			<Option virtualFolder="src\rsrc\" />
+		</Unit>
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<debugger />
+			<lib_finder disable_auto="1" />
+			<DoxyBlocks>
+				<comment_style block="0" line="0" />
+				<doxyfile_project />
+				<doxyfile_build />
+				<doxyfile_warnings />
+				<doxyfile_output />
+				<doxyfile_dot />
+				<general />
+			</DoxyBlocks>
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>
