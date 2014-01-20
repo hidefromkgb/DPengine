@@ -182,7 +182,8 @@ int DecodeFrame(uint8_t **buff, FGRH *fgrh, RGBX *cpal, int cclr, BGRA *bptr) {
                     bptr += (prev = code[iter].size);
                     while (!0) {
                         *bptr-- = code[iter].pixl;
-                        if (!code[iter].size) break;
+                        if (!code[iter].size)
+                            break;
                         iter = code[iter].prev;
                     }
                     bptr += prev + 2;

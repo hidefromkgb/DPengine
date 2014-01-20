@@ -1,0 +1,11 @@
+# Binaries
+win32.exe
+linux-gtk
+
+# Code::Blocks service files
+*.layout
+*.depend
+.obj
+
+# Win32-specific
+Thumbs.db

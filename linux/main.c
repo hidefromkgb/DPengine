@@ -67,8 +67,7 @@ gboolean DrawFunc(gpointer user) {
         cairo_paint(draw);
         cairo_destroy(draw);
         BlendPixStdThrd(head, tmrf->pict, &tmrf->ytmp);
-        gtk_widget_queue_draw(tmrf->gwnd);
-        gdk_window_process_updates(tmrf->gwnd->window, FALSE);
+        gdk_window_invalidate_rect(tmrf->gwnd->window, NULL, FALSE);
         tmrf->fram++;
         return TRUE;
     }
@@ -209,12 +208,12 @@ int main(int argc, char *argv[]) {
                      G_CALLBACK(MouseButton), NULL);
     g_signal_connect(G_OBJECT(gwnd), "motion-notify-event",
                      G_CALLBACK(MouseMove), NULL);
-    gtk_widget_set_events (gwnd, gtk_widget_get_events(gwnd) |
-                                 GDK_KEY_PRESS_MASK          |
-                                 GDK_BUTTON_PRESS_MASK       |
-                                 GDK_BUTTON_RELEASE_MASK     |
-                                 GDK_POINTER_MOTION_MASK     |
-                                 GDK_POINTER_MOTION_HINT_MASK);
+    gtk_widget_set_events(gwnd, gtk_widget_get_events(gwnd) |
+                                GDK_KEY_PRESS_MASK          |
+                                GDK_BUTTON_PRESS_MASK       |
+                                GDK_BUTTON_RELEASE_MASK     |
+                                GDK_POINTER_MOTION_MASK     |
+                                GDK_POINTER_MOTION_HINT_MASK);
     loop = (VEC2){0, TRUE};
     tail = malloc(sizeof(*tail));
     tail->prev = NULL;
@@ -269,7 +268,7 @@ int main(int argc, char *argv[]) {
 
         TimeFunc(&msec);
         mtmp = msec - mtmp;
-        printf("\nLoading complete: %u objects, %u ms [%0.3f ms/obj]\n\n",
+        printf("\nLoading complete: %ld objects, %u ms [%0.3f ms/obj]\n\n",
                loop.x, mtmp, (float)mtmp / (float)loop.x);
 
         tmrf = (TMRF){&msec, 0, surf, gwnd, tail,

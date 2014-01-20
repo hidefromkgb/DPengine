@@ -1,4 +1,6 @@
-#include "GIF/gifstd.h"
+#include "gif/gifstd.h"
+
+#define EMP_PICK (INST*)1
 
 
 
@@ -19,8 +21,6 @@ typedef struct _INST {
     struct _INST *prev, *next;
     void *user;
 } INST;
-
-#define EMP_PICK (INST*)1
 
 
 

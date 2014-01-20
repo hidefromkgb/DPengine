@@ -64,7 +64,7 @@ typedef union _BGRA {
     Initial reader. Returns raw GIF data (beginning with main header) if the
     stream is loaded, NULL otherwise. Can be left NULL if the implementation
     does not support anything else except file reading (which may be reading
-    from resources or from raw byte streams).
+    from resources or from raw byte streams or [insert I/O method here]).
     _________________________________________________________________________
     INPT: may be anything, from simple CHAR* to a complex structure of custom
           design, or even a single identifier. Anything that fits in VOID* :)
