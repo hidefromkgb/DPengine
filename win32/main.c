@@ -16,20 +16,22 @@
 
 typedef struct _TTMR {
     HANDLE quit;
-    UINT time;
+    ulong time;
 } TTMR;
 
 typedef struct _THRD {
-    INST *head;
-    PICT *draw;
-    VEC2  vect;
+    union {
+        FILL fill;
+        DRAW draw;
+    } pass;
+    int quit;
     HANDLE evti, *evto;
-    int (*func)(INST*, PICT*, VEC2*);
+    int (*func)(void*, int);
 } THRD;
 
 
 
-INST *pick = NULL;
+UNIT *pick = NULL;
 VEC2 cptr = {};
 UINT fcnt = 0;
 
@@ -54,7 +56,7 @@ DWORD CALLBACK ThrdFunc(LPVOID data) {
     do {
         WaitForSingleObject(data->evti, INFINITE);
         ResetEvent(data->evti);
-        loop = ((THRD*)data)->func(data->head, data->draw, &data->vect);
+        loop = data->func(&data->pass, data->quit);
         SetEvent(*data->evto);
     } while (loop);
     return TRUE;
@@ -141,24 +143,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
 
 
-/** List of sprites to remain unscaled. Just a stub, since the scale has to be
-    read from configs. The reason for not downscaling is given in parentheses.
- **/
-char *del_me_plz[] = {
-    "\\Angel\\",                         /// (downscale is his natural size)
-    "\\Parasprite\\",                    /// [same as above]
-    "\\random-pony.gif",                 /// (question mark)
-    "\\tree.gif",                        /// Applejack`s apple tree (appples)
-    "\\apple_drop.gif",                  /// [same as above]
-    "\\lemon_hearts_sweeping_right.gif", /// (broom)
-    "\\Ruby Pinch\\",                    /// (cutie mark)
-    "\\scoot_right.gif",                 /// Skating Scootaloo (wheels)
-    "\\Sparkler\\",                      /// (cutie mark again)
-    "\\stage.gif",                       /// Trixie`s stage (many details)
-    "\\balloon_right.gif",               /// Twilight`s balloon [same as above]
-    NULL
-};
-
 int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW, WindowProc,
                        0, 0, inst, LoadIcon(inst, MAKEINTRESOURCE(ICN_MAIN)),
@@ -174,15 +158,14 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     TTMR ttmr = {};
     MSG pmsg = {};
 
-    INST *tail, *iter;
+    UNIT *tail, *iter;
+    ULIB *ulib;
     THRD *thrd;
 
-    char path[MAX_PATH];
-    WIN32_FIND_DATA fdir, fgif;
-    HANDLE hdir, hgif, hwnd, *evto;
+    WIN32_FIND_DATA fdir;
+    HANDLE hdir, hwnd, *evto;
     UINT time, indx, nlim, ncpu;
     RECT scrr;
-    SIZE scrn;
 
     HBITMAP hdib;
     PICT draw;
@@ -197,73 +180,46 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         GetLocalTime(&init);
         seed = (init.wMilliseconds ^ init.wHour)
              + (init.wSecond ^ init.wMinute) * 0x10000;
-        scrn.cx = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-        scrn.cy = GetSystemMetrics(SM_CYVIRTUALSCREEN) - 1;
+        draw.size.x = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        draw.size.y = GetSystemMetrics(SM_CYVIRTUALSCREEN) - 1;
 
         time = timeGetTime();
         GetSystemInfo(&syin);
         ncpu = min(MAXIMUM_WAIT_OBJECTS, max(1, syin.dwNumberOfProcessors));
+
+        ncpu = 1; /// DEL ME
+
         evto = LocalAlloc(LMEM_FIXED, ncpu * sizeof(*evto));
         thrd = LocalAlloc(LMEM_FIXED, ncpu * sizeof(*thrd));
         for (indx = 0; indx < ncpu; indx++) {
             evto[indx] = CreateEvent(NULL, FALSE, TRUE, NULL);
             thrd[indx].evto = &evto[indx];
             thrd[indx].evti = CreateEvent(NULL, FALSE, FALSE, NULL);
-            thrd[indx].vect = (VEC2){0, TRUE};
-            thrd[indx].func = MakeAnimStdThrd;
+            thrd[indx].quit = FALSE;
+            thrd[indx].func = FillLibStdThrd;
+            thrd[indx].pass.fill.scrn = draw.size;
+            thrd[indx].pass.fill.load = 0;
             CreateThread(NULL, 0, ThrdFunc, &thrd[indx], 0, NULL);
         }
         indx = 0;
         if (!--nlim)
             nlim = (UINT)-1;
-        tail = LocalAlloc(LMEM_FIXED, sizeof(*tail));
-        tail->prev = NULL;
+
+        tail = NULL;
+        ulib = NULL;
 
         hdir = FindFirstFile("anim\\*", &fdir);
         while (hdir != INVALID_HANDLE_VALUE &&
                GetLastError() != ERROR_NO_MORE_FILES) {
 
-            show = sprintf(path, "anim\\%s\\*.gif", fdir.cFileName) - 5;
-            hgif = FindFirstFile(path, &fgif);
-            while (hgif != INVALID_HANDLE_VALUE &&
-                   GetLastError() != ERROR_NO_MORE_FILES) {
-                path[show] = '\0';
-                strcat(path, fgif.cFileName);
-
-                indx = WaitForMultipleObjects(ncpu, evto, FALSE, INFINITE);
-                if ((indx -= WAIT_OBJECT_0) >= MAXIMUM_WAIT_OBJECTS) {
-                    nlim = 0;
-                    break;
-                }
-                else {
-                    tail->scal = 0;
-                    tail->cpos.x = scrn.cx;
-                    tail->cpos.y = scrn.cy;
-                    while (del_me_plz[tail->scal]) {
-                        if (strstr(path, del_me_plz[tail->scal]))
-                            break;
-                        tail->scal++;
-                    }
-                    tail->scal = (del_me_plz[tail->scal])? 0 : 1;
-                    tail->path = LocalAlloc(LMEM_FIXED, MAX_PATH);
-                    strcpy(tail->path, path);
-                    thrd[indx].head = tail;
-                    ResetEvent(*thrd[indx].evto);
-                    SetEvent(thrd[indx].evti);
-                }
-                tail->time = timeGetTime() + PRNG(&seed) % 25;
-                tail->next = LocalAlloc(LMEM_FIXED, sizeof(*tail));
-                tail->next->prev = tail;
-                tail = tail->next;
-                nlim--;
-
-                if (!nlim)
-                    break;
-                FindNextFile(hgif, &fgif);
+            MakeEmptyLib(&ulib, "anim", fdir.cFileName);
+            indx = WaitForMultipleObjects(ncpu, evto, FALSE, INFINITE);
+            if ((indx -= WAIT_OBJECT_0) < MAXIMUM_WAIT_OBJECTS) {
+                thrd[indx].pass.fill.ulib = ulib;
+                ResetEvent(*thrd[indx].evto);
+                SetEvent(thrd[indx].evti);
             }
-            FindClose(hgif);
-            SetLastError(ERROR_SUCCESS);
-            if (!nlim)
+            else
                 break;
             FindNextFile(hdir, &fdir);
         }
@@ -272,8 +228,8 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
         printf("\n");
         for (nlim = indx = 0; indx < ncpu; indx++) {
-            nlim += thrd[indx].vect.x;
-            thrd[indx].vect.y = FALSE;
+            nlim += thrd[indx].pass.fill.load;
+            thrd[indx].quit = TRUE;
             ResetEvent(*thrd[indx].evto);
             SetEvent(thrd[indx].evti);
         }
@@ -284,23 +240,21 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             printf("\nLoading complete: %u objects, %u ms [%0.3f ms/obj]\n\n",
                    nlim, time, (float)time / (float)nlim);
 
+            UnitListFromLib(ulib, &tail);
             for (indx = 0; indx < ncpu; indx++) {
-                thrd[indx].func = BlendPixStdThrd;
-                thrd[indx].vect = (VEC2){((scrn.cy + 1) / ncpu) *  indx,
-                                         ((scrn.cy + 1) / ncpu) * (indx + 1)};
-                thrd[indx].draw = &draw;
+                thrd[indx].quit = FALSE;
+                thrd[indx].func = DrawPixStdThrd;
+                thrd[indx].pass.draw = (DRAW){NULL, &draw,
+                                       ((draw.size.y + 1) / ncpu)* indx,
+                                       ((draw.size.y + 1) / ncpu)*(indx + 1)};
                 CreateThread(NULL, 0, ThrdFunc, &thrd[indx], 0, NULL);
             }
-            thrd[ncpu - 1].vect.y = scrn.cy;
-            tail = tail->prev;
-            LocalFree(tail->next);
-            tail->next = NULL;
-            SortByY(&tail);
+            thrd[ncpu - 1].pass.draw.ymax = draw.size.y;
 
             CreateThread(NULL, 0, TimeFunc, &ttmr, 0, NULL);
             devc = CreateCompatibleDC(NULL);
-            bmpi.bmiHeader.biWidth  =  (draw.size.x = scrn.cx);
-            bmpi.bmiHeader.biHeight = -(draw.size.y = scrn.cy);
+            bmpi.bmiHeader.biWidth  =  draw.size.x;
+            bmpi.bmiHeader.biHeight = -draw.size.y;
             hdib = CreateDIBSection(devc, &bmpi, DIB_RGB_COLORS,
                                    (void*)&draw.bptr, 0, 0);
             SelectObject(devc, hdib);
@@ -309,7 +263,7 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOPMOST,
                                   wndc.lpszClassName, NULL,
                                   WS_POPUP | WS_VISIBLE,
-                                  0, 0, scrn.cx, scrn.cy,
+                                  0, 0, draw.size.x, draw.size.y,
                                   NULL, NULL, wndc.hInstance, wndc.hIcon);
             while (!0) {
                 time = timeGetTime();
@@ -321,11 +275,12 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                 }
                 else {
                     /// global vars used: PICK, CPTR, FCNT
-                    if ((iter = UpdateFrame(&tail, &pick, &ttmr.time, cptr))) {
+                    if ((iter = UpdateFrameStd(&tail, &pick,
+                                               &ttmr.time, cptr))) {
                         scrr = (RECT){0, 0, draw.size.x, draw.size.y};
                         FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
                         for (indx = 0; indx < ncpu; indx++) {
-                            thrd[indx].head = iter;
+                            thrd[indx].pass.draw.head = iter;
                             SetEvent(thrd[indx].evti);
                         }
                         WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
@@ -341,18 +296,6 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                         Sleep(DEF_SKIP);
                 }
             }
-            while (!0) {
-                FreeAnimStd((ASTD**)&tail->anim);
-                LocalFree(tail->path);
-                if (tail->prev) {
-                    tail = tail->prev;
-                    LocalFree(tail->next);
-                }
-                else {
-                    LocalFree(tail);
-                    break;
-                }
-            }
             DeleteDC(devc);
             DeleteObject(hdib);
             ttmr.quit = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -360,10 +303,13 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             CloseHandle(ttmr.quit);
 
             for (indx = 0; indx < ncpu; indx++) {
-                thrd[indx].head = NULL;
+                thrd[indx].quit = TRUE;
                 SetEvent(thrd[indx].evti);
             }
             WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
+
+            FreeLibList(&ulib, FreeAnimStd);
+            FreeUnitList(&tail, NULL);
         }
         for (indx = 0; indx < ncpu; indx++) {
             CloseHandle(*thrd[indx].evto);

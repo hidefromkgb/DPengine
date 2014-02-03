@@ -62,7 +62,7 @@ typedef struct _CTBE {
 
 
 inline void ReadChunk(uint8_t **buff) {
-    int skip;
+    long skip;
 
     (*buff)++;
     while ((skip = *(*buff)++))
@@ -71,17 +71,17 @@ inline void ReadChunk(uint8_t **buff) {
 
 
 
-int ReadFrameHeader(uint8_t **buff, GHDR *ghdr, FHDR **fhdr, RGBX **rpal) {
-    int rclr = 0;
+long ReadFrameHeader(uint8_t **buff, GHDR *ghdr, FHDR **fhdr, RGBX **rpal) {
+    long rclr = 0;
 
     *fhdr = (FHDR*)*buff;
     *buff += sizeof(**fhdr);
-    if ((*fhdr)->flgs & FLG_FPAL) {
+    if ((*fhdr)->flgs & GIF_FPAL) {
         /// local palette always has a priority over global
         *rpal = (RGBX*)*buff;
         *buff += (rclr = 2 << ((*fhdr)->flgs & 7)) * sizeof(**rpal);
     }
-    else if (ghdr->flgs & FLG_FPAL) {
+    else if (ghdr->flgs & GIF_FPAL) {
         /// no local palette, using global
         rclr = 2 << (ghdr->flgs & 7);
         *rpal = (RGBX*)((uint8_t*)ghdr + sizeof(*ghdr));
@@ -100,15 +100,16 @@ int ReadFrameHeader(uint8_t **buff, GHDR *ghdr, FHDR **fhdr, RGBX **rpal) {
 ///  -1: no end-of-stream mark after end-of-data code
 ///   0: no end-of-data code before end-of-stream mark -> [RECOVERABLE ERROR]
 ///   1: decoding successful
-int DecodeFrame(uint8_t **buff, FGRH *fgrh, RGBX *cpal, int cclr, BGRA *bptr) {
-    int iter, /// loop iterator for expanding codes into BGRA strings
-        bseq, /// block sequence loop counter
-        size, /// bit size counter
-        ctbl, /// code table counter, points to the last element
-        curr, /// current code from the code stream
-        prev, /// previous code from the code stream
-        ctsz, /// minimum LZW code table size, in bits
-        ccsz; /// current code table size, in bits
+long DecodeFrame(uint8_t **buff, FGRH *fgrh,
+                 RGBX *cpal, long cclr, BGRA *bptr) {
+    long iter, /// loop iterator for expanding codes into BGRA strings
+         bseq, /// block sequence loop counter
+         size, /// bit size counter
+         ctbl, /// code table counter, points to the last element
+         curr, /// current code from the code stream
+         prev, /// previous code from the code stream
+         ctsz, /// minimum LZW code table size, in bits
+         ccsz; /// current code table size, in bits
     uint16_t read, mask;
 
     #define DEF_CLEN (1 << 12)
@@ -214,9 +215,9 @@ int DecodeFrame(uint8_t **buff, FGRH *fgrh, RGBX *cpal, int cclr, BGRA *bptr) {
 
 
 
-int MakeAnim(void *inpt, int flgs, void *anim,
-             GGET gget, GINI gini, GWFR gwfr, GPUT gput) {
-    int desc, iter, prev, fram;
+long MakeAnim(void *inpt, long flgs, void *anim,
+              GGET gget, GINI gini, GWFR gwfr, GPUT gput) {
+    long desc, iter, prev, fram;
     uint8_t *buff, *btmp;
     BGRA *init, *bptr;
     GHDR *ghdr = NULL;
@@ -224,24 +225,24 @@ int MakeAnim(void *inpt, int flgs, void *anim,
     FHDR *fhdr;
     RGBX *cpal;
 
-    if (!(flgs & FLG_GGET) &&
+    if (!(flgs & MAF_GGET) &&
        ((desc = open((char*)inpt, O_RDONLY | O_BINARY)) > 0)) {
-        /// FLGS only has FLG_FILE, reading from a file
+        /// FLGS only has MAF_FILE, reading from a file
         buff = malloc(iter = lseek(desc, (off_t)0, SEEK_END));
         lseek(desc, (off_t)0, SEEK_SET);
         read(desc, buff, iter);
         close(desc);
         ghdr = (GHDR*)buff;
     }
-    else if ((flgs & FLG_GGET) && gget) {
-        /// FLGS has FLG_GGET, reading from some place supported by GGET()
+    else if ((flgs & MAF_GGET) && gget) {
+        /// FLGS has MAF_GGET, reading from some place supported by GGET()
         ghdr = gget(inpt);
     }
     iter = 0;
     if (ghdr) {
         /// skipping global header, skipping global palette (if there is any)
         btmp = buff = (uint8_t*)ghdr + sizeof(*ghdr) +
-        ((ghdr->flgs & FLG_FPAL)? (2 << (ghdr->flgs & 7)) * sizeof(*cpal) : 0);
+        ((ghdr->flgs & GIF_FPAL)? (2 << (ghdr->flgs & 7)) * sizeof(*cpal) : 0);
 
         /// counting frames
         fram = 0;
@@ -274,7 +275,7 @@ int MakeAnim(void *inpt, int flgs, void *anim,
                     cpal = NULL;
                     desc = ReadFrameHeader(&buff, ghdr, &fhdr, &cpal);
                     /// return code 0 means the error is recoverable; accepting
-                    if (DecodeFrame(&buff, fgrh, cpal, (flgs & FLG_AIND)?
+                    if (DecodeFrame(&buff, fgrh, cpal, (flgs & MAF_AIND)?
                                     -desc : desc, bptr) >= 0) {
                         /// computing blend mode
                         desc = -2;
@@ -301,7 +302,7 @@ int MakeAnim(void *inpt, int flgs, void *anim,
             free(init);
         }
     }
-    if (!(flgs & FLG_GGET))
+    if (!(flgs & MAF_GGET))
         free(ghdr);
     else if (gput) {
         /// if no error (ITER > 0), overwriting frame count with GPUT() output

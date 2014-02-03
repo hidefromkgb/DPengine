@@ -25,6 +25,13 @@
 			<Add option="-s" />
 			<Add option="`pkg-config gtk+-2.0 --libs`" />
 		</Linker>
+		<Unit filename="../core/core.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src/core/" />
+		</Unit>
+		<Unit filename="../core/core.h">
+			<Option virtualFolder="src/core/" />
+		</Unit>
 		<Unit filename="../core/gif/common.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/core/gif/" />
@@ -38,13 +45,6 @@
 		</Unit>
 		<Unit filename="../core/gif/gifstd.h">
 			<Option virtualFolder="src/core/gif/" />
-		</Unit>
-		<Unit filename="../core/core.c">
-			<Option compilerVar="CC" />
-			<Option virtualFolder="src/core/" />
-		</Unit>
-		<Unit filename="../core/core.h">
-			<Option virtualFolder="src/core/" />
 		</Unit>
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />

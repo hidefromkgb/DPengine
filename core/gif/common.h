@@ -6,14 +6,14 @@
 
 
 /// Palette flag (both global header and frame header)
-#define FLG_FPAL 0x80
+#define GIF_FPAL 0x80
 /// Interlace flag (frame header only)
-#define FLG_FINT 0x40
+#define GIF_FINT 0x40
 
 /// MakeAnim() flags, described in FLGS section of MakeAnim() documentation
-#define FLG_FILE 0x00
-#define FLG_GGET 0x01
-#define FLG_AIND 0x02
+#define MAF_FILE 0x00
+#define MAF_GGET 0x01
+#define MAF_AIND 0x02
 
 
 
@@ -68,7 +68,7 @@ typedef union _BGRA {
     _________________________________________________________________________
     INPT: may be anything, from simple CHAR* to a complex structure of custom
           design, or even a single identifier. Anything that fits in VOID* :)
-          If FLGS of MakeAnim() contains FLG_GGET, then this INPT will be the
+          If FLGS of MakeAnim() contains MAF_GGET, then this INPT will be the
           same INPT that was passed to MakeAnim(). Otherwise, GGET() will not
           be called at all.
  **/
@@ -82,12 +82,12 @@ typedef GHDR* (*GGET)(void *inpt);
     ANIM: implementation-specific data (i.e. a structure or a pointer to it)
     CFRM: the total number of frames in animation
  **/
-typedef int (*GINI)(GHDR *ghdr, void *anim, int cfrm);
+typedef long (*GINI)(GHDR *ghdr, void *anim, long cfrm);
 
 /** _________________________________________________________________________
     Decoded frame transferrer and frame delay setter. Returns positive values
     on success, negative otherwise. Note that it shall detect and recalculate
-    interlaced pictures (FHDR->flgs & FLG_FINT).
+    interlaced pictures (FHDR->flgs & GIF_FINT).
     _________________________________________________________________________
     GHDR: animation global header
     FHDR: header of the resulting frame (the one just decoded)
@@ -101,8 +101,8 @@ typedef int (*GINI)(GHDR *ghdr, void *anim, int cfrm);
           > 0: [actual frame index] + 1
           < 0: no backing needed
  **/
-typedef int (*GWFR)(GHDR *ghdr, FHDR *fhdr, void *anim, BGRA *bptr,
-                    int tran, int time, int curr, int from);
+typedef long (*GWFR)(GHDR *ghdr, FHDR *fhdr, void *anim, BGRA *bptr,
+                     long tran, long time, long curr, long from);
 
 /** _________________________________________________________________________
     Animation finalizer. Returns frame count if the animation is successfully
@@ -112,7 +112,7 @@ typedef int (*GWFR)(GHDR *ghdr, FHDR *fhdr, void *anim, BGRA *bptr,
     DATA: the location where animation data resides
     ANIM: implementation-specific data (i.e. a structure or a pointer to it)
  **/
-typedef int (*GPUT)(void *data, void *anim);
+typedef long (*GPUT)(void *data, void *anim);
 
 
 
@@ -121,17 +121,17 @@ typedef int (*GPUT)(void *data, void *anim);
     at all, or frame count in case of successful loading; otherwise the value
     returned is negative and equals -[index of the erroneous frame] - 1.
     _________________________________________________________________________
-    INPT: ASCIIZ-string if FLGS (see below) does not have FLG_GGET, otherwise
+    INPT: ASCIIZ-string if FLGS (see below) does not have MAF_GGET, otherwise
           it may contain anything; see GGET() documentation given above
     FLGS: flags
-          FLG_FILE: [DEFAULT FLAG] reading shall be performed from a file
-          FLG_GGET: reading shall be routed through GGET()
-          FLG_AIND: set pixels` alpha-components to their palette indices
+          MAF_FILE: [DEFAULT FLAG] reading shall be performed from a file
+          MAF_GGET: reading shall be routed through GGET()
+          MAF_AIND: set pixels` alpha-components to their palette indices
     ANIM: implementation-specific data (i.e. a structure or a pointer to it)
     GGET,
     GINI,
     GWFR,
     GPUT: implementations of callback functions described above
  **/
-int MakeAnim(void *inpt, int flgs, void *anim,
-             GGET gget, GINI gini, GWFR gwfr, GPUT gput);
+long MakeAnim(void *inpt, long flgs, void *anim,
+              GGET gget, GINI gini, GWFR gwfr, GPUT gput);

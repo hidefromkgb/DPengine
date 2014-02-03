@@ -2,13 +2,12 @@
 
 
 
-int InitAnimStd(GHDR *ghdr, void *anim, int cfrm) {
+long InitAnimStd(GHDR *ghdr, void *anim, long cfrm) {
     ASTD *retn = (ASTD*)anim;
-    int clrs, iter;
+    long clrs, iter;
     RGBX *gpal;
 
-    if (retn && ghdr && (ghdr->flgs & FLG_FPAL)) {
-        retn->fcur = 0;
+    if (retn && ghdr && (ghdr->flgs & GIF_FPAL)) {
         retn->fcnt = cfrm;
         retn->xdim = ghdr->xdim;
         retn->ydim = ghdr->ydim;
@@ -38,14 +37,14 @@ int InitAnimStd(GHDR *ghdr, void *anim, int cfrm) {
 
 
 
-int WriteFrameStd(GHDR *ghdr, FHDR *fhdr, void *anim, BGRA *bptr,
-                  int tran, int time, int curr, int from) {
+long WriteFrameStd(GHDR *ghdr, FHDR *fhdr, void *anim, BGRA *bptr,
+                   long tran, long time, long curr, long from) {
     ASTD *retn = (ASTD*)anim;
-    int x, y, dsrc, ddst;
+    long x, y, dsrc, ddst;
 
     retn->time[curr] = time * 10;
 
-    /// TODO: PROPERLY HANDLE INTERLACING!!! (fhdr->flgs & FLG_FINT)
+    /// TODO: PROPERLY HANDLE INTERLACING!!! (fhdr->flgs & GIF_FINT)
 
     if (!curr) {
         x = ghdr->xdim * ghdr->ydim;
@@ -98,11 +97,11 @@ int WriteFrameStd(GHDR *ghdr, FHDR *fhdr, void *anim, BGRA *bptr,
 
 
 
-ASTD *MakeAnimStd(char *name, int indx) {
+ASTD *MakeAnimStd(char *name, long indx) {
     ASTD *retn = malloc(sizeof(*retn));
 
     retn->bpal = (indx)? malloc(256 * sizeof(*retn->bpal)) : NULL;
-    if (MakeAnim((void*)name, FLG_FILE | ((indx)? FLG_AIND : 0), (void*)retn,
+    if (MakeAnim((void*)name, MAF_FILE | ((indx)? MAF_AIND : 0), (void*)retn,
                   NULL, InitAnimStd, WriteFrameStd, NULL) <= 0) {
         free(retn->bpal);
         free(retn);
