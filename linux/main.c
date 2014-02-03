@@ -68,7 +68,7 @@ gboolean DrawFunc(gpointer user) {
         draw.pict = tmrf->pict;
         draw.ymin = 0;
         draw.ymax = tmrf->pict->size.y;
-        DrawPixStdThrd(&draw, FALSE);
+        DrawPixStdThrd(&draw);
 
         gdk_window_invalidate_rect(tmrf->gwnd->window, NULL, FALSE);
         tmrf->fram++;
@@ -150,6 +150,7 @@ int main(int argc, char *argv[]) {
     GtkWidget *gwnd;
     GdkScreen *gscr;
 
+    char *anim = "anim";
     struct dirent **dirs;
     long y;
 
@@ -200,17 +201,18 @@ int main(int argc, char *argv[]) {
                                 GDK_POINTER_MOTION_HINT_MASK);
     tail = NULL;
     ulib = NULL;
+    fill.load = 0;
+    fill.scrn = pict.size;
 
     TimeFunc(&mtmp);
-    if ((y = scandir("anim", &dirs, NULL, alphasort)) >= 0) {
+    if ((y = scandir(anim, &dirs, NULL, alphasort)) >= 0) {
         while (y--) {
             if ((dirs[y]->d_type == DT_DIR)
             &&  strcmp(dirs[y]->d_name, ".")
             &&  strcmp(dirs[y]->d_name, "..")) {
-                MakeEmptyLib(&ulib, "anim", dirs[y]->d_name);
-                fill = (FILL){ulib, pict.size, 0};
-                FillLibStdThrd(&fill, FALSE);
-                FillLibStdThrd(&fill, TRUE);
+                MakeEmptyLib(&ulib, anim, dirs[y]->d_name);
+                fill.ulib = ulib;
+                FillLibStdThrd(&fill);
             }
             free(dirs[y]);
         }

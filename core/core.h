@@ -30,18 +30,20 @@ typedef struct _UNIT {
 
 /// unit library
 typedef struct _ULIB {
-    char *path;
-    UNIT **uarr;
-    ulong ucnt, uses;
-    struct _ULIB *prev,
-                 *next;
+    char *path;         /// the folder from which the library was built
+    UNIT **uarr;        /// array of animation units (also a linked list)
+    ulong ucnt,         /// length of the array
+          uses,         /// number of library`s units in the main display list
+          flgs;         /// library flags (ULF_ prefix)
+    struct _ULIB *prev, /// previous library in the list
+                 *next; /// next library in the list
 } ULIB;
 
 /// parameter structure for FillLibStdThrd()
 typedef struct _FILL {
     ULIB *ulib;
     VEC2 scrn;
-    long load;
+    long curr, load;
 } FILL;
 
 /// parameter structure for DrawPixStdThrd()
@@ -64,8 +66,8 @@ uint32_t PRNG(uint32_t *seed);
 UNIT *SortByY(UNIT **tail);
 UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr);
 
-long FillLibStdThrd(FILL *fill, long quit);
-long DrawPixStdThrd(DRAW *draw, long quit);
+void FillLibStdThrd(FILL *fill);
+void DrawPixStdThrd(DRAW *draw);
 
 void MakeEmptyLib(ULIB **head, char *base, char *path);
 void FreeUnitList(UNIT **tail, void (*adel)(void**));

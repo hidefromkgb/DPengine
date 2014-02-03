@@ -1,5 +1,4 @@
 #include "core.h"
-#include <stdio.h>
 #include <string.h>
 
 #define max(a, b) (((a) > (b))? (a) : (b))
@@ -7,17 +6,26 @@
 
 
 
+/// Default config file
+#define DEF_CONF "anim.conf"
 /// Default comment character
 #define DEF_CMNT '#'
 /// Default token separator
 #define DEF_TSEP ','
 
-/// Linear hash multiplier
-#define LCH_MULT 0xFBC5
-/// Linear hash shift
-#define LCH_PLUS 0x11
+/// Random number generator modulo
+#define RNG_TRIM 0xFFFFFFFB
+/// Random number generator multiplier
+#define RNG_MULT 0x10A860C1
+/// Random number generator shift
+#define RNG_PLUS 0x01
 
-/// [not recognized / invalid]
+/// String-oriented linear hash multiplier
+#define SLH_MULT 0xFBC5
+/// String-oriented linear hash shift
+#define SLH_PLUS 0x11
+
+/// [not recognized / comment / invalid token]
 #define AVT_NONE 0x00000000
 /// 'Name'
 #define AVT_NAME 0xC6961EB1
@@ -39,12 +47,12 @@ uint32_t seed;
 
 
 uint32_t PRNG(uint32_t *seed) {
-    return *seed = 1 + (*seed * 279470273) % 4294967291u;
+    return *seed = RNG_PLUS + (*seed * RNG_MULT) % RNG_TRIM;
 }
 
 
 
-inline char *SkipCharUTF8(char *line) {
+char *SkipCharUTF8(char *line) {
     static char skip[] = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 6};
     return line + ((*line & 0x80)? skip[((*line) >> 2) & 0x0F] : 1);
 }
@@ -54,33 +62,38 @@ inline char *SkipCharUTF8(char *line) {
 long WhitespaceUTF8(char *line) {
     switch (line[0]) {
         case '\x09':
-        case '\x20': goto _true;
-        case '\xC2': if (line[1] == '\xA0') goto _true;
-        case '\xE1': if (line[1] == '\x9A' && line[2] == '\x80') goto _true;
-        case '\xE3': if (line[1] == '\x80' && line[2] == '\x80') goto _true;
-        case '\xEF': if (line[1] == '\xBB' && line[2] == '\xBF') goto _true;
-        case '\xE2': switch (line[1]) {
-                         case '\x81': if (line[2] == '\x9F') goto _true;
-                         case '\x80': switch (line[2]) {
-                                          case '\x80':
-                                          case '\x81':
-                                          case '\x82':
-                                          case '\x83':
-                                          case '\x84':
-                                          case '\x85':
-                                          case '\x86':
-                                          case '\x87':
-                                          case '\x88':
-                                          case '\x89':
-                                          case '\x8A':
-                                          case '\x8B':
-                                          case '\xAF': goto _true;
-                                      }
-                     }
+        case '\x20':
+            return ~0;
+        case '\xC2':
+            if (line[1] == '\xA0') return ~0; break;
+        case '\xE1':
+            if (line[1] == '\x9A' && line[2] == '\x80') return ~0; break;
+        case '\xE3':
+            if (line[1] == '\x80' && line[2] == '\x80') return ~0; break;
+        case '\xEF':
+            if (line[1] == '\xBB' && line[2] == '\xBF') return ~0; break;
+        case '\xE2':
+            switch (line[1]) {
+                case '\x81': if (line[2] == '\x9F') return ~0; break;
+                case '\x80':
+                    switch (line[2]) {
+                        case '\x80':
+                        case '\x81':
+                        case '\x82':
+                        case '\x83':
+                        case '\x84':
+                        case '\x85':
+                        case '\x86':
+                        case '\x87':
+                        case '\x88':
+                        case '\x89':
+                        case '\x8A':
+                        case '\x8B':
+                        case '\xAF': return ~0;
+                    }
+            }
     }
     return 0;
-    _true:
-    return ~0;
 }
 
 
@@ -91,7 +104,6 @@ char *SplitLine(char **tail, char tsep) {
     if (*tail) {
         while (WhitespaceUTF8(iter))
             iter = SkipCharUTF8(iter);
-
         if (*iter) {
             if (!(*tail = strchr(iter, tsep)))
                 *tail = iter + strlen(iter);
@@ -101,14 +113,12 @@ char *SplitLine(char **tail, char tsep) {
                     temp = iter;
                 iter = SkipCharUTF8(iter);
             } while (iter < *tail);
-            if (**tail)
-                *(*tail)++ = '\0';
-            else
-                *tail = NULL;
+            *tail = (**tail)? *tail + 1 : NULL;
+            *++temp = '\0';
             return retn;
         }
-        *tail = NULL;
     }
+    *tail = NULL;
     return NULL;
 }
 
@@ -122,7 +132,7 @@ uint32_t DetermineType(char **tail) {
     if (temp && (*temp != DEF_CMNT)) {
         hash = 0;
         do {
-            hash = LCH_PLUS + LCH_MULT * hash + *temp++;
+            hash = SLH_PLUS + SLH_MULT * hash + *temp++;
         } while (*temp);
         return hash;
     }
@@ -132,11 +142,12 @@ uint32_t DetermineType(char **tail) {
 
 
 char *ConcatPath(char *base, char *path) {
-    char *retn = malloc(strlen(base) + strlen(path) + 2);
+    char *retn;
     long  iter;
 
     if (*path == '"')
         path++;
+    retn = malloc(strlen(base) + strlen(path) + 2);
     iter = sprintf(retn, "%s/%s", base, path) - 1;
     if (retn[iter] == '"')
         retn[iter] = '\0';
@@ -159,19 +170,19 @@ char *GetNextLine(char **file) {
 
 
 
-char *ReadConfig(char *conf) {
-    long size, file;
-    char *retn;
+char *LoadConfig(char *conf) {
+    char *retn = NULL;
+    long file, size;
 
     if ((file = open(conf, O_RDONLY)) > 0) {
         size = lseek(file, 0, SEEK_END);
         lseek(file, 0, SEEK_SET);
         retn = malloc(size + 1);
         read(file, retn, size);
+        retn[size] = '\0';
         close(file);
-        return retn;
     }
-    return NULL;
+    return retn;
 }
 
 
@@ -285,16 +296,13 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
 
 
 
-long DrawPixStdThrd(DRAW *draw, long quit) {
+void DrawPixStdThrd(DRAW *draw) {
     long x, y, xmin, ymin, xmax, ymax, xoff, yoff, ysrc, ydst;
     BGRA b_r_, _g_a, pixl, *bptr;
+    UNIT *head;
     ASTD *anim;
 
-    UNIT *head = draw->head;
-
-    if (quit)
-        return 0;
-
+    head = draw->head;
     while (head) {
         anim = head->anim;
 
@@ -332,26 +340,19 @@ long DrawPixStdThrd(DRAW *draw, long quit) {
         }
         head = head->next;
     }
-    return ~0;
 }
 
 
 
-long FillLibStdThrd(FILL *fill, long quit) {
+void FillLibStdThrd(FILL *fill) {
     #define anih ((ASTD*)tail->anim)
     char *file, *fptr, *conf;
-    long  fcnt;
     UNIT *tail;
 
-    if (quit) {
-        printf(" --- %ld objects loaded!\n\n", fill->load);
-        return 0;
-    }
     tail = NULL;
-    fcnt = 0;
-
-    conf = ConcatPath(fill->ulib->path, "anim.conf");
-    if ((file = fptr = ReadConfig(conf))) {
+    fill->curr = 0;
+    conf = ConcatPath(fill->ulib->path, DEF_CONF);
+    if ((file = fptr = LoadConfig(conf))) {
         free(conf);
         while ((conf = GetNextLine(&fptr))) {
             switch (DetermineType(&conf)) {
@@ -382,8 +383,8 @@ long FillLibStdThrd(FILL *fill, long quit) {
                                      - (anih->ydim << tail->scal))
                                      + (anih->ydim << tail->scal);
                         tail->fcur = PRNG(&seed) % anih->fcnt;
-                        fill->load++;
-                        fcnt++;
+                        tail->ulib = fill->ulib;
+                        fill->curr++;
                     }
                     else {
                         printf("FAILED:\t%s\n", tail->path);
@@ -401,12 +402,14 @@ long FillLibStdThrd(FILL *fill, long quit) {
             }
         }
         if (tail) {
+            fill->load += fill->curr;
+            printf(" --- %ld objects loaded!\n\n", fill->curr);
             tail->next = NULL;
             fill->ulib->uses = 1;
-            fill->ulib->ucnt = fcnt;
-            fill->ulib->uarr = malloc(fcnt * sizeof(*fill->ulib->uarr));
-            for (fcnt--; fcnt >= 0; fcnt--) {
-                fill->ulib->uarr[fcnt] = tail;
+            fill->ulib->ucnt = fill->curr;
+            fill->ulib->uarr = malloc(fill->curr * sizeof(*fill->ulib->uarr));
+            for (fill->curr--; fill->curr >= 0; fill->curr--) {
+                fill->ulib->uarr[fill->curr] = tail;
                 tail = tail->prev;
             }
         }
@@ -414,7 +417,6 @@ long FillLibStdThrd(FILL *fill, long quit) {
         conf = NULL;
     }
     free(conf);
-    return ~0;
     #undef anih
 }
 

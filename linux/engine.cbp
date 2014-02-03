@@ -17,6 +17,7 @@
 		</Build>
 		<Compiler>
 			<Add option="-fexpensive-optimizations" />
+			<Add option="-Os" />
 			<Add option="-O2" />
 			<Add option="-Wall" />
 			<Add option="`pkg-config gtk+-2.0 --cflags`" />

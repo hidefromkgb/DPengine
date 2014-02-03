@@ -24,9 +24,9 @@ typedef struct _THRD {
         FILL fill;
         DRAW draw;
     } pass;
-    int quit;
+    long loop;
     HANDLE evti, *evto;
-    int (*func)(void*, int);
+    void (*func)(void*);
 } THRD;
 
 
@@ -52,13 +52,13 @@ DWORD CALLBACK TimeFunc(LPVOID data) {
 
 DWORD CALLBACK ThrdFunc(LPVOID data) {
     #define data ((THRD*)data)
-    int loop;
     do {
         WaitForSingleObject(data->evti, INFINITE);
         ResetEvent(data->evti);
-        loop = data->func(&data->pass, data->quit);
+        if (data->loop)
+            data->func(&data->pass);
         SetEvent(*data->evto);
-    } while (loop);
+    } while (data->loop);
     return TRUE;
     #undef data
 }
@@ -162,7 +162,8 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     ULIB *ulib;
     THRD *thrd;
 
-    WIN32_FIND_DATA fdir;
+    char *temp;
+    WIN32_FIND_DATAW fdir;
     HANDLE hdir, hwnd, *evto;
     UINT time, indx, nlim, ncpu;
     RECT scrr;
@@ -175,6 +176,7 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     nlim = DialogBoxParam(inst, MAKEINTRESOURCE(DLG_MAIN), NULL, EnterProc, 0);
     if (++nlim) {
         AllocConsole();
+//        freopen("w.txt", "wb", stdout);
         freopen("CONOUT$", "wb", stdout);
 
         GetLocalTime(&init);
@@ -186,16 +188,13 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         time = timeGetTime();
         GetSystemInfo(&syin);
         ncpu = min(MAXIMUM_WAIT_OBJECTS, max(1, syin.dwNumberOfProcessors));
-
-        ncpu = 1; /// DEL ME
-
         evto = LocalAlloc(LMEM_FIXED, ncpu * sizeof(*evto));
         thrd = LocalAlloc(LMEM_FIXED, ncpu * sizeof(*thrd));
         for (indx = 0; indx < ncpu; indx++) {
             evto[indx] = CreateEvent(NULL, FALSE, TRUE, NULL);
             thrd[indx].evto = &evto[indx];
             thrd[indx].evti = CreateEvent(NULL, FALSE, FALSE, NULL);
-            thrd[indx].quit = FALSE;
+            thrd[indx].loop = TRUE;
             thrd[indx].func = FillLibStdThrd;
             thrd[indx].pass.fill.scrn = draw.size;
             thrd[indx].pass.fill.load = 0;
@@ -208,11 +207,15 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         tail = NULL;
         ulib = NULL;
 
-        hdir = FindFirstFile("anim\\*", &fdir);
+        hdir = FindFirstFileW(L"anim\\*", &fdir);
         while (hdir != INVALID_HANDLE_VALUE &&
                GetLastError() != ERROR_NO_MORE_FILES) {
-
-            MakeEmptyLib(&ulib, "anim", fdir.cFileName);
+            indx = WideCharToMultiByte(CP_UTF8, 0, fdir.cFileName, -1,
+                                       NULL, 0, NULL, NULL);
+            WideCharToMultiByte(CP_UTF8, 0, fdir.cFileName, -1,
+                                temp = malloc(indx * 2), indx, NULL, NULL);
+            MakeEmptyLib(&ulib, "anim", temp);
+            free(temp);
             indx = WaitForMultipleObjects(ncpu, evto, FALSE, INFINITE);
             if ((indx -= WAIT_OBJECT_0) < MAXIMUM_WAIT_OBJECTS) {
                 thrd[indx].pass.fill.ulib = ulib;
@@ -221,20 +224,21 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             }
             else
                 break;
-            FindNextFile(hdir, &fdir);
+            FindNextFileW(hdir, &fdir);
         }
         FindClose(hdir);
 
         WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
         printf("\n");
-        for (nlim = indx = 0; indx < ncpu; indx++) {
-            nlim += thrd[indx].pass.fill.load;
-            thrd[indx].quit = TRUE;
+        for (indx = 0; indx < ncpu; indx++) {
+            thrd[indx].loop = FALSE;
             ResetEvent(*thrd[indx].evto);
             SetEvent(thrd[indx].evti);
         }
         WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
-
+        for (nlim = indx = 0; indx < ncpu; indx++) {
+            nlim += thrd[indx].pass.fill.load;
+        }
         if (nlim) {
             time = timeGetTime() - time;
             printf("\nLoading complete: %u objects, %u ms [%0.3f ms/obj]\n\n",
@@ -242,7 +246,7 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
 
             UnitListFromLib(ulib, &tail);
             for (indx = 0; indx < ncpu; indx++) {
-                thrd[indx].quit = FALSE;
+                thrd[indx].loop = TRUE;
                 thrd[indx].func = DrawPixStdThrd;
                 thrd[indx].pass.draw = (DRAW){NULL, &draw,
                                        ((draw.size.y + 1) / ncpu)* indx,
@@ -303,7 +307,7 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             CloseHandle(ttmr.quit);
 
             for (indx = 0; indx < ncpu; indx++) {
-                thrd[indx].quit = TRUE;
+                thrd[indx].loop = FALSE;
                 SetEvent(thrd[indx].evti);
             }
             WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
