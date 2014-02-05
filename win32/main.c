@@ -284,7 +284,7 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                         scrr = (RECT){0, 0, draw.size.x, draw.size.y};
                         FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
                         for (indx = 0; indx < ncpu; indx++) {
-                            thrd[indx].pass.draw.head = iter;
+                            thrd[indx].pass.draw.tail = iter;
                             SetEvent(thrd[indx].evti);
                         }
                         WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);

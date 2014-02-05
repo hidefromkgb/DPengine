@@ -28,7 +28,7 @@ long InitAnimStd(GHDR *ghdr, void *anim, long cfrm) {
                 retn->bpal[iter].A = 0xFF;
             }
             retn->bpal[ghdr->bkgd].A = 0xFF;
-            retn->bpal[0xFF].A = 0x00;
+            retn->bpal[0xFF].BGRA = 0x00000000;
         }
         return 1;
     }

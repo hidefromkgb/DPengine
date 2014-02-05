@@ -58,7 +58,7 @@ gboolean DrawFunc(gpointer user) {
     DRAW draw;
 
     if (tmrf->gwnd->window &&
-       (draw.head = UpdateFrameStd(&tmrf->tail, &pick, tmrf->time, cptr))) {
+       (draw.tail = UpdateFrameStd(&tmrf->tail, &pick, tmrf->time, cptr))) {
         surf = cairo_create(tmrf->surf);
         cairo_set_operator(surf, CAIRO_OPERATOR_SOURCE);
         cairo_set_source_rgba(surf, 0, 0, 0, 0);

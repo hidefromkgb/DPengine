@@ -142,10 +142,12 @@ long DecodeFrame(uint8_t **buff, FGRH *fgrh,
     }
     for (iter = ((cclr > 0)? cclr : -cclr); iter < ctbl; iter++) {
         code[iter].size = 0;
-        code[iter].pixl.A = (cclr > 0)? 0x00 : iter;
+        code[iter].pixl.BGRA = 0x00000000;
+        if (cclr <= 0)
+            code[iter].pixl.A = iter;
     }
     if ((cclr > 0) && fgrh && (fgrh->flgs & FLG_CTRN))
-        code[fgrh->tran].pixl.A = 0x00;
+        code[fgrh->tran].pixl.BGRA = 0x00000000;
 
     /// splitting data stream into codes
     do {

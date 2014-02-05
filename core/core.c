@@ -161,10 +161,9 @@ char *GetNextLine(char **file) {
     long  iter;
 
     if ((retn = SplitLine(file, '\n')))
-        if ((iter = strlen(retn)) > 0) {
+        if ((iter = strlen(retn)) > 0)
             if (retn[iter - 1] == '\r')
                 retn[iter - 1] = '\0';
-        }
     return retn;
 }
 
@@ -245,7 +244,6 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
     ASTD *anim;
     long ytmp;
 
-    iter = 0;
     if (*tail) {
         iter = temp = *tail;
         if (*pick == EMP_PICK) {
@@ -274,71 +272,70 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
             if (*pick != EMP_PICK)
                 printf("%s\n", (*pick)->path);
         }
-        while (!0) {
+        while (iter) {
             anim = iter->anim;
             if ((*time - iter->time) > anim->time[iter->fcur]) {
                 iter->time = *time;
                 if (++iter->fcur >= anim->fcnt)
                     iter->fcur = 0;
             }
-            if (!iter->prev)
-                break;
             iter = iter->prev;
         }
         if (*pick && (*pick != EMP_PICK)) {
             (*pick)->cpos.x = cptr.x - (*pick)->cptr.x;
             (*pick)->cpos.y = cptr.y - (*pick)->cptr.y;
-            iter = SortByY(tail);
+            SortByY(tail);
         }
     }
-    return iter;
+    return *tail;
 }
 
 
 
 void DrawPixStdThrd(DRAW *draw) {
     long x, y, xmin, ymin, xmax, ymax, xoff, yoff, ysrc, ydst;
-    BGRA b_r_, _g_a, pixl, *bptr;
-    UNIT *head;
+    BGRA b_r_, _g_a, *bptr;
+    UNIT *tail;
     ASTD *anim;
 
-    head = draw->head;
-    while (head) {
-        anim = head->anim;
+    tail = draw->tail;
+    while (tail) {
+        anim = tail->anim;
 
         xoff = draw->pict->size.x;
-        yoff = head->cpos.y - (anim->ydim << head->scal);
-        xmin = max(0, -head->cpos.x);
+        yoff = tail->cpos.y - (anim->ydim << tail->scal);
+        xmin = max(0, -tail->cpos.x);
         ymin = max(0, draw->ymin - yoff);
-        xmax = min(anim->xdim << head->scal, xoff - head->cpos.x);
-        ymax = min(anim->ydim << head->scal, draw->ymax - yoff);
-        yoff = anim->xdim * anim->ydim * head->fcur;
+        xmax = min(anim->xdim << tail->scal, xoff - tail->cpos.x);
+        ymax = min(anim->ydim << tail->scal, draw->ymax - yoff);
+        yoff = anim->xdim * anim->ydim * tail->fcur;
         bptr = draw->pict->bptr;
 
         /// alpha blending here
         for (y = ymin; y < ymax; y++) {
-            ydst = (y + head->cpos.y - (anim->ydim << head->scal))
-                 * xoff + head->cpos.x;
-            ysrc = (y >> head->scal) * anim->xdim + yoff;
-            for (x = xmin; x < xmax; x++) {
+            ydst = (y + tail->cpos.y - (anim->ydim << tail->scal))
+                 * xoff + tail->cpos.x + xmin;
+            ysrc = (y >> tail->scal) * anim->xdim + yoff;
+            for (x = xmin; x < xmax; x++, ydst++) {
+                if (bptr[ydst].A == 0xFF)
+                    continue;
 
-                pixl = anim->bpal[anim->bptr.indx[ysrc + (x >> head->scal)]];
-//                pixl = anim->bptr.bgra[ysrc + (x >> head->scal)];
+                b_r_ = anim->bpal[anim->bptr.indx[ysrc + (x >> tail->scal)]];
+//                b_r_ = anim->bptr.bgra[ysrc + (x >> tail->scal)];
 
-                if (pixl.A == 0xFF)
-                    bptr[ydst + x] = pixl;
-                else if (pixl.A) {
-                    _g_a.BGRA = ((bptr[ydst + x].BGRA >> 8)
-                              &  0x00FF00FF) * (0xFF - pixl.A);
-                    b_r_.BGRA = ((bptr[ydst + x].BGRA     )
-                              &  0x00FF00FF) * (0xFF - pixl.A);
-                    bptr[ydst + x].BGRA = pixl.BGRA
-                              + (0x00FF00FF  & (b_r_.BGRA >> 8))
-                              + (0xFF00FF00  & (_g_a.BGRA     ));
+                if (bptr[ydst].A == 0x00)
+                    bptr[ydst] = b_r_;
+                else {
+                    _g_a.BGRA = ((b_r_.BGRA >> 8) & 0x00FF00FF)
+                              * (0xFF - bptr[ydst].A);
+                    b_r_.BGRA = ((b_r_.BGRA     ) & 0x00FF00FF)
+                              * (0xFF - bptr[ydst].A);
+                    bptr[ydst].BGRA += (0x00FF00FF & (b_r_.BGRA >> 8))
+                                    +  (0xFF00FF00 & (_g_a.BGRA     ));
                 }
             }
         }
-        head = head->next;
+        tail = tail->prev;
     }
 }
 
@@ -405,7 +402,7 @@ void FillLibStdThrd(FILL *fill) {
             fill->load += fill->curr;
             printf(" --- %ld objects loaded!\n\n", fill->curr);
             tail->next = NULL;
-            fill->ulib->uses = 1;
+            fill->ulib->uses = 5;
             fill->ulib->ucnt = fill->curr;
             fill->ulib->uarr = malloc(fill->curr * sizeof(*fill->ulib->uarr));
             for (fill->curr--; fill->curr >= 0; fill->curr--) {

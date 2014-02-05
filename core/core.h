@@ -48,7 +48,7 @@ typedef struct _FILL {
 
 /// parameter structure for DrawPixStdThrd()
 typedef struct _DRAW {
-    UNIT *head;
+    UNIT *tail;
     PICT *pict;
     long ymin, ymax;
 } DRAW;
