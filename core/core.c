@@ -453,7 +453,7 @@ void FillLibStdThrd(FILL *fill) {
             fill->load += fill->curr;
             printf(" --- %ld objects loaded!\n\n", fill->curr);
             tail->next = NULL;
-            fill->ulib->uses = 5;
+            fill->ulib->uses = 10;
             fill->ulib->ucnt = fill->curr;
             fill->ulib->uarr = malloc(fill->curr * sizeof(*fill->ulib->uarr));
             for (fill->curr--; fill->curr >= 0; fill->curr--) {

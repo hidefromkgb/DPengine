@@ -285,11 +285,10 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                         FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
                         for (indx = 0; indx < ncpu; indx++) {
                             thrd[indx].fprm.draw.tail = iter;
+                            ResetEvent(*thrd[indx].evto);
                             SetEvent(thrd[indx].evti);
                         }
                         WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
-                        for (indx = 0; indx < ncpu; indx++)
-                            ResetEvent(*thrd[indx].evto);
 
                         UpdateLayeredWindow(hwnd, NULL, &zpos,
                                            (SIZE*)&draw.size, devc,

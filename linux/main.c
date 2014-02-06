@@ -73,6 +73,15 @@ void ResetSem(SEML *list, LST_TYPE what, long drop) {
 
 
 
+void DebugSem(SEML *list) {
+    pthread_mutex_lock(&list->cmtx);
+    printf("%08X [%c%c%c%c]\n", list,
+          (list->list & 8)? '1' : '0', (list->list & 4)? '1' : '0', (list->list & 2)? '1' : '0', (list->list & 1)? '1' : '0');
+    pthread_mutex_unlock(&list->cmtx);
+}
+
+
+
 void WaitForSem(SEML *list, LST_TYPE what) {
     pthread_mutex_lock(&list->cmtx);
     while (!(list->list & what))
@@ -104,9 +113,10 @@ void ThrdFunc(void *data) {
         ResetSem(data->isem, data->uuid, TRUE);
         if (data->loop)
             data->func(&data->fprm);
+        else
+            printf("Thread exited\n");
         ResetSem(data->osem, data->uuid, FALSE);
     } while (data->loop);
-    printf("Thread exited\n");
     #undef data
 }
 
@@ -151,9 +161,9 @@ gboolean DrawFunc(gpointer user) {
 
         for (iter = 0; iter < tmrf->ncpu; iter++)
             tmrf->thrd[iter].fprm.draw.tail = tail;
+        ResetSem(tmrf->osem, tmrf->osem->full, TRUE);
         ResetSem(tmrf->isem, tmrf->isem->full, FALSE);
         WaitForSemList(tmrf->osem, TRUE);
-        ResetSem(tmrf->osem, tmrf->osem->full, TRUE);
 
         gdk_window_invalidate_rect(tmrf->gwnd->window, NULL, FALSE);
         tmrf->fram++;
@@ -287,9 +297,6 @@ int main(int argc, char *argv[]) {
     ulib = NULL;
 
     ncpu = min(sizeof(LST_TYPE) * 8, max(1, sysconf(_SC_NPROCESSORS_ONLN)));
-
-    ncpu = 1;
-
     thrd = malloc(ncpu * sizeof(*thrd));
     InitSemList(&isem, ncpu, 0);
     InitSemList(&osem, ncpu, ~0);
