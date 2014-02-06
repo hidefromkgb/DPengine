@@ -1,8 +1,4 @@
 #include "core.h"
-#include <string.h>
-
-#define max(a, b) (((a) > (b))? (a) : (b))
-#define min(a, b) (((a) < (b))? (a) : (b))
 
 
 
@@ -36,7 +32,7 @@
 /// 'behaviorgroup'
 #define AVT_BGRP 0xA40004B2
 /// 'Categories'
-#define AVT_CATS 0xC831B868
+#define AVT_CTGS 0xC831B868
 /// 'Speak'
 #define AVT_PHRS 0x90E5E31D
 
@@ -164,23 +160,6 @@ char *GetNextLine(char **file) {
         if ((iter = strlen(retn)) > 0)
             if (retn[iter - 1] == '\r')
                 retn[iter - 1] = '\0';
-    return retn;
-}
-
-
-
-char *LoadConfig(char *conf) {
-    char *retn = NULL;
-    long file, size;
-
-    if ((file = open(conf, O_RDONLY)) > 0) {
-        size = lseek(file, 0, SEEK_END);
-        lseek(file, 0, SEEK_SET);
-        retn = malloc(size + 1);
-        read(file, retn, size);
-        retn[size] = '\0';
-        close(file);
-    }
     return retn;
 }
 
@@ -330,8 +309,8 @@ void DrawPixStdThrd(DRAW *draw) {
                               * (0xFF - bptr[ydst].A);
                     b_r_.BGRA = ((b_r_.BGRA     ) & 0x00FF00FF)
                               * (0xFF - bptr[ydst].A);
-                    bptr[ydst].BGRA += (0x00FF00FF & (b_r_.BGRA >> 8))
-                                    +  (0xFF00FF00 & (_g_a.BGRA     ));
+                    bptr[ydst].BGRA += ((b_r_.BGRA >> 8) & 0x00FF00FF)
+                                    +  ((_g_a.BGRA     ) & 0xFF00FF00);
                 }
             }
         }
@@ -341,59 +320,131 @@ void DrawPixStdThrd(DRAW *draw) {
 
 
 
+long MakeUnitStd(UNIT **tail, UNIT *info) {
+    #pragma pack(push, 1)
+    struct {
+        RGBX csrc;
+        uint8_t tran;
+        RGBX cdst;
+    } *amap;
+    #pragma pack(pop)
+    char *apal, *file;
+    long  indx;
+    BGRA *bpal;
+    UNIT *prev;
+
+    if (!(*tail)) {
+        (*tail) = malloc(sizeof(**tail));
+        (*tail)->prev = NULL;
+    }
+    else {
+        (*tail)->next = malloc(sizeof(**tail));
+        (*tail)->next->prev = (*tail);
+        (*tail) = (*tail)->next;
+    }
+    prev = (*tail)->prev;
+    *(*tail) = *info;
+    (*tail)->prev = prev;
+    prev = (*tail);
+    prev->anim = NULL;
+    if ((prev->anim = MakeAnimStd(prev->path, ~0))) {
+        prev->cpos.x = PRNG(&seed) % (prev->cpos.x
+                     - (((ASTD*)prev->anim)->xdim << prev->scal));
+        prev->cpos.y = PRNG(&seed) % (prev->cpos.y
+                     - (((ASTD*)prev->anim)->ydim << prev->scal))
+                     + (((ASTD*)prev->anim)->ydim << prev->scal);
+        prev->fcur = PRNG(&seed) % ((ASTD*)prev->anim)->fcnt;
+        if ((bpal = ((ASTD*)prev->anim)->bpal)) {
+            apal = strdup(prev->path);
+            indx = strlen(apal);
+            apal[indx - 3] = 'a';
+            apal[indx - 2] = 'r';
+            apal[indx - 1] = 't';
+            if (bpal && (file = LoadFile(apal, &indx))) {
+                free(apal);
+                for (apal  = file + indx -  sizeof(*amap);
+                     apal >= file;  apal -= sizeof(*amap))
+                    for (amap = (typeof(amap))apal,
+                         indx = 0; indx < 256; indx++)
+                        if ((bpal[indx].R == amap->csrc.R)
+                        &&  (bpal[indx].G == amap->csrc.G)
+                        &&  (bpal[indx].B == amap->csrc.B)) {
+                             bpal[indx].R = ((long)amap->cdst.R
+                                          * amap->tran) >> 8;
+                             bpal[indx].G = ((long)amap->cdst.G
+                                          * amap->tran) >> 8;
+                             bpal[indx].B = ((long)amap->cdst.B
+                                          * amap->tran) >> 8;
+                             bpal[indx].A = amap->tran;
+                             break;
+                        }
+                free(file);
+                apal = NULL;
+            }
+            free(apal);
+        }
+        return ~0;
+    }
+    if ((*tail)->prev) {
+        (*tail) = (*tail)->prev;
+        free((*tail)->next);
+    }
+    else {
+        free(*tail);
+        *tail = NULL;
+    }
+    return 0;
+}
+
+
+
 void FillLibStdThrd(FILL *fill) {
-    #define anih ((ASTD*)tail->anim)
     char *file, *fptr, *conf;
-    UNIT *tail;
+    UNIT *tail,  info;
 
     tail = NULL;
     fill->curr = 0;
+    info.cpos = fill->scrn;
+    info.ulib = fill->ulib;
     conf = ConcatPath(fill->ulib->path, DEF_CONF);
-    if ((file = fptr = LoadConfig(conf))) {
+    if ((file = fptr = LoadFile(conf, NULL))) {
         free(conf);
         while ((conf = GetNextLine(&fptr))) {
             switch (DetermineType(&conf)) {
                 case AVT_BHVR:
-                    if (!tail) {
-                        tail = malloc(sizeof(*tail));
-                        tail->prev = NULL;
-                    }
-                    else {
-                        tail->next = malloc(sizeof(*tail));
-                        tail->next->prev = tail;
-                        tail = tail->next;
-                    }
                     SplitLine(&conf, DEF_TSEP);
                     SplitLine(&conf, DEF_TSEP);
                     SplitLine(&conf, DEF_TSEP);
                     SplitLine(&conf, DEF_TSEP);
                     SplitLine(&conf, DEF_TSEP);
-                    tail->path = ConcatPath(fill->ulib->path,
-                                            SplitLine(&conf, DEF_TSEP));
-                    tail->anim = NULL;
-                    if ((tail->anim = MakeAnimStd(tail->path, ~0))) {
-                        printf("DONE:\t%s\n", tail->path);
-                        tail->scal = 1;
-                        tail->cpos.x = PRNG(&seed) % (fill->scrn.x
-                                     - (anih->xdim << tail->scal));
-                        tail->cpos.y = PRNG(&seed) % (fill->scrn.y
-                                     - (anih->ydim << tail->scal))
-                                     + (anih->ydim << tail->scal);
-                        tail->fcur = PRNG(&seed) % anih->fcnt;
-                        tail->ulib = fill->ulib;
+                    info.path = ConcatPath(fill->ulib->path,
+                                           SplitLine(&conf, DEF_TSEP));
+                    SplitLine(&conf, DEF_TSEP);
+                    info.flgs = strtol(SplitLine(&conf, DEF_TSEP), NULL, 16);
+                    info.scal = (info.flgs >> 24) & 3;
+                    if (MakeUnitStd(&tail, &info)) {
+                        printf("DONE:\t%s\n", info.path);
                         fill->curr++;
                     }
                     else {
-                        printf("FAILED:\t%s\n", tail->path);
-                        free(tail->path);
-                        if (tail->prev) {
-                            tail = tail->prev;
-                            free(tail->next);
-                        }
-                        else {
-                            free(tail);
-                            tail = NULL;
-                        }
+                        printf("FAILED:\t%s\n", info.path);
+                        free(info.path);
+                    }
+                    break;
+
+                case AVT_EFCT:
+                    SplitLine(&conf, DEF_TSEP);
+                    SplitLine(&conf, DEF_TSEP);
+                    info.path = ConcatPath(fill->ulib->path,
+                                           SplitLine(&conf, DEF_TSEP));
+                    info.scal = 0;
+                    if (MakeUnitStd(&tail, &info)) {
+                        printf("DONE:\t%s\n", info.path);
+                        fill->curr++;
+                    }
+                    else {
+                        printf("FAILED:\t%s\n", info.path);
+                        free(info.path);
                     }
                     break;
             }
@@ -414,7 +465,6 @@ void FillLibStdThrd(FILL *fill) {
         conf = NULL;
     }
     free(conf);
-    #undef anih
 }
 
 

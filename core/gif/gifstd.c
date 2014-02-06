@@ -98,8 +98,9 @@ long WriteFrameStd(GHDR *ghdr, FHDR *fhdr, void *anim, BGRA *bptr,
 
 
 ASTD *MakeAnimStd(char *name, long indx) {
-    ASTD *retn = malloc(sizeof(*retn));
+    ASTD *retn;
 
+    retn = malloc(sizeof(*retn));
     retn->bpal = (indx)? malloc(256 * sizeof(*retn->bpal)) : NULL;
     if (MakeAnim((void*)name, MAF_FILE | ((indx)? MAF_AIND : 0), (void*)retn,
                   NULL, InitAnimStd, WriteFrameStd, NULL) <= 0) {

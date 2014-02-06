@@ -135,3 +135,12 @@ typedef long (*GPUT)(void *data, void *anim);
  **/
 long MakeAnim(void *inpt, long flgs, void *anim,
               GGET gget, GINI gini, GWFR gwfr, GPUT gput);
+
+/** _________________________________________________________________________
+    Just an auxiliary function to load a file into memory. Freeing is done by
+    caller. Returns a pointer to file data in case of success, 0 otherwise.
+    _________________________________________________________________________
+    NAME: ASCIIZ-string with a file name
+    SIZE: returned size of the file read
+ **/
+char *LoadFile(char *name, long *size);

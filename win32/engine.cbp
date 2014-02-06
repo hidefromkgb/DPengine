@@ -17,7 +17,6 @@
 		</Build>
 		<Compiler>
 			<Add option="-fexpensive-optimizations" />
-			<Add option="-Os" />
 			<Add option="-O2" />
 			<Add option="-Wall" />
 		</Compiler>

@@ -17,7 +17,6 @@
 		</Build>
 		<Compiler>
 			<Add option="-fexpensive-optimizations" />
-			<Add option="-Os" />
 			<Add option="-O2" />
 			<Add option="-Wall" />
 			<Add option="`pkg-config gtk+-2.0 --cflags`" />
@@ -25,6 +24,7 @@
 		<Linker>
 			<Add option="-s" />
 			<Add option="`pkg-config gtk+-2.0 --libs`" />
+			<Add option="-pthread" />
 		</Linker>
 		<Unit filename="../core/core.c">
 			<Option compilerVar="CC" />

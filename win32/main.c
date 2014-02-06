@@ -23,7 +23,7 @@ typedef struct _THRD {
     union {
         FILL fill;
         DRAW draw;
-    } pass;
+    } fprm;
     long loop;
     HANDLE evti, *evto;
     void (*func)(void*);
@@ -56,7 +56,7 @@ DWORD CALLBACK ThrdFunc(LPVOID data) {
         WaitForSingleObject(data->evti, INFINITE);
         ResetEvent(data->evti);
         if (data->loop)
-            data->func(&data->pass);
+            data->func(&data->fprm);
         SetEvent(*data->evto);
     } while (data->loop);
     return TRUE;
@@ -109,8 +109,8 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
         case WM_MOUSEMOVE:
             if (pick) {
-                cptr.x = LOWORD(lPrm);
-                cptr.y = HIWORD(lPrm);
+                cptr.x = (short)(lPrm);
+                cptr.y = (short)(lPrm >> 16);
             }
             return 0;
 
@@ -195,9 +195,9 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             thrd[indx].evto = &evto[indx];
             thrd[indx].evti = CreateEvent(NULL, FALSE, FALSE, NULL);
             thrd[indx].loop = TRUE;
-            thrd[indx].func = FillLibStdThrd;
-            thrd[indx].pass.fill.scrn = draw.size;
-            thrd[indx].pass.fill.load = 0;
+            thrd[indx].func = (void (*)(void*))FillLibStdThrd;
+            thrd[indx].fprm.fill.scrn = draw.size;
+            thrd[indx].fprm.fill.load = 0;
             CreateThread(NULL, 0, ThrdFunc, &thrd[indx], 0, NULL);
         }
         indx = 0;
@@ -218,7 +218,7 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             free(temp);
             indx = WaitForMultipleObjects(ncpu, evto, FALSE, INFINITE);
             if ((indx -= WAIT_OBJECT_0) < MAXIMUM_WAIT_OBJECTS) {
-                thrd[indx].pass.fill.ulib = ulib;
+                thrd[indx].fprm.fill.ulib = ulib;
                 ResetEvent(*thrd[indx].evto);
                 SetEvent(thrd[indx].evti);
             }
@@ -237,7 +237,7 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         }
         WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
         for (nlim = indx = 0; indx < ncpu; indx++) {
-            nlim += thrd[indx].pass.fill.load;
+            nlim += thrd[indx].fprm.fill.load;
         }
         if (nlim) {
             time = timeGetTime() - time;
@@ -247,13 +247,13 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             UnitListFromLib(ulib, &tail);
             for (indx = 0; indx < ncpu; indx++) {
                 thrd[indx].loop = TRUE;
-                thrd[indx].func = DrawPixStdThrd;
-                thrd[indx].pass.draw = (DRAW){NULL, &draw,
+                thrd[indx].func = (void (*)(void*))DrawPixStdThrd;
+                thrd[indx].fprm.draw = (DRAW){NULL, &draw,
                                        ((draw.size.y + 1) / ncpu)* indx,
                                        ((draw.size.y + 1) / ncpu)*(indx + 1)};
                 CreateThread(NULL, 0, ThrdFunc, &thrd[indx], 0, NULL);
             }
-            thrd[ncpu - 1].pass.draw.ymax = draw.size.y;
+            thrd[ncpu - 1].fprm.draw.ymax = draw.size.y;
 
             CreateThread(NULL, 0, TimeFunc, &ttmr, 0, NULL);
             devc = CreateCompatibleDC(NULL);
@@ -284,7 +284,7 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                         scrr = (RECT){0, 0, draw.size.x, draw.size.y};
                         FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
                         for (indx = 0; indx < ncpu; indx++) {
-                            thrd[indx].pass.draw.tail = iter;
+                            thrd[indx].fprm.draw.tail = iter;
                             SetEvent(thrd[indx].evti);
                         }
                         WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
@@ -312,7 +312,7 @@ int CALLBACK WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             }
             WaitForMultipleObjects(ncpu, evto, TRUE, INFINITE);
 
-            FreeLibList(&ulib, FreeAnimStd);
+            FreeLibList(&ulib, (void (*)(void**))FreeAnimStd);
             FreeUnitList(&tail, NULL);
         }
         for (indx = 0; indx < ncpu; indx++) {

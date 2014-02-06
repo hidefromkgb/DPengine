@@ -2,6 +2,13 @@
 
 #define EMP_PICK (UNIT*)1
 
+#ifndef max
+#define max(a, b) (((a) > (b))? (a) : (b))
+#endif
+#ifndef min
+#define min(a, b) (((a) < (b))? (a) : (b))
+#endif
+
 
 
 typedef struct _VEC2 {
@@ -22,7 +29,13 @@ typedef struct _UNIT {
     ulong fcur,         /// current frame of the animation
           time,         /// current frame timestamp (in ms)
           scal,         /// scaling factor in powers of 2
-          flgs;         /// unit flags (UCF_ prefix)
+          flgs,         /// unit flags (UCF_ prefix)
+          prob,         /// unit relative probability
+          mind,         /// minimum duration
+          maxd;         /// maximum duration
+    float dist,         /// movement per GIF time unit
+          gone,         /// current movement accumulator
+          angl;         /// current movement angle
     struct _UNIT *prev, /// previous unit in the list
                  *next; /// next unit in the list
     struct _ULIB *ulib; /// link to the parent unit library
@@ -52,9 +65,6 @@ typedef struct _DRAW {
     PICT *pict;
     long ymin, ymax;
 } DRAW;
-
-/// unit common flags
-/// unit library flags
 
 
 

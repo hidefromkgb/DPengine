@@ -61,6 +61,25 @@ typedef struct _CTBE {
 
 
 
+char *LoadFile(char *name, long *size) {
+    char *retn = 0;
+    long file, flen;
+
+    if ((file = open(name, O_RDONLY | O_BINARY)) > 0) {
+        flen = lseek(file, 0, SEEK_END);
+        lseek(file, 0, SEEK_SET);
+        retn = malloc(flen + 1);
+        read(file, retn, flen);
+        retn[flen] = '\0';
+        close(file);
+        if (size)
+            *size = flen;
+    }
+    return retn;
+}
+
+
+
 inline void ReadChunk(uint8_t **buff) {
     long skip;
 
@@ -227,13 +246,8 @@ long MakeAnim(void *inpt, long flgs, void *anim,
     FHDR *fhdr;
     RGBX *cpal;
 
-    if (!(flgs & MAF_GGET) &&
-       ((desc = open((char*)inpt, O_RDONLY | O_BINARY)) > 0)) {
+    if (!(flgs & MAF_GGET) && (buff = (uint8_t*)LoadFile((char*)inpt, NULL))) {
         /// FLGS only has MAF_FILE, reading from a file
-        buff = malloc(iter = lseek(desc, (off_t)0, SEEK_END));
-        lseek(desc, (off_t)0, SEEK_SET);
-        read(desc, buff, iter);
-        close(desc);
         ghdr = (GHDR*)buff;
     }
     else if ((flgs & MAF_GGET) && gget) {
