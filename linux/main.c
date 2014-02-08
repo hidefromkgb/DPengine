@@ -1,7 +1,3 @@
-//#include <stdio.h>
-//#include <dirent.h>
-//#include <pthread.h>
-//#include <sys/stat.h>
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
@@ -9,115 +5,107 @@
 
 
 
-#define LST_TYPE uint64_t
-
-#define FRM_SKIP 40
-#define DEF_SKIP 1
-
+#define SEM_NULL 0
+#define SEM_FULL ~SEM_NULL
+#define SEM_TYPE uint64_t
 
 
-/// semaphore list
-typedef struct _SEML {
-    pthread_cond_t cvar;
+
+/// semaphore data
+typedef struct _SEMD {
     pthread_mutex_t cmtx;
-    LST_TYPE list, full;
-} SEML;
+    pthread_cond_t cvar;
+    SEM_TYPE list, full;
+} SEMD;
 
+/// thread data
 typedef struct _THRD {
     union {
         FILL fill;
         DRAW draw;
     } fprm;
     long loop;
-    LST_TYPE uuid;
-    pthread_t ithr;
-    SEML *isem, *osem;
+    SEM_TYPE uuid;
+    SEMD *isem, *osem;
     void (*func)(void*);
+    pthread_t ithr;
 } THRD;
 
-typedef struct _TMRF {
-    SEML *isem, *osem;
+/// timer data
+typedef struct _TMRD {
+    SEMD isem, osem;
     ulong *time, ncpu, fram;
     cairo_surface_t *surf;
     GtkWidget *gwnd;
     THRD *thrd;
     UNIT *tail;
     PICT *pict;
-} TMRF;
+} TMRD;
 
-pthread_cond_t cond;
+
 
 UNIT *pick = NULL;
 VEC2 cptr = {};
 
 
 
-void InitSemList(SEML *retn, long lstl, LST_TYPE mask) {
-    pthread_mutex_init(&retn->cmtx, NULL);
+void FreeSemaphore(SEMD *retn) {
+    pthread_cond_destroy(&retn->cvar);
+    pthread_mutex_destroy(&retn->cmtx);
+}
+
+
+
+void MakeSemaphore(SEMD *retn, long lstl, SEM_TYPE mask) {
     pthread_cond_init(&retn->cvar, NULL);
+    pthread_mutex_init(&retn->cmtx, NULL);
+    pthread_mutex_lock(&retn->cmtx);
     retn->full = (1 << lstl) - 1;
     retn->list = retn->full & mask;
+    pthread_mutex_unlock(&retn->cmtx);
 }
 
 
 
-void ResetSem(SEML *list, LST_TYPE what, long drop) {
-    pthread_mutex_lock(&list->cmtx);
-    if (drop)
-        list->list &= ~what;
+void PickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask) {
+    pthread_mutex_lock(&drop->cmtx);
+    drop->list &= ~(drop->full & mask);
+    pthread_mutex_unlock(&drop->cmtx);
+
+    pthread_mutex_lock(&pick->cmtx);
+    pick->list |=  (pick->full & mask);
+    pthread_cond_broadcast(&pick->cvar);
+    pthread_mutex_unlock(&pick->cmtx);
+}
+
+
+
+SEM_TYPE WaitSemaphore(SEMD *wait, SEM_TYPE mask) {
+    SEM_TYPE retn;
+
+    pthread_mutex_lock(&wait->cmtx);
+    if (mask)
+        while ((wait->list & mask) != (wait->full & mask))
+            pthread_cond_wait(&wait->cvar, &wait->cmtx);
     else
-        list->list |=  what;
-    pthread_cond_signal(&list->cvar);
-    pthread_mutex_unlock(&list->cmtx);
-}
-
-
-
-void DebugSem(SEML *list) {
-    pthread_mutex_lock(&list->cmtx);
-    printf("%08X [%c%c%c%c]\n", list,
-          (list->list & 8)? '1' : '0', (list->list & 4)? '1' : '0', (list->list & 2)? '1' : '0', (list->list & 1)? '1' : '0');
-    pthread_mutex_unlock(&list->cmtx);
-}
-
-
-
-void WaitForSem(SEML *list, LST_TYPE what) {
-    pthread_mutex_lock(&list->cmtx);
-    while (!(list->list & what))
-        pthread_cond_wait(&list->cvar, &list->cmtx);
-    pthread_mutex_unlock(&list->cmtx);
-}
-
-
-
-LST_TYPE WaitForSemList(SEML *list, long full) {
-    LST_TYPE retn;
-
-    pthread_mutex_lock(&list->cmtx);
-    while (( full && list->list != list->full)
-       ||  (!full && list->list == 0)) {
-        pthread_cond_wait(&list->cvar, &list->cmtx);
-    }
-    retn = list->list;
-    pthread_mutex_unlock(&list->cmtx);
+        while (!wait->list)
+            pthread_cond_wait(&wait->cvar, &wait->cmtx);
+    retn = wait->list;
+    pthread_mutex_unlock(&wait->cmtx);
     return retn;
 }
 
 
 
-void ThrdFunc(void *data) {
-    #define data ((THRD*)data)
+void ThrdFunc(THRD *data) {
     do {
-        WaitForSem(data->isem, data->uuid);
-        ResetSem(data->isem, data->uuid, TRUE);
+        WaitSemaphore(data->isem, data->uuid);
         if (data->loop)
             data->func(&data->fprm);
         else
             printf("Thread exited\n");
-        ResetSem(data->osem, data->uuid, FALSE);
+        PickSemaphore(data->isem, data->osem, data->uuid);
     } while (data->loop);
-    #undef data
 }
 
 
@@ -133,40 +121,41 @@ gboolean TimeFunc(gpointer user) {
 
 
 gboolean FPSFunc(gpointer user) {
-    TMRF *tmrf = user;
+    TMRD *tmrd = user;
     char fsec[24];
 
-    sprintf(fsec, "%u FPS", tmrf->fram);
-    tmrf->fram = 0;
+    sprintf(fsec, "%u FPS", tmrd->fram);
+    tmrd->fram = 0;
     printf("%s\n", fsec);
-    gtk_window_set_title(GTK_WINDOW(tmrf->gwnd), fsec);
+    gtk_window_set_title(GTK_WINDOW(tmrd->gwnd), fsec);
     return TRUE;
 }
 
 
 
 gboolean DrawFunc(gpointer user) {
-    TMRF *tmrf = user;
+    TMRD *tmrd = user;
     cairo_t *surf;
     UNIT *tail;
     long iter;
 
-    if (tmrf->gwnd->window &&
-       (tail = UpdateFrameStd(&tmrf->tail, &pick, tmrf->time, cptr))) {
-        surf = cairo_create(tmrf->surf);
+    if (tmrd->gwnd->window &&
+       (tail = UpdateFrameStd(&tmrd->tail, &pick, tmrd->time, cptr))) {
+        surf = cairo_create(tmrd->surf);
         cairo_set_operator(surf, CAIRO_OPERATOR_SOURCE);
         cairo_set_source_rgba(surf, 0, 0, 0, 0);
         cairo_paint(surf);
         cairo_destroy(surf);
 
-        for (iter = 0; iter < tmrf->ncpu; iter++)
-            tmrf->thrd[iter].fprm.draw.tail = tail;
-        ResetSem(tmrf->osem, tmrf->osem->full, TRUE);
-        ResetSem(tmrf->isem, tmrf->isem->full, FALSE);
-        WaitForSemList(tmrf->osem, TRUE);
+        for (iter = 0; iter < tmrd->ncpu; iter++)
+            tmrd->thrd[iter].fprm.draw.tail = tail;
+        PickSemaphore(&tmrd->osem, &tmrd->isem, SEM_FULL);
+        WaitSemaphore(&tmrd->osem, SEM_FULL);
 
-        gdk_window_invalidate_rect(tmrf->gwnd->window, NULL, FALSE);
-        tmrf->fram++;
+        gdk_window_invalidate_rect(tmrd->gwnd->window, NULL, FALSE);
+        gdk_window_process_updates(tmrd->gwnd->window, FALSE);
+
+        tmrd->fram++;
         return TRUE;
     }
     return FALSE;
@@ -175,9 +164,9 @@ gboolean DrawFunc(gpointer user) {
 
 
 void ScreenChange(GtkWidget *gwnd, GdkScreen *scrn, gpointer user) {
-    GdkColormap *cmap = gdk_screen_get_rgba_colormap(
-                        gtk_widget_get_screen(gwnd));
-    if (cmap)
+    GdkColormap *cmap;
+
+    if ((cmap = gdk_screen_get_rgba_colormap(gtk_widget_get_screen(gwnd))))
         gtk_widget_set_colormap(gwnd, cmap);
     else {
         printf("Transparent windows not supported! Emergency exit...\n");
@@ -212,13 +201,13 @@ gboolean KeyDown(GtkWidget *gwnd, GdkEventKey *ekey, gpointer user) {
 
 
 gboolean MouseButton(GtkWidget* gwnd,
-                     GdkEventButton *evmb, GdkWindowEdge edge) {
-    if (evmb->button == 1)
-        switch (evmb->type) {
+                     GdkEventButton *embt, GdkWindowEdge edge) {
+    if (embt->button == 1)
+        switch (embt->type) {
             case GDK_BUTTON_PRESS:
                 pick = EMP_PICK;
-                cptr.x = evmb->x;
-                cptr.y = evmb->y;
+                cptr.x = embt->x;
+                cptr.y = embt->y;
                 break;
 
             case GDK_BUTTON_RELEASE:
@@ -245,19 +234,18 @@ int main(int argc, char *argv[]) {
     GtkWidget *gwnd;
     GdkScreen *gscr;
 
-    struct dirent **dirs;
+    ulong msec, mtmp;
     long ncpu, iter, curr;
-    char *anim = "anim";
+    struct dirent **dirs;
+    char *anim;
 
-    UNIT *tail;
     ULIB *ulib;
+    UNIT *tail;
+    THRD *thrd;
+    TMRD tmrd;
     PICT pict;
 
-    ulong msec, mtmp;
-    SEML isem, osem;
-    THRD *thrd;
-    TMRF tmrf;
-
+    anim = "anim";
     gtk_init(&argc, &argv);
     gscr = gtk_window_get_screen(gwnd = gtk_window_new(GTK_WINDOW_TOPLEVEL));
     ScreenChange(gwnd, NULL, NULL);
@@ -296,21 +284,17 @@ int main(int argc, char *argv[]) {
     tail = NULL;
     ulib = NULL;
 
-    ncpu = min(sizeof(LST_TYPE) * 8, max(1, sysconf(_SC_NPROCESSORS_ONLN)));
+    ncpu = min(sizeof(SEM_TYPE) * 8, max(1, sysconf(_SC_NPROCESSORS_ONLN)));
     thrd = malloc(ncpu * sizeof(*thrd));
-    InitSemList(&isem, ncpu, 0);
-    InitSemList(&osem, ncpu, ~0);
+    MakeSemaphore(&tmrd.isem, ncpu, SEM_NULL);
+    MakeSemaphore(&tmrd.osem, ncpu, SEM_FULL);
     for (iter = 0; iter < ncpu; iter++) {
-        thrd[iter].isem = &isem;
-        thrd[iter].osem = &osem;
-        thrd[iter].func = (void (*)(void*))FillLibStdThrd;
-        thrd[iter].loop = TRUE;
-        thrd[iter].uuid = 1 << iter;
-        thrd[iter].fprm.fill.load = 0;
-        thrd[iter].fprm.fill.scrn = pict.size;
-        pthread_create(&thrd[iter].ithr, NULL, ThrdFunc, &thrd[iter]);
+        thrd[iter] = (THRD){{(FILL){NULL, pict.size, 0}}, TRUE,
+                            1 << iter, &tmrd.isem, &tmrd.osem,
+                            (void (*)(void*))FillLibStdThrd};
+        pthread_create(&thrd[iter].ithr, NULL,
+                      (void (*)(void*))ThrdFunc, &thrd[iter]);
     }
-
     TimeFunc(&mtmp);
     seed = mtmp;
     if ((iter = scandir(anim, &dirs, NULL, alphasort)) >= 0) {
@@ -318,24 +302,21 @@ int main(int argc, char *argv[]) {
             if ((dirs[iter]->d_type == DT_DIR)
             &&  strcmp(dirs[iter]->d_name, ".")
             &&  strcmp(dirs[iter]->d_name, "..")) {
-                curr = WaitForSemList(&osem, FALSE);
+                curr = WaitSemaphore(&tmrd.osem, SEM_NULL);
                 curr = log2l(curr & (curr ^ (curr - 1)));
                 MakeEmptyLib(&ulib, anim, dirs[iter]->d_name);
                 thrd[curr].fprm.fill.ulib = ulib;
-                ResetSem(&osem, 1 << curr, TRUE);
-                ResetSem(&isem, 1 << curr, FALSE);
+                PickSemaphore(&tmrd.osem, &tmrd.isem, 1 << curr);
             }
             free(dirs[iter]);
         }
         free(dirs);
     }
-    WaitForSemList(&osem, TRUE);
-    printf("\n");
+    WaitSemaphore(&tmrd.osem, SEM_FULL);
     for (iter = 0; iter < ncpu; iter++)
         thrd[iter].loop = FALSE;
-    ResetSem(&osem, osem.full, TRUE);
-    ResetSem(&isem, isem.full, FALSE);
-    WaitForSemList(&osem, TRUE);
+    PickSemaphore(&tmrd.osem, &tmrd.isem, SEM_FULL);
+    WaitSemaphore(&tmrd.osem, SEM_FULL);
 
     if (ulib) {
         TimeFunc(&msec);
@@ -351,24 +332,26 @@ int main(int argc, char *argv[]) {
             thrd[iter].fprm.draw = (DRAW){NULL, &pict,
                                    ((pict.size.y + 1) / ncpu)* iter,
                                    ((pict.size.y + 1) / ncpu)*(iter + 1)};
-            pthread_create(&thrd[iter].ithr, NULL, ThrdFunc, &thrd[iter]);
+            pthread_create(&thrd[iter].ithr, NULL,
+                          (void (*)(void*))ThrdFunc, &thrd[iter]);
         }
         thrd[ncpu - 1].fprm.draw.ymax = pict.size.y;
 
         UnitListFromLib(ulib, &tail);
-        tmrf = (TMRF){&isem, &osem, &msec, ncpu, 0,
-                       surf,  gwnd,  thrd, tail, &pict};
-        g_timeout_add(DEF_SKIP, TimeFunc, &msec);
-        g_timeout_add(FRM_SKIP, DrawFunc, &tmrf);
-        g_timeout_add(1000, FPSFunc, &tmrf);
+        tmrd = (TMRD){tmrd.isem, tmrd.osem, &msec, ncpu,
+                      0, surf, gwnd, thrd, tail, &pict};
+        g_timeout_add(MIN_WAIT, TimeFunc, &msec);
+        g_timeout_add(FRM_WAIT, DrawFunc, &tmrd);
+        g_timeout_add(1000, FPSFunc, &tmrd);
 
         gtk_widget_show_all(gwnd);
         gtk_main();
 
+        WaitSemaphore(&tmrd.osem, SEM_FULL);
         for (iter = 0; iter < ncpu; iter++)
             thrd[iter].loop = FALSE;
-        ResetSem(&isem, isem.full, FALSE);
-        WaitForSemList(&osem, TRUE);
+        PickSemaphore(&tmrd.osem, &tmrd.isem, SEM_FULL);
+        WaitSemaphore(&tmrd.osem, SEM_FULL);
 
         FreeLibList(&ulib, (void (*)(void**))FreeAnimStd);
         FreeUnitList(&tail, NULL);
@@ -376,6 +359,8 @@ int main(int argc, char *argv[]) {
     else
         printf("No animation base found! Exiting...\n");
     cairo_surface_destroy(surf);
+    FreeSemaphore(&tmrd.isem);
+    FreeSemaphore(&tmrd.osem);
     free(thrd);
     return 0;
 }

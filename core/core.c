@@ -94,6 +94,16 @@ long WhitespaceUTF8(char *line) {
 
 
 
+uint32_t HashLine(char *line) {
+    uint32_t hash = 0;
+
+    while (*line)
+        hash = SLH_PLUS + SLH_MULT * hash + *line++;
+    return hash;
+}
+
+
+
 char *SplitLine(char **tail, char tsep) {
     char *retn, *temp, *iter = *tail;
 
@@ -121,17 +131,9 @@ char *SplitLine(char **tail, char tsep) {
 
 
 uint32_t DetermineType(char **tail) {
-    uint32_t hash;
-    char *temp;
-
-    temp = SplitLine(tail, DEF_TSEP);
-    if (temp && (*temp != DEF_CMNT)) {
-        hash = 0;
-        do {
-            hash = SLH_PLUS + SLH_MULT * hash + *temp++;
-        } while (*temp);
-        return hash;
-    }
+    char *temp = SplitLine(tail, DEF_TSEP);
+    if (temp && (*temp != DEF_CMNT))
+        return HashLine(temp);
     return AVT_NONE;
 }
 
@@ -346,8 +348,28 @@ long MakeUnitStd(UNIT **tail, UNIT *info) {
     *(*tail) = *info;
     (*tail)->prev = prev;
     prev = (*tail);
-    prev->anim = NULL;
-    if ((prev->anim = MakeAnimStd(prev->path, ~0))) {
+
+    prev->hash = HashLine(prev->path);
+    info = prev->prev;
+    while (info) {
+        if (info->hash == prev->hash)
+            break;
+        info = info->prev;
+    }
+    if (info && strcmp(info->path, prev->path))
+        info = NULL;
+    if (info) {
+        free(prev->path);
+        prev->anim = info->anim;
+        prev->path = info->path;
+        prev->flgs |= UCF_COPY;
+    }
+    else {
+        prev->anim = MakeAnimStd(prev->path, ~0);
+        prev->flgs &= ~UCF_COPY;
+    }
+
+    if (prev->anim) {
         prev->cpos.x = PRNG(&seed) % (prev->cpos.x
                      - (((ASTD*)prev->anim)->xdim << prev->scal));
         prev->cpos.y = PRNG(&seed) % (prev->cpos.y
@@ -423,11 +445,12 @@ void FillLibStdThrd(FILL *fill) {
                     info.flgs = strtol(SplitLine(&conf, DEF_TSEP), NULL, 16);
                     info.scal = (info.flgs >> 24) & 3;
                     if (MakeUnitStd(&tail, &info)) {
-                        printf("DONE:\t%s\n", info.path);
+                        printf("[%c] %s\n",
+                              (tail->flgs & UCF_COPY)? 'C' : ' ', tail->path);
                         fill->curr++;
                     }
                     else {
-                        printf("FAILED:\t%s\n", info.path);
+                        printf("[!] %s\n", info.path);
                         free(info.path);
                     }
                     break;
@@ -439,11 +462,12 @@ void FillLibStdThrd(FILL *fill) {
                                            SplitLine(&conf, DEF_TSEP));
                     info.scal = 0;
                     if (MakeUnitStd(&tail, &info)) {
-                        printf("DONE:\t%s\n", info.path);
+                        printf("[%c] %s\n",
+                              (tail->flgs & UCF_COPY)? 'C' : ' ', tail->path);
                         fill->curr++;
                     }
                     else {
-                        printf("FAILED:\t%s\n", info.path);
+                        printf("[!] %s\n", info.path);
                         free(info.path);
                     }
                     break;
@@ -451,9 +475,10 @@ void FillLibStdThrd(FILL *fill) {
         }
         if (tail) {
             fill->load += fill->curr;
-            printf(" --- %ld objects loaded!\n\n", fill->curr);
+            printf("--- %s: %ld objects\n\n",
+                   fill->ulib->path, fill->curr);
             tail->next = NULL;
-            fill->ulib->uses = 10;
+            fill->ulib->uses = 25;
             fill->ulib->ucnt = fill->curr;
             fill->ulib->uarr = malloc(fill->curr * sizeof(*fill->ulib->uarr));
             for (fill->curr--; fill->curr >= 0; fill->curr--) {
@@ -479,9 +504,9 @@ void MakeEmptyLib(ULIB **head, char *base, char *path) {
         (*head)->prev->next = *head;
         (*head) = (*head)->prev;
     }
+    (*head)->uses = 0;
     (*head)->prev = NULL;
     (*head)->uarr = NULL;
-    (*head)->uses = 0;
     (*head)->path = ConcatPath(base, path);
 }
 
@@ -491,7 +516,7 @@ void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
     UNIT *iter = *tail;
 
     while (iter) {
-        if (adel) {
+        if (adel && !(iter->flgs & UCF_COPY)) {
             adel(&iter->anim);
             free(iter->path);
         }

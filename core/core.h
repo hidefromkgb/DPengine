@@ -1,6 +1,6 @@
 #include "gif/gifstd.h"
 
-#define EMP_PICK (UNIT*)1
+
 
 #ifndef max
 #define max(a, b) (((a) > (b))? (a) : (b))
@@ -11,10 +11,24 @@
 
 
 
+/// minimum allowed delay
+#define MIN_WAIT 1
+/// default frame delay
+#define FRM_WAIT 40
+/// signals the need to pick an object
+#define EMP_PICK (UNIT*)1
+
+/// with this flag, UNIT.ANIM and UNIT.PATH are copies, so don`t free them
+#define UCF_COPY 0x80000000
+
+
+
+/// two-dimensional integer vector
 typedef struct _VEC2 {
     long x, y;
 } VEC2;
 
+/// image wrapper, contains raw pixel data and dimensions
 typedef struct _PICT {
     BGRA *bptr;
     VEC2 size;
@@ -24,18 +38,20 @@ typedef struct _PICT {
 typedef struct _UNIT {
     void *anim;         /// animation data (the format may vary)
     char *path;         /// path to the original animation file
+    uint32_t hash;      /// path hash used for finding copies
     VEC2  cpos,         /// position of the unit`s lower-left corner
           cptr;         /// cursor coords on mousedown (for dragging)
-    ulong fcur,         /// current frame of the animation
+    ulong flgs,         /// unit flags (UCF_ prefix)
+          fcur,         /// current frame of the animation
           time,         /// current frame timestamp (in ms)
           scal,         /// scaling factor in powers of 2
-          flgs,         /// unit flags (UCF_ prefix)
           prob,         /// unit relative probability
           mind,         /// minimum duration
           maxd;         /// maximum duration
     float dist,         /// movement per GIF time unit
           gone,         /// current movement accumulator
-          angl;         /// current movement angle
+          xmov,         /// current movement X-component
+          ymov;         /// current movement Y-component
     struct _UNIT *prev, /// previous unit in the list
                  *next; /// next unit in the list
     struct _ULIB *ulib; /// link to the parent unit library
@@ -56,7 +72,7 @@ typedef struct _ULIB {
 typedef struct _FILL {
     ULIB *ulib;
     VEC2 scrn;
-    long curr, load;
+    long load, curr;
 } FILL;
 
 /// parameter structure for DrawPixStdThrd()
