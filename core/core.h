@@ -18,8 +18,16 @@
 /// signals the need to pick an object
 #define EMP_PICK (UNIT*)1
 
-/// with this flag, UNIT.ANIM and UNIT.PATH are copies, so don`t free them
+/// UNIT.ANIM and UNIT.PATH are copies, don`t free them
 #define UCF_COPY 0x80000000
+/// the unit can be flipped horizontally
+#define UCF_CANX 0x00800000
+/// the unit can be flipped vertically
+#define UCF_CANY 0x00400000
+/// the unit is flipped horizontally
+#define UCF_REVX 0x00200000
+/// the unit is flipped vertically
+#define UCF_REVY 0x00100000
 
 
 
@@ -38,11 +46,11 @@ typedef struct _PICT {
 typedef struct _UNIT {
     void *anim;         /// animation data (the format may vary)
     char *path;         /// path to the original animation file
-    uint32_t hash;      /// path hash used for finding copies
+    uint32_t hash,      /// path hash used for finding copies
+             flgs;      /// unit flags (UCF_ prefix)
     VEC2  cpos,         /// position of the unit`s lower-left corner
           cptr;         /// cursor coords on mousedown (for dragging)
-    ulong flgs,         /// unit flags (UCF_ prefix)
-          fcur,         /// current frame of the animation
+    ulong fcur,         /// current frame of the animation
           time,         /// current frame timestamp (in ms)
           scal,         /// scaling factor in powers of 2
           prob,         /// unit relative probability
@@ -62,8 +70,8 @@ typedef struct _ULIB {
     char *path;         /// the folder from which the library was built
     UNIT **uarr;        /// array of animation units (also a linked list)
     ulong ucnt,         /// length of the array
-          uses,         /// number of library`s units in the main display list
-          flgs;         /// library flags (ULF_ prefix)
+          uses;         /// number of library`s units in the main display list
+    uint32_t flgs;      /// library flags (ULF_ prefix)
     struct _ULIB *prev, /// previous library in the list
                  *next; /// next library in the list
 } ULIB;
