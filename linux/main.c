@@ -135,11 +135,12 @@ gboolean FPSFunc(gpointer user) {
 
 gboolean DrawFunc(gpointer user) {
     TMRD *tmrd = user;
+    GdkWindow *gwnd;
     cairo_t *surf;
     UNIT *tail;
     long iter;
 
-    if (tmrd->gwnd->window &&
+    if ((gwnd = gtk_widget_get_window(tmrd->gwnd)) &&
        (tail = UpdateFrameStd(&tmrd->tail, &pick, tmrd->time, cptr))) {
         surf = cairo_create(tmrd->surf);
         cairo_set_operator(surf, CAIRO_OPERATOR_SOURCE);
@@ -152,8 +153,8 @@ gboolean DrawFunc(gpointer user) {
         PickSemaphore(&tmrd->osem, &tmrd->isem, SEM_FULL);
         WaitSemaphore(&tmrd->osem, SEM_FULL);
 
-        gdk_window_invalidate_rect(tmrd->gwnd->window, NULL, FALSE);
-        gdk_window_process_updates(tmrd->gwnd->window, FALSE);
+        gdk_window_invalidate_rect(gwnd, NULL, FALSE);
+        gdk_window_process_updates(gwnd, FALSE);
 
         tmrd->fram++;
         return TRUE;
@@ -164,10 +165,12 @@ gboolean DrawFunc(gpointer user) {
 
 
 void ScreenChange(GtkWidget *gwnd, GdkScreen *scrn, gpointer user) {
-    GdkColormap *cmap;
-
-    if ((cmap = gdk_screen_get_rgba_colormap(gtk_widget_get_screen(gwnd))))
-        gtk_widget_set_colormap(gwnd, cmap);
+    GdkVisual *gvis;
+    if ((gvis = gdk_screen_get_rgba_visual(gtk_widget_get_screen(gwnd))))
+        gtk_widget_set_visual(gwnd, gvis);
+//    GdkColormap *cmap;
+//    if ((cmap = gdk_screen_get_rgba_colormap(gtk_widget_get_screen(gwnd))))
+//        gtk_widget_set_colormap(gwnd, cmap);
     else {
         printf("Transparent windows not supported! Emergency exit...\n");
         exit(0);
@@ -176,15 +179,16 @@ void ScreenChange(GtkWidget *gwnd, GdkScreen *scrn, gpointer user) {
 
 
 
-gboolean Redraw(GtkWidget *gwnd, GdkEventExpose *eexp, gpointer user) {
-    cairo_t *draw = gdk_cairo_create(gwnd->window);
+gboolean Redraw(GtkWidget *gwnd, cairo_t *draw, gpointer user) {
+//gboolean Redraw(GtkWidget *gwnd, GdkEventExpose *eexp, gpointer user) {
+//    cairo_t *draw = gdk_cairo_create(gtk_widget_get_window(gwnd));
     cairo_surface_t *surf = user;
 
     cairo_surface_mark_dirty(surf);
     cairo_set_operator(draw, CAIRO_OPERATOR_SOURCE);
     cairo_set_source_surface(draw, surf, 0, 0);
     cairo_paint(draw);
-    cairo_destroy(draw);
+//    cairo_destroy(draw);
     return TRUE;
 }
 
@@ -261,10 +265,11 @@ int main(int argc, char *argv[]) {
     gtk_window_set_default_size(GTK_WINDOW(gwnd), pict.size.x, pict.size.y);
     gtk_window_set_position(GTK_WINDOW(gwnd), GTK_WIN_POS_CENTER);
 
-    g_signal_connect(G_OBJECT(gwnd), "delete-event",
-                     gtk_main_quit, NULL);
-    g_signal_connect(G_OBJECT(gwnd), "expose-event",
+    g_signal_connect(G_OBJECT(gwnd), "draw",
+//    g_signal_connect(G_OBJECT(gwnd), "expose-event",
                      G_CALLBACK(Redraw), surf);
+    g_signal_connect(G_OBJECT(gwnd), "delete-event",
+                     G_CALLBACK(gtk_main_quit), NULL);
     g_signal_connect(G_OBJECT(gwnd), "screen-changed",
                      G_CALLBACK(ScreenChange), NULL);
     g_signal_connect(G_OBJECT(gwnd), "key-press-event",
@@ -289,11 +294,9 @@ int main(int argc, char *argv[]) {
     MakeSemaphore(&tmrd.isem, ncpu, SEM_NULL);
     MakeSemaphore(&tmrd.osem, ncpu, SEM_FULL);
     for (iter = 0; iter < ncpu; iter++) {
-        thrd[iter] = (THRD){{(FILL){NULL, pict.size, 0}}, TRUE,
-                            1 << iter, &tmrd.isem, &tmrd.osem,
-                            (void (*)(void*))FillLibStdThrd};
-        pthread_create(&thrd[iter].ithr, NULL,
-                      (void (*)(void*))ThrdFunc, &thrd[iter]);
+        thrd[iter] = (THRD){{(FILL){NULL, pict.size, 0}}, TRUE, 1 << iter,
+                            &tmrd.isem, &tmrd.osem, FillLibStdThrd};
+        pthread_create(&thrd[iter].ithr, NULL, ThrdFunc, &thrd[iter]);
     }
     TimeFunc(&mtmp);
     seed = mtmp;
@@ -328,12 +331,11 @@ int main(int argc, char *argv[]) {
 
         for (iter = 0; iter < ncpu; iter++) {
             thrd[iter].loop = TRUE;
-            thrd[iter].func = (void (*)(void*))DrawPixStdThrd;
+            thrd[iter].func = DrawPixStdThrd;
             thrd[iter].fprm.draw = (DRAW){NULL, &pict,
                                    ((pict.size.y + 1) / ncpu)* iter,
                                    ((pict.size.y + 1) / ncpu)*(iter + 1)};
-            pthread_create(&thrd[iter].ithr, NULL,
-                          (void (*)(void*))ThrdFunc, &thrd[iter]);
+            pthread_create(&thrd[iter].ithr, NULL, ThrdFunc, &thrd[iter]);
         }
         thrd[ncpu - 1].fprm.draw.ymax = pict.size.y;
 
@@ -353,7 +355,7 @@ int main(int argc, char *argv[]) {
         PickSemaphore(&tmrd.osem, &tmrd.isem, SEM_FULL);
         WaitSemaphore(&tmrd.osem, SEM_FULL);
 
-        FreeLibList(&ulib, (void (*)(void**))FreeAnimStd);
+        FreeLibList(&ulib, FreeAnimStd);
         FreeUnitList(&tail, NULL);
     }
     else

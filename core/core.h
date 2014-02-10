@@ -5,6 +5,7 @@
 #ifndef max
 #define max(a, b) (((a) > (b))? (a) : (b))
 #endif
+
 #ifndef min
 #define min(a, b) (((a) < (b))? (a) : (b))
 #endif
@@ -18,16 +19,20 @@
 /// signals the need to pick an object
 #define EMP_PICK (UNIT*)1
 
-/// UNIT.ANIM and UNIT.PATH are copies, don`t free them
+/// if set, UNIT.ANIM and UNIT.PATH are copies, don`t free them
 #define UCF_COPY 0x80000000
+/// the unit is flipped horizontally
+#define UCF_REVX 0x40000000
+/// the unit is flipped vertically
+#define UCF_REVY 0x20000000
 /// the unit can be flipped horizontally
 #define UCF_CANX 0x00800000
 /// the unit can be flipped vertically
 #define UCF_CANY 0x00400000
-/// the unit is flipped horizontally
-#define UCF_REVX 0x00200000
-/// the unit is flipped vertically
-#define UCF_REVY 0x00100000
+/// the unit is initially flipped horizontally
+#define UCF_INIX 0x00200000
+/// the unit is initially flipped vertically
+#define UCF_INIY 0x00100000
 
 
 
@@ -104,6 +109,6 @@ void FillLibStdThrd(FILL *fill);
 void DrawPixStdThrd(DRAW *draw);
 
 void MakeEmptyLib(ULIB **head, char *base, char *path);
+void FreeLibList(ULIB **head, void (*adel)(void**));
 void FreeUnitList(UNIT **tail, void (*adel)(void**));
-void FreeLibList(ULIB **tail, void (*adel)(void**));
 void UnitListFromLib(ULIB *ulib, UNIT **tail);

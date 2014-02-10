@@ -19,11 +19,11 @@
 			<Add option="-fexpensive-optimizations" />
 			<Add option="-O2" />
 			<Add option="-Wall" />
-			<Add option="`pkg-config gtk+-2.0 --cflags`" />
+			<Add option="`pkg-config gtk+-3.0 --cflags`" />
 		</Compiler>
 		<Linker>
 			<Add option="-s" />
-			<Add option="`pkg-config gtk+-2.0 --libs`" />
+			<Add option="`pkg-config gtk+-3.0 --libs`" />
 			<Add option="-pthread" />
 		</Linker>
 		<Unit filename="../core/core.c">

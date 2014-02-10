@@ -523,31 +523,10 @@ void MakeEmptyLib(ULIB **head, char *base, char *path) {
 
 
 
-void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
-    UNIT *iter = *tail;
+void FreeLibList(ULIB **head, void (*adel)(void**)) {
+    ULIB *iter = *head;
 
-    while (iter) {
-        if (adel && !(iter->flgs & UCF_COPY)) {
-            adel(&iter->anim);
-            free(iter->path);
-        }
-        if (iter->prev) {
-            iter = iter->prev;
-            free(iter->next);
-        }
-        else {
-            free(iter);
-            iter = NULL;
-        }
-    }
-    (*tail) = NULL;
-}
-
-
-
-void FreeLibList(ULIB **list, void (*adel)(void**)) {
-    ULIB *iter = *list;
-
+    (*head) = NULL;
     while (iter) {
         if (iter->uarr) {
             FreeUnitList(&iter->uarr[iter->ucnt - 1], adel);
@@ -563,7 +542,28 @@ void FreeLibList(ULIB **list, void (*adel)(void**)) {
             iter = NULL;
         }
     }
-    (*list) = NULL;
+}
+
+
+
+void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
+    UNIT *iter = *tail;
+
+    (*tail) = NULL;
+    while (iter) {
+        if (adel && !(iter->flgs & UCF_COPY)) {
+            adel(&iter->anim);
+            free(iter->path);
+        }
+        if (iter->prev) {
+            iter = iter->prev;
+            free(iter->next);
+        }
+        else {
+            free(iter);
+            iter = NULL;
+        }
+    }
 }
 
 
@@ -574,7 +574,7 @@ void UnitListFromLib(ULIB *ulib, UNIT **tail) {
 
     while (ulib) {
         for (iter = 0; iter < ulib->uses; iter++) {
-            elem = malloc(sizeof(*list));
+            elem = malloc(sizeof(*elem));
             *elem = *ulib->uarr[PRNG(&seed) % ulib->ucnt];
             elem->prev = list;
             if (list)

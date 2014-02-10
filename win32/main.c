@@ -54,6 +54,8 @@ DWORD CALLBACK ThrdFunc(LPVOID data) {
         ResetEvent(data->evti);
         if (data->loop)
             data->func(&data->fprm);
+        else
+            printf("Thread exited\n");
         SetEvent(*data->evto);
     } while (data->loop);
     return TRUE;
