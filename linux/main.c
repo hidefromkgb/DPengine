@@ -156,9 +156,12 @@ gboolean DrawFunc(gpointer user) {
         cairo_destroy(surf);
 
         if (pick)
-//            gdk_window_get_pointer(gwnd, &cptr.x, &cptr.y, &gmod);
+#ifdef DEF_GTK3
             gdk_window_get_device_position(gwnd, gptr,
                                            &cptr.x, &cptr.y, &gmod);
+#else
+            gdk_window_get_pointer(gwnd, &cptr.x, &cptr.y, &gmod);
+#endif
         for (iter = 0; iter < tmrd->ncpu; iter++)
             tmrd->thrd[iter].fprm.draw.tail = tail;
         PickSemaphore(&tmrd->osem, &tmrd->isem, SEM_FULL);
@@ -176,12 +179,15 @@ gboolean DrawFunc(gpointer user) {
 
 
 void ScreenChange(GtkWidget *gwnd, GdkScreen *scrn, gpointer user) {
+#ifdef DEF_GTK3
     GdkVisual *gvis;
     if ((gvis = gdk_screen_get_rgba_visual(gtk_widget_get_screen(gwnd))))
         gtk_widget_set_visual(gwnd, gvis);
-//    GdkColormap *cmap;
-//    if ((cmap = gdk_screen_get_rgba_colormap(gtk_widget_get_screen(gwnd))))
-//        gtk_widget_set_colormap(gwnd, cmap);
+#else
+    GdkColormap *cmap;
+    if ((cmap = gdk_screen_get_rgba_colormap(gtk_widget_get_screen(gwnd))))
+        gtk_widget_set_colormap(gwnd, cmap);
+#endif
     else {
         printf("Transparent windows not supported! Emergency exit...\n");
         exit(0);
@@ -190,26 +196,29 @@ void ScreenChange(GtkWidget *gwnd, GdkScreen *scrn, gpointer user) {
 
 
 
+#ifdef DEF_GTK3
 gboolean Redraw(GtkWidget *gwnd, cairo_t *draw, gpointer user) {
-//gboolean Redraw(GtkWidget *gwnd, GdkEventExpose *eexp, gpointer user) {
-//    cairo_t *draw = gdk_cairo_create(gtk_widget_get_window(gwnd));
+#else
+gboolean Redraw(GtkWidget *gwnd, GdkEventExpose *eexp, gpointer user) {
+    cairo_t *draw = gdk_cairo_create(gtk_widget_get_window(gwnd));
+#endif
     cairo_surface_t *surf = user;
 
     cairo_surface_mark_dirty(surf);
     cairo_set_operator(draw, CAIRO_OPERATOR_SOURCE);
     cairo_set_source_surface(draw, surf, 0, 0);
     cairo_paint(draw);
-//    cairo_destroy(draw);
+#ifndef DEF_GTK3
+    cairo_destroy(draw);
+#endif
     return TRUE;
 }
 
 
 
 gboolean KeyDown(GtkWidget *gwnd, GdkEventKey *ekey, gpointer user) {
-    if (ekey->keyval == GDK_KEY_Escape) {
-        gtk_widget_destroy(gwnd);
+    if (ekey->keyval == GDK_KEY_Escape)
         gtk_main_quit();
-    }
     return TRUE;
 }
 
@@ -267,8 +276,11 @@ int main(int argc, char *argv[]) {
     gtk_window_set_default_size(GTK_WINDOW(gwnd), pict.size.x, pict.size.y);
     gtk_window_set_position(GTK_WINDOW(gwnd), GTK_WIN_POS_CENTER);
 
+#ifdef DEF_GTK3
     g_signal_connect(G_OBJECT(gwnd), "draw",
-//    g_signal_connect(G_OBJECT(gwnd), "expose-event",
+#else
+    g_signal_connect(G_OBJECT(gwnd), "expose-event",
+#endif
                      G_CALLBACK(Redraw), surf);
     g_signal_connect(G_OBJECT(gwnd), "delete-event",
                      G_CALLBACK(gtk_main_quit), NULL);
@@ -331,8 +343,8 @@ int main(int argc, char *argv[]) {
             thrd[iter].loop = TRUE;
             thrd[iter].func = DrawPixStdThrd;
             thrd[iter].fprm.draw = (DRAW){NULL, &pict,
-                                   ((pict.size.y + 1) / ncpu)* iter,
-                                   ((pict.size.y + 1) / ncpu)*(iter + 1)};
+                                   ((pict.size.y + 1) / ncpu) *  iter,
+                                   ((pict.size.y + 1) / ncpu) * (iter + 1)};
             pthread_create(&thrd[iter].ithr, NULL, ThrdFunc, &thrd[iter]);
         }
         thrd[ncpu - 1].fprm.draw.ymax = pict.size.y;

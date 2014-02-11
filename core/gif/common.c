@@ -171,8 +171,8 @@ long DecodeFrame(uint8_t **buff, uint8_t *bptr) {
                 else {
                     /// single-pixel or multi-pixel code
                     if (ctbl < DEF_CLEN)
-                        code[++ctbl] = (code[prev] & 0xFFF000) + 0x1000 + prev;
-
+                        code[++ctbl] = ((code[prev] + 0x1000) & 0xFFF000)
+                                     |  (prev & 0xFFF);
                     /// appending pixel string to the frame
                     iter = (curr >= ctbl)? prev : curr;
                     bptr += (prev = (code[iter] >> 12) & 0xFFF);

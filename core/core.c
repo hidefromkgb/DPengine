@@ -128,8 +128,7 @@ char *SplitLine(char **tail, char tsep) {
             return retn;
         }
     }
-    *tail = NULL;
-    return NULL;
+    return *tail = NULL;
 }
 
 
@@ -224,7 +223,7 @@ UNIT *SortByY(UNIT **tail) {
 
 
 UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
-    long xpos, ypos, ytmp;
+    long xpos, ypos;
     UNIT *iter, *temp;
     ASTD *anim;
 
@@ -232,24 +231,22 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
         iter = temp = *tail;
         if (*pick == EMP_PICK) {
             while (temp) {
-                anim = temp->anim;
-                ytmp = temp->cpos.y - (anim->ydim << temp->scal);
-                xpos = (cptr.x - temp->cpos.x) >> temp->scal;
-                ypos = (cptr.y - ytmp) >> temp->scal;
-                if (temp->flgs & UCF_REVX)
-                    xpos = anim->xdim - 1 - xpos;
-                if (temp->flgs & UCF_REVY)
-                    ypos = anim->ydim - 1 - ypos;
-                if ((cptr.x <  temp->cpos.x + (anim->xdim << temp->scal))
-                &&  (cptr.x >= temp->cpos.x)
-                &&  (cptr.y <  temp->cpos.y)
-                &&  (cptr.y >= ytmp)
-                &&  (anim->bptr[xpos + anim->xdim *
-                               (ypos + anim->ydim * temp->fcur)] != 0xFF)) {
-                    temp->cptr.x = cptr.x - temp->cpos.x;
-                    temp->cptr.y = cptr.y - temp->cpos.y;
-                    *pick = temp;
-                    break;
+                anim =   temp->anim;
+                xpos =  (cptr.x - temp->cpos.x) >> temp->scal;
+                ypos = ((cptr.y - temp->cpos.y) >> temp->scal) + anim->ydim;
+                if ((cptr.x >= temp->cpos.x) && (xpos <  anim->xdim)
+                &&  (cptr.y <  temp->cpos.y) && (ypos >= 0)) {
+                    if (temp->flgs & UCF_REVX)
+                        xpos = anim->xdim - 1 - xpos;
+                    if (temp->flgs & UCF_REVY)
+                        ypos = anim->ydim - 1 - ypos;
+                    if (anim->bptr[xpos + anim->xdim *
+                                  (ypos + anim->ydim * temp->fcur)] != 0xFF) {
+                        temp->cptr.x = cptr.x - temp->cpos.x;
+                        temp->cptr.y = cptr.y - temp->cpos.y;
+                        *pick = temp;
+                        break;
+                    }
                 }
                 temp = temp->prev;
             }
@@ -301,7 +298,7 @@ void DrawPixStdThrd(DRAW *draw) {
         }
         else {
             xmax = min(xinc, xoff - tail->cpos.x);
-            xmin = max(   0,      - tail->cpos.x);
+            xmin = max(   0,    0 - tail->cpos.x);
             yinc = 1;
         }
         xinc = ((yinc < 0)? xinc - 1 - xmin : xmin) + tail->cpos.x;
@@ -311,22 +308,20 @@ void DrawPixStdThrd(DRAW *draw) {
             ydst = (y + tail->cpos.y) * xoff + xinc;
             ysrc = (tail->flgs & UCF_REVY)? -y - 1 : y + ymin;
             ysrc = (ysrc >> tail->scal) * anim->xdim + yoff;
-            for (x = xmin; x < xmax; x++, ydst += yinc) {
-                if (bptr[ydst].A == 0xFF)
-                    continue;
-
-                b_r_ = anim->bpal[anim->bptr[ysrc + (x >> tail->scal)]];
-                if (bptr[ydst].A == 0x00)
-                    bptr[ydst] = b_r_;
-                else {
-                    _g_a.BGRA = ((b_r_.BGRA >> 8) & 0x00FF00FF)
-                              * (0xFF - bptr[ydst].A);
-                    b_r_.BGRA = ((b_r_.BGRA     ) & 0x00FF00FF)
-                              * (0xFF - bptr[ydst].A);
-                    bptr[ydst].BGRA += ((b_r_.BGRA >> 8) & 0x00FF00FF)
-                                    +  ((_g_a.BGRA     ) & 0xFF00FF00);
+            for (x = xmin; x < xmax; x++, ydst += yinc)
+                if (bptr[ydst].A != 0xFF) {
+                    b_r_ = anim->bpal[anim->bptr[ysrc + (x >> tail->scal)]];
+                    if (bptr[ydst].A == 0x00)
+                        bptr[ydst] = b_r_;
+                    else {
+                        _g_a.BGRA = ((b_r_.BGRA >> 8) & 0x00FF00FF)
+                                  * (0xFF - bptr[ydst].A);
+                        b_r_.BGRA = ((b_r_.BGRA     ) & 0x00FF00FF)
+                                  * (0xFF - bptr[ydst].A);
+                        bptr[ydst].BGRA += ((b_r_.BGRA >> 8) & 0x00FF00FF)
+                                        +  ((_g_a.BGRA     ) & 0xFF00FF00);
+                    }
                 }
-            }
         }
         tail = tail->prev;
     }
@@ -448,7 +443,7 @@ void FillLibStdThrd(FILL *fill) {
     conf = ConcatPath(fill->ulib->path, DEF_CONF);
     if ((file = fptr = LoadFile(conf, NULL))) {
         free(conf);
-        while ((conf = GetNextLine(&fptr))) {
+        while ((conf = GetNextLine(&fptr)))
             switch (DetermineType(&conf)) {
                 case AVT_BHVR:
                     SplitLine(&conf, DEF_TSEP);
@@ -489,13 +484,13 @@ void FillLibStdThrd(FILL *fill) {
                     }
                     break;
             }
-        }
+
         if (tail) {
             fill->load += fill->curr;
             printf("--- %s: %ld objects\n\n",
                    fill->ulib->path, fill->curr);
             tail->next = NULL;
-            fill->ulib->uses = 25;
+            fill->ulib->uses = 1;
             fill->ulib->ucnt = fill->curr;
             fill->ulib->uarr = malloc(fill->curr * sizeof(*fill->ulib->uarr));
             for (fill->curr--; fill->curr >= 0; fill->curr--) {
