@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
@@ -44,6 +45,7 @@ typedef struct _TMRD {
 
 
 
+GdkDevice *gptr;
 UNIT *pick = NULL;
 VEC2 cptr = {};
 
@@ -67,8 +69,10 @@ void MakeSemaphore(SEMD *retn, long lstl, SEM_TYPE mask) {
 
 
 
-void PickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask) {
+long PickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask) {
+    long retn;
     pthread_mutex_lock(&drop->cmtx);
+    retn = (drop->list & mask)? TRUE : FALSE;
     drop->list &= ~(drop->full & mask);
     pthread_mutex_unlock(&drop->cmtx);
 
@@ -76,15 +80,15 @@ void PickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask) {
     pick->list |=  (pick->full & mask);
     pthread_cond_broadcast(&pick->cvar);
     pthread_mutex_unlock(&pick->cmtx);
+    return retn;
 }
 
 
 
 SEM_TYPE WaitSemaphore(SEMD *wait, SEM_TYPE mask) {
     SEM_TYPE retn;
-
     pthread_mutex_lock(&wait->cmtx);
-    if (mask)
+    if (mask != SEM_NULL)
         while ((wait->list & mask) != (wait->full & mask))
             pthread_cond_wait(&wait->cvar, &wait->cmtx);
     else
@@ -98,14 +102,16 @@ SEM_TYPE WaitSemaphore(SEMD *wait, SEM_TYPE mask) {
 
 
 void ThrdFunc(THRD *data) {
-    do {
+    while (TRUE) {
         WaitSemaphore(data->isem, data->uuid);
-        if (data->loop)
-            data->func(&data->fprm);
-        else
-            printf("Thread exited\n");
-        PickSemaphore(data->isem, data->osem, data->uuid);
-    } while (data->loop);
+        if (!data->loop)
+            break;
+        data->func(&data->fprm);
+        if (!PickSemaphore(data->isem, data->osem, data->uuid))
+            return;
+    }
+    printf("Thread exited\n");
+    PickSemaphore(data->isem, data->osem, data->uuid);
 }
 
 
@@ -135,6 +141,7 @@ gboolean FPSFunc(gpointer user) {
 
 gboolean DrawFunc(gpointer user) {
     TMRD *tmrd = user;
+    GdkModifierType gmod;
     GdkWindow *gwnd;
     cairo_t *surf;
     UNIT *tail;
@@ -148,6 +155,10 @@ gboolean DrawFunc(gpointer user) {
         cairo_paint(surf);
         cairo_destroy(surf);
 
+        if (pick)
+//            gdk_window_get_pointer(gwnd, &cptr.x, &cptr.y, &gmod);
+            gdk_window_get_device_position(gwnd, gptr,
+                                           &cptr.x, &cptr.y, &gmod);
         for (iter = 0; iter < tmrd->ncpu; iter++)
             tmrd->thrd[iter].fprm.draw.tail = tail;
         PickSemaphore(&tmrd->osem, &tmrd->isem, SEM_FULL);
@@ -209,25 +220,16 @@ gboolean MouseButton(GtkWidget* gwnd,
     if (embt->button == 1)
         switch (embt->type) {
             case GDK_BUTTON_PRESS:
-                pick = EMP_PICK;
+                gptr = embt->device;
                 cptr.x = embt->x;
                 cptr.y = embt->y;
+                pick = EMP_PICK;
                 break;
 
             case GDK_BUTTON_RELEASE:
                 pick = NULL;
                 break;
         }
-    return TRUE;
-}
-
-
-
-gboolean MouseMove(GtkWidget *gwnd, GdkEventMotion *emov, gpointer user) {
-    GdkModifierType gmod;
-
-    if (pick)
-        gdk_window_get_pointer(emov->window, &cptr.x, &cptr.y, &gmod);
     return TRUE;
 }
 
@@ -278,14 +280,10 @@ int main(int argc, char *argv[]) {
                      G_CALLBACK(MouseButton), NULL);
     g_signal_connect(G_OBJECT(gwnd), "button-release-event",
                      G_CALLBACK(MouseButton), NULL);
-    g_signal_connect(G_OBJECT(gwnd), "motion-notify-event",
-                     G_CALLBACK(MouseMove), NULL);
-    gtk_widget_set_events(gwnd, gtk_widget_get_events(gwnd) |
-                                GDK_KEY_PRESS_MASK          |
-                                GDK_BUTTON_PRESS_MASK       |
-                                GDK_BUTTON_RELEASE_MASK     |
-                                GDK_POINTER_MOTION_MASK     |
-                                GDK_POINTER_MOTION_HINT_MASK);
+    gtk_widget_set_events(gwnd, gtk_widget_get_events(gwnd)
+                              | GDK_KEY_PRESS_MASK
+                              | GDK_BUTTON_PRESS_MASK
+                              | GDK_BUTTON_RELEASE_MASK);
     tail = NULL;
     ulib = NULL;
 
@@ -347,6 +345,8 @@ int main(int argc, char *argv[]) {
         g_timeout_add(1000, FPSFunc, &tmrd);
 
         gtk_widget_show_all(gwnd);
+        gdk_window_set_cursor(gtk_widget_get_window(gwnd),
+                              gdk_cursor_new(GDK_HAND1));
         gtk_main();
 
         WaitSemaphore(&tmrd.osem, SEM_FULL);

@@ -8,10 +8,7 @@ typedef unsigned long ulong;
 
 /// GIF animation
 typedef struct _ASTD {
-    union {
-        uint8_t *indx;
-        BGRA    *bgra;
-    } bptr;          /// pixel data storage
+    uint8_t *bptr;   /// index data storage
     ulong fcnt,      /// frame count
          *time;      /// frame delays
     BGRA *bpal;      /// palette
@@ -20,5 +17,5 @@ typedef struct _ASTD {
 
 
 
-ASTD *MakeAnimStd(char *name, long indx);
+ASTD *MakeAnimStd(char *name);
 void FreeAnimStd(ASTD **anim);

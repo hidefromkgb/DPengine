@@ -13,22 +13,22 @@
 /// graphics control extension
 #define EXT_GCTL 0xF9
 
-/// Transparency flag
+/// transparency flag
 #define FLG_CTRN 0x01
 
-/// Mode not set
+/// mode not set
 #define FLG_CUDN 0x00
-/// Leave result as is
+/// leave result as is
 #define FLG_CUDL 0x04
-/// Restore background
+/// restore background
 #define FLG_CUDB 0x08
-/// Restore previous
+/// restore previous
 #define FLG_CUDP 0x0C
-/// Mask to extract the states above
+/// mask to extract the states above
 #define FLG_CUDM 0x1C
 
-/// Default delay for frames having no graphics headers, just in case
-/// Given in GIF time units; 1 unit = 10 ms
+/// default delay for frames having no graphics headers, just in case
+/// (given in GIF time units; 1 unit = 10 ms)
 #define DEF_SKIP 0
 
 
@@ -52,11 +52,6 @@ typedef struct _FGRH {    /// ============ FRAME GRAPHICS HEADER ============
     uint8_t tran;         /// transparent color index
     uint8_t term;         /// terminator; must be 0x00
 } FGRH;
-
-typedef struct _CTBE {
-    int16_t prev, size;
-    BGRA pixl;
-} CTBE;
 #pragma pack(pop)
 
 
@@ -110,18 +105,16 @@ long ReadFrameHeader(uint8_t **buff, GHDR *ghdr, FHDR **fhdr, RGBX **rpal) {
 
 
 
-/// CCLR < 0 means that every pixel would contain its palette index in alpha.
 /// Return values:
-///  -5: no palette found
 ///  -4: the data stream is empty
 ///  -3: minimum LZW size is out of its nominal [2; 8] bounds
 ///  -2: initial code is not equal to minimum LZW size
 ///  -1: no end-of-stream mark after end-of-data code
 ///   0: no end-of-data code before end-of-stream mark -> [RECOVERABLE ERROR]
 ///   1: decoding successful
-long DecodeFrame(uint8_t **buff, FGRH *fgrh,
-                 RGBX *cpal, long cclr, BGRA *bptr) {
-    long iter, /// loop iterator for expanding codes into BGRA strings
+long DecodeFrame(uint8_t **buff, uint8_t *bptr) {
+    #define DEF_CLEN (1 << 12)
+    long iter, /// loop iterator for expanding codes into index strings
          bseq, /// block sequence loop counter
          size, /// bit size counter
          ctbl, /// code table counter, points to the last element
@@ -130,14 +123,10 @@ long DecodeFrame(uint8_t **buff, FGRH *fgrh,
          ctsz, /// minimum LZW code table size, in bits
          ccsz; /// current code table size, in bits
     uint16_t read, mask;
-
-    #define DEF_CLEN (1 << 12)
-    CTBE code[DEF_CLEN];
+    uint32_t code[DEF_CLEN];
 
     /// preparing initial values
     ctsz = *(*buff)++;
-    if (!cclr)
-        return -5;
     if (!(bseq = *(*buff)++))
         return -4;
     if ((ctsz < 2) || (ctsz > 8))
@@ -152,21 +141,8 @@ long DecodeFrame(uint8_t **buff, FGRH *fgrh,
         return -2;
 
     /// filling persistent part of the code table
-    for (iter = ((cclr > 0)? cclr : -cclr) - 1; iter >= 0; iter--) {
-        code[iter].size = 0;
-        code[iter].pixl.B = cpal[iter].B;
-        code[iter].pixl.G = cpal[iter].G;
-        code[iter].pixl.R = cpal[iter].R;
-        code[iter].pixl.A = (cclr > 0)? 0xFF : iter;
-    }
-    for (iter = ((cclr > 0)? cclr : -cclr); iter < ctbl; iter++) {
-        code[iter].size = 0;
-        code[iter].pixl.BGRA = 0x00000000;
-        if (cclr <= 0)
-            code[iter].pixl.A = iter;
-    }
-    if ((cclr > 0) && fgrh && (fgrh->flgs & FLG_CTRN))
-        code[fgrh->tran].pixl.BGRA = 0x00000000;
+    for (iter = 0; iter < ctbl; iter++)
+        code[iter] = iter << 24;
 
     /// splitting data stream into codes
     do {
@@ -193,28 +169,26 @@ long DecodeFrame(uint8_t **buff, FGRH *fgrh,
                     mask = (1 << (ccsz = ctsz + 1)) - 1;
                 }
                 else {
-                    /// single-pixel (CODE[ITER].SIZE == 0) or multi-pixel code
-                    if (ctbl < DEF_CLEN) {
-                        ctbl++;
-                        code[ctbl].prev = prev;
-                        code[ctbl].size = code[prev].size + 1;
-                    }
+                    /// single-pixel or multi-pixel code
+                    if (ctbl < DEF_CLEN)
+                        code[++ctbl] = (code[prev] & 0xFFF000) + 0x1000 + prev;
+
                     /// appending pixel string to the frame
                     iter = (curr >= ctbl)? prev : curr;
-                    bptr += (prev = code[iter].size);
+                    bptr += (prev = (code[iter] >> 12) & 0xFFF);
                     while (!0) {
-                        *bptr-- = code[iter].pixl;
-                        if (!code[iter].size)
+                        *bptr-- = code[iter] >> 24;
+                        if (!(code[iter] & 0xFFF000))
                             break;
-                        iter = code[iter].prev;
+                        iter = code[iter] & 0xFFF;
                     }
                     bptr += prev + 2;
                     if (curr >= ctbl)
-                        *bptr++ = code[iter].pixl;
+                        *bptr++ = code[iter] >> 24;
 
                     /// adding new code to the code table
                     if (ctbl < DEF_CLEN)
-                        code[ctbl].pixl = code[iter].pixl;
+                        code[ctbl] |= code[iter] & 0xFF000000;
                 }
                 /// does code table exceed bit limit?
                 if ((ctbl == mask) && (ctbl < DEF_CLEN - 1)) {
@@ -238,9 +212,8 @@ long DecodeFrame(uint8_t **buff, FGRH *fgrh,
 
 long MakeAnim(void *inpt, long flgs, void *anim,
               GGET gget, GINI gini, GWFR gwfr, GPUT gput) {
-    long desc, iter, prev, fram;
-    uint8_t *buff, *btmp;
-    BGRA *init, *bptr;
+    long desc, iter, prev, fram, clrs;
+    uint8_t *buff, *btmp, *init, *bptr;
     GHDR *ghdr = NULL;
     FGRH *fgrh = NULL;
     FHDR *fhdr;
@@ -273,7 +246,7 @@ long MakeAnim(void *inpt, long flgs, void *anim,
         /// initializing the main structure, beginning frame extraction
         if (fram && (gini(ghdr, anim, fram--) > 0)) {
             init = malloc(ghdr->xdim * ghdr->ydim * sizeof(*init) + 16);
-            bptr = (BGRA*)(((uintptr_t)init & -16) + 16);
+            bptr = (uint8_t*)(((uintptr_t)init & -16) + 16);
             iter = prev = 0;
 
             while ((desc = *buff++) != GIF_EOFH) {
@@ -288,11 +261,9 @@ long MakeAnim(void *inpt, long flgs, void *anim,
                 }
                 /// found a frame
                 else if (desc == GIF_FHDR) {
-                    cpal = NULL;
-                    desc = ReadFrameHeader(&buff, ghdr, &fhdr, &cpal);
+                    clrs = ReadFrameHeader(&buff, ghdr, &fhdr, &cpal);
                     /// return code 0 means the error is recoverable; accepting
-                    if (DecodeFrame(&buff, fgrh, cpal, (flgs & MAF_AIND)?
-                                    -desc : desc, bptr) >= 0) {
+                    if (DecodeFrame(&buff, bptr) >= 0) {
                         /// computing blend mode
                         desc = -2;
                         if (fgrh && (iter < fram))
@@ -303,7 +274,7 @@ long MakeAnim(void *inpt, long flgs, void *anim,
                                 case FLG_CUDB: desc = -1;   prev = iter;
                             }
                         /// writing extracted frame to its persistent location
-                        gwfr(ghdr, fhdr, anim, bptr,
+                        gwfr(ghdr, fhdr, anim, bptr, cpal, clrs,
                             (fgrh && (fgrh->flgs & FLG_CTRN))? fgrh->tran : -1,
                             (fgrh)? fgrh->time : DEF_SKIP, iter++, desc + 1);
                     }

@@ -13,7 +13,6 @@
 /// MakeAnim() flags, described in FLGS section of MakeAnim() documentation
 #define MAF_FILE 0x00
 #define MAF_GGET 0x01
-#define MAF_AIND 0x02
 
 
 
@@ -92,7 +91,9 @@ typedef long (*GINI)(GHDR *ghdr, void *anim, long cfrm);
     GHDR: animation global header
     FHDR: header of the resulting frame (the one just decoded)
     ANIM: implementation-specific data (i.e. a structure or a pointer to it)
-    BPTR: decoded data pointer; data format is BGRA8888
+    BPTR: decoded array of color indices
+    CPAL: palette associated with the frame
+    CLRS: number of colors in the palette
     TRAN: transparent color index (or -1 if there`s none)
     TIME: next frame delay, in GIF time units (1 unit = 10 ms); can be 0
     CURR: index of the resulting frame
@@ -101,7 +102,8 @@ typedef long (*GINI)(GHDR *ghdr, void *anim, long cfrm);
           > 0: [actual frame index] + 1
           < 0: no backing needed
  **/
-typedef long (*GWFR)(GHDR *ghdr, FHDR *fhdr, void *anim, BGRA *bptr,
+typedef long (*GWFR)(GHDR *ghdr, FHDR *fhdr, void *anim,
+                     uint8_t *bptr, RGBX *cpal, long clrs,
                      long tran, long time, long curr, long from);
 
 /** _________________________________________________________________________

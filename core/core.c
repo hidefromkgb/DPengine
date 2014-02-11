@@ -114,13 +114,17 @@ char *SplitLine(char **tail, char tsep) {
             if (!(*tail = strchr(iter, tsep)))
                 *tail = iter + strlen(iter);
             temp = retn = iter;
-            do {
+            while (iter < *tail) {
                 if (!WhitespaceUTF8(iter))
                     temp = iter;
                 iter = SkipCharUTF8(iter);
-            } while (iter < *tail);
+            }
             *tail = (**tail)? *tail + 1 : NULL;
-            *++temp = '\0';
+            if (*temp) {
+                if (*temp != tsep)
+                    temp++;
+                *temp = '\0';
+            }
             return retn;
         }
     }
@@ -168,12 +172,11 @@ char *GetNextLine(char **file) {
 
 
 UNIT *SortByY(UNIT **tail) {
-    long ymin, ymax, ytmp;
-    UNIT *curr, *retn;
-
     static struct {
         UNIT *lbgn, *lend;
     } elem[0x2000];
+    long ymin, ymax, ytmp;
+    UNIT *curr, *retn;
 
     retn = curr = *tail;
     if (curr->prev) {
@@ -241,12 +244,8 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
                 &&  (cptr.x >= temp->cpos.x)
                 &&  (cptr.y <  temp->cpos.y)
                 &&  (cptr.y >= ytmp)
-
-                &&  (anim->bptr.indx[xpos + anim->xdim *
-                                    (ypos + anim->ydim * temp->fcur)] < 255)) {
-//                &&  (anim->bptr.bgra[xpos + anim->xdim *
-//                                    (ypos + anim->ydim * temp->fcur)].A)) {
-
+                &&  (anim->bptr[xpos + anim->xdim *
+                               (ypos + anim->ydim * temp->fcur)] != 0xFF)) {
                     temp->cptr.x = cptr.x - temp->cpos.x;
                     temp->cptr.y = cptr.y - temp->cpos.y;
                     *pick = temp;
@@ -278,7 +277,9 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
 
 
 void DrawPixStdThrd(DRAW *draw) {
-    long x, y, xmin, ymin, xmax, ymax, xoff, yoff, ysrc, ydst, yinc;
+    long x, y, ysrc, ydst,
+         xmin, ymin, xmax, ymax,
+         xoff, yoff, xinc, yinc;
     BGRA b_r_, _g_a, *bptr;
     UNIT *tail;
     ASTD *anim;
@@ -287,29 +288,34 @@ void DrawPixStdThrd(DRAW *draw) {
     while (tail) {
         anim = tail->anim;
 
-        xoff = draw->pict->size.x;
-        yoff = tail->cpos.y - (anim->ydim << tail->scal);
-        xmin = max(0, -tail->cpos.x);
-        ymin = max(0, draw->ymin - yoff);
-        xmax = min(anim->xdim << tail->scal, xoff - tail->cpos.x);
-        ymax = min(anim->ydim << tail->scal, draw->ymax - yoff);
-        yoff = anim->xdim * anim->ydim * tail->fcur;
-        yinc = (tail->flgs & UCF_REVX)? -1 : 1;
         bptr = draw->pict->bptr;
+        yoff = anim->xdim * anim->ydim * tail->fcur;
+        xoff = draw->pict->size.x;
+        ymax = min(0, draw->ymax - tail->cpos.y);
+        ymin = anim->ydim << tail->scal;
+        xinc = anim->xdim << tail->scal;
+        if (tail->flgs & UCF_REVX) {
+            xmax = min(xinc, xinc + tail->cpos.x);
+            xmin = max(   0, xinc + tail->cpos.x - xoff);
+            yinc = -1;
+        }
+        else {
+            xmax = min(xinc, xoff - tail->cpos.x);
+            xmin = max(   0,      - tail->cpos.x);
+            yinc = 1;
+        }
+        xinc = ((yinc < 0)? xinc - 1 - xmin : xmin) + tail->cpos.x;
 
         /// alpha blending here
-        for (y = ymin, ymin = (anim->ydim << tail->scal) - 1; y < ymax; y++) {
-            ydst = (y + tail->cpos.y - (anim->ydim << tail->scal))
-                 * xoff + tail->cpos.x + xmin + ((yinc < 0)? xmax - 1 : 0);
-            ysrc = (tail->flgs & UCF_REVY)? ymin - y : y;
+        for (y = max(-ymin, draw->ymin - tail->cpos.y); y < ymax; y++) {
+            ydst = (y + tail->cpos.y) * xoff + xinc;
+            ysrc = (tail->flgs & UCF_REVY)? -y - 1 : y + ymin;
             ysrc = (ysrc >> tail->scal) * anim->xdim + yoff;
             for (x = xmin; x < xmax; x++, ydst += yinc) {
                 if (bptr[ydst].A == 0xFF)
                     continue;
 
-                b_r_ = anim->bpal[anim->bptr.indx[ysrc + (x >> tail->scal)]];
-//                b_r_ = anim->bptr.bgra[ysrc + (x >> tail->scal)];
-
+                b_r_ = anim->bpal[anim->bptr[ysrc + (x >> tail->scal)]];
                 if (bptr[ydst].A == 0x00)
                     bptr[ydst] = b_r_;
                 else {
@@ -372,7 +378,7 @@ long MakeUnitStd(UNIT **tail, UNIT *info) {
         prev->flgs |= UCF_COPY;
     }
     else {
-        prev->anim = MakeAnimStd(prev->path, ~0);
+        prev->anim = MakeAnimStd(prev->path);
         prev->flgs &= ~UCF_COPY;
     }
 
