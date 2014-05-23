@@ -479,7 +479,6 @@ void FillLibStdThrd(FILL *fill) {
             printf("--- %s: %ld objects\n\n",
                    fill->ulib->path, fill->curr);
             tail->next = NULL;
-            fill->ulib->uses = DEF_USES;
             fill->ulib->ucnt = fill->curr;
             fill->ulib->uarr = malloc(fill->curr * sizeof(*fill->ulib->uarr));
             for (fill->curr--; fill->curr >= 0; fill->curr--) {
@@ -505,7 +504,7 @@ void MakeEmptyLib(ULIB **head, char *base, char *path) {
         (*head)->prev->next = *head;
         (*head) = (*head)->prev;
     }
-    (*head)->uses = 0;
+    (*head)->ucnt = 0;
     (*head)->prev = NULL;
     (*head)->uarr = NULL;
     (*head)->path = ConcatPath(base, path);
@@ -558,28 +557,46 @@ void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
 
 
 
-ulong UnitListFromLib(ULIB *ulib, UNIT **tail) {
+void UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
+                     VEC2  dims, ulong *uniq, ulong *size) {
     UNIT *elem, *list = NULL;
     ulong iter, uuid = 0;
 
     while (ulib) {
         for (iter = 0; iter < ulib->ucnt; iter++)
             ulib->uarr[iter]->uuid = ++uuid;
-        for (iter = 0; iter < ulib->uses; iter++) {
-            elem = malloc(sizeof(*elem));
-            *elem = *ulib->uarr[PRNG(&seed) % ulib->ucnt];
-            elem->prev = list;
-            if (list)
-                list->next = elem;
-            list = elem;
-        }
+        if (ulib->ucnt)
+            for (iter = 0; iter < uses; iter++) {
+                elem = malloc(sizeof(*elem));
+                *elem = *ulib->uarr[PRNG(&seed) % ulib->ucnt];
+                elem->prev = list;
+                if (list)
+                    list->next = elem;
+                list = elem;
+            }
         ulib = ulib->next;
     }
     if (list) {
         list->next = NULL;
-        SortByY(&list);
         FreeUnitList(tail, NULL);
         *tail = list;
+        if (uniq)
+            *uniq = uuid;
+        uuid = 0;
+        while (list) {
+            list->cpos.x = PRNG(&seed) % (dims.x
+                         - (((ASTD*)list->anim)->xdim << list->scal));
+            list->cpos.y = PRNG(&seed) % (dims.y
+                         - (((ASTD*)list->anim)->ydim << list->scal))
+                         + (((ASTD*)list->anim)->ydim << list->scal);
+            list->flgs   = (list->flgs & ~UCF_REVX) | (PRNG(&seed) & UCF_REVX);
+            list->flgs   = (list->flgs & ~UCF_REVY) | (PRNG(&seed) & UCF_REVY);
+            list->fcur   = PRNG(&seed) % ((ASTD*)list->anim)->fcnt;
+            list = list->prev;
+            uuid++;
+        }
+        SortByY(tail);
+        if (size)
+            *size = uuid;
     }
-    return uuid;
 }

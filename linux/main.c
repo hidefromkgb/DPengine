@@ -12,6 +12,8 @@
 
 
 
+#define DEF_USES 128
+
 #define BRT_RSTD 0
 #define BRT_ROGL 1
 
@@ -309,7 +311,7 @@ gboolean InitGL(GtkWidget *gwnd, gpointer user) {
         printf("Unsupported OpenGL version! Emergency exit...\n");
         exit(0);
     }
-    MakeRendererOGL(init->ulib, init->uniq, init->data, init->size);
+    MakeRendererOGL(init->ulib, init->uniq, init->data, init->size, FALSE);
 
     gdk_gl_drawable_gl_end(pGLD);
     return FALSE;
@@ -386,14 +388,14 @@ int main(int argc, char *argv[]) {
     struct dirent **dirs;
     char *anim;
 
-    UNIT *tail, *elem;
+    UNIT *tail;
     ULIB *ulib;
     THRD *thrd;
     TMRD tmrd;
     PICT pict;
     GLIS init;
 
-    rndr = (argc == 1)? BRT_RSTD : BRT_ROGL;
+    rndr = (argc == 1)? BRT_ROGL : BRT_RSTD;
 
     anim = "anim";
     gtk_init(&argc, &argv);
@@ -486,7 +488,8 @@ int main(int argc, char *argv[]) {
         printf("\nLoading complete: %ld objects, %u ms [%0.3f ms/obj]\n\n",
                curr, mtmp, (float)mtmp / (float)curr);
 
-        init.uniq = UnitListFromLib(ulib, &tail);
+        UnitListFromLib(ulib, &tail, DEF_USES,
+                        pict.size, &init.uniq, &init.size);
 
         switch (rndr) {
             case BRT_RSTD:
@@ -504,30 +507,11 @@ int main(int argc, char *argv[]) {
                 break;
 
             case BRT_ROGL:
-                elem = tail;
-                init.size = 0;
-                while (elem) {
-                    init.size++;
-                    elem = elem->prev;
-                }
                 init.size *= 4;
                 init.ulib = ulib;
                 init.data = calloc(init.size, sizeof(*init.data));
                 break;
         }
-        elem = tail;
-        while (elem) {
-            elem->cpos.x = PRNG(&seed) % (pict.size.x
-                         - (((ASTD*)elem->anim)->xdim << elem->scal));
-            elem->cpos.y = PRNG(&seed) % (pict.size.y
-                         - (((ASTD*)elem->anim)->ydim << elem->scal))
-                         + (((ASTD*)elem->anim)->ydim << elem->scal);
-            elem->flgs   = (elem->flgs & ~UCF_REVX) | (PRNG(&seed) & UCF_REVX);
-            elem->flgs   = (elem->flgs & ~UCF_REVY) | (PRNG(&seed) & UCF_REVY);
-            elem->fcur   = PRNG(&seed) % ((ASTD*)elem->anim)->fcnt;
-            elem = elem->prev;
-        }
-        SortByY(&tail);
 
         gtk_widget_realize(gwnd);
         gtk_widget_show(gwnd);

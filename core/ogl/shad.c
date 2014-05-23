@@ -64,12 +64,12 @@ SHDR *MakeShaderList(GLchar *vert[], GLchar *pixl[],
 
     *cshd = iter;
     for (iter = 0; iter < *cshd; iter++) {
-        if (pixl[iter] != -1)
+        if (pixl[iter] != (GLchar*)-1)
             curp = pixl[iter];
         if (!stop) {
             if (!vert[iter])
                 stop = GL_TRUE;
-            else if (vert[iter] != -1)
+            else if (vert[iter] != (GLchar*)-1)
                 curv = vert[iter];
         }
         retn[iter].prog = glCreateProgram();

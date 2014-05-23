@@ -46,6 +46,9 @@ GLchar *name[] = {
     "glRenderbufferStorage",
     "glFramebufferTexture2D",
     "glFramebufferRenderbuffer",
+    "glMapBufferARB",
+    "glUnmapBufferARB",
+    "glTexImage3D",
     NULL
 };
 GLvoid *LoadedOpenGLFunctions[carrsz(name)];
@@ -88,7 +91,7 @@ FTEX *BindTex(FVBO *vobj, GLuint bind, GLuint mode) {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                GL_TEXTURE_2D, vtex->ptex[ktex].indx, 0);
     else if (mode == TEX_DFLT) {
-        glActiveTexture(GL_TEXTURE0 + bind);
+        glActiveTextureARB(GL_TEXTURE0 + bind);
         glBindTexture(vtex->ptex[ktex].type, vtex->ptex[ktex].indx);
     }
     return &vtex->ptex[ktex];
@@ -148,29 +151,29 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
         retn->ptex = calloc(retn->ctex, sizeof(*retn->ptex));
     }
 
-    glGenBuffers(catr, retn->pvbo = malloc(catr * sizeof(*retn->pvbo)));
+    glGenBuffersARB(catr, retn->pvbo = malloc(catr * sizeof(*retn->pvbo)));
 
     retn->cind = patr[0].cdat / sizeof(GLuint);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, retn->pvbo[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER_ARB,
-                 patr[0].cdat, patr[0].pdat, patr[0].draw);
+    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, retn->pvbo[0]);
+    glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER_ARB,
+                    patr[0].cdat, patr[0].pdat, patr[0].draw);
 
     for (iter = 1; iter < catr; iter++) {
-        glBindBuffer(GL_ARRAY_BUFFER_ARB, retn->pvbo[iter]);
-        glBufferData(GL_ARRAY_BUFFER_ARB,
-                     patr[iter].cdat, patr[iter].pdat, patr[iter].draw);
+        glBindBufferARB(GL_ARRAY_BUFFER_ARB, retn->pvbo[iter]);
+        glBufferDataARB(GL_ARRAY_BUFFER_ARB,
+                        patr[iter].cdat, patr[iter].pdat, patr[iter].draw);
     }
 
     for (shdr = 0; shdr < retn->cshd; shdr++) {
         glUseProgramObjectARB(retn->pshd[shdr].prog);
         glBindVertexArray(retn->pshd[shdr].pvao);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, retn->pvbo[0]);
+        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, retn->pvbo[0]);
 
         for (iter = 1; iter < catr; iter++) {
             if (patr[iter].name
             && (aloc = glGetAttribLocation(retn->pshd[shdr].prog,
                                            patr[iter].name)) != -1) {
-                glBindBuffer(GL_ARRAY_BUFFER_ARB, retn->pvbo[iter]);
+                glBindBufferARB(GL_ARRAY_BUFFER_ARB, retn->pvbo[iter]);
                 ecnt = 0;
                 switch (patr[iter].type) {
                     case UNI_T1IV:
@@ -203,8 +206,8 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
     }
     glUseProgramObjectARB(0);
     glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
-    glBindBuffer(GL_ARRAY_BUFFER_ARB, 0);
+    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
     return retn;
 }
 
@@ -309,82 +312,6 @@ GLvoid FreeVBO(FVBO **vobj) {
 
 
 
-FRBO *MakeRBO(FVBO *vobj, GLuint tfrn, GLuint tbak) {
-    FTEX *ftex, *btex;
-    FRBO *retn;
-
-    if (!vobj || (tfrn >= vobj->ctex) || (tbak >= vobj->ctex))
-        return NULL;
-
-    ftex = BindTex(vobj, tfrn, TEX_NSET);
-    btex = BindTex(vobj, tbak, TEX_NSET);
-    if ((ftex->xdim != btex->xdim) ||
-        (ftex->ydim != btex->ydim))
-        return NULL;
-
-    retn = malloc(sizeof(*retn));
-    retn->vobj = vobj;
-    retn->tfrn = tfrn;
-    retn->tbak = tbak;
-
-    glGenFramebuffers(1, &retn->frmb);
-    glGenRenderbuffers(1, &retn->rndb);
-    glBindRenderbuffer(GL_RENDERBUFFER, retn->rndb);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
-                          ftex->xdim, ftex->ydim);
-    glBindRenderbuffer(GL_RENDERBUFFER, 0);
-    return retn;
-}
-
-
-
-GLvoid DrawRBO(FRBO *robj, GLuint shad) {
-    FTEX ttex, *ftex, *btex;
-    GLint view[4];
-
-    glGetIntegerv(GL_VIEWPORT, view);
-    glBindFramebuffer(GL_FRAMEBUFFER, robj->frmb);
-    glBindRenderbuffer(GL_RENDERBUFFER, robj->rndb);
-
-    ttex = *(btex = BindTex(robj->vobj, robj->tbak, TEX_FRMB));
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                              GL_RENDERBUFFER, robj->rndb);
-    glViewport(0, 0, btex->xdim, btex->ydim);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    DrawVBO(robj->vobj, shad);
-
-    glBindRenderbuffer(GL_RENDERBUFFER, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(view[0], view[1], view[2], view[3]);
-
-    *btex = *(ftex = BindTex(robj->vobj, robj->tfrn, TEX_NSET));
-    *ftex = ttex;
-}
-
-
-
-GLvoid SwapRBO(FRBO *robj) {
-    FTEX ttex, *ftex, *btex;
-
-     ttex = *(btex = BindTex(robj->vobj, robj->tbak, TEX_NSET));
-    *btex = *(ftex = BindTex(robj->vobj, robj->tfrn, TEX_NSET));
-    *ftex = ttex;
-}
-
-
-
-GLvoid FreeRBO(FRBO **robj) {
-    if (robj && *robj) {
-        glDeleteRenderbuffers(1, &(*robj)->rndb);
-        glDeleteFramebuffers(1, &(*robj)->frmb);
-        free(*robj);
-        *robj = NULL;
-    }
-}
-
-
-
 typedef struct _TXSZ {
     GLint size, indx;
     GLubyte *bptr;
@@ -401,14 +328,16 @@ int sizecmp(const void *a, const void *b) {
 
 
 
-void MakeRendererOGL(ULIB *ulib, ulong uniq, T2UV *data, ulong size) {
+void MakeRendererOGL(ULIB *ulib, ulong uniq,
+                     T2UV *data, ulong size, ulong rgba) {
     GLsizei bank, fill, curr, mtex, chei, phei;
     GLubyte *atex, *aptr;
     T4FV *dims, *coef;
     GLuint *indx;
-    T3FV *vert;
-    BGRA *apal;
     TXSZ *txsz;
+    T3FV *vert;
+    BGRA *apal,
+          temp;
 
     glCullFace(GL_BACK);
     glDisable(GL_CULL_FACE);
@@ -421,7 +350,7 @@ void MakeRendererOGL(ULIB *ulib, ulong uniq, T2UV *data, ulong size) {
     glClearColor(0.0, 0.0, 0.0, 0.0);
 
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mtex);
-    MakeShaderSrc(log2(mtex = min(mtex, 4096)));
+    MakeShaderSrc(log2l(mtex = min(mtex, 4096)));
 
     chei = ceil(  1.0 * uniq / mtex);
     phei = ceil(256.0 * uniq / mtex);
@@ -454,6 +383,12 @@ void MakeRendererOGL(ULIB *ulib, ulong uniq, T2UV *data, ulong size) {
         }
         ulib = ulib->next;
     }
+    if (rgba)
+        for (curr = (uniq << 8) - 1; curr >= 0; curr--) {
+            temp = apal[curr];
+            apal[curr].R = temp.B;
+            apal[curr].B = temp.R;
+        }
     qsort(txsz, uniq, sizeof(*txsz), sizecmp);
 
     for (bank =  1, fill = curr = 0; curr < uniq; curr++) {
@@ -490,10 +425,10 @@ void MakeRendererOGL(ULIB *ulib, ulong uniq, T2UV *data, ulong size) {
                    {.name = "data", .type = UNI_T2UV, .pdat = data,
                     .cdat = size * sizeof(*data), .draw = GL_STREAM_DRAW_ARB}},
 
-         suni[] = {{.name = "atex", .type = UNI_T1II, .pdat = 0},
-                   {.name = "apal", .type = UNI_T1II, .pdat = 1},
-                   {.name = "dims", .type = UNI_T1II, .pdat = 2},
-                   {.name = "coef", .type = UNI_T1II, .pdat = 3},
+         suni[] = {{.name = "atex", .type = UNI_T1II, .pdat = (GLvoid*)0},
+                   {.name = "apal", .type = UNI_T1II, .pdat = (GLvoid*)1},
+                   {.name = "dims", .type = UNI_T1II, .pdat = (GLvoid*)2},
+                   {.name = "coef", .type = UNI_T1II, .pdat = (GLvoid*)3},
                    {.name = "disz", .type = UNI_T2FV, .pdat = &disz}};
 
     surf = MakeVBO(NULL, sver, spix, GL_QUADS,

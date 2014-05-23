@@ -15,14 +15,12 @@
 
 
 
-/// default number of main list items per library
-#define DEF_USES 100
 /// minimum allowed delay
 #define MIN_WAIT 1
 /// default frame delay
 #define FRM_WAIT 40
 /// signals the need to pick an object
-#define EMP_PICK (UNIT*)1
+#define EMP_PICK ((UNIT*)1)
 
 /// if set, UNIT.ANIM and UNIT.PATH are copies, don`t free them
 #define UCF_COPY 0x80000000
@@ -73,8 +71,7 @@ typedef struct _UNIT {
 typedef struct _ULIB {
     char *path;         /// the folder from which the library was built
     UNIT **uarr;        /// array of animation units (also a linked list)
-    ulong ucnt,         /// length of the array
-          uses;         /// number of library`s units in the main display list
+    ulong ucnt;         /// length of the array
     uint32_t flgs;      /// library flags (ULF_ prefix)
     struct _ULIB *prev, /// previous library in the list
                  *next; /// next library in the list
@@ -109,6 +106,7 @@ void  DrawPixStdThrd(DRAW *draw);
 void  MakeEmptyLib(ULIB **head, char *base, char *path);
 void  FreeLibList(ULIB **head, void (*adel)(void**));
 void  FreeUnitList(UNIT **tail, void (*adel)(void**));
-ulong UnitListFromLib(ULIB *ulib, UNIT **tail);
+void  UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
+                      VEC2  dims, ulong *uniq, ulong *size);
 
 #endif

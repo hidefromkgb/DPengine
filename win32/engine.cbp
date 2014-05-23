@@ -5,12 +5,12 @@
 		<Option title="win32" />
 		<Option pch_mode="2" />
 		<Option compiler="gcc" />
-		<Option virtualFolders="src\;src\core\;src\rsrc\;src\core\gif\;" />
+		<Option virtualFolders="src\;src\core\;src\rsrc\;src\core\gif\;src\core\ogl\;" />
 		<Build>
 			<Target title="Debug">
-				<Option output="..\win32" prefix_auto="1" extension_auto="1" />
+				<Option output="../win32" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
-				<Option object_output=".obj\" />
+				<Option object_output=".obj/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>
@@ -18,9 +18,9 @@
 				</Compiler>
 			</Target>
 			<Target title="Release">
-				<Option output="..\win32" prefix_auto="1" extension_auto="1" />
+				<Option output="../win32" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
-				<Option object_output=".obj\" />
+				<Option object_output=".obj/" />
 				<Option type="0" />
 				<Option compiler="gcc" />
 				<Compiler>
@@ -28,7 +28,7 @@
 					<Add option="-O2" />
 				</Compiler>
 				<Linker>
-            				<Add option="-s" />
+					<Add option="-s" />
 				</Linker>
 			</Target>
 		</Build>
@@ -40,45 +40,69 @@
 			<Add library="user32" />
 			<Add library="kernel32" />
 			<Add library="comctl32" />
+			<Add library="opengl32" />
 			<Add library="winmm" />
 		</Linker>
-		<Unit filename="..\core\core.c">
+		<Unit filename="../core/core.c">
 			<Option compilerVar="CC" />
-			<Option virtualFolder="src\core\" />
+			<Option virtualFolder="src/core/" />
 		</Unit>
-		<Unit filename="..\core\core.h">
-			<Option virtualFolder="src\core\" />
+		<Unit filename="../core/core.h">
+			<Option virtualFolder="src/core/" />
 		</Unit>
-		<Unit filename="..\core\gif\common.c">
+		<Unit filename="../core/gif/common.c">
 			<Option compilerVar="CC" />
-			<Option virtualFolder="src\core\gif\" />
+			<Option virtualFolder="src/core/gif/" />
 		</Unit>
-		<Unit filename="..\core\gif\common.h">
-			<Option virtualFolder="src\core\gif\" />
+		<Unit filename="../core/gif/common.h">
+			<Option virtualFolder="src/core/gif/" />
 		</Unit>
-		<Unit filename="..\core\gif\gifstd.c">
+		<Unit filename="../core/gif/gifstd.c">
 			<Option compilerVar="CC" />
-			<Option virtualFolder="src\core\gif\" />
+			<Option virtualFolder="src/core/gif/" />
 		</Unit>
-		<Unit filename="..\core\gif\gifstd.h">
-			<Option virtualFolder="src\core\gif\" />
+		<Unit filename="../core/gif/gifstd.h">
+			<Option virtualFolder="src/core/gif/" />
+		</Unit>
+		<Unit filename="../core/ogl/core.h">
+			<Option virtualFolder="src/core/ogl/" />
+		</Unit>
+		<Unit filename="../core/ogl/shad.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src/core/ogl/" />
+		</Unit>
+		<Unit filename="../core/ogl/unit.h">
+			<Option virtualFolder="src/core/ogl/" />
+		</Unit>
+		<Unit filename="../core/ogl/util.c">
+			<Option compilerVar="CC" />
+			<Option virtualFolder="src/core/ogl/" />
 		</Unit>
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
-			<Option virtualFolder="src\" />
+			<Option virtualFolder="src/" />
 		</Unit>
-		<Unit filename="rsrc\rsrc.h">
-			<Option virtualFolder="src\rsrc\" />
+		<Unit filename="rsrc/rsrc.h">
+			<Option virtualFolder="src/rsrc/" />
 		</Unit>
-		<Unit filename="rsrc\rsrc.rc">
+		<Unit filename="rsrc/rsrc.rc">
 			<Option compilerVar="WINDRES" />
-			<Option virtualFolder="src\rsrc\" />
+			<Option virtualFolder="src/rsrc/" />
 		</Unit>
 		<Extensions>
 			<code_completion />
 			<envvars />
 			<debugger />
 			<lib_finder disable_auto="1" />
+			<DoxyBlocks>
+				<comment_style block="0" line="0" />
+				<doxyfile_project />
+				<doxyfile_build />
+				<doxyfile_warnings />
+				<doxyfile_output />
+				<doxyfile_dot />
+				<general />
+			</DoxyBlocks>
 		</Extensions>
 	</Project>
 </CodeBlocks_project_file>
