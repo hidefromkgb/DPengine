@@ -1,3 +1,6 @@
+#ifndef HDR_CORE
+#define HDR_CORE
+
 #include "gif/gifstd.h"
 
 
@@ -12,6 +15,8 @@
 
 
 
+/// default number of main list items per library
+#define DEF_USES 100
 /// minimum allowed delay
 #define MIN_WAIT 1
 /// default frame delay
@@ -58,13 +63,7 @@ typedef struct _UNIT {
     ulong fcur,         /// current frame of the animation
           time,         /// current frame timestamp (in ms)
           scal,         /// scaling factor in powers of 2
-          prob,         /// unit relative probability
-          mind,         /// minimum duration
-          maxd;         /// maximum duration
-    float dist,         /// movement per GIF time unit
-          gone,         /// current movement accumulator
-          xmov,         /// current movement X-component
-          ymov;         /// current movement Y-component
+          uuid;         /// unique unit identifier
     struct _UNIT *prev, /// previous unit in the list
                  *next; /// next unit in the list
     struct _ULIB *ulib; /// link to the parent unit library
@@ -84,7 +83,6 @@ typedef struct _ULIB {
 /// parameter structure for FillLibStdThrd()
 typedef struct _FILL {
     ULIB *ulib;
-    VEC2 scrn;
     long load, curr;
 } FILL;
 
@@ -105,10 +103,12 @@ uint32_t PRNG(uint32_t *seed);
 UNIT *SortByY(UNIT **tail);
 UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr);
 
-void FillLibStdThrd(FILL *fill);
-void DrawPixStdThrd(DRAW *draw);
+void  FillLibStdThrd(FILL *fill);
+void  DrawPixStdThrd(DRAW *draw);
 
-void MakeEmptyLib(ULIB **head, char *base, char *path);
-void FreeLibList(ULIB **head, void (*adel)(void**));
-void FreeUnitList(UNIT **tail, void (*adel)(void**));
-void UnitListFromLib(ULIB *ulib, UNIT **tail);
+void  MakeEmptyLib(ULIB **head, char *base, char *path);
+void  FreeLibList(ULIB **head, void (*adel)(void**));
+void  FreeUnitList(UNIT **tail, void (*adel)(void**));
+ulong UnitListFromLib(ULIB *ulib, UNIT **tail);
+
+#endif

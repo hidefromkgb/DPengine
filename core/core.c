@@ -378,16 +378,6 @@ long MakeUnitStd(UNIT **tail, UNIT *info) {
     }
 
     if (prev->anim) {
-//        if (prev->flgs & UCF_CANX)
-            prev->flgs = (prev->flgs & ~UCF_REVX) | (PRNG(&seed) & UCF_REVX);
-//        if (prev->flgs & UCF_CANY)
-            prev->flgs = (prev->flgs & ~UCF_REVY) | (PRNG(&seed) & UCF_REVY);
-        prev->cpos.x = PRNG(&seed) % (prev->cpos.x
-                     - (((ASTD*)prev->anim)->xdim << prev->scal));
-        prev->cpos.y = PRNG(&seed) % (prev->cpos.y
-                     - (((ASTD*)prev->anim)->ydim << prev->scal))
-                     + (((ASTD*)prev->anim)->ydim << prev->scal);
-        prev->fcur = PRNG(&seed) % ((ASTD*)prev->anim)->fcnt;
         if ((bpal = ((ASTD*)prev->anim)->bpal)) {
             apal = strdup(prev->path);
             indx = strlen(apal);
@@ -438,7 +428,6 @@ void FillLibStdThrd(FILL *fill) {
 
     tail = NULL;
     fill->curr = 0;
-    info.cpos = fill->scrn;
     info.ulib = fill->ulib;
     conf = ConcatPath(fill->ulib->path, DEF_CONF);
     if ((file = fptr = LoadFile(conf, NULL))) {
@@ -490,7 +479,7 @@ void FillLibStdThrd(FILL *fill) {
             printf("--- %s: %ld objects\n\n",
                    fill->ulib->path, fill->curr);
             tail->next = NULL;
-            fill->ulib->uses = 1;
+            fill->ulib->uses = DEF_USES;
             fill->ulib->ucnt = fill->curr;
             fill->ulib->uarr = malloc(fill->curr * sizeof(*fill->ulib->uarr));
             for (fill->curr--; fill->curr >= 0; fill->curr--) {
@@ -569,11 +558,13 @@ void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
 
 
 
-void UnitListFromLib(ULIB *ulib, UNIT **tail) {
+ulong UnitListFromLib(ULIB *ulib, UNIT **tail) {
     UNIT *elem, *list = NULL;
-    ulong iter;
+    ulong iter, uuid = 0;
 
     while (ulib) {
+        for (iter = 0; iter < ulib->ucnt; iter++)
+            ulib->uarr[iter]->uuid = ++uuid;
         for (iter = 0; iter < ulib->uses; iter++) {
             elem = malloc(sizeof(*elem));
             *elem = *ulib->uarr[PRNG(&seed) % ulib->ucnt];
@@ -590,4 +581,5 @@ void UnitListFromLib(ULIB *ulib, UNIT **tail) {
         FreeUnitList(tail, NULL);
         *tail = list;
     }
+    return uuid;
 }
