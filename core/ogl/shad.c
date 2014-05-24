@@ -123,34 +123,34 @@ char *shader(char *frmt, ...) {
 char *tver[] = {
 /// surf - #: main vertex shader
 "#version 130\n\
-\
-attribute vec3 vert;\
-attribute uvec2 data;\
-\
-uniform sampler2D dims;\
-uniform sampler2D coef;\
-uniform vec2 disz;\
-\
-varying vec4 vtex;\
-varying vec4 voff;\
-\
-%s\
-\
-void main() {\
-    uint  indx = data.y & 0xFFFFFu;\
-    uint  cpal = indx << 8;\
-    ivec2 offs = ivec2(indx & txsz, indx >> txlg);\
-    ivec2 vpos = ivec2((int(data.x) << 16) >> 16, int(data.x) >> 16);\
-    vec4  vdim = texelFetch(dims, offs, 0);\
-    vec4  vcoe = vec4(0.5 - (0.5 - vert.x) * (1.0 - ((data.y >> 29) & 0x2u)),\
-                      0.5 + (0.5 - vert.y) * (1.0 - ((data.y >> 30) & 0x2u)),\
-                      1.0, 1.0) * texelFetch(coef, offs, 0);\
-    vtex = vec4(vert.x * vdim.x, vert.y * vdim.y, vdim.x, 0.0);\
-    voff = vec4(vdim.z, vdim.w + ((data.y >> 20) & 0x3FFu) * vdim.x * vdim.y,\
-                cpal & txsz, cpal >> txlg);\
-    gl_Position = vec4((vpos.x + vdim.x * vcoe.x) * disz.x - 1.0,\
-                      -(vpos.y - vdim.y * vcoe.y) * disz.y + 1.0,\
-                       -vpos.y * disz.y * 0.5 + 1.0, 1.0);\
+\n\
+in vec3 vert;\n\
+in uvec2 data;\n\
+\n\
+uniform sampler2D dims;\n\
+uniform sampler2D coef;\n\
+uniform vec2 disz;\n\
+\n\
+out vec4 vtex;\n\
+out vec4 voff;\n\
+\n\
+%s\n\
+\n\
+void main() {\n\
+    uint  indx = data.y & 0xFFFFFu;\n\
+    uint  cpal = indx << 8;\n\
+    ivec2 offs = ivec2(indx & txsz, indx >> txlg);\n\
+    ivec2 vpos = ivec2((int(data.x) << 16) >> 16, int(data.x) >> 16);\n\
+    vec4  vdim = texelFetch(dims, offs, 0);\n\
+    vec4  vcoe = vec4(0.5 - (0.5 - vert.x) * (1.0 - float((data.y >> 29) & 0x2u)),\n\
+                      0.5 + (0.5 - vert.y) * (1.0 - float((data.y >> 30) & 0x2u)),\n\
+                      1.0, 1.0) * texelFetch(coef, offs, 0);\n\
+    vtex = vec4(vert.x * vdim.x, vert.y * vdim.y, vdim.x, 0.0);\n\
+    voff = vec4(vdim.z, vdim.w + ((data.y >> 20) & 0x3FFu) * vdim.x * vdim.y,\n\
+                cpal & txsz, cpal >> txlg);\n\
+    gl_Position = vec4((vpos.x + vdim.x * vcoe.x) * disz.x - 1.0,\n\
+                      -(vpos.y - vdim.y * vcoe.y) * disz.y + 1.0,\n\
+                       -vpos.y * disz.y * 0.5 + 1.0, 1.0);\n\
 }",
 
 NULL};
@@ -160,21 +160,21 @@ NULL};
 char *tpix[] = {
 /// surf - 0: display
 "#version 130\n\
-\
-uniform usampler2DArray atex;\
-uniform sampler2D apal;\
-\
-varying vec4 vtex;\
-varying vec4 voff;\
-\
-%s\
-\
-void main() {\
-    uint  offs = uint(voff.y) + uint(vtex.x) + uint(vtex.y) * uint(vtex.z);\
-    uvec4 indx = texelFetch(atex,\
-                            ivec3(offs & txsz, offs >> txlg, voff.x), 0);\
-    if (indx.x == 0xFFu) discard;\
-    gl_FragColor = texelFetch(apal, ivec2(voff.z + indx.x, voff.w), 0);\
+\n\
+uniform usampler2DArray atex;\n\
+uniform sampler2D apal;\n\
+\n\
+in vec4 vtex;\n\
+in vec4 voff;\n\
+\n\
+%s\n\
+\n\
+void main() {\n\
+    uint  offs = uint(voff.y) + uint(vtex.x) + uint(vtex.y) * uint(vtex.z);\n\
+    uvec4 indx = texelFetch(atex,\n\
+                            ivec3(offs & txsz, offs >> txlg, voff.x), 0);\n\
+    if (indx.x == 0xFFu) discard;\n\
+    gl_FragColor = texelFetch(apal, ivec2(voff.z + indx.x, voff.w), 0);\n\
 }",
 
 NULL};

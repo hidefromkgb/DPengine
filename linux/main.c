@@ -12,8 +12,6 @@
 
 
 
-#define DEF_USES 128
-
 #define BRT_RSTD 0
 #define BRT_ROGL 1
 
@@ -163,15 +161,17 @@ gboolean DrawFunc(gpointer user) {
     TMRD *tmrd = user;
     GdkModifierType gmod;
     GdkWindow *gwnd;
+    gint xptr, yptr;
     cairo_t *surf;
     UNIT *tail;
     long iter;
 
     if ((gwnd = gtk_widget_get_window(tmrd->gwnd)) &&
         (tail = UpdateFrameStd(&tmrd->tail, &pick, tmrd->time, cptr))) {
-        if (pick)
-            gdk_window_get_pointer(gwnd, &cptr.x, &cptr.y, &gmod);
-
+        if (pick) {
+            gdk_window_get_pointer(gwnd, &xptr, &yptr, &gmod);
+            cptr = (VEC2){xptr, yptr};
+        }
         switch (rndr) {
             case BRT_RSTD:
                 surf = cairo_create(tmrd->surf);
@@ -395,7 +395,16 @@ int main(int argc, char *argv[]) {
     PICT pict;
     GLIS init;
 
-    rndr = (argc == 1)? BRT_ROGL : BRT_RSTD;
+    long uses;
+
+    if (argc == 1)
+        uses = 0;
+    else
+        uses = atoi(argv[1]);
+    if (!uses)
+        uses = 128;
+    rndr = (uses < 0)? BRT_RSTD : BRT_ROGL;
+    uses = abs(uses);
 
     anim = "anim";
     gtk_init(&argc, &argv);
@@ -488,7 +497,7 @@ int main(int argc, char *argv[]) {
         printf("\nLoading complete: %ld objects, %u ms [%0.3f ms/obj]\n\n",
                curr, mtmp, (float)mtmp / (float)curr);
 
-        UnitListFromLib(ulib, &tail, DEF_USES,
+        UnitListFromLib(ulib, &tail, uses,
                         pict.size, &init.uniq, &init.size);
 
         switch (rndr) {
