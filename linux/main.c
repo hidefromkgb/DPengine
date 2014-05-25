@@ -62,10 +62,9 @@ typedef struct _GLIS {
 
 
 
-UNIT *pick = NULL;
-VEC2 cptr = {};
+UNIT *pick = NULL, *poke = NULL;
 
-long rndr = BRT_RSTD;
+long rndr;
 
 
 
@@ -159,19 +158,27 @@ gboolean FPSFunc(gpointer user) {
 
 gboolean DrawFunc(gpointer user) {
     TMRD *tmrd = user;
+    GdkRectangle rect = {};
     GdkModifierType gmod;
+    GdkRegion *creg;
     GdkWindow *gwnd;
     gint xptr, yptr;
     cairo_t *surf;
     UNIT *tail;
     long iter;
 
+    gdk_window_get_pointer(gwnd, &xptr, &yptr, &gmod);
+    poke = (pick)? pick : EMP_PICK;
+
     if ((gwnd = gtk_widget_get_window(tmrd->gwnd)) &&
-        (tail = UpdateFrameStd(&tmrd->tail, &pick, tmrd->time, cptr))) {
-        if (pick) {
-            gdk_window_get_pointer(gwnd, &xptr, &yptr, &gmod);
-            cptr = (VEC2){xptr, yptr};
+        (tail = UpdateFrameStd(&tmrd->tail, &poke, tmrd->time, xptr, yptr))) {
+        if (poke != EMP_PICK) {
+            rect.width  = tmrd->pict->size.x;
+            rect.height = tmrd->pict->size.y;
         }
+        creg = gdk_region_rectangle(&rect);
+        gdk_window_input_shape_combine_region(gwnd, creg, 0, 0);
+        gdk_region_destroy(creg);
         switch (rndr) {
             case BRT_RSTD:
                 surf = cairo_create(tmrd->surf);
@@ -202,7 +209,6 @@ gboolean DrawFunc(gpointer user) {
         }
         gdk_window_invalidate_rect(gwnd, NULL, FALSE);
         gdk_window_process_updates(gwnd, FALSE);
-
         tmrd->fram++;
         return TRUE;
     }
@@ -269,9 +275,9 @@ gboolean MouseButton(GtkWidget* gwnd,
     if (embt->button == 1)
         switch (embt->type) {
             case GDK_BUTTON_PRESS:
-                cptr.x = embt->x;
-                cptr.y = embt->y;
-                pick = EMP_PICK;
+                pick = poke;
+                if (pick != EMP_PICK)
+                    printf("%s\n", pick->path);
                 break;
 
             case GDK_BUTTON_RELEASE:
@@ -380,8 +386,8 @@ GdkGLConfig *GetGDKGL(GdkScreen *scrn) {
 
 int main(int argc, char *argv[]) {
     cairo_surface_t *surf = NULL;
-    GtkWidget *gwnd;
     GdkScreen *gscr;
+    GtkWidget *gwnd;
 
     ulong msec, mtmp;
     long ncpu, iter, curr;
@@ -400,7 +406,7 @@ int main(int argc, char *argv[]) {
     if (argc == 1)
         uses = 0;
     else
-        uses = atoi(argv[1]);
+        uses = atol(argv[1]);
     if (!uses)
         uses = 128;
     rndr = (uses < 0)? BRT_RSTD : BRT_ROGL;
@@ -419,6 +425,7 @@ int main(int argc, char *argv[]) {
     gtk_window_set_decorated(GTK_WINDOW(gwnd), FALSE);
     gtk_window_set_default_size(GTK_WINDOW(gwnd), pict.size.x, pict.size.y);
     gtk_window_set_position(GTK_WINDOW(gwnd), GTK_WIN_POS_CENTER);
+    gtk_window_set_keep_above(GTK_WINDOW(gwnd), TRUE);
 
     switch (rndr) {
         case BRT_RSTD:
@@ -529,6 +536,7 @@ int main(int argc, char *argv[]) {
 
         tmrd = (TMRD){tmrd.isem, tmrd.osem, &msec, ncpu, 0,
                       surf, gwnd, thrd, tail, &pict, init.data};
+
         g_timeout_add(MIN_WAIT, TimeFunc, &msec);
         g_timeout_add(FRM_WAIT, DrawFunc, &tmrd);
         g_timeout_add(1000, FPSFunc, &tmrd);

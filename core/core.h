@@ -98,7 +98,8 @@ extern uint32_t seed;
 
 uint32_t PRNG(uint32_t *seed);
 UNIT *SortByY(UNIT **tail);
-UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr);
+UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick,
+                     ulong *time, long xptr, long yptr);
 
 void  FillLibStdThrd(FILL *fill);
 void  DrawPixStdThrd(DRAW *draw);

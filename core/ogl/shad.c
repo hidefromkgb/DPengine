@@ -60,7 +60,7 @@ SHDR *MakeShaderList(GLchar *vert[], GLchar *pixl[],
 
     while (pixl[iter]) iter++;
 
-    SHDR *retn = (SHDR*)calloc(iter, sizeof(SHDR));
+    SHDR *retn = calloc(iter, sizeof(*retn));
 
     *cshd = iter;
     for (iter = 0; iter < *cshd; iter++) {
@@ -85,7 +85,7 @@ SHDR *MakeShaderList(GLchar *vert[], GLchar *pixl[],
                                              puni[ctmp].name)) != -1)
                 retn[iter].cuni++;
 
-        for (retn[iter].puni = (UNIF*)malloc(retn[iter].cuni * sizeof(UNIF)),
+        for (retn[iter].puni = malloc(retn[iter].cuni * sizeof(UNIF)),
              step = ctmp = 0; ctmp < cuni; ctmp++)
             if ((name = glGetUniformLocation(retn[iter].prog,
                                              puni[ctmp].name)) != -1) {

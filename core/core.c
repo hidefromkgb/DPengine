@@ -222,7 +222,8 @@ UNIT *SortByY(UNIT **tail) {
 
 
 
-UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
+UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick,
+                     ulong *time, long xptr, long yptr) {
     long xpos, ypos;
     UNIT *iter, *temp;
     ASTD *anim;
@@ -232,26 +233,24 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
         if (*pick == EMP_PICK) {
             while (temp) {
                 anim =   temp->anim;
-                xpos =  (cptr.x - temp->cpos.x) >> temp->scal;
-                ypos = ((cptr.y - temp->cpos.y) >> temp->scal) + anim->ydim;
-                if ((cptr.x >= temp->cpos.x) && (xpos <  anim->xdim)
-                &&  (cptr.y <  temp->cpos.y) && (ypos >= 0)) {
+                xpos =  (xptr - temp->cpos.x) >> temp->scal;
+                ypos = ((yptr - temp->cpos.y) >> temp->scal) + anim->ydim;
+                if ((xptr >= temp->cpos.x) && (xpos <  anim->xdim)
+                &&  (yptr <  temp->cpos.y) && (ypos >= 0)) {
                     if (temp->flgs & UCF_REVX)
                         xpos = anim->xdim - 1 - xpos;
                     if (temp->flgs & UCF_REVY)
                         ypos = anim->ydim - 1 - ypos;
                     if (anim->bptr[xpos + anim->xdim *
                                   (ypos + anim->ydim * temp->fcur)] != 0xFF) {
-                        temp->cptr.x = cptr.x - temp->cpos.x;
-                        temp->cptr.y = cptr.y - temp->cpos.y;
+                        temp->cptr.x = xptr - temp->cpos.x;
+                        temp->cptr.y = yptr - temp->cpos.y;
                         *pick = temp;
                         break;
                     }
                 }
                 temp = temp->prev;
             }
-            if (*pick != EMP_PICK)
-                printf("%s\n", (*pick)->path);
         }
         while (iter) {
             anim = iter->anim;
@@ -263,8 +262,8 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick, ulong *time, VEC2 cptr) {
             iter = iter->prev;
         }
         if (*pick && (*pick != EMP_PICK)) {
-            (*pick)->cpos.x = cptr.x - (*pick)->cptr.x;
-            (*pick)->cpos.y = cptr.y - (*pick)->cptr.y;
+            (*pick)->cpos.x = xptr - (*pick)->cptr.x;
+            (*pick)->cpos.y = yptr - (*pick)->cptr.y;
             SortByY(tail);
         }
     }

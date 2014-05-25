@@ -300,8 +300,8 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     TMRD  tmrd = {};
     THRD *thrd;
     ULIB *ulib;
-    UNIT *tail, *iter;
-    FRBO *fram;
+    UNIT *tail, *iter, *poke;
+    FRBO *fram = NULL;
 
     char *temp;
     WIN32_FIND_DATAW fdir;
@@ -465,7 +465,11 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                 DispatchMessage(&pmsg);
             }
             else {
-                if ((iter = UpdateFrameStd(&tail, &pick, &tmrd.time, cptr))) {
+                poke = pick;
+                if ((iter = UpdateFrameStd(&tail, &pick,
+                                           &tmrd.time, cptr.x, cptr.y))) {
+                    if (poke != pick)
+                        printf("%s\n", pick->path);
                     switch (rndr) {
                         /// global vars used: PICK, CPTR, FCNT
                         case BRT_RSTD:
