@@ -328,14 +328,13 @@ int sizecmp(const void *a, const void *b) {
 
 
 
-void MakeRendererOGL(ULIB *ulib, ulong uniq,
-                     T2UV *data, ulong size, ulong rgba) {
-    GLsizei bank, fill, curr, mtex, chei, phei;
+void MakeRendererOGL(ULIB  *ulib, ulong uniq,
+                     T2UV **data, ulong size, ulong rgba) {
+    GLsizei bank, fill, curr, mtex, chei, phei, dhei;
     GLubyte *atex, *aptr;
     T4FV *dims, *coef;
     GLuint *indx;
     TXSZ *txsz;
-    T3FV *vert;
     BGRA *apal,
           temp;
 
@@ -352,15 +351,16 @@ void MakeRendererOGL(ULIB *ulib, ulong uniq,
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mtex);
     MakeShaderSrc(log2l(mtex = min(mtex, 4096)));
 
-    chei = ceil(  1.0 * uniq / mtex);
-    phei = ceil(256.0 * uniq / mtex);
+    dhei = ceil((GLfloat)size  / mtex) + 1;
+    chei = ceil((GLfloat)uniq  / mtex);
+    phei = ceil((256.0 * uniq) / mtex);
 
     dims = calloc(mtex * chei, sizeof(*dims));
     coef = calloc(mtex * chei, sizeof(*coef));
     apal = calloc(mtex * phei, sizeof(*apal));
 
-    indx = calloc(size, sizeof(*indx));
-    vert = calloc(size, sizeof(*vert));
+    *data = calloc(mtex * dhei, sizeof(**data));
+    indx = calloc(mtex * dhei * 4, sizeof(*indx));
 
     txsz = calloc(uniq, sizeof(*txsz));
 
@@ -413,44 +413,42 @@ void MakeRendererOGL(ULIB *ulib, ulong uniq,
     }
     free(txsz);
 
-    for (curr = 0; curr < size; curr++) {
-        vert[curr] = (T3FV){(curr >> 1) & 1, ((curr + 1) >> 1) & 1, 0};
+    for (curr = mtex * dhei * 4 - 1; curr >= 0; curr--)
         indx[curr] = curr;
-    }
 
-    UNIF satr[] = {{/** No name/type for indices! **/ .pdat = indx,
-                    .cdat = size * sizeof(*indx), .draw = GL_STATIC_DRAW_ARB},
-                   {.name = "vert", .type = UNI_T3FV, .pdat = vert,
-                    .cdat = size * sizeof(*vert), .draw = GL_STATIC_DRAW_ARB},
-                   {.name = "data", .type = UNI_T2UV, .pdat = data,
-                    .cdat = size * sizeof(*data), .draw = GL_STREAM_DRAW_ARB}},
-
-         suni[] = {{.name = "atex", .type = UNI_T1II, .pdat = (GLvoid*)0},
-                   {.name = "apal", .type = UNI_T1II, .pdat = (GLvoid*)1},
-                   {.name = "dims", .type = UNI_T1II, .pdat = (GLvoid*)2},
-                   {.name = "coef", .type = UNI_T1II, .pdat = (GLvoid*)3},
+    UNIF satr[] = {{.pdat = indx, .cdat = mtex * dhei * 4 * sizeof(*indx),
+                    .draw = GL_STATIC_DRAW_ARB}},
+         suni[] = {{.name = "data", .type = UNI_T1II, .pdat = (GLvoid*)0},
+                   {.name = "atex", .type = UNI_T1II, .pdat = (GLvoid*)1},
+                   {.name = "apal", .type = UNI_T1II, .pdat = (GLvoid*)2},
+                   {.name = "dims", .type = UNI_T1II, .pdat = (GLvoid*)3},
+                   {.name = "coef", .type = UNI_T1II, .pdat = (GLvoid*)4},
                    {.name = "disz", .type = UNI_T2FV, .pdat = &disz}};
 
     surf = MakeVBO(NULL, sver, spix, GL_QUADS,
-                   carrsz(satr), satr, carrsz(suni), suni, 4);
+                   carrsz(satr), satr, carrsz(suni), suni, 5);
+    surf->cind = size * 4;
 
-    MakeTex(&surf->ptex[0], mtex, mtex, bank + 1,
+    MakeTex(&surf->ptex[0], mtex, dhei, 0,
+            GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
+            GL_UNSIGNED_INT, GL_RG32UI, GL_RG_INTEGER, *data);
+
+    MakeTex(&surf->ptex[1], mtex, mtex, bank + 1,
             GL_TEXTURE_2D_ARRAY, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
             GL_UNSIGNED_BYTE, GL_R8UI, GL_RED_INTEGER, atex);
 
-    MakeTex(&surf->ptex[1], mtex, phei, 0,
+    MakeTex(&surf->ptex[2], mtex, phei, 0,
             GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
             GL_UNSIGNED_BYTE, GL_RGBA8, GL_BGRA, apal);
 
-    MakeTex(&surf->ptex[2], mtex, chei, 0,
+    MakeTex(&surf->ptex[3], mtex, chei, 0,
             GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
             GL_FLOAT, GL_RGBA32F, GL_RGBA, dims);
 
-    MakeTex(&surf->ptex[3], mtex, chei, 0,
+    MakeTex(&surf->ptex[4], mtex, chei, 0,
             GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
             GL_FLOAT, GL_RGBA32F, GL_RGBA, coef);
 
-    free(vert);
     free(indx);
 
     free(atex);
@@ -472,13 +470,16 @@ void SizeRendererOGL(ulong xscr, ulong yscr) {
 
 void DrawRendererOGL(T2UV *data, ulong size) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, surf->pvbo[2]);
-    glBufferSubDataARB(GL_ARRAY_BUFFER_ARB, 0, size * sizeof(*data), data);
+    BindTex(surf, 0, TEX_DFLT);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, surf->ptex[0].xdim,
+                    ceil((GLfloat)size / surf->ptex[0].xdim),
+                    GL_RG_INTEGER, GL_UNSIGNED_INT, data);
     DrawVBO(surf, 0);
 }
 
 
 
-void FreeRendererOGL() {
+void FreeRendererOGL(T2UV *data) {
     FreeVBO(&surf);
+    free(data);
 }

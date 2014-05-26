@@ -39,15 +39,10 @@
 
 
 
-/// two-dimensional integer vector
-typedef struct _VEC2 {
-    long x, y;
-} VEC2;
-
 /// image wrapper, contains raw pixel data and dimensions
 typedef struct _PICT {
     BGRA *bptr;
-    VEC2 size;
+    long dimx, dimy;
 } PICT;
 
 /// elementary animation unit
@@ -56,8 +51,8 @@ typedef struct _UNIT {
     char *path;         /// path to the original animation file
     uint32_t hash,      /// path hash used for finding copies
              flgs;      /// unit flags (UCF_ prefix)
-    VEC2  cpos,         /// position of the unit`s lower-left corner
-          cptr;         /// cursor coords on mousedown (for dragging)
+    long  posx, posy,   /// position of the unit`s lower-left corner
+          ptrx, ptry;   /// cursor coords on mousedown (for dragging)
     ulong fcur,         /// current frame of the animation
           time,         /// current frame timestamp (in ms)
           scal,         /// scaling factor in powers of 2
@@ -108,6 +103,6 @@ void  MakeEmptyLib(ULIB **head, char *base, char *path);
 void  FreeLibList(ULIB **head, void (*adel)(void**));
 void  FreeUnitList(UNIT **tail, void (*adel)(void**));
 void  UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
-                      VEC2  dims, ulong *uniq, ulong *size);
+                      long  dimx, long   dimy, ulong *uniq, ulong *size);
 
 #endif

@@ -50,7 +50,7 @@ typedef struct _TMRD {
     THRD *thrd;
     UNIT *tail;
     PICT *pict;
-    T2UV *data;
+    T2UV **data;
 } TMRD;
 
 /// OpenGL initialization structure
@@ -165,16 +165,18 @@ gboolean DrawFunc(gpointer user) {
     gint xptr, yptr;
     cairo_t *surf;
     UNIT *tail;
+    T2UV *data;
     long iter;
 
+    if (!(gwnd = gtk_widget_get_window(tmrd->gwnd)))
+        return FALSE;
     gdk_window_get_pointer(gwnd, &xptr, &yptr, &gmod);
     poke = (pick)? pick : EMP_PICK;
 
-    if ((gwnd = gtk_widget_get_window(tmrd->gwnd)) &&
-        (tail = UpdateFrameStd(&tmrd->tail, &poke, tmrd->time, xptr, yptr))) {
+    if ((tail = UpdateFrameStd(&tmrd->tail, &poke, tmrd->time, xptr, yptr))) {
         if (poke != EMP_PICK) {
-            rect.width  = tmrd->pict->size.x;
-            rect.height = tmrd->pict->size.y;
+            rect.width  = tmrd->pict->dimx;
+            rect.height = tmrd->pict->dimy;
         }
         creg = gdk_region_rectangle(&rect);
         gdk_window_input_shape_combine_region(gwnd, creg, 0, 0);
@@ -193,17 +195,17 @@ gboolean DrawFunc(gpointer user) {
                 break;
 
             case BRT_ROGL:
+                if (!(data = *tmrd->data))
+                    break;
                 iter = 0;
                 while (tail) {
-                    tmrd->data[iter + 0] = tmrd->data[iter + 1] =
-                    tmrd->data[iter + 2] = tmrd->data[iter + 3] =
-                        (T2UV){(tail->cpos.y << 16) | (tail->cpos.x & 0xFFFF),
+                    data[iter++] =
+                        (T2UV){(tail->posy << 16) | (tail->posx & 0xFFFF),
                               ((tail->flgs & UCF_REVY)? 0x80000000 : 0) |
                               ((tail->flgs & UCF_REVX)? 0x40000000 : 0) |
                               ((tail->fcur & 0x3FF) << 20) |
                               ((tail->uuid - 1) & 0xFFFFF)};
                     tail = tail->prev;
-                    iter += 4;
                 }
                 break;
         }
@@ -291,13 +293,11 @@ gboolean MouseButton(GtkWidget* gwnd,
 
 gboolean Resize(GtkWidget *gwnd, GdkEventConfigure *ecnf, gpointer user) {
     GdkGLDrawable *pGLD = gtk_widget_get_gl_drawable(gwnd);
-    GLfloat dimx = gwnd->allocation.width,
-            dimy = gwnd->allocation.height;
 
     if (!gdk_gl_drawable_gl_begin(pGLD, gtk_widget_get_gl_context(gwnd)))
         return FALSE;
 
-    SizeRendererOGL(dimx, dimy);
+    SizeRendererOGL(gwnd->allocation.width, gwnd->allocation.height);
 
     gdk_gl_drawable_gl_end(pGLD);
 
@@ -317,7 +317,7 @@ gboolean InitGL(GtkWidget *gwnd, gpointer user) {
         printf("Unsupported OpenGL version! Emergency exit...\n");
         exit(0);
     }
-    MakeRendererOGL(init->ulib, init->uniq, init->data, init->size, FALSE);
+    MakeRendererOGL(init->ulib, init->uniq, &init->data, init->size, FALSE);
 
     gdk_gl_drawable_gl_end(pGLD);
     return FALSE;
@@ -331,7 +331,7 @@ gboolean DeinitGL(GtkWidget *gwnd, gpointer user) {
     if (!gdk_gl_drawable_gl_begin(pGLD, gtk_widget_get_gl_context(gwnd)))
         return FALSE;
 
-    FreeRendererOGL();
+    FreeRendererOGL(user);
 
     gdk_gl_drawable_gl_end(pGLD);
 
@@ -418,19 +418,19 @@ int main(int argc, char *argv[]) {
     gscr = gtk_window_get_screen(gwnd = gtk_window_new(GTK_WINDOW_TOPLEVEL));
     ScreenChange(gwnd, NULL, NULL);
 
-    pict.size.x = gdk_screen_get_width(gscr);
-    pict.size.y = gdk_screen_get_height(gscr);
+    pict.dimx = gdk_screen_get_width(gscr);
+    pict.dimy = gdk_screen_get_height(gscr);
 
     gtk_widget_set_app_paintable(gwnd, TRUE);
     gtk_window_set_decorated(GTK_WINDOW(gwnd), FALSE);
-    gtk_window_set_default_size(GTK_WINDOW(gwnd), pict.size.x, pict.size.y);
+    gtk_window_set_default_size(GTK_WINDOW(gwnd), pict.dimx, pict.dimy);
     gtk_window_set_position(GTK_WINDOW(gwnd), GTK_WIN_POS_CENTER);
     gtk_window_set_keep_above(GTK_WINDOW(gwnd), TRUE);
 
     switch (rndr) {
         case BRT_RSTD:
             surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                                              pict.size.x, pict.size.y);
+                                              pict.dimx, pict.dimy);
             pict.bptr = cairo_image_surface_get_data(surf);
             g_signal_connect(G_OBJECT(gwnd), "expose-event",
                              G_CALLBACK(Redraw), surf);
@@ -504,8 +504,10 @@ int main(int argc, char *argv[]) {
         printf("\nLoading complete: %ld objects, %u ms [%0.3f ms/obj]\n\n",
                curr, mtmp, (float)mtmp / (float)curr);
 
-        UnitListFromLib(ulib, &tail, uses,
-                        pict.size, &init.uniq, &init.size);
+        printf("Renderer: %s\n\n", (rndr == BRT_ROGL)? "OpenGL": "CPU");
+
+        UnitListFromLib(ulib, &tail, uses, pict.dimx, pict.dimy,
+                        &init.uniq, &init.size);
 
         switch (rndr) {
             case BRT_RSTD:
@@ -514,18 +516,16 @@ int main(int argc, char *argv[]) {
                     thrd[iter].func = DrawPixStdThrd;
                     thrd[iter].fprm.draw =
                         (DRAW){NULL, &pict,
-                              ((pict.size.y + 1) / ncpu) *  iter,
-                              ((pict.size.y + 1) / ncpu) * (iter + 1)};
+                              ((pict.dimy + 1) / ncpu) *  iter,
+                              ((pict.dimy + 1) / ncpu) * (iter + 1)};
                     pthread_create(&thrd[iter].ithr, NULL,
                                    ThrdFunc, &thrd[iter]);
                 }
-                thrd[ncpu - 1].fprm.draw.ymax = pict.size.y;
+                thrd[ncpu - 1].fprm.draw.ymax = pict.dimy;
                 break;
 
             case BRT_ROGL:
-                init.size *= 4;
                 init.ulib = ulib;
-                init.data = calloc(init.size, sizeof(*init.data));
                 break;
         }
 
@@ -535,7 +535,7 @@ int main(int argc, char *argv[]) {
                               gdk_cursor_new(GDK_HAND1));
 
         tmrd = (TMRD){tmrd.isem, tmrd.osem, &msec, ncpu, 0,
-                      surf, gwnd, thrd, tail, &pict, init.data};
+                      surf, gwnd, thrd, tail, &pict, &init.data};
 
         g_timeout_add(MIN_WAIT, TimeFunc, &msec);
         g_timeout_add(FRM_WAIT, DrawFunc, &tmrd);
@@ -552,8 +552,7 @@ int main(int argc, char *argv[]) {
                 break;
 
             case BRT_ROGL:
-                DeinitGL(gwnd, NULL);
-                free(init.data);
+                DeinitGL(gwnd, init.data);
                 break;
         }
         FreeLibList(&ulib, FreeAnimStd);

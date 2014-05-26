@@ -28,7 +28,9 @@
     #define GL_STREAM_DRAW_ARB              0x88E0
     #define GL_STATIC_DRAW_ARB              0x88E4
     #define GL_CLAMP_TO_EDGE                0x812F
+    #define GL_RG32UI                       0x823C
     #define GL_R8UI                         0x8232
+    #define GL_RG_INTEGER                   0x8228
     #define GL_RED_INTEGER                  0x8D94
     #define GL_RGBA32F                      0x8814
     #define GL_BGRA                         0x80E1
@@ -121,11 +123,11 @@ typedef struct _T4UV {
 
 
 long InitRendererOGL();
-void MakeRendererOGL(ULIB *ulib, ulong uniq,
-                     T2UV *data, ulong size, ulong rgba);
+void MakeRendererOGL(ULIB  *ulib, ulong uniq,
+                     T2UV **data, ulong size, ulong rgba);
 void SizeRendererOGL(ulong xscr, ulong yscr);
 void DrawRendererOGL(T2UV *data, ulong size);
-void FreeRendererOGL();
+void FreeRendererOGL(T2UV *data);
 
 
 

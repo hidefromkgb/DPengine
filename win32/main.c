@@ -44,16 +44,16 @@ typedef struct _FRBO {
     GLuint fbuf,    /// framebuffer
            rbuf[2], /// renderbuffers for pixel and depth data
            pbuf[2]; /// pixel-transfer buffer array
-    GLint  xdim,    /// width
-           ydim,    /// height
+    GLint  dimx,    /// width
+           dimy,    /// height
            swiz;    /// pixel buffer switcher
 } FRBO;
 
 
 
 UNIT *pick = NULL;
-VEC2 cptr = {};
-UINT fcnt = 0;
+POINT cptr = {};
+UINT  fcnt = 0;
 
 ulong rndr = BRT_ROGL;
 HGLRC mwrc;
@@ -61,12 +61,12 @@ HDC mwdc;
 
 
 
-FRBO *MakeRBO(VEC2 size) {
+FRBO *MakeRBO(long dimx, long dimy) {
     FRBO *retn = malloc(sizeof(FRBO));
     GLint data;
 
-    retn->xdim = size.x;
-    retn->ydim = size.y;
+    retn->dimx = dimx;
+    retn->dimy = dimy;
     retn->swiz = 0;
 
     glGenFramebuffers(1, &retn->fbuf);
@@ -75,15 +75,15 @@ FRBO *MakeRBO(VEC2 size) {
     glGenRenderbuffers(2, retn->rbuf);
     glBindRenderbuffer(GL_RENDERBUFFER, retn->rbuf[0]);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA,
-                          retn->xdim, retn->ydim);
+                          retn->dimx, retn->dimy);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                               GL_RENDERBUFFER, retn->rbuf[0]);
     glBindRenderbuffer(GL_RENDERBUFFER, retn->rbuf[1]);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
-                          retn->xdim, retn->ydim);
+                          retn->dimx, retn->dimy);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                               GL_RENDERBUFFER, retn->rbuf[1]);
-    data = retn->xdim * retn->ydim * 4;
+    data = retn->dimx * retn->dimy * 4;
 
     glGenBuffersARB(2, retn->pbuf);
     glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, retn->pbuf[0]);
@@ -104,7 +104,7 @@ void ReadRBO(FRBO *robj, PICT *pict, ulong flgs) {
     if (flgs & FLG_IPBO)
         glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, robj->pbuf[robj->swiz]);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, robj->fbuf);
-    glReadPixels(0, 0, robj->xdim, robj->ydim,
+    glReadPixels(0, 0, robj->dimx, robj->dimy,
                 (flgs & FLG_IBGR)? GL_BGRA : GL_RGBA,
                  GL_UNSIGNED_BYTE, (flgs & FLG_IPBO)? NULL : pict->bptr);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
@@ -115,7 +115,7 @@ void ReadRBO(FRBO *robj, PICT *pict, ulong flgs) {
         if ((bptr = glMapBufferARB(GL_PIXEL_PACK_BUFFER_ARB,
                                    GL_READ_ONLY_ARB))) {
             memcpy(pict->bptr, bptr,
-                   pict->size.x * pict->size.y * sizeof(BGRA));
+                   pict->dimx * pict->dimy * sizeof(BGRA));
             glUnmapBufferARB(GL_PIXEL_PACK_BUFFER_ARB);
         }
         glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
@@ -311,6 +311,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
 
     HBITMAP hdib;
     PICT draw;
+    SIZE dims;
     HDC devc;
 
     T2UV *data = NULL;
@@ -330,9 +331,9 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     GetLocalTime(&init);
     seed = (init.wMilliseconds ^ init.wHour)
          + (init.wSecond ^ init.wMinute) * 0x10000;
-    draw.size.x = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-    draw.size.y = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-    scrr = (RECT){0, 0, draw.size.x, draw.size.y};
+    draw.dimx = dims.cx = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    draw.dimy = dims.cy = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    scrr = (RECT){0, 0, draw.dimx, draw.dimy};
 
     time = timeGetTime();
     GetSystemInfo(&syin);
@@ -386,12 +387,15 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         printf("\nLoading complete: %u objects, %u ms [%0.3f ms/obj]\n\n",
                nlim, time, (float)time / (float)nlim);
 
-        UnitListFromLib(ulib, &tail, flgs & 0xFFFF, draw.size, &uniq, &size);
+        printf("Renderer: %s\n\n", (rndr == BRT_ROGL)? "OpenGL": "CPU");
+
+        UnitListFromLib(ulib, &tail, flgs & 0xFFFF,
+                        draw.dimx, draw.dimy, &uniq, &size);
 
         CreateThread(NULL, 0, TimeFunc, &tmrd, 0, NULL);
         devc = CreateCompatibleDC(NULL);
-        bmpi.bmiHeader.biWidth  = draw.size.x;
-        bmpi.bmiHeader.biHeight = draw.size.y * ((rndr == BRT_RSTD)? -1 : 1);
+        bmpi.bmiHeader.biWidth  = draw.dimx;
+        bmpi.bmiHeader.biHeight = draw.dimy * ((rndr == BRT_RSTD)? -1 : 1);
         hdib = CreateDIBSection(devc, &bmpi, DIB_RGB_COLORS,
                                (void*)&draw.bptr, 0, 0);
         SelectObject(devc, hdib);
@@ -400,7 +404,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         RegisterClassEx(&wndc);
         hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOPMOST,
                               wndc.lpszClassName, NULL, WS_POPUP | WS_VISIBLE,
-                              0, 0, draw.size.x, draw.size.y,
+                              0, 0, draw.dimx, draw.dimy,
                               NULL, NULL, wndc.hInstance, wndc.hIcon);
         switch (rndr) {
             case BRT_RSTD:
@@ -408,11 +412,11 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                     thrd[indx].loop = TRUE;
                     thrd[indx].func = (void (*)(void*))DrawPixStdThrd;
                     thrd[indx].fprm.draw =
-                        (DRAW){NULL, &draw, ((draw.size.y + 1) / ncpu)* indx,
-                              ((draw.size.y + 1) / ncpu)*(indx + 1)};
+                        (DRAW){NULL, &draw, ((draw.dimy + 1) / ncpu)* indx,
+                              ((draw.dimy + 1) / ncpu)*(indx + 1)};
                     CreateThread(NULL, 0, ThrdFunc, &thrd[indx], 0, NULL);
                 }
-                thrd[ncpu - 1].fprm.draw.ymax = draw.size.y;
+                thrd[ncpu - 1].fprm.draw.ymax = draw.dimy;
                 break;
 
             case BRT_ROGL:
@@ -444,14 +448,12 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                     show = FALSE;
                 }
                 else {
-                    size *= 4;
-                    data = calloc(size, sizeof(*data));
-                    MakeRendererOGL(ulib, uniq, data, size,
+                    MakeRendererOGL(ulib, uniq, &data, size,
                                    (flgs & FLG_IBGR)? FALSE : TRUE);
-                    SizeRendererOGL(draw.size.x, draw.size.y);
-                    fram = MakeRBO(draw.size);
+                    SizeRendererOGL(draw.dimx, draw.dimy);
+                    fram = MakeRBO(draw.dimx, draw.dimy);
                     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fram->fbuf);
-                    glViewport(0, 0, fram->xdim, fram->ydim);
+                    glViewport(0, 0, fram->dimx, fram->dimy);
                     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
                 }
                 break;
@@ -485,10 +487,9 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                         case BRT_ROGL:
                             indx = 0;
                             while (iter) {
-                                data[indx + 0] = data[indx + 1] =
-                                data[indx + 2] = data[indx + 3] =
-                                    (T2UV){(iter->cpos.y << 16) |
-                                           (iter->cpos.x & 0xFFFF),
+                                data[indx++] =
+                                    (T2UV){(iter->posy << 16) |
+                                           (iter->posx & 0xFFFF),
                                           ((iter->flgs & UCF_REVY)?
                                             0x80000000 : 0) |
                                           ((iter->flgs & UCF_REVX)?
@@ -496,7 +497,6 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                                           ((iter->fcur & 0x3FF) << 20) |
                                           ((iter->uuid - 1) & 0xFFFFF)};
                                 iter = iter->prev;
-                                indx += 4;
                             }
                             ReadRBO(fram, &draw, flgs);
                             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fram->fbuf);
@@ -504,7 +504,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
                             break;
                     }
-                    UpdateLayeredWindow(hwnd, NULL, &zpos, (SIZE*)&draw.size,
+                    UpdateLayeredWindow(hwnd, NULL, &zpos, &dims,
                                         devc, &zpos, 0, &bfun, ULW_ALPHA);
                 }
                 fcnt++;
@@ -529,8 +529,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
 
             case BRT_ROGL:
                 FreeRBO(&fram);
-                FreeRendererOGL();
-                free(data);
+                FreeRendererOGL(data);
                 wglMakeCurrent(NULL, NULL);
                 wglDeleteContext(mwrc);
                 ReleaseDC(hogl, mwdc);

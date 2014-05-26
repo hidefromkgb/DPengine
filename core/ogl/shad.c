@@ -124,9 +124,7 @@ char *tver[] = {
 /// surf - #: main vertex shader
 "#version 130\n\
 \n\
-in vec3 vert;\n\
-in uvec2 data;\n\
-\n\
+uniform usampler2D data;\n\
 uniform sampler2D dims;\n\
 uniform sampler2D coef;\n\
 uniform vec2 disz;\n\
@@ -137,17 +135,22 @@ out vec4 voff;\n\
 %s\n\
 \n\
 void main() {\n\
-    uint  indx = data.y & 0xFFFFFu;\n\
-    uint  cpal = indx << 8;\n\
-    ivec2 offs = ivec2(indx & txsz, indx >> txlg);\n\
-    ivec2 vpos = ivec2((int(data.x) << 16) >> 16, int(data.x) >> 16);\n\
-    vec4  vdim = texelFetch(dims, offs, 0);\n\
-    vec4  vcoe = vec4(0.5 - (0.5 - vert.x) * (1.0 - float((data.y >> 29) & 0x2u)),\n\
-                      0.5 + (0.5 - vert.y) * (1.0 - float((data.y >> 30) & 0x2u)),\n\
-                      1.0, 1.0) * texelFetch(coef, offs, 0);\n\
+    vec2   vert = vec2(((gl_VertexID + 0) >> 1) & 1,\n\
+                       ((gl_VertexID + 1) >> 1) & 1);\n\
+    uint   indx = uint(gl_VertexID) >> 2u;\n\
+    uvec4  vdat = texelFetch(data, ivec2(indx & txsz, indx >> txlg), 0);\n\
+    indx = vdat.y & 0xFFFFFu;\n\
+    ivec2  offs = ivec2(indx & txsz, indx >> txlg);\n\
+    ivec2  vpos = ivec2((int(vdat.x) << 16) >> 16, int(vdat.x) >> 16);\n\
+    vec4   vdim = texelFetch(dims, offs, 0);\n\
+    vec4   vcoe = texelFetch(coef, offs, 0) \n\
+         * vec4(0.5 - (0.5 - vert.x) * (1.0 - float((vdat.y >> 29) & 0x2u)),\n\
+                0.5 + (0.5 - vert.y) * (1.0 - float((vdat.y >> 30) & 0x2u)),\n\
+                1.0, 1.0);\n\
+    indx <<= 8;\n\
     vtex = vec4(vert.x * vdim.x, vert.y * vdim.y, vdim.x, 0.0);\n\
-    voff = vec4(vdim.z, vdim.w + ((data.y >> 20) & 0x3FFu) * vdim.x * vdim.y,\n\
-                cpal & txsz, cpal >> txlg);\n\
+    voff = vec4(vdim.w + ((vdat.y >> 20) & 0x3FFu) * vdim.x * vdim.y,\n\
+                vdim.z, indx & txsz, indx >> txlg);\n\
     gl_Position = vec4((vpos.x + vdim.x * vcoe.x) * disz.x - 1.0,\n\
                       -(vpos.y - vdim.y * vcoe.y) * disz.y + 1.0,\n\
                        -vpos.y * disz.y * 0.5 + 1.0, 1.0);\n\
@@ -170,9 +173,9 @@ in vec4 voff;\n\
 %s\n\
 \n\
 void main() {\n\
-    uint  offs = uint(voff.y) + uint(vtex.x) + uint(vtex.y) * uint(vtex.z);\n\
+    uint  offs = uint(voff.x) + uint(vtex.x) + uint(vtex.y) * uint(vtex.z);\n\
     uvec4 indx = texelFetch(atex,\n\
-                            ivec3(offs & txsz, offs >> txlg, voff.x), 0);\n\
+                            ivec3(offs & txsz, offs >> txlg, voff.y), 0);\n\
     if (indx.x == 0xFFu) discard;\n\
     gl_FragColor = texelFetch(apal, ivec2(voff.z + indx.x, voff.w), 0);\n\
 }",

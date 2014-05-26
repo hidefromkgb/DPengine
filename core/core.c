@@ -179,9 +179,9 @@ UNIT *SortByY(UNIT **tail) {
 
     retn = curr = *tail;
     if (curr->prev) {
-        ymin = ymax = curr->cpos.y;
+        ymin = ymax = curr->posy;
         while (!0) {
-            ytmp = curr->cpos.y;
+            ytmp = curr->posy;
             if (ytmp > ymax)
                 ymax = ytmp;
             else if (ytmp < ymin)
@@ -193,7 +193,7 @@ UNIT *SortByY(UNIT **tail) {
         memset(elem, 0, (ymax -= ymin - 1) * sizeof(*elem));
 
         while (curr) {
-            ytmp = curr->cpos.y - ymin;
+            ytmp = curr->posy - ymin;
             if (!elem[ytmp].lbgn)
                 elem[ytmp].lbgn = elem[ytmp].lend = curr;
             else {
@@ -233,18 +233,18 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick,
         if (*pick == EMP_PICK) {
             while (temp) {
                 anim =   temp->anim;
-                xpos =  (xptr - temp->cpos.x) >> temp->scal;
-                ypos = ((yptr - temp->cpos.y) >> temp->scal) + anim->ydim;
-                if ((xptr >= temp->cpos.x) && (xpos <  anim->xdim)
-                &&  (yptr <  temp->cpos.y) && (ypos >= 0)) {
+                xpos =  (xptr - temp->posx) >> temp->scal;
+                ypos = ((yptr - temp->posy) >> temp->scal) + anim->ydim;
+                if ((xptr >= temp->posx) && (xpos <  anim->xdim)
+                &&  (yptr <  temp->posy) && (ypos >= 0)) {
                     if (temp->flgs & UCF_REVX)
                         xpos = anim->xdim - 1 - xpos;
                     if (temp->flgs & UCF_REVY)
                         ypos = anim->ydim - 1 - ypos;
                     if (anim->bptr[xpos + anim->xdim *
                                   (ypos + anim->ydim * temp->fcur)] != 0xFF) {
-                        temp->cptr.x = xptr - temp->cpos.x;
-                        temp->cptr.y = yptr - temp->cpos.y;
+                        temp->ptrx = xptr - temp->posx;
+                        temp->ptry = yptr - temp->posy;
                         *pick = temp;
                         break;
                     }
@@ -262,8 +262,8 @@ UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick,
             iter = iter->prev;
         }
         if (*pick && (*pick != EMP_PICK)) {
-            (*pick)->cpos.x = xptr - (*pick)->cptr.x;
-            (*pick)->cpos.y = yptr - (*pick)->cptr.y;
+            (*pick)->posx = xptr - (*pick)->ptrx;
+            (*pick)->posy = yptr - (*pick)->ptry;
             SortByY(tail);
         }
     }
@@ -286,25 +286,25 @@ void DrawPixStdThrd(DRAW *draw) {
 
         bptr = draw->pict->bptr;
         yoff = anim->xdim * anim->ydim * tail->fcur;
-        xoff = draw->pict->size.x;
-        ymax = min(0, draw->ymax - tail->cpos.y);
+        xoff = draw->pict->dimx;
+        ymax = min(0, draw->ymax - tail->posy);
         ymin = anim->ydim << tail->scal;
         xinc = anim->xdim << tail->scal;
         if (tail->flgs & UCF_REVX) {
-            xmax = min(xinc, xinc + tail->cpos.x);
-            xmin = max(   0, xinc + tail->cpos.x - xoff);
+            xmax = min(xinc, xinc + tail->posx);
+            xmin = max(   0, xinc + tail->posx - xoff);
             yinc = -1;
         }
         else {
-            xmax = min(xinc, xoff - tail->cpos.x);
-            xmin = max(   0,    0 - tail->cpos.x);
+            xmax = min(xinc, xoff - tail->posx);
+            xmin = max(   0,    0 - tail->posx);
             yinc = 1;
         }
-        xinc = ((yinc < 0)? xinc - 1 - xmin : xmin) + tail->cpos.x;
+        xinc = ((yinc < 0)? xinc - 1 - xmin : xmin) + tail->posx;
 
         /// alpha blending here
-        for (y = max(-ymin, draw->ymin - tail->cpos.y); y < ymax; y++) {
-            ydst = (y + tail->cpos.y) * xoff + xinc;
+        for (y = max(-ymin, draw->ymin - tail->posy); y < ymax; y++) {
+            ydst = (y + tail->posy) * xoff + xinc;
             ysrc = (tail->flgs & UCF_REVY)? -y - 1 : y + ymin;
             ysrc = (ysrc >> tail->scal) * anim->xdim + yoff;
             for (x = xmin; x < xmax; x++, ydst += yinc)
@@ -556,8 +556,8 @@ void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
 
 
 
-void UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
-                     VEC2  dims, ulong *uniq, ulong *size) {
+void  UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
+                      long  dimx, long   dimy, ulong *uniq, ulong *size) {
     UNIT *elem, *list = NULL;
     ulong iter, uuid = 0;
 
@@ -583,14 +583,14 @@ void UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
             *uniq = uuid;
         uuid = 0;
         while (list) {
-            list->cpos.x = PRNG(&seed) % (dims.x
-                         - (((ASTD*)list->anim)->xdim << list->scal));
-            list->cpos.y = PRNG(&seed) % (dims.y
-                         - (((ASTD*)list->anim)->ydim << list->scal))
-                         + (((ASTD*)list->anim)->ydim << list->scal);
-            list->flgs   = (list->flgs & ~UCF_REVX) | (PRNG(&seed) & UCF_REVX);
-            list->flgs   = (list->flgs & ~UCF_REVY) | (PRNG(&seed) & UCF_REVY);
-            list->fcur   = PRNG(&seed) % ((ASTD*)list->anim)->fcnt;
+            list->posx = PRNG(&seed) % (dimx
+                       - (((ASTD*)list->anim)->xdim << list->scal));
+            list->posy = PRNG(&seed) % (dimy
+                       - (((ASTD*)list->anim)->ydim << list->scal))
+                       + (((ASTD*)list->anim)->ydim << list->scal);
+            list->flgs = (list->flgs & ~UCF_REVX) | (PRNG(&seed) & UCF_REVX);
+            list->flgs = (list->flgs & ~UCF_REVY) | (PRNG(&seed) & UCF_REVY);
+            list->fcur = PRNG(&seed) % ((ASTD*)list->anim)->fcnt;
             list = list->prev;
             uuid++;
         }
