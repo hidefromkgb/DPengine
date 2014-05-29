@@ -128,7 +128,6 @@ typedef long (*GPUT)(void *data, void *anim);
     FLGS: flags
           MAF_FILE: [DEFAULT FLAG] reading shall be performed from a file
           MAF_GGET: reading shall be routed through GGET()
-          MAF_AIND: set pixels` alpha-components to their palette indices
     ANIM: implementation-specific data (i.e. a structure or a pointer to it)
     GGET,
     GINI,
@@ -137,6 +136,8 @@ typedef long (*GPUT)(void *data, void *anim);
  **/
 long MakeAnim(void *inpt, long flgs, void *anim,
               GGET gget, GINI gini, GWFR gwfr, GPUT gput);
+
+
 
 /** _________________________________________________________________________
     Just an auxiliary function to load a file into memory. Freeing is done by

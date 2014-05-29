@@ -189,8 +189,8 @@ char **sver, **spix;
 
 
 GLvoid MakeShaderSrc(GLuint logt) {
-    char cons[96];
-    int iter;
+    char cons[256];
+    long iter;
 
     sver = calloc(1, sizeof(tver));
     spix = calloc(1, sizeof(tpix));
