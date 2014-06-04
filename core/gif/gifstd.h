@@ -1,5 +1,13 @@
-#include "common.h"
-#include <string.h>
+#include <stdint.h>
+
+
+
+typedef union _BGRA {
+    struct {
+        uint8_t B, G, R, A;
+    };
+    uint32_t BGRA;
+} BGRA;
 
 
 
@@ -17,5 +25,6 @@ typedef struct _ASTD {
 
 
 
+char *LoadFile(char *name, long *size);
 ASTD *MakeAnimStd(char *name);
 void FreeAnimStd(ASTD **anim);

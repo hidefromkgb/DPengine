@@ -1,4 +1,8 @@
 #include "common.h"
+#include <stdio.h>
+#include <fcntl.h>
+
+
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -75,7 +79,7 @@ char *LoadFile(char *name, long *size) {
 
 
 
-inline void ReadChunk(uint8_t **buff) {
+inline void SkipChunk(uint8_t **buff) {
     long skip;
 
     (*buff)++;
@@ -210,23 +214,19 @@ long DecodeFrame(uint8_t **buff, uint8_t *bptr) {
 
 
 
-long MakeAnim(void *inpt, long flgs, void *anim,
+long MakeAnim(void *inpt, void *anim,
               GGET gget, GINI gini, GWFR gwfr, GPUT gput) {
-    long desc, iter, prev, fram, clrs;
+    long desc, iter, fram, clrs;
     uint8_t *buff, *btmp, *init, *bptr;
     GHDR *ghdr = NULL;
     FGRH *fgrh = NULL;
     FHDR *fhdr;
     RGBX *cpal;
 
-    if (!(flgs & MAF_GGET) && (buff = (uint8_t*)LoadFile((char*)inpt, NULL))) {
-        /// FLGS only has MAF_FILE, reading from a file
-        ghdr = (GHDR*)buff;
-    }
-    else if ((flgs & MAF_GGET) && gget) {
-        /// FLGS has MAF_GGET, reading from some place supported by GGET()
+    if (!gget)
+        ghdr = (GHDR*)LoadFile((char*)inpt, NULL);
+    else
         ghdr = gget(inpt);
-    }
     iter = 0;
     if (ghdr) {
         /// skipping global header, skipping global palette (if there is any)
@@ -241,23 +241,20 @@ long MakeAnim(void *inpt, long flgs, void *anim,
                 ReadFrameHeader(&btmp, ghdr, &fhdr, &cpal);
                 fram++;
             }
-            ReadChunk(&btmp);
+            SkipChunk(&btmp);
         }
         /// initializing the main structure, beginning frame extraction
         if (fram && (gini(ghdr, anim, fram--) > 0)) {
             init = malloc(ghdr->xdim * ghdr->ydim * sizeof(*init) + 16);
             bptr = (uint8_t*)(((uintptr_t)init & -16) + 16);
-            iter = prev = 0;
+            iter = 0;
 
             while ((desc = *buff++) != GIF_EOFH) {
                 /// found an extension
                 if (desc == GIF_EHDR) {
-                    if (*buff == EXT_GCTL) {
-                        fgrh = (FGRH*)++buff;
-                        buff += sizeof(*fgrh);
-                    }
-                    else
-                        ReadChunk(&buff);
+                    if (*buff == EXT_GCTL)
+                        fgrh = (FGRH*)(buff + 1);
+                    SkipChunk(&buff);
                 }
                 /// found a frame
                 else if (desc == GIF_FHDR) {
@@ -268,10 +265,9 @@ long MakeAnim(void *inpt, long flgs, void *anim,
                         desc = -2;
                         if (fgrh && (iter < fram))
                             switch (fgrh->flgs & FLG_CUDM) {
-                                case FLG_CUDP: desc = prev; break;
-                                case FLG_CUDL: desc = iter; break;
-                                case FLG_CUDN:
-                                case FLG_CUDB: desc = -1;   prev = iter;
+                                case FLG_CUDP: desc = iter - 1; break;
+                                case FLG_CUDL: desc = iter;     break;
+                                case FLG_CUDB: desc = -1;       break;
                             }
                         /// writing extracted frame to its persistent location
                         gwfr(ghdr, fhdr, anim, bptr, cpal, clrs,
@@ -289,7 +285,7 @@ long MakeAnim(void *inpt, long flgs, void *anim,
             free(init);
         }
     }
-    if (!(flgs & MAF_GGET))
+    if (!gget && !gput)
         free(ghdr);
     else if (gput) {
         /// if no error (ITER > 0), overwriting frame count with GPUT() output

@@ -1,5 +1,6 @@
-#include "core.h"
+#include <stdio.h>
 #include <math.h>
+#include "core.h"
 
 
 

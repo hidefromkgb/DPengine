@@ -119,7 +119,7 @@ char *SplitLine(char **tail, char tsep) {
                     temp = iter;
                 iter = SkipCharUTF8(iter);
             }
-            *tail = (**tail)? *tail + 1 : NULL;
+            *tail = (**tail)? *tail + 1 : 0;
             if (*temp) {
                 if (*temp != tsep)
                     temp++;
@@ -128,7 +128,7 @@ char *SplitLine(char **tail, char tsep) {
             return retn;
         }
     }
-    return *tail = NULL;
+    return *tail = 0;
 }
 
 
@@ -331,9 +331,9 @@ void DrawPixStdThrd(DRAW *draw) {
 long MakeUnitStd(UNIT **tail, UNIT *info) {
     #pragma pack(push, 1)
     struct {
-        RGBX csrc;
+        uint8_t srcr, srcg, srcb;
         uint8_t tran;
-        RGBX cdst;
+        uint8_t dstr, dstg, dstb;
     } *amap;
     #pragma pack(pop)
 
@@ -344,7 +344,7 @@ long MakeUnitStd(UNIT **tail, UNIT *info) {
 
     if (!(*tail)) {
         (*tail) = malloc(sizeof(**tail));
-        (*tail)->prev = NULL;
+        (*tail)->prev = 0;
     }
     else {
         (*tail)->next = malloc(sizeof(**tail));
@@ -364,7 +364,7 @@ long MakeUnitStd(UNIT **tail, UNIT *info) {
         info = info->prev;
     }
     if (info && strcmp(info->path, prev->path))
-        info = NULL;
+        info = 0;
     if (info) {
         free(prev->path);
         prev->anim = info->anim;
@@ -389,20 +389,20 @@ long MakeUnitStd(UNIT **tail, UNIT *info) {
                      apal >= file;  apal -= sizeof(*amap))
                     for (amap = (typeof(amap))apal,
                          indx = 0; indx < 256; indx++)
-                        if ((bpal[indx].R == amap->csrc.R)
-                        &&  (bpal[indx].G == amap->csrc.G)
-                        &&  (bpal[indx].B == amap->csrc.B)) {
-                             bpal[indx].R = ((long)amap->cdst.R
+                        if ((bpal[indx].R == amap->srcr)
+                        &&  (bpal[indx].G == amap->srcg)
+                        &&  (bpal[indx].B == amap->srcb)) {
+                             bpal[indx].R = ((long)amap->dstr
                                           * amap->tran) >> 8;
-                             bpal[indx].G = ((long)amap->cdst.G
+                             bpal[indx].G = ((long)amap->dstg
                                           * amap->tran) >> 8;
-                             bpal[indx].B = ((long)amap->cdst.B
+                             bpal[indx].B = ((long)amap->dstb
                                           * amap->tran) >> 8;
                              bpal[indx].A = amap->tran;
                              break;
                         }
                 free(file);
-                apal = NULL;
+                apal = 0;
             }
             free(apal);
         }
@@ -414,7 +414,7 @@ long MakeUnitStd(UNIT **tail, UNIT *info) {
     }
     else {
         free(*tail);
-        *tail = NULL;
+        *tail = 0;
     }
     return 0;
 }
@@ -425,11 +425,11 @@ void FillLibStdThrd(FILL *fill) {
     char *file, *fptr, *conf;
     UNIT *tail,  info;
 
-    tail = NULL;
+    tail = 0;
     fill->curr = 0;
     info.ulib = fill->ulib;
     conf = ConcatPath(fill->ulib->path, DEF_CONF);
-    if ((file = fptr = LoadFile(conf, NULL))) {
+    if ((file = fptr = LoadFile(conf, 0))) {
         free(conf);
         while ((conf = GetNextLine(&fptr)))
             switch (DetermineType(&conf)) {
@@ -442,7 +442,7 @@ void FillLibStdThrd(FILL *fill) {
                     info.path = ConcatPath(fill->ulib->path,
                                            SplitLine(&conf, DEF_TSEP));
                     SplitLine(&conf, DEF_TSEP);
-                    info.flgs = strtol(SplitLine(&conf, DEF_TSEP), NULL, 16);
+                    info.flgs = strtol(SplitLine(&conf, DEF_TSEP), 0, 16);
                     info.scal = (info.flgs >> 24) & 3;
                     if (MakeUnitStd(&tail, &info)) {
                         printf("[%c] %s\n",
@@ -477,7 +477,7 @@ void FillLibStdThrd(FILL *fill) {
             fill->load += fill->curr;
             printf("--- %s: %ld objects\n\n",
                    fill->ulib->path, fill->curr);
-            tail->next = NULL;
+            tail->next = 0;
             fill->ulib->ucnt = fill->curr;
             fill->ulib->uarr = malloc(fill->curr * sizeof(*fill->ulib->uarr));
             for (fill->curr--; fill->curr >= 0; fill->curr--) {
@@ -486,7 +486,7 @@ void FillLibStdThrd(FILL *fill) {
             }
         }
         free(file);
-        conf = NULL;
+        conf = 0;
     }
     free(conf);
 }
@@ -496,7 +496,7 @@ void FillLibStdThrd(FILL *fill) {
 void MakeEmptyLib(ULIB **head, char *base, char *path) {
     if (!*head) {
          *head = malloc(sizeof(**head));
-        (*head)->next = NULL;
+        (*head)->next = 0;
     }
     else {
         (*head)->prev = malloc(sizeof(**head));
@@ -504,8 +504,8 @@ void MakeEmptyLib(ULIB **head, char *base, char *path) {
         (*head) = (*head)->prev;
     }
     (*head)->ucnt = 0;
-    (*head)->prev = NULL;
-    (*head)->uarr = NULL;
+    (*head)->prev = 0;
+    (*head)->uarr = 0;
     (*head)->path = ConcatPath(base, path);
 }
 
@@ -514,7 +514,7 @@ void MakeEmptyLib(ULIB **head, char *base, char *path) {
 void FreeLibList(ULIB **head, void (*adel)(void**)) {
     ULIB *iter = *head;
 
-    (*head) = NULL;
+    (*head) = 0;
     while (iter) {
         if (iter->uarr) {
             FreeUnitList(&iter->uarr[iter->ucnt - 1], adel);
@@ -527,7 +527,7 @@ void FreeLibList(ULIB **head, void (*adel)(void**)) {
         }
         else {
             free(iter);
-            iter = NULL;
+            iter = 0;
         }
     }
 }
@@ -537,7 +537,7 @@ void FreeLibList(ULIB **head, void (*adel)(void**)) {
 void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
     UNIT *iter = *tail;
 
-    (*tail) = NULL;
+    (*tail) = 0;
     while (iter) {
         if (adel && !(iter->flgs & UCF_COPY)) {
             adel(&iter->anim);
@@ -549,16 +549,16 @@ void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
         }
         else {
             free(iter);
-            iter = NULL;
+            iter = 0;
         }
     }
 }
 
 
 
-void  UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
-                      long  dimx, long   dimy, ulong *uniq, ulong *size) {
-    UNIT *elem, *list = NULL;
+void UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
+                     long  dimx, long   dimy, ulong *uniq, ulong *size) {
+    UNIT *elem, *list = 0;
     ulong iter, uuid = 0;
 
     while (ulib) {
@@ -576,8 +576,8 @@ void  UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
         ulib = ulib->next;
     }
     if (list) {
-        list->next = NULL;
-        FreeUnitList(tail, NULL);
+        list->next = 0;
+        FreeUnitList(tail, 0);
         *tail = list;
         if (uniq)
             *uniq = uuid;

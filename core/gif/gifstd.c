@@ -1,3 +1,5 @@
+#include <string.h>
+#include "common.h"
 #include "gifstd.h"
 
 
@@ -20,7 +22,7 @@ long InitAnimStd(GHDR *ghdr, void *anim, long cfrm) {
 
 long WriteFrameStd(GHDR *ghdr, FHDR *fhdr, void *anim,
                    uint8_t *bptr, RGBX *cpal, long clrs,
-                   long tran, long time, long curr, long from) {
+                   long tran, long time, long curr, long next) {
     ASTD *retn = (ASTD*)anim;
     long x, y, dsrc, ddst;
 
@@ -48,14 +50,14 @@ long WriteFrameStd(GHDR *ghdr, FHDR *fhdr, void *anim,
             if (bptr[fhdr->xdim * y + x] != tran)
                 retn->bptr[ghdr->xdim * y + x + ddst] =
                       bptr[fhdr->xdim * y + x];
-    if (from >= 0) {
+    if (next >= 0) {
         x = ghdr->xdim * ghdr->ydim;
-        dsrc = x * ((from)? (from - 1) : curr);
+        dsrc = x * ((next)? (next - 1) : curr);
         ddst = x * (curr + 1);
         for (y = 0; y < x; y++)
             retn->bptr[ddst + y] = retn->bptr[dsrc + y];
     }
-    if (!from) {
+    if (!next) {
         ddst = ghdr->xdim * (ghdr->ydim * ++curr + fhdr->yoff) + fhdr->xoff;
         for (y = 0; y < fhdr->ydim; y++)
             for (x = 0; x < fhdr->xdim; x++)
@@ -71,7 +73,7 @@ ASTD *MakeAnimStd(char *name) {
 
     retn = malloc(sizeof(*retn));
     retn->bpal = NULL;
-    if (MakeAnim((void*)name, MAF_FILE, (void*)retn,
+    if (MakeAnim((void*)name, (void*)retn,
                   NULL, InitAnimStd, WriteFrameStd, NULL) <= 0) {
         free(retn->bpal);
         free(retn);

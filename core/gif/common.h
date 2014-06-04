@@ -1,7 +1,5 @@
 #include <stdint.h>
 #include <stdlib.h>
-#include <stdio.h>
-#include <fcntl.h>
 
 
 
@@ -9,10 +7,6 @@
 #define GIF_FPAL 0x80
 /// Interlace flag (frame header only)
 #define GIF_FINT 0x40
-
-/// MakeAnim() flags, described in FLGS section of MakeAnim() documentation
-#define MAF_FILE 0x00
-#define MAF_GGET 0x01
 
 
 
@@ -48,13 +42,6 @@ typedef struct _FHDR {    /// ============== MAIN FRAME HEADER ==============
 typedef struct _RGBX {
     uint8_t R, G, B;
 } RGBX;
-
-typedef union _BGRA {
-    struct {
-        uint8_t B, G, R, A;
-    };
-    uint32_t BGRA;
-} BGRA;
 #pragma pack(pop)
 
 
@@ -67,9 +54,7 @@ typedef union _BGRA {
     _________________________________________________________________________
     INPT: may be anything, from simple CHAR* to a complex structure of custom
           design, or even a single identifier. Anything that fits in VOID* :)
-          If FLGS of MakeAnim() contains MAF_GGET, then this INPT will be the
-          same INPT that was passed to MakeAnim(). Otherwise, GGET() will not
-          be called at all.
+          It will be copied from MakeAnim()`s INPT if its GGET() != NULL.
  **/
 typedef GHDR* (*GGET)(void *inpt);
 
@@ -97,14 +82,14 @@ typedef long (*GINI)(GHDR *ghdr, void *anim, long cfrm);
     TRAN: transparent color index (or -1 if there`s none)
     TIME: next frame delay, in GIF time units (1 unit = 10 ms); can be 0
     CURR: index of the resulting frame
-    FROM: the frame that serves as background for the next frame
-          = 0: no frame, just background color
+    NEXT: the frame that serves as background for the next (NB: next!) frame
+          = 0: just transparency (in FHDR bounds; the rest is current frame)
           > 0: [actual frame index] + 1
-          < 0: no backing needed
+          < 0: no backing needed (used in single-frame GIFs)
  **/
 typedef long (*GWFR)(GHDR *ghdr, FHDR *fhdr, void *anim,
                      uint8_t *bptr, RGBX *cpal, long clrs,
-                     long tran, long time, long curr, long from);
+                     long tran, long time, long curr, long next);
 
 /** _________________________________________________________________________
     Animation finalizer. Returns frame count if the animation is successfully
@@ -123,27 +108,13 @@ typedef long (*GPUT)(void *data, void *anim);
     at all, or frame count in case of successful loading; otherwise the value
     returned is negative and equals -[index of the erroneous frame] - 1.
     _________________________________________________________________________
-    INPT: ASCIIZ-string if FLGS (see below) does not have MAF_GGET, otherwise
-          it may contain anything; see GGET() documentation given above
-    FLGS: flags
-          MAF_FILE: [DEFAULT FLAG] reading shall be performed from a file
-          MAF_GGET: reading shall be routed through GGET()
+    INPT: ASCIIZ-string if GGET() == NULL, otherwise it may contain anything;
+          see GGET() documentation given above
     ANIM: implementation-specific data (i.e. a structure or a pointer to it)
     GGET,
     GINI,
     GWFR,
     GPUT: implementations of callback functions described above
  **/
-long MakeAnim(void *inpt, long flgs, void *anim,
+long MakeAnim(void *inpt, void *anim,
               GGET gget, GINI gini, GWFR gwfr, GPUT gput);
-
-
-
-/** _________________________________________________________________________
-    Just an auxiliary function to load a file into memory. Freeing is done by
-    caller. Returns a pointer to file data in case of success, 0 otherwise.
-    _________________________________________________________________________
-    NAME: ASCIIZ-string with a file name
-    SIZE: returned size of the file read
- **/
-char *LoadFile(char *name, long *size);

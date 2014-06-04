@@ -141,19 +141,19 @@ void main() {\n\
     uvec4  vdat = texelFetch(data, ivec2(indx & txsz, indx >> txlg), 0);\n\
     indx = vdat.y & 0xFFFFFu;\n\
     ivec2  offs = ivec2(indx & txsz, indx >> txlg);\n\
-    ivec2  vpos = ivec2((int(vdat.x) << 16) >> 16, int(vdat.x) >> 16);\n\
     vec4   vdim = texelFetch(dims, offs, 0);\n\
     vec4   vcoe = texelFetch(coef, offs, 0) \n\
          * vec4(0.5 - (0.5 - vert.x) * (1.0 - float((vdat.y >> 29) & 0x2u)),\n\
                 0.5 + (0.5 - vert.y) * (1.0 - float((vdat.y >> 30) & 0x2u)),\n\
                 1.0, 1.0);\n\
     indx <<= 8;\n\
+    offs = ivec2((int(vdat.x) << 16) >> 16, int(vdat.x) >> 16);\n\
     vtex = vec4(vert.x * vdim.x, vert.y * vdim.y, vdim.x, 0.0);\n\
     voff = vec4(vdim.w + ((vdat.y >> 20) & 0x3FFu) * vdim.x * vdim.y,\n\
                 vdim.z, indx & txsz, indx >> txlg);\n\
-    gl_Position = vec4((vpos.x + vdim.x * vcoe.x) * disz.x - 1.0,\n\
-                      -(vpos.y - vdim.y * vcoe.y) * disz.y + 1.0,\n\
-                       -vpos.y * disz.y * 0.5 + 1.0, 1.0);\n\
+    gl_Position = vec4((offs.x + vdim.x * vcoe.x) * disz.x - 1.0,\n\
+                      -(offs.y - vdim.y * vcoe.y) * disz.y + 1.0,\n\
+                       -offs.y * disz.y * 0.5 + 1.0, 1.0);\n\
 }",
 
 NULL};

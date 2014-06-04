@@ -1,6 +1,9 @@
 #ifndef HDR_CORE
 #define HDR_CORE
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "gif/gifstd.h"
 
 
