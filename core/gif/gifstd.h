@@ -2,17 +2,18 @@
 
 
 
+/// Just a "convenience type"
+typedef unsigned long ulong;
+
+/// Main pixel format for palettes and output
+#pragma pack(push, 1)
 typedef union _BGRA {
     struct {
         uint8_t B, G, R, A;
     };
     uint32_t BGRA;
 } BGRA;
-
-
-
-/// Just a "convenience type"
-typedef unsigned long ulong;
+#pragma pack(pop)
 
 /// GIF animation
 typedef struct _ASTD {
@@ -25,6 +26,5 @@ typedef struct _ASTD {
 
 
 
-char *LoadFile(char *name, long *size);
 ASTD *MakeAnimStd(char *name);
 void FreeAnimStd(ASTD **anim);

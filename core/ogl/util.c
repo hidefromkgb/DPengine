@@ -313,7 +313,7 @@ GLvoid FreeVBO(FVBO **vobj) {
 
 
 typedef struct _TXSZ {
-    GLint size, indx;
+    GLint size, fcnt, indx;
     GLubyte *bptr;
 } TXSZ;
 
@@ -330,9 +330,9 @@ int sizecmp(const void *a, const void *b) {
 
 void MakeRendererOGL(ULIB  *ulib, ulong uniq,
                      T2UV **data, ulong size, ulong rgba) {
-    GLsizei bank, fill, curr, mtex, chei, phei, dhei;
+    GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
     GLubyte *atex, *aptr;
-    T4FV *dims, *coef;
+    T4FV *dims, *bank;
     GLuint *indx;
     TXSZ *txsz;
     BGRA *apal,
@@ -356,7 +356,7 @@ void MakeRendererOGL(ULIB  *ulib, ulong uniq,
     phei = ceil((256.0 * uniq) / mtex);
 
     dims = calloc(mtex * chei, sizeof(*dims));
-    coef = calloc(mtex * chei, sizeof(*coef));
+    bank = calloc(mtex * chei, sizeof(*bank));
     apal = calloc(mtex * phei, sizeof(*apal));
 
     *data = calloc(mtex * dhei, sizeof(**data));
@@ -365,22 +365,20 @@ void MakeRendererOGL(ULIB  *ulib, ulong uniq,
     txsz = calloc(uniq, sizeof(*txsz));
 
     while (ulib) {
-        for (curr = 0; curr < ulib->ucnt; curr++) {
-            ASTD *anim = ulib->uarr[curr]->anim;
+        for (curr = 0; curr < ulib->ucnt; curr++)
+            if (!ulib->uarr[curr]->orig) {
+                ASTD *anim = ulib->uarr[curr]->anim;
 
-            dims[ulib->uarr[curr]->uuid - 1] =
-                (T4FV){anim->xdim, anim->ydim, 0, 0};
-            coef[ulib->uarr[curr]->uuid - 1] =
-                (T4FV){(1 << ulib->uarr[curr]->scal),
-                       (1 << ulib->uarr[curr]->scal), 0, 0};
-            memcpy(&apal[(ulib->uarr[curr]->uuid - 1) << 8],
-                   anim->bpal, 256 * sizeof(BGRA));
-
-            txsz[ulib->uarr[curr]->uuid - 1].indx = ulib->uarr[curr]->uuid;
-            txsz[ulib->uarr[curr]->uuid - 1].bptr = anim->bptr;
-            txsz[ulib->uarr[curr]->uuid - 1].size =
-                anim->xdim * anim->ydim * anim->fcnt;
-        }
+                txsz[ulib->uarr[curr]->uuid - 1] =
+                    (TXSZ){anim->xdim * anim->ydim, anim->fcnt,
+                           ulib->uarr[curr]->uuid,  anim->bptr};
+                dims[ulib->uarr[curr]->uuid - 1] =
+                    (T4FV){(1 << ulib->uarr[curr]->scal),
+                           (1 << ulib->uarr[curr]->scal),
+                           anim->xdim, anim->ydim};
+                memcpy(&apal[(ulib->uarr[curr]->uuid - 1) << 8],
+                       anim->bpal, 256 * sizeof(BGRA));
+            }
         ulib = ulib->next;
     }
     if (rgba)
@@ -391,25 +389,45 @@ void MakeRendererOGL(ULIB  *ulib, ulong uniq,
         }
     qsort(txsz, uniq, sizeof(*txsz), sizecmp);
 
-    for (bank =  1, fill = curr = 0; curr < uniq; curr++) {
-        fill += txsz[curr].size;
-        if (fill > mtex * mtex) {
-            fill = txsz[curr].size;
-            bank++;
+    for (cbnk =  1, fill = curr = 0; curr < uniq; curr++) {
+        fcnt = txsz[curr].fcnt;
+        while (fcnt) {
+            if (fill + txsz[curr].size > mtex * mtex) {
+                fill = 0;
+                cbnk++;
+            }
+            fend = min((GLfloat)fcnt,
+                       (GLfloat)(mtex * mtex - fill) / txsz[curr].size);
+            fill += txsz[curr].size * fend;
+            fcnt -= fend;
         }
     }
-    atex = aptr = calloc(mtex * mtex * bank, sizeof(*atex));
+    atex = aptr = calloc(mtex * mtex * cbnk, sizeof(*atex));
 
-    for (bank = -1, fill = curr = 0; curr < uniq; curr++) {
-        if (aptr + txsz[curr].size - atex > fill) {
-            aptr = atex + fill;
-            fill += mtex * mtex;
-            bank++;
+    for (fill = mtex * mtex, cbnk = curr = 0; curr < uniq; curr++) {
+        fcnt = GL_FALSE;
+        while (txsz[curr].fcnt) {
+            if (aptr + txsz[curr].size - atex > fill) {
+                cbnk++;
+                aptr = atex + fill;
+                fill += mtex * mtex;
+            }
+            fend = min((GLfloat)txsz[curr].fcnt,
+                       (GLfloat)(atex + fill - aptr) / txsz[curr].size);
+            if (!fcnt) {
+                bank[txsz[curr].indx - 1].x = cbnk;
+                bank[txsz[curr].indx - 1].y = aptr - atex - fill + mtex * mtex;
+                bank[txsz[curr].indx - 1].z =
+                    bank[txsz[curr].indx - 1].y + fend * txsz[curr].size;
+                bank[txsz[curr].indx - 1].w =
+                    mtex * mtex - (mtex * mtex % txsz[curr].size);
+                fcnt = GL_TRUE;
+            }
+            memcpy(aptr, txsz[curr].bptr, txsz[curr].size * fend);
+            txsz[curr].bptr += txsz[curr].size * fend;
+            aptr += txsz[curr].size * fend;
+            txsz[curr].fcnt -= fend;
         }
-        memcpy(aptr, txsz[curr].bptr, txsz[curr].size);
-        dims[txsz[curr].indx - 1].z = bank;
-        dims[txsz[curr].indx - 1].w = aptr - atex - fill + mtex * mtex;
-        aptr += txsz[curr].size;
     }
     free(txsz);
 
@@ -422,7 +440,7 @@ void MakeRendererOGL(ULIB  *ulib, ulong uniq,
                    {.name = "atex", .type = UNI_T1II, .pdat = (GLvoid*)1},
                    {.name = "apal", .type = UNI_T1II, .pdat = (GLvoid*)2},
                    {.name = "dims", .type = UNI_T1II, .pdat = (GLvoid*)3},
-                   {.name = "coef", .type = UNI_T1II, .pdat = (GLvoid*)4},
+                   {.name = "bank", .type = UNI_T1II, .pdat = (GLvoid*)4},
                    {.name = "disz", .type = UNI_T2FV, .pdat = &disz}};
 
     surf = MakeVBO(NULL, sver, spix, GL_QUADS,
@@ -433,7 +451,7 @@ void MakeRendererOGL(ULIB  *ulib, ulong uniq,
             GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
             GL_UNSIGNED_INT, GL_RG32UI, GL_RG_INTEGER, *data);
 
-    MakeTex(&surf->ptex[1], mtex, mtex, bank + 1,
+    MakeTex(&surf->ptex[1], mtex, mtex, cbnk + 1,
             GL_TEXTURE_2D_ARRAY, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
             GL_UNSIGNED_BYTE, GL_R8UI, GL_RED_INTEGER, atex);
 
@@ -447,14 +465,14 @@ void MakeRendererOGL(ULIB  *ulib, ulong uniq,
 
     MakeTex(&surf->ptex[4], mtex, chei, 0,
             GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
-            GL_FLOAT, GL_RGBA32F, GL_RGBA, coef);
+            GL_FLOAT, GL_RGBA32F, GL_RGBA, bank);
 
     free(indx);
 
     free(atex);
     free(apal);
     free(dims);
-    free(coef);
+    free(bank);
 
     FreeShaderSrc();
 }

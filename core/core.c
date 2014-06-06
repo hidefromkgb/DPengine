@@ -369,11 +369,11 @@ long MakeUnitStd(UNIT **tail, UNIT *info) {
         free(prev->path);
         prev->anim = info->anim;
         prev->path = info->path;
-        prev->flgs |= UCF_COPY;
+        prev->orig = info;
     }
     else {
         prev->anim = MakeAnimStd(prev->path);
-        prev->flgs &= ~UCF_COPY;
+        prev->orig = 0;
     }
 
     if (prev->anim) {
@@ -446,7 +446,7 @@ void FillLibStdThrd(FILL *fill) {
                     info.scal = (info.flgs >> 24) & 3;
                     if (MakeUnitStd(&tail, &info)) {
                         printf("[%c] %s\n",
-                              (tail->flgs & UCF_COPY)? 'C' : ' ', tail->path);
+                              (tail->orig)? 'C' : ' ', tail->path);
                         fill->curr++;
                     }
                     else {
@@ -463,7 +463,7 @@ void FillLibStdThrd(FILL *fill) {
                     info.scal = 0;
                     if (MakeUnitStd(&tail, &info)) {
                         printf("[%c] %s\n",
-                              (tail->flgs & UCF_COPY)? 'C' : ' ', tail->path);
+                              (tail->orig)? 'C' : ' ', tail->path);
                         fill->curr++;
                     }
                     else {
@@ -539,7 +539,7 @@ void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
 
     (*tail) = 0;
     while (iter) {
-        if (adel && !(iter->flgs & UCF_COPY)) {
+        if (adel && !iter->orig) {
             adel(&iter->anim);
             free(iter->path);
         }
@@ -563,7 +563,10 @@ void UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
 
     while (ulib) {
         for (iter = 0; iter < ulib->ucnt; iter++)
-            ulib->uarr[iter]->uuid = ++uuid;
+            if (!ulib->uarr[iter]->orig)
+                ulib->uarr[iter]->uuid = ++uuid;
+            else
+                ulib->uarr[iter]->uuid = ulib->uarr[iter]->orig->uuid;
         if (ulib->ucnt)
             for (iter = 0; iter < uses; iter++) {
                 elem = malloc(sizeof(*elem));

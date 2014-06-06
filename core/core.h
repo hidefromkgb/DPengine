@@ -25,8 +25,6 @@
 /// signals the need to pick an object
 #define EMP_PICK ((UNIT*)1)
 
-/// if set, UNIT.ANIM and UNIT.PATH are copies, don`t free them
-#define UCF_COPY 0x80000000
 /// the unit is flipped horizontally
 #define UCF_REVX 0x40000000
 /// the unit is flipped vertically
@@ -61,7 +59,8 @@ typedef struct _UNIT {
           scal,         /// scaling factor in powers of 2
           uuid;         /// unique unit identifier
     struct _UNIT *prev, /// previous unit in the list
-                 *next; /// next unit in the list
+                 *next, /// next unit in the list
+                 *orig; /// original unit (NULL if this unit is not a copy)
     struct _ULIB *ulib; /// link to the parent unit library
 } UNIT;
 
@@ -107,5 +106,8 @@ void  FreeLibList(ULIB **head, void (*adel)(void**));
 void  FreeUnitList(UNIT **tail, void (*adel)(void**));
 void  UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
                       long  dimx, long   dimy, ulong *uniq, ulong *size);
+
+/// Imported from ./gif/common.c
+char *LoadFile(char *name, long *size);
 
 #endif

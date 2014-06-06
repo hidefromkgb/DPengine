@@ -126,7 +126,7 @@ char *tver[] = {
 \n\
 uniform usampler2D data;\n\
 uniform sampler2D dims;\n\
-uniform sampler2D coef;\n\
+uniform sampler2D bank;\n\
 uniform vec2 disz;\n\
 \n\
 out vec4 vtex;\n\
@@ -141,18 +141,24 @@ void main() {\n\
     uvec4  vdat = texelFetch(data, ivec2(indx & txsz, indx >> txlg), 0);\n\
     indx = vdat.y & 0xFFFFFu;\n\
     ivec2  offs = ivec2(indx & txsz, indx >> txlg);\n\
-    vec4   vdim = texelFetch(dims, offs, 0);\n\
-    vec4   vcoe = texelFetch(coef, offs, 0) \n\
+    vec4   vbnk = texelFetch(bank, offs, 0);\n\
+    vec4   vdim = texelFetch(dims, offs, 0) \n\
          * vec4(0.5 - (0.5 - vert.x) * (1.0 - float((vdat.y >> 29) & 0x2u)),\n\
                 0.5 + (0.5 - vert.y) * (1.0 - float((vdat.y >> 30) & 0x2u)),\n\
                 1.0, 1.0);\n\
     indx <<= 8;\n\
     offs = ivec2((int(vdat.x) << 16) >> 16, int(vdat.x) >> 16);\n\
-    vtex = vec4(vert.x * vdim.x, vert.y * vdim.y, vdim.x, 0.0);\n\
-    voff = vec4(vdim.w + ((vdat.y >> 20) & 0x3FFu) * vdim.x * vdim.y,\n\
-                vdim.z, indx & txsz, indx >> txlg);\n\
-    gl_Position = vec4((offs.x + vdim.x * vcoe.x) * disz.x - 1.0,\n\
-                      -(offs.y - vdim.y * vcoe.y) * disz.y + 1.0,\n\
+    vtex = vec4(vert.x * vdim.z, vert.y * vdim.w, vdim.z, 0.0);\n\
+    voff = vec4(vbnk.y + ((vdat.y >> 20) & 0x3FFu) * vdim.z * vdim.w,\n\
+                vbnk.x, indx & txsz, indx >> txlg);\n\
+    if (voff.x >= vbnk.z) {\n\
+        voff.x -= vbnk.z;\n\
+        indx = uint(voff.x / vbnk.w);\n\
+        voff.x -= float(indx * uint(vbnk.w));\n\
+        voff.y += float(indx + 1u);\n\
+    }\n\
+    gl_Position = vec4((offs.x + vdim.z * vdim.x) * disz.x - 1.0,\n\
+                      -(offs.y - vdim.w * vdim.y) * disz.y + 1.0,\n\
                        -offs.y * disz.y * 0.5 + 1.0, 1.0);\n\
 }",
 
@@ -194,7 +200,7 @@ GLvoid MakeShaderSrc(GLuint logt) {
 
     sver = calloc(1, sizeof(tver));
     spix = calloc(1, sizeof(tpix));
-    sprintf(cons, "const uint txsz = uint(%u), txlg = uint(%u);",
+    sprintf(cons, "const uint txsz = %uu, txlg = %uu;",
            (1 << logt) - 1, logt);
 
     for (iter = carrsz(tver) - 2; iter >= 0; iter--)
