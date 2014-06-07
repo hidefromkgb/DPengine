@@ -1,5 +1,5 @@
-#include "unit.h"
 #include <stdarg.h>
+#include "unit.h"
 
 
 
@@ -7,23 +7,21 @@ GLint ShaderProgramStatus(GLuint prog, GLboolean shad, GLenum parm) {
     GLchar buff[2048];
     GLint stat, slen;
 
-    switch (shad) {
-        case GL_FALSE:
-            glGetProgramiv(prog, parm, &stat);
-            if (stat != GL_TRUE) {
-                glGetProgramInfoLog(prog, carrsz(buff), &slen, buff);
-                printf("Shader program: %s\n", (GLchar*)buff);
-            }
-            return stat;
-
-        default:
-            glGetShaderiv(prog, parm, &stat);
-            if (stat != GL_TRUE) {
-                glGetShaderInfoLog(prog, carrsz(buff), &slen, buff);
-                printf("Shader: %s\n", (GLchar*)buff);
-            }
-            return stat;
+    if (shad) {
+        glGetShaderiv(prog, parm, &stat);
+        if (stat != GL_TRUE) {
+            glGetShaderInfoLog(prog, carrsz(buff), &slen, buff);
+            printf("[shader error]\n%s\n\n", (GLchar*)buff);
+        }
     }
+    else {
+        glGetProgramiv(prog, parm, &stat);
+        if (stat != GL_TRUE) {
+            glGetProgramInfoLog(prog, carrsz(buff), &slen, buff);
+            printf("[shader program error]\n%s\n\n", (GLchar*)buff);
+        }
+    }
+    return stat;
 }
 
 
@@ -85,8 +83,8 @@ SHDR *MakeShaderList(GLchar *vert[], GLchar *pixl[],
                                              puni[ctmp].name)) != -1)
                 retn[iter].cuni++;
 
-        for (retn[iter].puni = malloc(retn[iter].cuni * sizeof(UNIF)),
-             step = ctmp = 0; ctmp < cuni; ctmp++)
+        retn[iter].puni = malloc(retn[iter].cuni * sizeof(*retn[iter].puni));
+        for (step = ctmp = 0; ctmp < cuni; ctmp++)
             if ((name = glGetUniformLocation(retn[iter].prog,
                                              puni[ctmp].name)) != -1) {
                 retn[iter].puni[step] = puni[ctmp];
@@ -121,7 +119,34 @@ char *shader(char *frmt, ...) {
 
 
 char *tver[] = {
-/// surf - #: main vertex shader
+/** [main vertex shader] (FB = frame bank, CA = current animation)
+
+    ==== dynamic uniforms (changes every frame)
+    T2UV <data>: x = [Y pos (16)] [X pos (16)] <-- parentheses give bit count
+                 y = [Y inv  (1)] [X inv  (1)] [frame (10)] [base index (20)]
+
+    ==== static uniforms (no changes during runtime)
+    T4FV <dims>: x = frame X scale
+                 y = frame Y scale
+                 z = frame width
+                 w = frame height
+    T4FV <bank>: x = FB index
+                 y = CA`s first frame offset in FB
+                 z = end of CA block in FB
+                 w = end of FB as if it all consisted of CA frames
+    T2FV  disz : x = 2.0 / screen width
+                 y = 2.0 / screen height
+
+    ==== parameters for pixel shader ("=" means static, "~" means varying)
+    T4FV  vtex : x ~ current pixel U-pos (needs to be truncated to uint)
+                 y ~ current pixel V-pos (needs to be truncated to uint)
+                 z = frame width in pixels
+                 w = 0.0 (RESERVED)
+    T4FV  voff : x = current frame offset in FB
+                 y = FB index
+                 z = CA palette U-pos in texture
+                 w = CA palette V-pos in texture
+ **/
 "#version 130\n\
 \n\
 uniform usampler2D data;\n\
@@ -167,7 +192,41 @@ NULL};
 
 
 char *tpix[] = {
-/// surf - 0: display
+/** [main pixel shader] (FB = frame bank, CA = current animation)
+
+    ==== basic concepts and theory
+               _________    __________________   This is a frame bank array on
+             .|       . |  |_#K_|             |  the left & a single FB on the
+           .  |     .   |  | animation #(K+1) |  right. Each FB is composed of
+         .____|___.     |  |             _____|  animations, which in turn are
+       _|_______  |    n|  |____________|     |  made of consecutive frames in
+     _|_______  | |_____|  | animation #(K+2) |  linear form, unlike textures.
+    |         | | |   .    |                __|  Some of the animations do not
+    |         | |2| .      |_______________|  |  fit in a single FB, occupying
+    |         |1|_|------->| animation #(K+3) |  space in several FBs. In this
+    |        0|_|          |       ___________|  case, they are split frame by
+    |_________|            |______|///EMPTY///|  frame in several parts. As an
+                                                 illustration, animation #K is
+    only partially contained in the second FB: say, one or two last frames. FB
+    dimensions are chosen to match GPU capabilities, but they cannot be larger
+    than 4096*4096. This restriction comes from many factors like inability of
+    GLfloat to store consecutive integers larger than 2^24, or excess unneeded
+    space consumption when only a part of the last FB is actually used.
+
+    ==== static uniforms (no changes during runtime)
+    BYTE <atex>: FB array, each layer is an FB with palette indices; see above
+    T4FV <apal>: palette texture
+
+    ==== parameters from vertex shader ("=" means static, "~" means varying)
+    T4FV  vtex : x ~ current pixel U-pos (needs to be truncated to uint)
+                 y ~ current pixel V-pos (needs to be truncated to uint)
+                 z = frame width in pixels
+                 w = 0.0 (RESERVED)
+    T4FV  voff : x = current frame offset in FB
+                 y = FB index
+                 z = CA palette U-pos in texture
+                 w = CA palette V-pos in texture
+ **/
 "#version 130\n\
 \n\
 uniform usampler2DArray atex;\n\
@@ -200,8 +259,7 @@ GLvoid MakeShaderSrc(GLuint logt) {
 
     sver = calloc(1, sizeof(tver));
     spix = calloc(1, sizeof(tpix));
-    sprintf(cons, "const uint txsz = %uu, txlg = %uu;",
-           (1 << logt) - 1, logt);
+    sprintf(cons, "const uint txsz = %uu, txlg = %uu;", (1 << logt) - 1, logt);
 
     for (iter = carrsz(tver) - 2; iter >= 0; iter--)
         sver[iter] = shader(tver[iter], cons, NULL);
