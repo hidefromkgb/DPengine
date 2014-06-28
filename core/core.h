@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "engine.h"
 #include "gif/gifstd.h"
 
 
@@ -18,96 +19,70 @@
 
 
 
-/// minimum allowed delay
-#define MIN_WAIT 1
-/// default frame delay
-#define FRM_WAIT 40
-/// signals the need to pick an object
-#define EMP_PICK ((UNIT*)1)
+#define TXT_EXIT "[//THR//]"
+#define TXT_FFPS "[%3lu FPS]"
+#define TXT_FANI "[%4u%c%c%c]"
+#define TXT_FAIL "[>>ERR<<]"
+#define TXT_DUPL "[--DUP--]"
+#define TXT_AEND "[==ANI==] %lu objects, %lu ms: %0.3f ms/obj\n%s"
+#define TXT_ROGL "[++OGL++]"
+#define TXT_RSTD "[++CPU++]"
 
-/// the unit is flipped horizontally
-#define UCF_REVX 0x40000000
-/// the unit is flipped vertically
-#define UCF_REVY 0x20000000
-/// the unit can be flipped horizontally
-#define UCF_CANX 0x00800000
-/// the unit can be flipped vertically
-#define UCF_CANY 0x00400000
-/// the unit is initially flipped horizontally
-#define UCF_INIX 0x00200000
-/// the unit is initially flipped vertically
-#define UCF_INIY 0x00100000
+
+
+typedef struct _TREE {
+    uint64_t hash;
+    long flgs, diff;
+    union {
+        struct {
+            char *path;
+            struct _TREE *epix;
+        };
+        struct {
+            void *anim;
+            uint32_t *xdim, *ydim, *uuid, *fcnt, **time,
+                      xoff,  yoff,  scal;
+        };
+    };
+    struct _TREE *fill, *coll, *prev, *next[2];
+} TREE;
 
 
 
 /// image wrapper, contains raw pixel data and dimensions
 typedef struct _PICT {
     BGRA *bptr;
-    long dimx, dimy;
+    ulong xdim, ydim;
 } PICT;
 
 /// elementary animation unit
 typedef struct _UNIT {
-    void *anim;         /// animation data (the format may vary)
-    char *path;         /// path to the original animation file
-    uint32_t hash,      /// path hash used for finding copies
-             flgs;      /// unit flags (UCF_ prefix)
-    long  posx, posy,   /// position of the unit`s lower-left corner
-          ptrx, ptry;   /// cursor coords on mousedown (for dragging)
-    ulong fcur,         /// current frame of the animation
-          time,         /// current frame timestamp (in ms)
-          scal,         /// scaling factor in powers of 2
-          uuid;         /// unique unit identifier
-    struct _UNIT *prev, /// previous unit in the list
-                 *next, /// next unit in the list
-                 *orig; /// original unit (NULL if this unit is not a copy)
-    struct _ULIB *ulib; /// link to the parent unit library
+    void *anim;    /// animation data (the format may vary)
+    ulong scal;    /// scaling factor in powers of 2
+    ulong offs[4]; /// offsets from the initial size: X_lf, X_rt, Y_up, Y_dn
 } UNIT;
 
-/// unit library
-typedef struct _ULIB {
-    char *path;         /// the folder from which the library was built
-    UNIT **uarr;        /// array of animation units (also a linked list)
-    ulong ucnt;         /// length of the array
-    uint32_t flgs;      /// library flags (ULF_ prefix)
-    struct _ULIB *prev, /// previous library in the list
-                 *next; /// next library in the list
-} ULIB;
 
-/// parameter structure for FillLibStdThrd()
-typedef struct _FILL {
-    ULIB *ulib;
-    long load, curr;
-} FILL;
 
-/// parameter structure for DrawPixStdThrd()
-typedef struct _DRAW {
-    UNIT *tail;
-    PICT *pict;
-    long ymin, ymax;
-} DRAW;
+extern TREE *(*LoadUnitStdThrd)(TREE *itmp, char *path);
 
 
 
-extern uint32_t seed;
+uint32_t DownsampleAnimStd(ASTD *anim, uint32_t *xoff, uint32_t *yoff);
+void RecolorPalette(BGRA *bpal, char *file, long size);
+void DrawPixStdThrd(PICT *pict, UNIT *uarr, T2UV *data,
+                    long size, long yinf, long ysup);
 
+long TryUpdatePixTree(TREE *estr);
+void TryLoadUnit(uint8_t *path, uint32_t *uuid, uint32_t *xdim, uint32_t *ydim,
+                 uint32_t *fcnt, uint32_t **time);
 
+void MakeUnitArray(UNIT **uarr);
+void FreeUnitArray(UNIT **uarr);
+long SelectUnit(UNIT *uarr, T2UV *data, long size, long xptr, long yptr);
 
-uint32_t PRNG(uint32_t *seed);
-UNIT *SortByY(UNIT **tail);
-UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick,
-                     ulong *time, long xptr, long yptr);
-
-void  FillLibStdThrd(FILL *fill);
-void  DrawPixStdThrd(DRAW *draw);
-
-void  MakeEmptyLib(ULIB **head, char *base, char *path);
-void  FreeLibList(ULIB **head, void (*adel)(void**));
-void  FreeUnitList(UNIT **tail, void (*adel)(void**));
-void  UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
-                      long  dimx, long   dimy, ulong *uniq, ulong *size);
-
-/// Imported from ./gif/common.c
 char *LoadFile(char *name, long *size);
+
+
 
 #endif

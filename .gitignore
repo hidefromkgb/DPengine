@@ -1,6 +1,8 @@
 # Binaries
 win32.exe
 linux-gtk
+*.dll
+*.so
 
 # Code::Blocks service files
 *.layout
@@ -9,3 +11,5 @@ linux-gtk
 
 # Win32-specific
 Thumbs.db
+*.def
+*.a

@@ -2,17 +2,21 @@
 <CodeBlocks_project_file>
 	<FileVersion major="1" minor="6" />
 	<Project>
-		<Option title="linux" />
+		<Option title="engine (linux)" />
 		<Option pch_mode="2" />
 		<Option compiler="gcc" />
 		<Option virtualFolders="src/;src/core/;src/core/ogl/;src/core/gif/;" />
 		<Build>
 			<Target title="Debug (GTK2)">
-				<Option output="../linux-gtk" prefix_auto="1" extension_auto="1" />
+				<Option output="../engine" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
 				<Option object_output=".obj/" />
-				<Option type="1" />
+				<Option type="3" />
 				<Option compiler="gcc" />
+				<Option host_application="./linux-gtk" />
+				<Option run_host_application_in_terminal="1" />
+				<Option createDefFile="1" />
+				<Option createStaticLib="1" />
 				<Compiler>
 					<Add option="`pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags`" />
 					<Add option="-g" />
@@ -22,11 +26,15 @@
 				</Linker>
 			</Target>
 			<Target title="Release (GTK2)">
-				<Option output="../linux-gtk" prefix_auto="1" extension_auto="1" />
+				<Option output="../engine" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
 				<Option object_output=".obj/" />
-				<Option type="0" />
+				<Option type="3" />
 				<Option compiler="gcc" />
+				<Option host_application="./linux-gtk" />
+				<Option run_host_application_in_terminal="1" />
+				<Option createDefFile="1" />
+				<Option createStaticLib="1" />
 				<Compiler>
 					<Add option="`pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags`" />
 					<Add option="-fexpensive-optimizations" />
@@ -40,6 +48,8 @@
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
+			<Add option="-fPIC" />
+			<Add option="-fvisibility=hidden" />
 			<Add directory="/usr/include/gtkglext-1.0" />
 			<Add directory="/usr/lib/gtkglext-1.0/include" />
 		</Compiler>
@@ -49,40 +59,43 @@
 			<Add library="X11" />
 			<Add library="GL" />
 		</Linker>
-		<Unit filename="../core/core.c">
+		<Unit filename="../../core/core.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/core/" />
 		</Unit>
-		<Unit filename="../core/core.h">
+		<Unit filename="../../core/core.h">
 			<Option virtualFolder="src/core/" />
 		</Unit>
-		<Unit filename="../core/gif/common.c">
+		<Unit filename="../../core/gif/common.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/core/gif/" />
 		</Unit>
-		<Unit filename="../core/gif/common.h">
+		<Unit filename="../../core/gif/common.h">
 			<Option virtualFolder="src/core/gif/" />
 		</Unit>
-		<Unit filename="../core/gif/gifstd.c">
+		<Unit filename="../../core/gif/gifstd.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/core/gif/" />
 		</Unit>
-		<Unit filename="../core/gif/gifstd.h">
+		<Unit filename="../../core/gif/gifstd.h">
 			<Option virtualFolder="src/core/gif/" />
 		</Unit>
-		<Unit filename="../core/ogl/core.h">
+		<Unit filename="../../core/ogl/core.h">
 			<Option virtualFolder="src/core/ogl/" />
 		</Unit>
-		<Unit filename="../core/ogl/shad.c">
+		<Unit filename="../../core/ogl/shad.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/core/ogl/" />
 		</Unit>
-		<Unit filename="../core/ogl/unit.h">
+		<Unit filename="../../core/ogl/unit.h">
 			<Option virtualFolder="src/core/ogl/" />
 		</Unit>
-		<Unit filename="../core/ogl/util.c">
+		<Unit filename="../../core/ogl/util.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/core/ogl/" />
+		</Unit>
+		<Unit filename="../../core/engine.h">
+			<Option virtualFolder="src/" />
 		</Unit>
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />

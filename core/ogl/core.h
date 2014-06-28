@@ -1,8 +1,8 @@
+#include <GL/gl.h>
 #include "../core.h"
 
 #if defined(_WIN32)
     typedef char GLchar;
-    #include <gl/gl.h>
     #include <windows.h>
     #define GL_GET_PROC_ADDR     wglGetProcAddress
     #define GL_COMPILE_STATUS               0x8B81
@@ -38,7 +38,6 @@
     #define WGL_CONTEXT_MINOR_VERSION_ARB   0x2092
     #define WGL_CONTEXT_FLAGS_ARB           0x2094
 #else
-    #include <GL/gl.h>
     #include <GL/glx.h>
     #define GL_GET_PROC_ADDR     glXGetProcAddress
 #endif
@@ -94,40 +93,12 @@
 
 
 
-#pragma pack(push, 1)
-typedef struct _T2FV {
-    float u, v;
-} T2FV;
-
-typedef struct _T3FV {
-    float x, y, z;
-} T3FV;
-
-typedef struct _T4FV {
-    float x, y, z, w;
-} T4FV;
-
-typedef struct _T2UV {
-    uint32_t u, v;
-} T2UV;
-
-typedef struct _T3UV {
-    uint32_t x, y, z;
-} T3UV;
-
-typedef struct _T4UV {
-    uint32_t x, y, z, w;
-} T4UV;
-#pragma pack(pop)
-
-
-
 long InitRendererOGL();
-void MakeRendererOGL(ULIB  *ulib, ulong uniq,
-                     T2UV **data, ulong size, ulong rgba);
+void MakeRendererOGL(UNIT *uarr, ulong uniq,
+                     T2UV *data, ulong size, ulong rgba);
 void SizeRendererOGL(ulong xscr, ulong yscr);
 void DrawRendererOGL(T2UV *data, ulong size);
-void FreeRendererOGL(T2UV *data);
+void FreeRendererOGL();
 
 
 

@@ -2,100 +2,167 @@
 
 
 
-/// Default config file
-#define DEF_CONF "anim.conf"
-/// Default comment character
-#define DEF_CMNT '#'
-/// Default token separator
-#define DEF_TSEP ','
+TREE *(*LoadUnitStdThrd)(TREE *elem, char *path);
 
-/// Random number generator modulo
-#define RNG_TRIM 0xFFFFFFFB
-/// Random number generator multiplier
-#define RNG_MULT 0x10A860C1
-/// Random number generator shift
-#define RNG_PLUS 0x01
+uint32_t guid = 0;
+TREE *hstr = 0, *hpix = 0;
+
+
+
+uint32_t DownsampleAnimStd(ASTD *anim, uint32_t *xoff, uint32_t *yoff) {
+    long x, y, fram, dpos, retn,
+         xmin, xmax, ymin, ymax;
+
+    if (xoff)
+        *xoff = 0;
+    if (yoff)
+        *yoff = 0;
+
+    xmax = 0;
+    xmin = anim->xdim;
+    ymax = 0;
+    ymin = anim->ydim;
+    for (fram = 0; fram < anim->fcnt; fram++) {
+        for (y = 0; y < anim->ydim; y++) {
+            dpos = (fram * anim->ydim + y) * anim->xdim;
+            retn = -1;
+            for (x = 0; x < anim->xdim; x++)
+                if (anim->bptr[dpos + x] != 0xFF) {
+                    xmax = (x > xmax)? x : xmax;
+                    xmin = (x < xmin)? x : xmin;
+                    retn = 0;
+                }
+            if (!retn) {
+                ymax = (y > ymax)? y : ymax;
+                ymin = (y < ymin)? y : ymin;
+            }
+        }
+        if ((xmin == 0) && (ymin == 0) &&
+            (xmax == anim->xdim - 1) && (ymax == anim->ydim - 1)) {
+            xmin = xmax + 1;
+            break;
+        }
+    }
+    if ((xmin <= xmax) && (ymin <= ymax)) {
+        for (retn = fram = 0; fram < anim->fcnt; fram++)
+            for (y = ymin; y <= ymax; y++) {
+                dpos = (fram * anim->ydim + y) * anim->xdim;
+                for (x = xmin; x <= xmax; x++)
+                    anim->bptr[retn++] = anim->bptr[dpos + x];
+            }
+        anim->xdim = xmax - xmin + 1;
+        anim->ydim = ymax - ymin + 1;
+        anim->bptr = realloc(anim->bptr, anim->fcnt * anim->xdim * anim->ydim);
+        if (xoff)
+            *xoff = xmin;
+        if (yoff)
+            *yoff = ymin;
+    }
+
+    retn = 0;
+    while (!(anim->xdim & 1) && !(anim->ydim & 1)) {
+        for (fram = 0; fram < anim->fcnt; fram++)
+            for (y = 0; y < anim->ydim; y += 2) {
+                dpos = (fram * anim->ydim + y) * anim->xdim;
+                for (x = 0; x < anim->xdim; x += 2)
+                    if ((anim->bptr[dpos + x] !=
+                         anim->bptr[dpos + x + 1])
+                    ||  (anim->bptr[dpos + x] !=
+                         anim->bptr[dpos + x + anim->xdim])
+                    ||  (anim->bptr[dpos + x] !=
+                         anim->bptr[dpos + x + anim->xdim + 1]))
+                        goto _quit;
+            }
+        for (xmin = fram = 0; fram < anim->fcnt; fram++)
+            for (y = 0; y < anim->ydim; y += 2) {
+                dpos = (fram * anim->ydim + y) * anim->xdim;
+                for (x = 0; x < anim->xdim; x += 2)
+                    anim->bptr[xmin++] = anim->bptr[dpos + x];
+            }
+        anim->xdim >>= 1;
+        anim->ydim >>= 1;
+        retn++;
+    }
+    _quit:
+    if (retn)
+        anim->bptr = realloc(anim->bptr, anim->fcnt * anim->xdim * anim->ydim);
+
+    return retn;
+}
+
+
+
+long CompareAnimStd(ASTD *a, ASTD *b, long flgs) {
+    long x, y, fram, dpos, spos;
+
+    if ((a->fcnt != b->fcnt) || (a->xdim != b->xdim) || (a->ydim != b->ydim))
+        return 0;
+
+    for (fram = 0; fram < a->fcnt; fram++)
+        for (y = 0; y < a->ydim; y++) {
+            spos = dpos = (fram * a->ydim + y) * a->xdim;
+            if (flgs & 2)
+                spos = (fram * a->ydim - y + a->ydim - 1) * a->xdim;
+            if (flgs & 1) {
+                spos += a->xdim - 1;
+                for (x = 0; x < a->xdim; x++)
+                    if (a->bpal[a->bptr[dpos + x]].BGRA !=
+                        b->bpal[b->bptr[spos - x]].BGRA)
+                        return 0;
+            }
+            else {
+                for (x = 0; x < a->xdim; x++)
+                    if (a->bpal[a->bptr[dpos + x]].BGRA !=
+                        b->bpal[b->bptr[spos + x]].BGRA)
+                        return 0;
+            }
+        }
+
+    return ~0;
+}
+
+
 
 /// String-oriented linear hash multiplier
 #define SLH_MULT 0xFBC5
 /// String-oriented linear hash shift
 #define SLH_PLUS 0x11
 
-/// [not recognized / comment / invalid token]
-#define AVT_NONE 0x00000000
-/// 'Name'
-#define AVT_NAME 0xC6961EB1
-/// 'Effect'
-#define AVT_EFCT 0xE708AEFF
-/// 'Behavior'
-#define AVT_BHVR 0xB6AB6234
-/// 'behaviorgroup'
-#define AVT_BGRP 0xA40004B2
-/// 'Categories'
-#define AVT_CTGS 0xC831B868
-/// 'Speak'
-#define AVT_PHRS 0x90E5E31D
+#define HASH(hash, trgt) hash = SLH_PLUS + SLH_MULT * hash + trgt.BGRA;
+uint64_t HashAnimStd(ASTD *anim, long *flgs) {
+    uint64_t hh00, hh01, hh10, hh11;
+    long x, y, fram, dpos;
 
+    if (!anim)
+        return 0;
 
-
-uint32_t seed;
-
-
-
-uint32_t PRNG(uint32_t *seed) {
-    return *seed = RNG_PLUS + (*seed * RNG_MULT) % RNG_TRIM;
-}
-
-
-
-char *SkipCharUTF8(char *line) {
-    static char skip[] = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 6};
-    return line + ((*line & 0x80)? skip[((*line) >> 2) & 0x0F] : 1);
-}
-
-
-
-long WhitespaceUTF8(char *line) {
-    switch (line[0]) {
-        case '\x09':
-        case '\x20':
-            return ~0;
-        case '\xC2':
-            if (line[1] == '\xA0') return ~0; break;
-        case '\xE1':
-            if (line[1] == '\x9A' && line[2] == '\x80') return ~0; break;
-        case '\xE3':
-            if (line[1] == '\x80' && line[2] == '\x80') return ~0; break;
-        case '\xEF':
-            if (line[1] == '\xBB' && line[2] == '\xBF') return ~0; break;
-        case '\xE2':
-            switch (line[1]) {
-                case '\x81': if (line[2] == '\x9F') return ~0; break;
-                case '\x80':
-                    switch (line[2]) {
-                        case '\x80':
-                        case '\x81':
-                        case '\x82':
-                        case '\x83':
-                        case '\x84':
-                        case '\x85':
-                        case '\x86':
-                        case '\x87':
-                        case '\x88':
-                        case '\x89':
-                        case '\x8A':
-                        case '\x8B':
-                        case '\xAF': return ~0;
-                    }
+    hh00 = hh01 = hh10 = hh11 = 0;
+    for (fram = 0; fram < anim->fcnt; fram++)
+        for (y = 0; y < anim->ydim; y++) {
+            dpos = (fram * anim->ydim + y) * anim->xdim;
+            for (x = 0; x < anim->xdim; x++) {
+                HASH(hh00, anim->bpal[anim->bptr[dpos + x]]);
+                HASH(hh01, anim->bpal[anim->bptr[dpos - x + anim->xdim - 1]]);
             }
-    }
-    return 0;
+            dpos = (fram * anim->ydim - y + anim->ydim - 1) * anim->xdim;
+            for (x = 0; x < anim->xdim; x++) {
+                HASH(hh10, anim->bpal[anim->bptr[dpos + x]]);
+                HASH(hh11, anim->bpal[anim->bptr[dpos - x + anim->xdim - 1]]);
+            }
+        }
+    fram  = (hh00 > hh01)? 0b00 : 0b01;
+    hh00  = (hh00 > hh01)? hh00 : hh01;
+    dpos  = (hh10 > hh11)? 0b10 : 0b11;
+    hh10  = (hh10 > hh11)? hh10 : hh11;
+    *flgs = (hh00 > hh10)? fram : dpos;
+    return  (hh00 > hh10)? hh00 : hh10;
 }
+#undef HASH
 
 
 
-uint32_t HashLine(char *line) {
-    uint32_t hash = 0;
+uint64_t HashLine(char *line) {
+    uint64_t hash = 0;
 
     while (*line)
         hash = SLH_PLUS + SLH_MULT * hash + *line++;
@@ -104,208 +171,61 @@ uint32_t HashLine(char *line) {
 
 
 
-char *SplitLine(char **tail, char tsep) {
-    char *retn, *temp, *iter = *tail;
+/// Default directory separator
+#define DEF_DSEP '/'
 
-    if (*tail) {
-        while (WhitespaceUTF8(iter))
-            iter = SkipCharUTF8(iter);
-        if (*iter) {
-            if (!(*tail = strchr(iter, tsep)))
-                *tail = iter + strlen(iter);
-            temp = retn = iter;
-            while (iter < *tail) {
-                if (!WhitespaceUTF8(iter))
-                    temp = iter;
-                iter = SkipCharUTF8(iter);
-            }
-            *tail = (**tail)? *tail + 1 : 0;
-            if (*temp) {
-                if (*temp != tsep)
-                    temp++;
-                *temp = '\0';
-            }
-            return retn;
-        }
-    }
-    return *tail = 0;
-}
+char *ExtractLastDirs(char *path, long dcnt) {
+    long iter;
 
-
-
-uint32_t DetermineType(char **tail) {
-    char *temp = SplitLine(tail, DEF_TSEP);
-    if (temp && (*temp != DEF_CMNT))
-        return HashLine(temp);
-    return AVT_NONE;
-}
-
-
-
-char *ConcatPath(char *base, char *path) {
-    char *retn;
-    long  iter;
-
-    if (*path == '"')
-        path++;
-    retn = malloc(strlen(base) + strlen(path) + 2);
-    iter = sprintf(retn, "%s/%s", base, path) - 1;
-    if (retn[iter] == '"')
-        retn[iter] = '\0';
-    return retn;
-}
-
-
-
-char *GetNextLine(char **file) {
-    char *retn;
-    long  iter;
-
-    if ((retn = SplitLine(file, '\n')))
-        if ((iter = strlen(retn)) > 0)
-            if (retn[iter - 1] == '\r')
-                retn[iter - 1] = '\0';
-    return retn;
-}
-
-
-
-UNIT *SortByY(UNIT **tail) {
-    static struct {
-        UNIT *lbgn, *lend;
-    } elem[0x2000];
-    long ymin, ymax, ytmp;
-    UNIT *curr, *retn;
-
-    retn = curr = *tail;
-    if (curr->prev) {
-        ymin = ymax = curr->posy;
-        while (!0) {
-            ytmp = curr->posy;
-            if (ytmp > ymax)
-                ymax = ytmp;
-            else if (ytmp < ymin)
-                ymin = ytmp;
-            if (!curr->prev)
-                break;
-            curr = curr->prev;
-        }
-        memset(elem, 0, (ymax -= ymin - 1) * sizeof(*elem));
-
-        while (curr) {
-            ytmp = curr->posy - ymin;
-            if (!elem[ytmp].lbgn)
-                elem[ytmp].lbgn = elem[ytmp].lend = curr;
-            else {
-                curr->prev = elem[ytmp].lend;
-                elem[ytmp].lend->next = curr;
-                elem[ytmp].lend = curr;
-            }
-            curr = curr->next;
-        }
-
-        for (ymin = 0; ymin < ymax; ymin++)
-            if (elem[ymin].lbgn) {
-                elem[ymin].lbgn->prev = curr;
-                if (curr)
-                    curr->next = elem[ymin].lbgn;
-                else
-                    retn = elem[ymin].lbgn;
-                curr = elem[ymin].lend;
-            }
-
-        curr->next = 0;
-        *tail = curr;
-    }
-    return retn;
-}
-
-
-
-UNIT *UpdateFrameStd(UNIT **tail, UNIT **pick,
-                     ulong *time, long xptr, long yptr) {
-    long xpos, ypos;
-    UNIT *iter, *temp;
-    ASTD *anim;
-
-    if (*tail) {
-        iter = temp = *tail;
-        if (*pick == EMP_PICK) {
-            while (temp) {
-                anim =   temp->anim;
-                xpos =  (xptr - temp->posx) >> temp->scal;
-                ypos = ((yptr - temp->posy) >> temp->scal) + anim->ydim;
-                if ((xptr >= temp->posx) && (xpos <  anim->xdim)
-                &&  (yptr <  temp->posy) && (ypos >= 0)) {
-                    if (temp->flgs & UCF_REVX)
-                        xpos = anim->xdim - 1 - xpos;
-                    if (temp->flgs & UCF_REVY)
-                        ypos = anim->ydim - 1 - ypos;
-                    if (anim->bptr[xpos + anim->xdim *
-                                  (ypos + anim->ydim * temp->fcur)] != 0xFF) {
-                        temp->ptrx = xptr - temp->posx;
-                        temp->ptry = yptr - temp->posy;
-                        *pick = temp;
-                        break;
-                    }
+    if (path && ((iter = strlen(path)) > 0)) {
+        while (--iter)
+            if (path[iter] == DEF_DSEP)
+                if (!--dcnt) {
+                    ++iter;
+                    break;
                 }
-                temp = temp->prev;
-            }
-        }
-        while (iter) {
-            anim = iter->anim;
-            if ((*time - iter->time) > anim->time[iter->fcur]) {
-                iter->time = *time;
-                if (++iter->fcur >= anim->fcnt)
-                    iter->fcur = 0;
-            }
-            iter = iter->prev;
-        }
-        if (*pick && (*pick != EMP_PICK)) {
-            (*pick)->posx = xptr - (*pick)->ptrx;
-            (*pick)->posy = yptr - (*pick)->ptry;
-            SortByY(tail);
-        }
+        path += iter;
     }
-    return *tail;
+    return path;
 }
 
 
 
-void DrawPixStdThrd(DRAW *draw) {
-    long x, y, ysrc, ydst,
-         xmin, ymin, xmax, ymax,
-         xoff, yoff, xinc, yinc;
+void DrawPixStdThrd(PICT *pict, UNIT *uarr, T2UV *data,
+                    long size, long yinf, long ysup) {
+    long iter, x, y, ysrc, ydst, xmin, ymin, xmax, ymax,
+         xoff, yoff, xinc, yinc, xpos, ypos;
     BGRA b_r_, _g_a, *bptr;
     UNIT *tail;
     ASTD *anim;
 
-    tail = draw->tail;
-    while (tail) {
+    for (iter = 0; iter < size; iter++) {
+        tail = &uarr[(data[iter].y >> 2) & 0xFFFF];
+        xpos = (int16_t)data[iter].x;
+        ypos = (int16_t)(data[iter].x >> 16);
         anim = tail->anim;
-
-        bptr = draw->pict->bptr;
-        yoff = anim->xdim * anim->ydim * tail->fcur;
-        xoff = draw->pict->dimx;
-        ymax = min(0, draw->ymax - tail->posy);
+        bptr = pict->bptr;
+        xoff = pict->xdim;
+        yoff = anim->xdim * anim->ydim * (data[iter].y >> 18);
+        ymax = min(0, ysup - ypos);
         ymin = anim->ydim << tail->scal;
         xinc = anim->xdim << tail->scal;
-        if (tail->flgs & UCF_REVX) {
-            xmax = min(xinc, xinc + tail->posx);
-            xmin = max(   0, xinc + tail->posx - xoff);
+        if (data[iter].y & 1) {
+            xmax = min(xinc, xinc + xpos);
+            xmin = max(   0, xinc + xpos - xoff);
             yinc = -1;
         }
         else {
-            xmax = min(xinc, xoff - tail->posx);
-            xmin = max(   0,    0 - tail->posx);
+            xmax = min(xinc, xoff - xpos);
+            xmin = max(   0,    0 - xpos);
             yinc = 1;
         }
-        xinc = ((yinc < 0)? xinc - 1 - xmin : xmin) + tail->posx;
+        xinc = ((yinc < 0)? xinc - 1 - xmin : xmin) + xpos;
 
         /// alpha blending here
-        for (y = max(-ymin, draw->ymin - tail->posy); y < ymax; y++) {
-            ydst = (y + tail->posy) * xoff + xinc;
-            ysrc = (tail->flgs & UCF_REVY)? -y - 1 : y + ymin;
+        for (y = max(-ymin, yinf - ypos); y < ymax; y++) {
+            ydst = (y + ypos) * xoff + xinc;
+            ysrc = (data[iter].y & 2)? -y - 1 : y + ymin;
             ysrc = (ysrc >> tail->scal) * anim->xdim + yoff;
             for (x = xmin; x < xmax; x++, ydst += yinc)
                 if (bptr[ydst].A != 0xFF) {
@@ -322,13 +242,113 @@ void DrawPixStdThrd(DRAW *draw) {
                     }
                 }
         }
-        tail = tail->prev;
     }
 }
 
 
 
-long MakeUnitStd(UNIT **tail, UNIT *info) {
+void TreeDelPath(TREE *root) {
+    free(root->path);
+}
+
+
+
+void TreeDel(TREE **root, void (*func)(TREE*)) {
+    if (*root) {
+        TreeDel(&(*root)->fill, func);
+        TreeDel(&(*root)->coll, func);
+        TreeDel(&(*root)->next[0], func);
+        TreeDel(&(*root)->next[1], func);
+        if (func)
+            func(*root);
+        free(*root);
+        *root = 0;
+    }
+}
+
+
+
+TREE *TreeFind(TREE *root, uint64_t hash) {
+    while (root) {
+        if (hash == root->hash)
+            break;
+        root = root->next[(hash < root->hash)? 0 : 1];
+    }
+    return root;
+}
+
+
+
+/// modified and adapted from libAVL
+void TreeAdd(TREE **root, TREE *elem) {
+    TREE *btop, *iter, *rnew, *temp;
+    long diff, rsub, lsub;
+
+    elem->diff = 0;
+    elem->prev = elem->coll = elem->fill = elem->next[0] = elem->next[1] = 0;
+    iter = btop = *root;
+    while (iter) {
+        if (iter->diff)
+            btop = iter;
+
+        if (elem->hash == iter->hash) {
+            elem->coll = iter->coll;
+            iter->coll = elem;
+            return;
+        }
+        diff = (elem->hash < iter->hash)? 0 : 1;
+        elem->prev = iter;
+        iter = iter->next[diff];
+    }
+    if (elem->prev) {
+        elem->prev->next[diff] = iter = elem;
+        do {
+            iter->prev->diff += (iter->prev->next[0] == iter)? -1 : +1;
+            iter = iter->prev;
+        } while (iter != btop);
+
+        if (btop->diff == ((btop->diff < 0)? -2 : +2)) {
+            diff = (btop->diff < 0)? -1 : +1;
+            rsub = 1 ^ (lsub = (diff + 1) >> 1);
+            temp = btop->next[lsub];
+            if (temp->diff == diff) {
+                rnew = temp;
+                btop->next[lsub] = temp->next[rsub];
+                temp->next[rsub] = btop;
+                temp->diff = btop->diff = 0;
+                temp->prev = btop->prev;
+                btop->prev = temp;
+            }
+            else {
+                rnew = temp->next[rsub];
+                temp->next[rsub] = rnew->next[lsub];
+                rnew->next[lsub] = temp;
+                btop->next[lsub] = rnew->next[rsub];
+                rnew->next[rsub] = btop;
+                temp->diff = (rnew->diff == -diff)? -rnew->diff : 0;
+                btop->diff = (rnew->diff == +diff)? -rnew->diff : 0;
+                rnew->diff = 0;
+                rnew->prev = btop->prev;
+                temp->prev = btop->prev = rnew;
+                if (temp->next[rsub])
+                    temp->next[rsub]->prev = temp;
+            }
+            if (btop->next[lsub])
+                btop->next[lsub]->prev = btop;
+
+            if (rnew->prev)
+                rnew->prev->next[(rnew->prev->next[0] == btop)? 0 : 1] = rnew;
+            else
+                *root = rnew;
+        }
+    }
+    else
+        *root = elem;
+}
+
+
+
+void RecolorPalette(BGRA *bpal, char *file, long size) {
     #pragma pack(push, 1)
     struct {
         uint8_t srcr, srcg, srcb;
@@ -337,268 +357,214 @@ long MakeUnitStd(UNIT **tail, UNIT *info) {
     } *amap;
     #pragma pack(pop)
 
-    char *apal, *file;
-    long  indx;
-    BGRA *bpal;
-    UNIT *prev;
+    char *apal;
 
-    if (!(*tail)) {
-        (*tail) = malloc(sizeof(**tail));
-        (*tail)->prev = 0;
+    if (!bpal || !file)
+        return;
+
+    for (apal  = file + size -  sizeof(*amap);
+         apal >= file;  apal -= sizeof(*amap))
+        for (amap = (typeof(amap))apal,
+             size = 0; size < 256; size++)
+            if ((bpal[size].R == amap->srcr)
+            &&  (bpal[size].G == amap->srcg)
+            &&  (bpal[size].B == amap->srcb)) {
+                 bpal[size].R = ((long)amap->dstr * amap->tran) >> 8;
+                 bpal[size].G = ((long)amap->dstg * amap->tran) >> 8;
+                 bpal[size].B = ((long)amap->dstb * amap->tran) >> 8;
+                 bpal[size].A = amap->tran;
+                 break;
+            }
+}
+
+
+
+/// uses 1 global var: HPIX
+long TryUpdatePixTree(TREE* estr) {
+    TREE *epix;
+    char stat;
+
+    if (!estr || (estr->epix && (estr->epix->flgs & 4)))
+        return 0;
+
+    stat = ' ';
+    estr->epix->hash = HashAnimStd(estr->epix->anim, &estr->epix->flgs);
+    if (estr->epix->anim) {
+        epix = TreeFind(hpix, estr->epix->hash);
+        while (epix) {
+            if (CompareAnimStd(epix->anim, estr->epix->anim,
+                               epix->flgs ^ estr->epix->flgs))
+                break;
+            epix = epix->coll;
+        }
+        if (!epix) {
+            TreeAdd(&hpix, estr->epix);
+            *estr->epix->uuid = ++guid << 2;
+            estr->epix->flgs |= 4;
+        }
+        else {
+            estr->flgs = (estr->flgs & -4)
+                       + ((epix->flgs ^ estr->epix->flgs) & 3);
+            *estr->epix->uuid = (*epix->uuid & -4) + (estr->flgs & 3);
+            *estr->epix->time = *epix->time;
+            FreeAnimStd((ASTD**)&estr->epix->anim);
+            TreeDel(&estr->epix, 0);
+            estr->epix = epix;
+            stat = '#';
+        }
     }
     else {
-        (*tail)->next = malloc(sizeof(**tail));
-        (*tail)->next->prev = (*tail);
-        (*tail) = (*tail)->next;
+        *estr->epix->uuid = 0;
+        TreeDel(&estr->epix, 0);
     }
-    prev = (*tail)->prev;
-    *(*tail) = *info;
-    (*tail)->prev = prev;
-    prev = (*tail);
+    if (estr->epix)
+        printf(TXT_FANI" %s\n", *estr->epix->uuid >> 2, stat,
+              (estr->flgs & 2)? 'D' : 'U', (estr->flgs & 1)? 'L' : 'R',
+               estr->path);
+    else
+        printf(TXT_FAIL" %s\n", estr->path);
+    return ~0;
+}
 
-    prev->hash = HashLine(prev->path);
-    info = prev->prev;
-    while (info) {
-        if (info->hash == prev->hash)
+
+
+/// uses 2 global vars: HSTR, GUID
+void TryLoadUnit(uint8_t *path, uint32_t *uuid, uint32_t *xdim, uint32_t *ydim,
+                 uint32_t *fcnt, uint32_t **time) {
+    TREE *estr, *epix;
+    char *ptrn;
+    uint64_t hash;
+
+    epix = calloc(1, sizeof(*epix));
+    epix->uuid = uuid;
+    epix->xdim = xdim;
+    epix->ydim = ydim;
+    epix->fcnt = fcnt;
+    epix->time = time;
+    ptrn = ExtractLastDirs((char*)path, 2);
+    hash = (path)? HashLine(ptrn) : 0;
+    estr = (path)? TreeFind(hstr, hash) : 0;
+    while (estr) {
+        if (!strcmp(estr->path, ptrn))
             break;
-        info = info->prev;
+        estr = estr->coll;
     }
-    if (info && strcmp(info->path, prev->path))
-        info = 0;
-    if (info) {
-        free(prev->path);
-        prev->anim = info->anim;
-        prev->path = info->path;
-        prev->orig = info;
-    }
-    else {
-        prev->anim = MakeAnimStd(prev->path);
-        prev->orig = 0;
-    }
-
-    if (prev->anim) {
-        if ((bpal = ((ASTD*)prev->anim)->bpal)) {
-            apal = strdup(prev->path);
-            indx = strlen(apal);
-            apal[indx - 3] = 'a';
-            apal[indx - 2] = 'r';
-            apal[indx - 1] = 't';
-            if (bpal && (file = LoadFile(apal, &indx))) {
-                free(apal);
-                for (apal  = file + indx -  sizeof(*amap);
-                     apal >= file;  apal -= sizeof(*amap))
-                    for (amap = (typeof(amap))apal,
-                         indx = 0; indx < 256; indx++)
-                        if ((bpal[indx].R == amap->srcr)
-                        &&  (bpal[indx].G == amap->srcg)
-                        &&  (bpal[indx].B == amap->srcb)) {
-                             bpal[indx].R = ((long)amap->dstr
-                                          * amap->tran) >> 8;
-                             bpal[indx].G = ((long)amap->dstg
-                                          * amap->tran) >> 8;
-                             bpal[indx].B = ((long)amap->dstb
-                                          * amap->tran) >> 8;
-                             bpal[indx].A = amap->tran;
-                             break;
-                        }
-                free(file);
-                apal = 0;
-            }
-            free(apal);
+    if (!estr) {
+        if (path) {
+            estr = calloc(1, sizeof(*estr));
+            estr->path = strdup(ptrn);
+            estr->hash = hash;
+            estr->epix = epix;
+            TreeAdd(&hstr, estr);
         }
-        return ~0;
+        else
+            free(epix);
+        /// the unit returned by LoadUnitStdThrd()
+        /// may NOT be a unit for the name passed!
+        TryUpdatePixTree(LoadUnitStdThrd(estr, (char*)path));
     }
-    if ((*tail)->prev) {
-        (*tail) = (*tail)->prev;
-        free((*tail)->next);
+    else if (estr->epix) {
+        epix->fill = estr->fill;
+        estr->fill = epix;
+        printf(TXT_DUPL" %s\n", estr->path);
     }
-    else {
-        free(*tail);
-        *tail = 0;
-    }
-    return 0;
+    else
+        free(epix);
 }
 
 
 
-void FillLibStdThrd(FILL *fill) {
-    char *file, *fptr, *conf;
-    UNIT *tail,  info;
+void FreeUnitArray(UNIT **uarr) {
+    UNIT *elem;
+    long iter;
 
-    tail = 0;
-    fill->curr = 0;
-    info.ulib = fill->ulib;
-    conf = ConcatPath(fill->ulib->path, DEF_CONF);
-    if ((file = fptr = LoadFile(conf, 0))) {
-        free(conf);
-        while ((conf = GetNextLine(&fptr)))
-            switch (DetermineType(&conf)) {
-                case AVT_BHVR:
-                    SplitLine(&conf, DEF_TSEP);
-                    SplitLine(&conf, DEF_TSEP);
-                    SplitLine(&conf, DEF_TSEP);
-                    SplitLine(&conf, DEF_TSEP);
-                    SplitLine(&conf, DEF_TSEP);
-                    info.path = ConcatPath(fill->ulib->path,
-                                           SplitLine(&conf, DEF_TSEP));
-                    SplitLine(&conf, DEF_TSEP);
-                    info.flgs = strtol(SplitLine(&conf, DEF_TSEP), 0, 16);
-                    info.scal = (info.flgs >> 24) & 3;
-                    if (MakeUnitStd(&tail, &info)) {
-                        printf("[%c] %s\n",
-                              (tail->orig)? 'C' : ' ', tail->path);
-                        fill->curr++;
-                    }
-                    else {
-                        printf("[!] %s\n", info.path);
-                        free(info.path);
-                    }
-                    break;
-
-                case AVT_EFCT:
-                    SplitLine(&conf, DEF_TSEP);
-                    SplitLine(&conf, DEF_TSEP);
-                    info.path = ConcatPath(fill->ulib->path,
-                                           SplitLine(&conf, DEF_TSEP));
-                    info.scal = 0;
-                    if (MakeUnitStd(&tail, &info)) {
-                        printf("[%c] %s\n",
-                              (tail->orig)? 'C' : ' ', tail->path);
-                        fill->curr++;
-                    }
-                    else {
-                        printf("[!] %s\n", info.path);
-                        free(info.path);
-                    }
-                    break;
-            }
-
-        if (tail) {
-            fill->load += fill->curr;
-            printf("--- %s: %ld objects\n\n",
-                   fill->ulib->path, fill->curr);
-            tail->next = 0;
-            fill->ulib->ucnt = fill->curr;
-            fill->ulib->uarr = malloc(fill->curr * sizeof(*fill->ulib->uarr));
-            for (fill->curr--; fill->curr >= 0; fill->curr--) {
-                fill->ulib->uarr[fill->curr] = tail;
-                tail = tail->prev;
-            }
-        }
-        free(file);
-        conf = 0;
+    if ((elem = *uarr)) {
+        for (iter = 1; iter < elem[0].scal; iter++)
+            if (elem[iter].anim)
+                FreeAnimStd((ASTD**)&elem[iter].anim);
+        free(elem);
     }
-    free(conf);
+    *uarr = 0;
 }
 
 
 
-void MakeEmptyLib(ULIB **head, char *base, char *path) {
-    if (!*head) {
-         *head = malloc(sizeof(**head));
-        (*head)->next = 0;
-    }
-    else {
-        (*head)->prev = malloc(sizeof(**head));
-        (*head)->prev->next = *head;
-        (*head) = (*head)->prev;
-    }
-    (*head)->ucnt = 0;
-    (*head)->prev = 0;
-    (*head)->uarr = 0;
-    (*head)->path = ConcatPath(base, path);
-}
+void FillDuplicates(TREE *root) {
+    if (!root)
+        return;
+    FillDuplicates(root->next[1]);
+    FillDuplicates(root->next[0]);
+    FillDuplicates(root->coll);
 
-
-
-void FreeLibList(ULIB **head, void (*adel)(void**)) {
-    ULIB *iter = *head;
-
-    (*head) = 0;
-    while (iter) {
-        if (iter->uarr) {
-            FreeUnitList(&iter->uarr[iter->ucnt - 1], adel);
-            free(iter->uarr);
-        }
-        free(iter->path);
-        if (iter->next) {
-            iter = iter->next;
-            free(iter->prev);
-        }
-        else {
-            free(iter);
-            iter = 0;
-        }
+    TREE *fill = root->fill;
+    while (root->epix && fill) {
+        *fill->uuid = *root->epix->uuid;
+        *fill->xdim = *root->epix->xdim;
+        *fill->ydim = *root->epix->ydim;
+        *fill->fcnt = *root->epix->fcnt;
+        *fill->time = *root->epix->time;
+        fill = fill->fill;
     }
 }
 
 
 
-void FreeUnitList(UNIT **tail, void (*adel)(void**)) {
-    UNIT *iter = *tail;
-
-    (*tail) = 0;
-    while (iter) {
-        if (adel && !iter->orig) {
-            adel(&iter->anim);
-            free(iter->path);
-        }
-        if (iter->prev) {
-            iter = iter->prev;
-            free(iter->next);
-        }
-        else {
-            free(iter);
-            iter = 0;
-        }
-    }
+void UnitArrayFromTree(UNIT *uarr, TREE *root) {
+    if (!root || !uarr)
+        return;
+    UnitArrayFromTree(uarr, root->next[1]);
+    UnitArrayFromTree(uarr, root->next[0]);
+    UnitArrayFromTree(uarr, root->coll);
+    uarr[*root->uuid >> 2].anim = root->anim;
+    uarr[*root->uuid >> 2].scal = root->scal;
+    uarr[*root->uuid >> 2].offs[0] = root->xoff;
+    uarr[*root->uuid >> 2].offs[2] = root->yoff;
+    uarr[*root->uuid >> 2].offs[1] = *root->xdim - root->xoff
+                                   - (((ASTD*)root->anim)->xdim << root->scal);
+    uarr[*root->uuid >> 2].offs[3] = *root->ydim - root->yoff
+                                   - (((ASTD*)root->anim)->ydim << root->scal);
 }
 
 
 
-void UnitListFromLib(ULIB *ulib, UNIT **tail, ulong  uses,
-                     long  dimx, long   dimy, ulong *uniq, ulong *size) {
-    UNIT *elem, *list = 0;
-    ulong iter, uuid = 0;
+/// uses 3 global vars: HSTR, HPIX, GUID
+void MakeUnitArray(UNIT **uarr) {
+    FreeUnitArray(uarr);
+    if (hpix) {
+        FillDuplicates(hstr);
+        *uarr = calloc(guid + 1, sizeof(**uarr));
+        UnitArrayFromTree(*uarr, hpix);
+        (*uarr)[0].scal = guid + 1;
+    }
+    TreeDel(&hstr, TreeDelPath);
+    TreeDel(&hpix, 0);
+    guid = 0;
+}
 
-    while (ulib) {
-        for (iter = 0; iter < ulib->ucnt; iter++)
-            if (!ulib->uarr[iter]->orig)
-                ulib->uarr[iter]->uuid = ++uuid;
-            else
-                ulib->uarr[iter]->uuid = ulib->uarr[iter]->orig->uuid;
-        if (ulib->ucnt)
-            for (iter = 0; iter < uses; iter++) {
-                elem = malloc(sizeof(*elem));
-                *elem = *ulib->uarr[PRNG(&seed) % ulib->ucnt];
-                elem->prev = list;
-                if (list)
-                    list->next = elem;
-                list = elem;
-            }
-        ulib = ulib->next;
-    }
-    if (list) {
-        list->next = 0;
-        FreeUnitList(tail, 0);
-        *tail = list;
-        if (uniq)
-            *uniq = uuid;
-        uuid = 0;
-        while (list) {
-            list->posx = PRNG(&seed) % (dimx
-                       - (((ASTD*)list->anim)->xdim << list->scal));
-            list->posy = PRNG(&seed) % (dimy
-                       - (((ASTD*)list->anim)->ydim << list->scal))
-                       + (((ASTD*)list->anim)->ydim << list->scal);
-            list->flgs = (list->flgs & ~UCF_REVX) | (PRNG(&seed) & UCF_REVX);
-            list->flgs = (list->flgs & ~UCF_REVY) | (PRNG(&seed) & UCF_REVY);
-            list->fcur = PRNG(&seed) % ((ASTD*)list->anim)->fcnt;
-            list = list->prev;
-            uuid++;
+
+
+long SelectUnit(UNIT *uarr, T2UV *data, long size, long xptr, long yptr) {
+    long iter, xpos, ypos;
+    ASTD *anim;
+
+    for (iter = 0; iter < size; iter++) {
+        if (!(ypos = (data[iter].y >> 2) & 0xFFFF))
+            continue;
+        anim = uarr[ypos].anim;
+        xpos = ( xptr - uarr[ypos].offs[(data[iter].y & 1)? 1 : 0]
+             - (int16_t)(data[iter].x      )) >> uarr[ypos].scal;
+        ypos = (-yptr - uarr[ypos].offs[(data[iter].y & 2)? 2 : 3]
+             + (int16_t)(data[iter].x >> 16)) >> uarr[ypos].scal;
+        if ((xpos >= 0) && (xpos < anim->xdim)
+        &&  (ypos >= 0) && (ypos < anim->ydim)) {
+            if (data[iter].y & 1)
+                xpos = anim->xdim - 1 - xpos;
+            if (!(data[iter].y & 2))
+                ypos = anim->ydim - 1 - ypos;
+            if (anim->bptr[((data[iter].y >> 18) * anim->ydim + ypos)
+                           * anim->xdim + xpos] != 0xFF)
+                break;
         }
-        SortByY(tail);
-        if (size)
-            *size = uuid;
     }
+    return (iter < size)? iter : -1;
 }

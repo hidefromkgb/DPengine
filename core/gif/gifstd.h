@@ -17,11 +17,12 @@ typedef union _BGRA {
 
 /// GIF animation
 typedef struct _ASTD {
-    uint8_t *bptr;   /// index data storage
-    ulong fcnt,      /// frame count
-         *time;      /// frame delays
-    BGRA *bpal;      /// palette
-    long xdim, ydim; /// frame size
+    uint8_t *bptr; /// index data storage
+    uint32_t xdim, /// frame width
+             ydim, /// frame height
+             fcnt, /// frame count
+            *time; /// frame delays
+    BGRA    *bpal; /// palette
 } ASTD;
 
 

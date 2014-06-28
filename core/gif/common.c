@@ -174,7 +174,7 @@ long DecodeFrame(uint8_t **buff, uint8_t *bptr) {
                 }
                 else {
                     /// single-pixel or multi-pixel code
-                    if (ctbl < DEF_CLEN)
+                    if (ctbl < DEF_CLEN - 1)
                         code[++ctbl] = ((code[prev] + 0x1000) & 0xFFF000)
                                      |  (prev & 0xFFF);
                     /// appending pixel string to the frame
@@ -244,7 +244,7 @@ long MakeAnim(void *inpt, void *anim,
             SkipChunk(&btmp);
         }
         /// initializing the main structure, beginning frame extraction
-        if (fram && (gini(ghdr, anim, fram--) > 0)) {
+        if (fram && gini(ghdr, anim, fram--)) {
             init = malloc(ghdr->xdim * ghdr->ydim * sizeof(*init) + 16);
             bptr = (uint8_t*)(((uintptr_t)init & -16) + 16);
             iter = 0;

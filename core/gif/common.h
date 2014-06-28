@@ -60,7 +60,7 @@ typedef GHDR* (*GGET)(void *inpt);
 
 /** _________________________________________________________________________
     Animation structure initializer. Returns positive values if the structure
-    is successfully initialized, negative otherwise.
+    is successfully initialized, zero otherwise.
     _________________________________________________________________________
     GHDR: animation global header
     ANIM: implementation-specific data (i.e. a structure or a pointer to it)
@@ -70,8 +70,8 @@ typedef long (*GINI)(GHDR *ghdr, void *anim, long cfrm);
 
 /** _________________________________________________________________________
     Decoded frame transferrer and frame delay setter. Returns positive values
-    on success, negative otherwise. Note that it shall detect and recalculate
-    interlaced pictures (FHDR->flgs & GIF_FINT).
+    on success, zero otherwise. NB: it has to recalculate interlaced pictures
+    (based on GIF_FINT flag state in FHDR->flgs: 0 = normal, 1 = interlaced).
     _________________________________________________________________________
     GHDR: animation global header
     FHDR: header of the resulting frame (the one just decoded)
@@ -82,7 +82,7 @@ typedef long (*GINI)(GHDR *ghdr, void *anim, long cfrm);
     TRAN: transparent color index (or -1 if there`s none)
     TIME: next frame delay, in GIF time units (1 unit = 10 ms); can be 0
     CURR: index of the resulting frame
-    NEXT: the frame that serves as background for the next (NB: next!) frame
+    NEXT: the frame that serves as background for the next (SIC! next) frame
           = 0: just transparency (in FHDR bounds; the rest is current frame)
           > 0: [actual frame index] + 1
           < 0: no backing needed (used in single-frame GIFs)

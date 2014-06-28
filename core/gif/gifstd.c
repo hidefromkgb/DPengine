@@ -13,9 +13,9 @@ long InitAnimStd(GHDR *ghdr, void *anim, long cfrm) {
         retn->ydim = ghdr->ydim;
         retn->time = malloc(cfrm * sizeof(*retn->time));
         retn->bptr = malloc(cfrm * ghdr->xdim * ghdr->ydim);
-        return 1;
+        return ~0;
     }
-    return -1;
+    return 0;
 }
 
 
@@ -63,7 +63,7 @@ long WriteFrameStd(GHDR *ghdr, FHDR *fhdr, void *anim,
             for (x = 0; x < fhdr->xdim; x++)
                 retn->bptr[ghdr->xdim * y + x + ddst] = 0xFF;
     }
-    return 1;
+    return ~0;
 }
 
 

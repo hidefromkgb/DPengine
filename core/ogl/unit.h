@@ -59,20 +59,20 @@ typedef struct _FVBO {
 GLvoid MakeShaderSrc(GLuint logt);
 GLvoid FreeShaderSrc();
 
-GLint      ShaderProgramStatus(GLuint prog, GLboolean shad, GLenum parm);
-GLboolean  ShaderAdd(GLchar *fstr, GLuint prog, GLenum type);
-SHDR      *MakeShaderList(GLchar *vert[], GLchar *pixl[],
-                          GLuint cuni, UNIF *puni, GLuint *cshd);
+GLint     ShaderProgramStatus(GLuint prog, GLboolean shad, GLenum parm);
+GLboolean ShaderAdd(GLchar *fstr, GLuint prog, GLenum type);
+SHDR     *MakeShaderList(GLchar *vert[], GLchar *pixl[],
+                         GLuint cuni, UNIF *puni, GLuint *cshd);
 
-FTEX   *BindTex(FVBO  *vobj, GLuint bind, GLuint mode);
-GLvoid  MakeTex(FTEX  *retn, GLuint xdim, GLuint ydim, GLuint  zdim,
-                GLenum trgt, GLenum wrap, GLint  tmag, GLint   tmin,
-                GLenum type, GLenum frmt, GLenum mode, GLvoid *data);
+FTEX  *BindTex(FVBO  *vobj, GLuint bind, GLuint mode);
+GLvoid MakeTex(FTEX  *retn, GLuint xdim, GLuint ydim, GLuint  zdim,
+               GLenum trgt, GLenum wrap, GLint  tmag, GLint   tmin,
+               GLenum type, GLenum frmt, GLenum mode, GLvoid *data);
 
-FVBO   *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
-                GLuint catr, UNIF *patr, GLuint cuni, UNIF *puni, GLuint ctex);
-GLvoid  DrawVBO(FVBO *vobj, GLuint shad);
-GLvoid  FreeVBO(FVBO **vobj);
+FVBO  *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
+               GLuint catr, UNIF *patr, GLuint cuni, UNIF *puni, GLuint ctex);
+GLvoid DrawVBO(FVBO *vobj, GLuint shad);
+GLvoid FreeVBO(FVBO **vobj);
 
 
 

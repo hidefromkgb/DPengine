@@ -123,7 +123,7 @@ char *tver[] = {
 
     ==== dynamic uniforms (changes every frame)
     T2UV <data>: x = [Y pos (16)] [X pos (16)] <-- parentheses give bit count
-                 y = [Y inv  (1)] [X inv  (1)] [frame (10)] [base index (20)]
+                 y = [frame (14)] [base index (16)] [Y inv (1)] [X inv (1)]
 
     ==== static uniforms (no changes during runtime)
     T4FV <dims>: x = frame X scale
@@ -160,26 +160,25 @@ out vec4 voff;\n\
 %s\n\
 \n\
 void main() {\n\
-    vec2   vert = vec2(((gl_VertexID + 0) >> 1) & 1,\n\
-                       ((gl_VertexID + 1) >> 1) & 1);\n\
     uint   indx = uint(gl_VertexID) >> 2u;\n\
+    vec2   vert = vec2(gl_VertexID & 2, (gl_VertexID + 1) & 2) * 0.5;\n\
     uvec4  vdat = texelFetch(data, ivec2(indx & txsz, indx >> txlg), 0);\n\
-    indx = vdat.y & 0xFFFFFu;\n\
+    indx = ((vdat.y >> 2u) & 0xFFFFu) - 1u;\n\
     ivec2  offs = ivec2(indx & txsz, indx >> txlg);\n\
     vec4   vbnk = texelFetch(bank, offs, 0);\n\
     vec4   vdim = texelFetch(dims, offs, 0) \n\
-         * vec4(0.5 - (0.5 - vert.x) * (1.0 - float((vdat.y >> 29) & 0x2u)),\n\
-                0.5 + (0.5 - vert.y) * (1.0 - float((vdat.y >> 30) & 0x2u)),\n\
+         * vec4(0.5 - (0.5 - vert.x) * (0.5 - float(vdat.y & 1u)) * 2.0,\n\
+                0.5 + (0.5 - vert.y) * (1.0 - float(vdat.y & 2u)),\n\
                 1.0, 1.0);\n\
-    indx <<= 8;\n\
+    indx <<= 8u;\n\
     offs = ivec2((int(vdat.x) << 16) >> 16, int(vdat.x) >> 16);\n\
     vtex = vec4(vert.x * vdim.z, vert.y * vdim.w, vdim.z, 0.0);\n\
-    voff = vec4(vbnk.y + ((vdat.y >> 20) & 0x3FFu) * vdim.z * vdim.w,\n\
+    voff = vec4(vbnk.y + (vdat.y >> 18u) * vdim.z * vdim.w,\n\
                 vbnk.x, indx & txsz, indx >> txlg);\n\
     if (voff.x >= vbnk.z) {\n\
         voff.x -= vbnk.z;\n\
         indx = uint(voff.x / vbnk.w);\n\
-        voff.x -= float(indx * uint(vbnk.w));\n\
+        voff.x -= float(indx) * vbnk.w;\n\
         voff.y += float(indx + 1u);\n\
     }\n\
     gl_Position = vec4((offs.x + vdim.z * vdim.x) * disz.x - 1.0,\n\
@@ -216,16 +215,6 @@ char *tpix[] = {
     ==== static uniforms (no changes during runtime)
     BYTE <atex>: FB array, each layer is an FB with palette indices; see above
     T4FV <apal>: palette texture
-
-    ==== parameters from vertex shader ("=" means static, "~" means varying)
-    T4FV  vtex : x ~ current pixel U-pos (needs to be truncated to uint)
-                 y ~ current pixel V-pos (needs to be truncated to uint)
-                 z = frame width in pixels
-                 w = 0.0 (RESERVED)
-    T4FV  voff : x = current frame offset in FB
-                 y = FB index
-                 z = CA palette U-pos in texture
-                 w = CA palette V-pos in texture
  **/
 "#version 130\n\
 \n\

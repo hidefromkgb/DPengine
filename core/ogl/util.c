@@ -61,7 +61,7 @@ long InitRendererOGL() {
     while (name[++iter])
         if (!(LoadedOpenGLFunctions[iter] = GL_GET_PROC_ADDR(name[iter])))
             return 0;
-    return 1;
+    return ~0;
 }
 
 
@@ -328,15 +328,14 @@ int sizecmp(const void *a, const void *b) {
 
 
 
-void MakeRendererOGL(ULIB  *ulib, ulong uniq,
-                     T2UV **data, ulong size, ulong rgba) {
+void MakeRendererOGL(UNIT *uarr, ulong uniq,
+                     T2UV *data, ulong size, ulong rgba) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
     GLubyte *atex, *aptr;
     T4FV *dims, *bank;
     GLuint *indx;
     TXSZ *txsz;
-    BGRA *apal,
-          temp;
+    BGRA *apal;
 
     glCullFace(GL_BACK);
     glDisable(GL_CULL_FACE);
@@ -359,33 +358,19 @@ void MakeRendererOGL(ULIB  *ulib, ulong uniq,
     bank = calloc(mtex * chei, sizeof(*bank));
     apal = calloc(mtex * phei, sizeof(*apal));
 
-    *data = calloc(mtex * dhei, sizeof(**data));
     indx = calloc(mtex * dhei * 4, sizeof(*indx));
 
     txsz = calloc(uniq, sizeof(*txsz));
 
-    while (ulib) {
-        for (curr = 0; curr < ulib->ucnt; curr++)
-            if (!ulib->uarr[curr]->orig) {
-                ASTD *anim = ulib->uarr[curr]->anim;
-
-                txsz[ulib->uarr[curr]->uuid - 1] =
-                    (TXSZ){anim->xdim * anim->ydim, anim->fcnt,
-                           ulib->uarr[curr]->uuid,  anim->bptr};
-                dims[ulib->uarr[curr]->uuid - 1] =
-                    (T4FV){(1 << ulib->uarr[curr]->scal),
-                           (1 << ulib->uarr[curr]->scal),
-                           anim->xdim, anim->ydim};
-                memcpy(&apal[(ulib->uarr[curr]->uuid - 1) << 8],
-                       anim->bpal, 256 * sizeof(BGRA));
-            }
-        ulib = ulib->next;
-    }
-    if (rgba)
-        for (curr = (uniq << 8) - 1; curr >= 0; curr--) {
-            temp = apal[curr];
-            apal[curr].R = temp.B;
-            apal[curr].B = temp.R;
+    for (curr = 1; curr <= uniq; curr++)
+        if (uarr[curr].anim) {
+            ASTD *anim = uarr[curr].anim;
+            txsz[curr - 1] =
+                (TXSZ){anim->xdim * anim->ydim, anim->fcnt, curr, anim->bptr};
+            dims[curr - 1] =
+                (T4FV){(1 << uarr[curr].scal), (1 << uarr[curr].scal),
+                       anim->xdim, anim->ydim};
+            memcpy(&apal[(curr - 1) << 8], anim->bpal, 256 * sizeof(*apal));
         }
     qsort(txsz, uniq, sizeof(*txsz), sizecmp);
 
@@ -449,7 +434,7 @@ void MakeRendererOGL(ULIB  *ulib, ulong uniq,
 
     MakeTex(&surf->ptex[0], mtex, dhei, 0,
             GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
-            GL_UNSIGNED_INT, GL_RG32UI, GL_RG_INTEGER, *data);
+            GL_UNSIGNED_INT, GL_RG32UI, GL_RG_INTEGER, data);
 
     MakeTex(&surf->ptex[1], mtex, mtex, cbnk + 1,
             GL_TEXTURE_2D_ARRAY, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
@@ -457,7 +442,7 @@ void MakeRendererOGL(ULIB  *ulib, ulong uniq,
 
     MakeTex(&surf->ptex[2], mtex, phei, 0,
             GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
-            GL_UNSIGNED_BYTE, GL_RGBA8, GL_BGRA, apal);
+            GL_UNSIGNED_BYTE, GL_RGBA8, (rgba)? GL_RGBA : GL_BGRA, apal);
 
     MakeTex(&surf->ptex[3], mtex, chei, 0,
             GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
@@ -497,7 +482,6 @@ void DrawRendererOGL(T2UV *data, ulong size) {
 
 
 
-void FreeRendererOGL(T2UV *data) {
+void FreeRendererOGL() {
     FreeVBO(&surf);
-    free(data);
 }
