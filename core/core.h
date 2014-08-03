@@ -2,10 +2,28 @@
 #define HDR_CORE
 
 #include <stdio.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include "engine.h"
 #include "gif/gifstd.h"
+
+#ifdef _WIN32
+    #include <windows.h>
+    #define THR_EXIT TRUE
+    #define THR_FAIL FALSE
+    #define THR_FUNC DWORD APIENTRY
+    #define DEF_SEMD HANDLE *list;
+    #define DEF_DSEP '/'
+#else
+    #define THR_EXIT
+    #define THR_FAIL
+    #define THR_FUNC void
+    #define DEF_SEMD pthread_mutex_t cmtx; \
+                     pthread_cond_t  cvar; \
+                     SEM_TYPE list, full;
+    #define DEF_DSEP '/'
+#endif
 
 
 
@@ -28,8 +46,13 @@
 #define TXT_ROGL "[++OGL++]"
 #define TXT_RSTD "[++CPU++]"
 
+#define SEM_NULL 0
+#define SEM_FULL ~SEM_NULL
+#define SEM_TYPE uint64_t
 
 
+
+/// hash tree data
 typedef struct _TREE {
     uint64_t hash;
     long flgs, diff;
@@ -47,8 +70,6 @@ typedef struct _TREE {
     struct _TREE *fill, *coll, *prev, *next[2];
 } TREE;
 
-
-
 /// image wrapper, contains raw pixel data and dimensions
 typedef struct _PICT {
     BGRA *bptr;
@@ -62,9 +83,41 @@ typedef struct _UNIT {
     ulong offs[4]; /// offsets from the initial size: X_lf, X_rt, Y_up, Y_dn
 } UNIT;
 
+/// semaphore data
+typedef struct _SEMD {
+    DEF_SEMD;
+} SEMD;
+
+/// thread data
+typedef struct _THRD {
+    ulong loop;
+    SEM_TYPE uuid;
+    struct _TMRD *orig;
+    void (*func)(struct _THRD*);
+    union {
+        ulong ymin;
+        TREE *elem;
+    };
+    union {
+        ulong ymax;
+        char *path;
+    };
+} THRD;
+
+/// timer data
+typedef struct _TMRD {
+    uint64_t time;
+    SEMD isem, osem;
+    ulong ncpu, rndr, draw, uniq, size, flgs;
+    PICT  pict;
+    UNIT *uarr;
+    T2UV *data;
+    THRD *thrd;
+} TMRD;
 
 
-extern TREE *(*LoadUnitStdThrd)(TREE *itmp, char *path);
+
+extern TMRD tmrd;
 
 
 
@@ -74,15 +127,29 @@ void DrawPixStdThrd(PICT *pict, UNIT *uarr, T2UV *data,
                     long size, long yinf, long ysup);
 
 long TryUpdatePixTree(TREE *estr);
-void TryLoadUnit(uint8_t *path, uint32_t *uuid, uint32_t *xdim, uint32_t *ydim,
-                 uint32_t *fcnt, uint32_t **time);
 
+void FreeHashTrees();
 void MakeUnitArray(UNIT **uarr);
 void FreeUnitArray(UNIT **uarr);
 long SelectUnit(UNIT *uarr, T2UV *data, long size, long xptr, long yptr);
 
-char *LoadFile(char *name, long *size);
+SEM_TYPE FindBit(SEM_TYPE inpt);
 
+THR_FUNC ThrdFunc(THRD *data);
+void LTHR(THRD *data);
+void PTHR(THRD *data);
+void StopThreads(TMRD *tmrd);
+void SwitchThreads(TMRD *tmrd, long draw);
+
+
+
+/// external functions, have to be implemented or imported
+uint64_t TimeFunc();
+char *LoadFile(void *name);
+void MakeThread(THRD *thrd);
+void InitRenderer(TMRD *tmrd);
+long PickSemaphore(TMRD *tmrd, long open, SEM_TYPE mask);
+SEM_TYPE WaitSemaphore(TMRD *tmrd, long open, SEM_TYPE mask);
 
 
 #endif

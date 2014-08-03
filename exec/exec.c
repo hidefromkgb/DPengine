@@ -8,25 +8,6 @@ long pflg = 0;
 
 
 
-char *LoadFile(char *name, long *size) {
-    char *retn = 0;
-    long file, flen;
-
-    if ((file = open(name, O_RDONLY | O_BINARY)) > 0) {
-        flen = lseek(file, 0, SEEK_END);
-        lseek(file, 0, SEEK_SET);
-        retn = malloc(flen + 1);
-        read(file, retn, flen);
-        retn[flen] = '\0';
-        close(file);
-        if (size)
-            *size = flen;
-    }
-    return retn;
-}
-
-
-
 /// Random number generator modulo
 #define RNG_TRIM 0xFFFFFFFB
 /// Random number generator multiplier
@@ -146,7 +127,7 @@ char *ConcatPath(char *base, char *path) {
     if (*path == '"')
         path++;
     retn = malloc(strlen(base) + strlen(path) + 2);
-    iter = sprintf(retn, "%s/%s", base, path) - 1;
+    iter = sprintf(retn, "%s"DEF_DSEP"%s", base, path) - 1;
     if (retn[iter] == '"')
         retn[iter] = '\0';
     return retn;
@@ -390,11 +371,15 @@ void FreeEverything(ULIB **ulib) {
 
 
 
-void UpdateFrame(T2UV *data, uint64_t *time, uint32_t flgs,
-                 int32_t xptr, int32_t yptr, int32_t isel) {
+uint32_t UpdateFrame(T2UV *data, uint64_t *time, uint32_t flgs,
+                     int32_t xptr, int32_t yptr, int32_t isel) {
     long indx = 0;
     uint64_t curr;
     UNIT *iter;
+
+//    EngineBeginAddition();
+//    /// here you can add new sprites!
+//    EngineFinishLoading(1);
 
     if ((isel >= 0) || grab) {
         if (!grab && ((pflg ^= flgs) & 1)) {
@@ -428,4 +413,5 @@ void UpdateFrame(T2UV *data, uint64_t *time, uint32_t flgs,
                    (iter->fram << 18) | (iter->uuid & 0x3FFFF)};
         iter = iter->prev;
     }
+    return indx;
 }

@@ -7,39 +7,6 @@
 
 
 
-/// thread data
-typedef struct _THRD {
-    HANDLE *isem, *osem;
-    ulong loop;
-    void (*func)(struct _THRD*);
-    union {
-        struct _TMRD *orig;
-        TREE *elem;
-    };
-    union {
-        ulong ymin;
-        char *path;
-    };
-    ulong ymax;
-} THRD;
-
-/// timer data
-typedef struct _TMRD {
-    HGLRC mwrc;
-    HDC devc, mwdc;
-    HWND hwnd, hogl;
-    HBITMAP hdib;
-    HANDLE *isem, *osem;
-    UINT flgs;
-
-    uint64_t time;
-    ulong ncpu, fram, rndr, uniq, size;
-    PICT  pict;
-    UNIT *uarr;
-    T2UV *data;
-    THRD *thrd;
-} TMRD;
-
 /// renderbuffer-based framebuffer object
 typedef struct _FRBO {
     GLuint fbuf,    /// framebuffer
@@ -54,6 +21,12 @@ typedef struct _FRBO {
 
 UFRM UpdateFrame;
 TMRD tmrd;
+
+HGLRC mwrc;
+HDC devc, mwdc;
+HWND hwnd, hogl;
+HBITMAP hdib;
+ulong fram;
 
 
 
@@ -133,77 +106,133 @@ void FreeRBO(FRBO **robj) {
 
 
 
-TREE *LoadUST(TREE *elem, char *path) {
-    TREE *retn = NULL;
-    long iter = WaitForMultipleObjects(tmrd.ncpu, tmrd.osem, FALSE, INFINITE);
-    if ((iter -= WAIT_OBJECT_0) < MAXIMUM_WAIT_OBJECTS) {
-        retn = tmrd.thrd[iter].elem;
-        tmrd.thrd[iter].elem = elem;
-        tmrd.thrd[iter].path = path;
-        ResetEvent(*tmrd.thrd[iter].osem);
-        SetEvent(*tmrd.thrd[iter].isem);
+LPWSTR UTF16(char *utf8) {
+    long size = strlen(utf8) * 4 + 2;
+    LPWSTR retn = calloc(size, sizeof(*retn));
+    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, retn, size);
+    return retn;
+}
+
+
+
+char *LoadFile(void *name) {
+    struct {
+        char *name;
+        long size;
+    } *data = name;
+    char *retn = 0;
+    DWORD  temp;
+    LPWSTR wide = UTF16(data->name);
+    HANDLE file = CreateFileW(wide, GENERIC_READ, FILE_SHARE_READ, 0,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    if (file != INVALID_HANDLE_VALUE) {
+        data->size = GetFileSize(file, NULL);
+        retn = malloc(data->size);
+        ReadFile(file, retn, data->size, &temp, NULL);
+        CloseHandle(file);
+    }
+    free(wide);
+    return retn;
+}
+
+
+
+void MakeThread(THRD *thrd) {
+    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ThrdFunc, thrd, 0, NULL);
+}
+
+
+
+void InitRenderer(TMRD *tmrd) {
+    switch (tmrd->rndr) {
+        case BRT_RSTD:
+            SwitchThreads(tmrd, 1);
+            break;
+
+        case BRT_ROGL: {
+            MakeRendererOGL(tmrd->uarr, tmrd->uniq,
+                            tmrd->size, !(tmrd->flgs & WIN_IBGR));
+            SizeRendererOGL(tmrd->pict.xdim, tmrd->pict.ydim);
+            break;
+        }
+    }
+}
+
+
+
+long PickSemaphore(TMRD *tmrd, long open, SEM_TYPE mask) {
+    SEMD *drop = (open)? &tmrd->osem : &tmrd->isem,
+         *pick = (open)? &tmrd->isem : &tmrd->osem;
+    long iter;
+
+    for (iter = 0; iter < tmrd->ncpu; iter++)
+        if (mask & (1 << iter))
+            ResetEvent(drop->list[iter]);
+
+    for (iter = 0; iter < tmrd->ncpu; iter++)
+        if (mask & (1 << iter))
+            SetEvent(pick->list[iter]);
+
+    return TRUE;
+}
+
+
+
+SEM_TYPE WaitSemaphore(TMRD *tmrd, long open, SEM_TYPE mask) {
+    SEMD *wait = (open)? &tmrd->osem : &tmrd->isem;
+    SEM_TYPE retn;
+    HANDLE *list;
+
+    if (mask != SEM_NULL) {
+        mask &= (1 << tmrd->ncpu) - 1;
+        retn = mask;
+        open = 0;
+        while (retn) {
+            retn &= ~(1 << FindBit(retn));
+            open++;
+        }
+        list = LocalAlloc(LMEM_FIXED, open * sizeof(*list));
+        list = &list[open];
+        retn = mask;
+        while (retn) {
+            *--list = wait->list[FindBit(retn)];
+            retn &= ~(1 << FindBit(retn));
+        }
+        WaitForMultipleObjects(open, list, TRUE, INFINITE);
+        LocalFree(list);
+        retn = mask;
+    }
+    else {
+        retn = WaitForMultipleObjects(tmrd->ncpu, wait->list, FALSE, INFINITE);
+        retn = ((retn - WAIT_OBJECT_0) < MAXIMUM_WAIT_OBJECTS)? 1 << retn : 0;
     }
     return retn;
 }
 
 
 
-void LTHR(THRD *data) {
-    char *path, *apal, *file;
-    long  iter;
-    TREE *elem;
-    ASTD *retn;
+void FreeSemaphore(SEMD *retn, long nthr) {
+    long iter;
 
-    retn = 0;
-    path = data->path;
-    elem = data->elem;
-    if (path) {
-        iter = strlen(path);
-        if (((path[iter - 3] == 'g') || (path[iter - 3] == 'G'))
-        &&  ((path[iter - 2] == 'i') || (path[iter - 2] == 'I'))
-        &&  ((path[iter - 1] == 'f') || (path[iter - 1] == 'F'))
-        &&  (retn = MakeAnimStd(path))) {
-            *elem->epix->xdim = retn->xdim;
-            *elem->epix->ydim = retn->ydim;
-            *elem->epix->fcnt = retn->fcnt;
-            *elem->epix->time = retn->time;
-             elem->epix->scal = DownsampleAnimStd(retn, &elem->epix->xoff,
-                                                        &elem->epix->yoff);
-            apal = strdup(path);
-            apal[iter - 3] = 'a';
-            apal[iter - 2] = 'r';
-            apal[iter - 1] = 't';
-            file = LoadFile(apal, &iter);
-            RecolorPalette(retn->bpal, file, iter);
-            free(apal);
-            free(file);
-        }
-        elem->epix->anim = retn;
-    }
+    for (iter = 0; iter < nthr; iter++)
+        CloseHandle(retn->list[iter]);
+    LocalFree(retn->list);
 }
 
 
 
-void PTHR(THRD *data) {
-    DrawPixStdThrd(&data->orig->pict, data->orig->uarr, data->orig->data,
-                   data->orig->size, data->ymin, data->ymax);
+void MakeSemaphore(SEMD *retn, long nthr, SEM_TYPE mask) {
+    long iter;
+
+    retn->list = LocalAlloc(LMEM_FIXED, nthr * sizeof(*retn->list));
+    for (iter = 0; iter < nthr; iter++)
+        retn->list[iter] = CreateEvent(NULL, TRUE, (mask >> iter) & 1, NULL);
 }
 
 
 
-DWORD APIENTRY ThrdFunc(LPVOID data) {
-    #define data ((THRD*)data)
-    do {
-        WaitForSingleObject(*data->isem, INFINITE);
-        ResetEvent(*data->isem);
-        if (data->loop)
-            data->func(data);
-        else
-            printf(TXT_EXIT"\n");
-        SetEvent(*data->osem);
-    } while (data->loop);
-    return TRUE;
-    #undef data
+uint64_t TimeFunc() {
+    return GetTickCount();
 }
 
 
@@ -232,11 +261,11 @@ LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
 
         case WM_TIMER: {
-            static char fout[24];
-            sprintf(fout, TXT_FFPS, tmrd.fram);
+            static char fout[64];
+            sprintf(fout, TXT_FFPS, fram);
             SetWindowText(hWnd, fout);
             printf("%s\n", fout);
-            tmrd.fram = 0;
+            fram = 0;
             return 0;
         }
 
@@ -255,17 +284,17 @@ LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
 void DeinitGL() {
     wglMakeCurrent(NULL, NULL);
-    wglDeleteContext(tmrd.mwrc);
-    ReleaseDC(tmrd.hogl, tmrd.mwdc);
-    DeleteDC(tmrd.mwdc);
-    DestroyWindow(tmrd.hogl);
-    DestroyWindow(tmrd.hwnd);
+    wglDeleteContext(mwrc);
+    ReleaseDC(hogl, mwdc);
+    DeleteDC(mwdc);
+    DestroyWindow(hogl);
+    DestroyWindow(hwnd);
 }
 
 
 
-LIB_OPEN long EngineInitialize(uint32_t rndr,
-                               uint32_t *xdim, uint32_t *ydim, uint32_t flgs) {
+long EngineInitialize(uint32_t rndr,
+                      uint32_t *xdim, uint32_t *ydim, uint32_t flgs) {
     WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW,
                        WindowProc, 0, 0, GetModuleHandle(NULL), NULL,
                        LoadCursor(NULL, IDC_HAND), NULL, NULL, "-", NULL};
@@ -282,21 +311,20 @@ LIB_OPEN long EngineInitialize(uint32_t rndr,
     BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader), 0, 0,
                         1, 8 * sizeof(BGRA), BI_RGB}};
     SYSTEM_INFO syin = {};
-    long iter;
 
-    tmrd.rndr = rndr;
     tmrd.flgs = flgs;
+    tmrd.rndr = rndr;
+    tmrd.draw = FALSE;
     tmrd.pict.xdim =
         *xdim = (*xdim)? *xdim : GetSystemMetrics(SM_CXVIRTUALSCREEN);
     tmrd.pict.ydim =
         *ydim = (*ydim)? *ydim : GetSystemMetrics(SM_CYVIRTUALSCREEN);
 
     RegisterClassEx(&wndc);
-    tmrd.hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOPMOST,
-                               wndc.lpszClassName, NULL,
-                               WS_POPUP | WS_VISIBLE,
-                               0, 0, tmrd.pict.xdim, tmrd.pict.ydim,
-                               NULL, NULL, wndc.hInstance, NULL);
+    hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOPMOST,
+                          wndc.lpszClassName, NULL, WS_POPUP | WS_VISIBLE,
+                          0, 0, 100, 100,//tmrd.pict.xdim, tmrd.pict.ydim,
+                          NULL, NULL, wndc.hInstance, NULL);
     switch (tmrd.rndr) {
         case BRT_RSTD:
             break;
@@ -306,21 +334,20 @@ LIB_OPEN long EngineInitialize(uint32_t rndr,
             wndc.hbrBackground = GetStockObject(BLACK_BRUSH);
             wndc.lpfnWndProc = DefWindowProc;
             RegisterClassEx(&wndc);
-            tmrd.hogl = CreateWindowEx(WS_EX_APPWINDOW, wndc.lpszClassName,
-                                       NULL, WS_POPUP, 0, 0, 0, 0,
-                                       NULL, NULL, wndc.hInstance, NULL);
-            tmrd.mwdc = GetDC(tmrd.hogl);
+            hogl = CreateWindowEx(WS_EX_APPWINDOW, wndc.lpszClassName,
+                                  NULL, WS_POPUP, 0, 0, 0, 0,
+                                  NULL, NULL, wndc.hInstance, NULL);
+            mwdc = GetDC(hogl);
             ppfd.iLayerType = PFD_MAIN_PLANE;
-            SetPixelFormat(tmrd.mwdc,
-                           ChoosePixelFormat(tmrd.mwdc, &ppfd), &ppfd);
-            wglMakeCurrent(tmrd.mwdc, tmrd.mwrc = wglCreateContext(tmrd.mwdc));
+            SetPixelFormat(mwdc, ChoosePixelFormat(mwdc, &ppfd), &ppfd);
+            wglMakeCurrent(mwdc, mwrc = wglCreateContext(mwdc));
 
             if ((wglMakeCtx = (typeof(wglMakeCtx))
                  wglGetProcAddress("wglCreateContextAttribsARB"))
-            &&  (rtmp = wglMakeCtx(tmrd.mwdc, 0, attr))) {
+            &&  (rtmp = wglMakeCtx(mwdc, 0, attr))) {
                 wglMakeCurrent(NULL, NULL);
-                wglDeleteContext(tmrd.mwrc);
-                wglMakeCurrent(tmrd.mwdc, tmrd.mwrc = rtmp);
+                wglDeleteContext(mwrc);
+                wglMakeCurrent(mwdc, mwrc = rtmp);
             }
             if (!InitRendererOGL()) {
                 char errm[48];
@@ -331,103 +358,56 @@ LIB_OPEN long EngineInitialize(uint32_t rndr,
             }
             break;
     }
-    LoadUnitStdThrd = LoadUST;
-    GetSystemInfo(&syin);
-    tmrd.ncpu = min(MAXIMUM_WAIT_OBJECTS, max(1, syin.dwNumberOfProcessors));
-    tmrd.isem = LocalAlloc(LMEM_FIXED, tmrd.ncpu * sizeof(*tmrd.isem));
-    tmrd.osem = LocalAlloc(LMEM_FIXED, tmrd.ncpu * sizeof(*tmrd.osem));
-    tmrd.thrd = LocalAlloc(LMEM_FIXED, tmrd.ncpu * sizeof(*tmrd.thrd));
-    for (iter = 0; iter < tmrd.ncpu; iter++) {
-        tmrd.isem[iter] = CreateEvent(NULL, FALSE, FALSE, NULL);
-        tmrd.osem[iter] = CreateEvent(NULL, FALSE,  TRUE, NULL);
-        tmrd.thrd[iter] = (THRD){&tmrd.isem[iter], &tmrd.osem[iter],
-                                 TRUE, LTHR};
-        CreateThread(NULL, 0, ThrdFunc, &tmrd.thrd[iter], 0, NULL);
-    }
-    tmrd.devc = CreateCompatibleDC(NULL);
+
+    devc = CreateCompatibleDC(NULL);
     bmpi.bmiHeader.biWidth = tmrd.pict.xdim;
     bmpi.bmiHeader.biHeight =
         (tmrd.rndr == BRT_RSTD)? -tmrd.pict.ydim : tmrd.pict.ydim;
-    tmrd.hdib = CreateDIBSection(tmrd.devc, &bmpi, DIB_RGB_COLORS,
-                                (void*)&tmrd.pict.bptr, 0, 0);
-    SelectObject(tmrd.devc, tmrd.hdib);
-    tmrd.time = GetTickCount();
+    hdib = CreateDIBSection(devc, &bmpi, DIB_RGB_COLORS,
+                           (void*)&tmrd.pict.bptr, 0, 0);
+    SelectObject(devc, hdib);
+
+    GetSystemInfo(&syin);
+    tmrd.ncpu = min(MAXIMUM_WAIT_OBJECTS, max(1, syin.dwNumberOfProcessors));
+    tmrd.thrd = LocalAlloc(LMEM_FIXED, tmrd.ncpu * sizeof(*tmrd.thrd));
+    MakeSemaphore(&tmrd.isem, tmrd.ncpu, SEM_NULL);
+    MakeSemaphore(&tmrd.osem, tmrd.ncpu, SEM_FULL);
+    SwitchThreads(&tmrd, 0);
+    tmrd.time = TimeFunc();
     return ~0;
 }
 
 
 
-LIB_OPEN void EngineLoadAnimAsync(uint8_t *path, uint32_t *uuid,
-                                  uint32_t *xdim, uint32_t *ydim,
-                                  uint32_t *fcnt, uint32_t **time) {
-    TryLoadUnit(path, uuid, xdim, ydim, fcnt, time);
-}
-
-
-
-LIB_OPEN void EngineFinishLoading() {
-    long iter;
-
-    WaitForMultipleObjects(tmrd.ncpu, tmrd.osem, TRUE, INFINITE);
-    for (iter = 0; iter < tmrd.ncpu; iter++) {
-        TryUpdatePixTree(tmrd.thrd[iter].elem);
-        tmrd.thrd[iter].loop = FALSE;
-        ResetEvent(*tmrd.thrd[iter].osem);
-        SetEvent(*tmrd.thrd[iter].isem);
-    }
-    WaitForMultipleObjects(tmrd.ncpu, tmrd.osem, TRUE, INFINITE);
-    MakeUnitArray(&tmrd.uarr);
-}
-
-
-
-LIB_OPEN void EngineRunMainLoop(UFRM func, uint32_t msec, uint32_t size) {
+void EngineRunMainLoop(UFRM func, uint32_t msec, uint32_t size) {
     BLENDFUNCTION bfun = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+    RECT scrr = {0, 0, tmrd.pict.xdim, tmrd.pict.ydim};
+    SIZE dims = {tmrd.pict.xdim, tmrd.pict.ydim};
     POINT cpos, zpos = {};
     MSG pmsg = {};
-    RECT scrr;
-    SIZE dims;
 
     LONG iter;
-    uint64_t mtmp;
-    FRBO *fram = NULL;
+    FRBO *surf = NULL;
 
     if (tmrd.uarr) {
-        mtmp = GetTickCount() - tmrd.time;
         UpdateFrame = func;
-        tmrd.uniq = tmrd.uarr[0].scal - 1;
         tmrd.data = calloc(((size >> 12) + 2) * 4096, sizeof(*tmrd.data));
         tmrd.size = size;
-        printf(TXT_AEND"\n", tmrd.uniq, (ulong)mtmp, (float)mtmp / tmrd.uniq,
-              (tmrd.rndr == BRT_ROGL)? TXT_ROGL : TXT_RSTD);
-        scrr =
-            (RECT){0, 0, dims.cx = tmrd.pict.xdim, dims.cy = tmrd.pict.ydim};
 
         switch (tmrd.rndr) {
             case BRT_RSTD:
-                mtmp = (tmrd.pict.ydim / tmrd.ncpu) + 1;
-                for (iter = 0; iter < tmrd.ncpu; iter++) {
-                    tmrd.thrd[iter] =
-                        (THRD){tmrd.thrd[iter].isem, tmrd.thrd[iter].osem,
-                               TRUE, PTHR, {&tmrd}, {mtmp * iter},
-                               mtmp * (iter + 1)};
-                    CreateThread(NULL, 0, ThrdFunc, &tmrd.thrd[iter], 0, NULL);
-                }
-                tmrd.thrd[tmrd.ncpu - 1].ymax = tmrd.pict.ydim;
                 break;
 
             case BRT_ROGL:
-                MakeRendererOGL(tmrd.uarr, tmrd.uniq, tmrd.data,
-                                tmrd.size, !(tmrd.flgs & WIN_IBGR));
-                SizeRendererOGL(tmrd.pict.xdim, tmrd.pict.ydim);
-                fram = MakeRBO(tmrd.pict.xdim, tmrd.pict.ydim);
-                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fram->fbuf);
-                glViewport(0, 0, fram->xdim, fram->ydim);
+                surf = MakeRBO(tmrd.pict.xdim, tmrd.pict.ydim);
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, surf->fbuf);
+                glViewport(0, 0, surf->xdim, surf->ydim);
                 glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
                 break;
         }
+        InitRenderer(&tmrd);
         while (TRUE) {
-            tmrd.time = GetTickCount();
+            tmrd.time = TimeFunc();
             if (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
                 if (pmsg.message == WM_QUIT)
                     break;
@@ -435,8 +415,10 @@ LIB_OPEN void EngineRunMainLoop(UFRM func, uint32_t msec, uint32_t size) {
                 DispatchMessage(&pmsg);
                 continue;
             }
+            if (!tmrd.draw)
+                continue;
             GetCursorPos(&cpos);
-            ScreenToClient(tmrd.hwnd, &cpos);
+            ScreenToClient(hwnd, &cpos);
             iter = ((GetAsyncKeyState(VK_LBUTTON))? 1 : 0)
                  | ((GetAsyncKeyState(VK_MBUTTON))? 2 : 0)
                  | ((GetAsyncKeyState(VK_RBUTTON))? 4 : 0);
@@ -445,45 +427,47 @@ LIB_OPEN void EngineRunMainLoop(UFRM func, uint32_t msec, uint32_t size) {
                                    tmrd.size, cpos.x, cpos.y));
             switch (tmrd.rndr) {
                 case BRT_RSTD:
-                    FillRect(tmrd.devc, &scrr, GetStockObject(BLACK_BRUSH));
-                    for (iter = 0; iter < tmrd.ncpu; iter++) {
-                        ResetEvent(*tmrd.thrd[iter].osem);
-                        SetEvent(*tmrd.thrd[iter].isem);
-                    }
-                    WaitForMultipleObjects(tmrd.ncpu, tmrd.osem,
-                                           TRUE, INFINITE);
+                    FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
+                    PickSemaphore(&tmrd, 1, SEM_FULL);
+                    WaitSemaphore(&tmrd, 1, SEM_FULL);
                     break;
 
                 case BRT_ROGL:
-                    ReadRBO(fram, &tmrd.pict, tmrd.flgs);
-                    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fram->fbuf);
+                    ReadRBO(surf, &tmrd.pict, tmrd.flgs);
+                    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, surf->fbuf);
                     DrawRendererOGL(tmrd.data, tmrd.size);
                     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
                     break;
             }
-            UpdateLayeredWindow(tmrd.hwnd, NULL, &zpos, &dims,
-                                tmrd.devc, &zpos, 0, &bfun, ULW_ALPHA);
-            tmrd.fram++;
-            while (GetTickCount() - tmrd.time < msec)
+            UpdateLayeredWindow(hwnd, NULL, &zpos, &dims,
+                                devc, &zpos, 0, &bfun, ULW_ALPHA);
+            fram++;
+            while (TimeFunc() - tmrd.time < msec)
                 Sleep(1);
         }
+        switch (tmrd.rndr) {
+            case BRT_RSTD:
+                StopThreads(&tmrd);
+                break;
+
+            case BRT_ROGL: {
+                FreeRendererOGL();
+                FreeRBO(&surf);
+                DeinitGL();
+                break;
+            }
+        }
+        FreeUnitArray(&tmrd.uarr);
+        FreeHashTrees();
+        free(tmrd.data);
     }
     else
         printf("No animation base found! Exiting...\n");
 
-    if (tmrd.rndr == BRT_ROGL) {
-        FreeRendererOGL();
-        DeinitGL();
-    }
-    FreeUnitArray(&tmrd.uarr);
-    DeleteDC(tmrd.devc);
-    DeleteObject(tmrd.hdib);
-    for (iter = 0; iter < tmrd.ncpu; iter++) {
-        CloseHandle(tmrd.isem[iter]);
-        CloseHandle(tmrd.osem[iter]);
-    }
-    LocalFree(tmrd.isem);
-    LocalFree(tmrd.osem);
+    DeleteDC(devc);
+    DeleteObject(hdib);
+
+    FreeSemaphore(&tmrd.isem, tmrd.ncpu);
+    FreeSemaphore(&tmrd.osem, tmrd.ncpu);
     LocalFree(tmrd.thrd);
-    free(tmrd.data);
 }

@@ -94,8 +94,7 @@
 
 
 long InitRendererOGL();
-void MakeRendererOGL(UNIT *uarr, ulong uniq,
-                     T2UV *data, ulong size, ulong rgba);
+void MakeRendererOGL(UNIT *uarr, ulong uniq, ulong size, ulong rgba);
 void SizeRendererOGL(ulong xscr, ulong yscr);
 void DrawRendererOGL(T2UV *data, ulong size);
 void FreeRendererOGL();

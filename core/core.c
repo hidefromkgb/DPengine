@@ -2,10 +2,98 @@
 
 
 
-TREE *(*LoadUnitStdThrd)(TREE *elem, char *path);
-
 uint32_t guid = 0;
 TREE *hstr = 0, *hpix = 0;
+TMRD tmrd;
+
+
+
+THR_FUNC ThrdFunc(THRD *data) {
+    while (~0) {
+        WaitSemaphore(data->orig, 0, data->uuid);
+        if (!data->loop)
+            break;
+        data->func(data);
+        if (!PickSemaphore(data->orig, 0, data->uuid))
+            return THR_FAIL;
+    }
+    printf(TXT_EXIT"\n");
+    PickSemaphore(data->orig, 0, data->uuid);
+    return THR_EXIT;
+}
+
+
+
+void LTHR(THRD *data) {
+    struct {
+        char *name;
+        long size;
+    } apal;
+    char *path, *file;
+    long  indx;
+    TREE *elem;
+    ASTD *retn;
+
+    retn = 0;
+    path = data->path;
+    elem = data->elem;
+    if (path) {
+        indx = strlen(path);
+        if (((path[indx - 3] == 'g') || (path[indx - 3] == 'G'))
+        &&  ((path[indx - 2] == 'i') || (path[indx - 2] == 'I'))
+        &&  ((path[indx - 1] == 'f') || (path[indx - 1] == 'F'))
+        &&  (retn = MakeAnimStd(path))) {
+            *elem->epix->xdim = retn->xdim;
+            *elem->epix->ydim = retn->ydim;
+            *elem->epix->fcnt = retn->fcnt;
+            *elem->epix->time = retn->time;
+             elem->epix->scal = DownsampleAnimStd(retn, &elem->epix->xoff,
+                                                        &elem->epix->yoff);
+            apal.name = strdup(path);
+            apal.name[indx - 3] = 'a';
+            apal.name[indx - 2] = 'r';
+            apal.name[indx - 1] = 't';
+            file = LoadFile((void*)&apal);
+            RecolorPalette(retn->bpal, file, apal.size);
+            free(apal.name);
+            free(file);
+        }
+        elem->epix->anim = retn;
+    }
+}
+
+
+
+void PTHR(THRD *data) {
+    DrawPixStdThrd(&data->orig->pict, data->orig->uarr, data->orig->data,
+                    data->orig->size, data->ymin, data->ymax);
+}
+
+
+
+SEM_TYPE FindBit(SEM_TYPE inpt) {
+    inpt &= inpt ^ (inpt - 1);
+    return ((inpt & 0xFFFFFFFF00000000)? 32 : 0)
+         + ((inpt & 0xFFFF0000FFFF0000)? 16 : 0)
+         + ((inpt & 0xFF00FF00FF00FF00)?  8 : 0)
+         + ((inpt & 0xF0F0F0F0F0F0F0F0)?  4 : 0)
+         + ((inpt & 0xCCCCCCCCCCCCCCCC)?  2 : 0)
+         + ((inpt & 0xAAAAAAAAAAAAAAAA)?  1 : 0);
+}
+
+
+
+TREE *LoadUnitStdThrd(TREE *elem, char *path) {
+    SEM_TYPE curr;
+    TREE *retn;
+
+    curr = FindBit(WaitSemaphore(&tmrd, 1, SEM_NULL));
+    retn = tmrd.thrd[curr].elem;
+    tmrd.thrd[curr].elem = elem;
+    tmrd.thrd[curr].path = path;
+    PickSemaphore(&tmrd, 1, 1 << curr);
+    return retn;
+}
 
 
 
@@ -171,9 +259,6 @@ uint64_t HashLine(char *line) {
 
 
 
-/// Default directory separator
-#define DEF_DSEP '/'
-
 char *ExtractLastDirs(char *path, long dcnt) {
     long iter;
 
@@ -249,6 +334,12 @@ void DrawPixStdThrd(PICT *pict, UNIT *uarr, T2UV *data,
 
 void TreeDelPath(TREE *root) {
     free(root->path);
+}
+
+
+
+void TreeDelAnim(TREE *root) {
+    FreeAnimStd((ASTD**)&root->anim);
 }
 
 
@@ -429,8 +520,9 @@ long TryUpdatePixTree(TREE* estr) {
 
 
 /// uses 2 global vars: HSTR, GUID
-void TryLoadUnit(uint8_t *path, uint32_t *uuid, uint32_t *xdim, uint32_t *ydim,
-                 uint32_t *fcnt, uint32_t **time) {
+void EngineLoadAnimAsync(uint8_t  *path, uint32_t *uuid,
+                         uint32_t *xdim, uint32_t *ydim,
+                         uint32_t *fcnt, uint32_t **time) {
     TREE *estr, *epix;
     char *ptrn;
     uint64_t hash;
@@ -474,16 +566,84 @@ void TryLoadUnit(uint8_t *path, uint32_t *uuid, uint32_t *xdim, uint32_t *ydim,
 
 
 
-void FreeUnitArray(UNIT **uarr) {
-    UNIT *elem;
-    long iter;
+void StopThreads(TMRD *tmrd) {
+    ulong iter, loop;
 
-    if ((elem = *uarr)) {
-        for (iter = 1; iter < elem[0].scal; iter++)
-            if (elem[iter].anim)
-                FreeAnimStd((ASTD**)&elem[iter].anim);
-        free(elem);
+    for (loop = iter = 0; iter < tmrd->ncpu; iter++)
+        loop |= tmrd->thrd[iter].loop;
+    if (loop) {
+        WaitSemaphore(tmrd, 1, SEM_FULL);
+        for (iter = 0; iter < tmrd->ncpu; iter++)
+            tmrd->thrd[iter].loop = 0;
+        PickSemaphore(tmrd, 1, SEM_FULL);
+        WaitSemaphore(tmrd, 1, SEM_FULL);
     }
+}
+
+
+
+void SwitchThreads(TMRD *tmrd, long draw) {
+    ulong iter, temp;
+
+    if (!draw) {
+        for (iter = 0; iter < tmrd->ncpu; iter++) {
+            tmrd->thrd[iter] = (THRD){1, 1 << iter, tmrd, LTHR};
+            MakeThread(&tmrd->thrd[iter]);
+        }
+    }
+    else {
+        temp = (tmrd->pict.ydim / tmrd->ncpu) + 1;
+        for (iter = 0; iter < tmrd->ncpu; iter++) {
+            tmrd->thrd[iter] = (THRD){1, 1 << iter, tmrd, PTHR,
+                                     {temp * iter}, {temp * (iter + 1)}};
+            MakeThread(&tmrd->thrd[iter]);
+        }
+        tmrd->thrd[tmrd->ncpu - 1].ymax = tmrd->pict.ydim;
+    }
+}
+
+
+
+void EngineBeginAddition() {
+    StopThreads(&tmrd);
+    SwitchThreads(&tmrd, 0);
+}
+
+
+
+void EngineFinishLoading(long loop) {
+    ulong mtmp, iter;
+
+    tmrd.draw = 0;
+    StopThreads(&tmrd);
+    for (iter = 0; iter < tmrd.ncpu; iter++)
+        TryUpdatePixTree(tmrd.thrd[iter].elem);
+    MakeUnitArray(&tmrd.uarr);
+
+    if (tmrd.uarr) {
+        mtmp = TimeFunc() - tmrd.time;
+        tmrd.uniq = tmrd.uarr[0].scal - 1;
+        if (!loop)
+            printf(TXT_AEND"\n", tmrd.uniq, mtmp, (float)mtmp / tmrd.uniq,
+                  (tmrd.rndr == BRT_ROGL)? TXT_ROGL : TXT_RSTD);
+        else
+            InitRenderer(&tmrd);
+        tmrd.draw = ~0;
+    }
+}
+
+
+
+void FreeHashTrees() {
+    TreeDel(&hstr, TreeDelPath);
+    TreeDel(&hpix, TreeDelAnim);
+    guid = 0;
+}
+
+
+
+void FreeUnitArray(UNIT **uarr) {
+    free(*uarr);
     *uarr = 0;
 }
 
@@ -536,9 +696,6 @@ void MakeUnitArray(UNIT **uarr) {
         UnitArrayFromTree(*uarr, hpix);
         (*uarr)[0].scal = guid + 1;
     }
-    TreeDel(&hstr, TreeDelPath);
-    TreeDel(&hpix, 0);
-    guid = 0;
 }
 
 

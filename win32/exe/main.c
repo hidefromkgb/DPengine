@@ -34,6 +34,27 @@ LPWSTR UTF16(char *utf8) {
 
 
 
+char *LoadFile(char *name, long *size) {
+    char *retn = 0;
+    DWORD  temp, flen;
+    LPWSTR wide = UTF16(name);
+    HANDLE file = CreateFileW(wide, GENERIC_READ, FILE_SHARE_READ, 0,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    if (file != INVALID_HANDLE_VALUE) {
+        flen = GetFileSize(file, NULL);
+        retn = malloc(flen + 1);
+        ReadFile(file, retn, flen, &temp, NULL);
+        CloseHandle(file);
+        retn[flen] = '\0';
+        if (size)
+            *size = flen;
+    }
+    free(wide);
+    return retn;
+}
+
+
+
 BOOL APIENTRY EnterProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
     switch (uMsg) {
         case WM_INITDIALOG: {
@@ -113,7 +134,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     if (EngineInitialize(rndr, &xdim, &ydim,                                    /// EngineInitialize
                         ((flgs & FLG_IBGR)? WIN_IBGR : 0)
                       | ((flgs & FLG_IPBO)? WIN_IPBO : 0))) {
-        hdir = FindFirstFileW(L""DEF_FLDR"/*", &fdir);
+        hdir = FindFirstFileW(L""DEF_FLDR""DEF_DSEP"*", &fdir);
         while ((hdir != INVALID_HANDLE_VALUE) &&
                (GetLastError() != ERROR_NO_MORE_FILES)) {
             MakeEmptyLib(&ulib, DEF_FLDR, temp = UTF8(fdir.cFileName));
@@ -123,7 +144,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         }
         FindClose(hdir);
 
-        EngineFinishLoading();                                                  /// EngineFinishLoading
+        EngineFinishLoading(0);                                                 /// EngineFinishLoading
         flgs = UnitListFromLib(ulib, flgs & 0xFFFF, xdim, ydim);
         EngineRunMainLoop(UpdateFrame, FRM_WAIT, flgs);                         /// EngineRunMainLoop
         FreeEverything(&ulib);

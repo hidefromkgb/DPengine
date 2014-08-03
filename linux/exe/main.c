@@ -3,6 +3,25 @@
 
 
 
+char *LoadFile(char *name, long *size) {
+    char *retn = 0;
+    long file, flen;
+
+    if ((file = open(name, O_RDONLY)) > 0) {
+        flen = lseek(file, 0, SEEK_END);
+        lseek(file, 0, SEEK_SET);
+        retn = malloc(flen + 1);
+        read(file, retn, flen);
+        retn[flen] = '\0';
+        close(file);
+        if (size)
+            *size = flen;
+    }
+    return retn;
+}
+
+
+
 int main(int argc, char *argv[]) {
     struct dirent **dirs;
     long uses, rndr, iter;
@@ -33,7 +52,7 @@ int main(int argc, char *argv[]) {
             }
             free(dirs);
         }
-        EngineFinishLoading();                                                  /// FinishLoading
+        EngineFinishLoading(0);                                                 /// FinishLoading
         iter = UnitListFromLib(ulib, uses, xdim, ydim);
         EngineRunMainLoop(UpdateFrame, FRM_WAIT, iter);                         /// RunMainLoop
         FreeEverything(&ulib);

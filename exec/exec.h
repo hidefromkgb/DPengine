@@ -6,12 +6,8 @@
 
 
 
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
-
-/// Default animation folder
-#define DEF_FLDR "../anim"
+#define DEF_DSEP "/"
+#define DEF_FLDR ".."DEF_DSEP"anim"
 /// Default config file
 #define DEF_CONF "pony.ini"
 /// Default comment character
@@ -70,5 +66,10 @@ void FillLib(ULIB *ulib, char *pcnf, LOAD load);
 long UnitListFromLib(ULIB *ulib, long uses, long xdim, long ydim);
 void FreeEverything(ULIB **ulib);
 
-void UpdateFrame(T2UV *data, uint64_t *time, uint32_t flgs,
-                 int32_t xptr, int32_t yptr, int32_t isel);
+uint32_t UpdateFrame(T2UV *data, uint64_t *time, uint32_t flgs,
+                     int32_t xptr, int32_t yptr, int32_t isel);
+
+
+
+/// external functions, have to be implemented or imported
+char *LoadFile(char *name, long *size);

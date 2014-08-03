@@ -69,12 +69,16 @@ long WriteFrameStd(GHDR *ghdr, FHDR *fhdr, void *anim,
 
 
 ASTD *MakeAnimStd(char *name) {
+    struct {
+        char *name;
+        long size;
+    } file = {name, 0};
     ASTD *retn;
 
     retn = malloc(sizeof(*retn));
     retn->bpal = NULL;
-    if (MakeAnim((void*)name, (void*)retn,
-                  NULL, InitAnimStd, WriteFrameStd, NULL) <= 0) {
+    if (MakeAnim((void*)&file, (void*)retn,
+                 (GGET)LoadFile, InitAnimStd, WriteFrameStd, free) <= 0) {
         free(retn->bpal);
         free(retn);
         retn = NULL;

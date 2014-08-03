@@ -29,3 +29,6 @@ typedef struct _ASTD {
 
 ASTD *MakeAnimStd(char *name);
 void FreeAnimStd(ASTD **anim);
+
+/// external functions, have to be implemented or imported
+char *LoadFile(void *file);

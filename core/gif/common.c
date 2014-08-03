@@ -1,12 +1,6 @@
-#include <stdio.h>
-#include <fcntl.h>
 #include "common.h"
 
 
-
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
 
 /// extension header
 #define GIF_EHDR 0x21
@@ -57,25 +51,6 @@ typedef struct _FGRH {    /// ============ FRAME GRAPHICS HEADER ============
     uint8_t term;         /// terminator; must be 0x00
 } FGRH;
 #pragma pack(pop)
-
-
-
-char *LoadFile(char *name, long *size) {
-    char *retn = 0;
-    long file, flen;
-
-    if ((file = open(name, O_RDONLY | O_BINARY)) > 0) {
-        flen = lseek(file, 0, SEEK_END);
-        lseek(file, 0, SEEK_SET);
-        retn = malloc(flen + 1);
-        read(file, retn, flen);
-        retn[flen] = '\0';
-        close(file);
-        if (size)
-            *size = flen;
-    }
-    return retn;
-}
 
 
 
@@ -223,12 +198,8 @@ long MakeAnim(void *inpt, void *anim,
     FHDR *fhdr;
     RGBX *cpal;
 
-    if (!gget)
-        ghdr = (GHDR*)LoadFile((char*)inpt, NULL);
-    else
-        ghdr = gget(inpt);
     iter = 0;
-    if (ghdr) {
+    if ((ghdr = gget(inpt))) {
         /// skipping global header, skipping global palette (if there is any)
         btmp = buff = (uint8_t*)ghdr + sizeof(*ghdr) +
         ((ghdr->flgs & GIF_FPAL)? (2 << (ghdr->flgs & 7)) * sizeof(*cpal) : 0);
@@ -285,12 +256,6 @@ long MakeAnim(void *inpt, void *anim,
             free(init);
         }
     }
-    if (!gget && !gput)
-        free(ghdr);
-    else if (gput) {
-        /// if no error (ITER > 0), overwriting frame count with GPUT() output
-        desc = gput((void*)ghdr, anim);
-        iter = (iter > 0)? desc : iter;
-    }
+    gput((char*)ghdr);
     return iter;
 }

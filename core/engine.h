@@ -50,7 +50,8 @@ typedef struct _T4UV {
 
 /** _________________________________________________________________________
     Callback function for the main program to modify the display list. Called
-    each frame. This is just a typedef, not an actual function definition.
+    each frame, returns new length of the updated list (max adding capacity =
+    4096 sprites). This is just a typedef, not an actual function definition.
     _________________________________________________________________________
     DATA: display list; shares the format with <DATA> uniform (see the source
           in core/ogl/shad.c, look for "main vertex shader" tag), except that
@@ -64,8 +65,8 @@ typedef struct _T4UV {
     YPTR: cursor Y coordinate, relative to the window`s upper left corner
     ISEL: index of the element under cursor in the existing list, < 0 if none
  **/
-typedef void (*UFRM)(T2UV *data, uint64_t *time, uint32_t flgs,
-                     int32_t xptr, int32_t yptr, int32_t isel);
+typedef uint32_t (*UFRM)(T2UV *data, uint64_t *time, uint32_t flgs,
+                         int32_t xptr, int32_t yptr, int32_t isel);
 
 
 
@@ -102,11 +103,20 @@ LIB_OPEN void EngineLoadAnimAsync(uint8_t *path, uint32_t *uuid,
                                   uint32_t *fcnt, uint32_t **time);
 
 /** _________________________________________________________________________
-    Ensures loading completion. After the call, all UUIDs, dimensions, delays
-    and frame counts become valid.
+    Blocks rendering and allows adding new sprites to the existing base.
     _________________________________________________________________________
  **/
-LIB_OPEN void EngineFinishLoading();
+LIB_OPEN void EngineBeginAddition();
+
+/** _________________________________________________________________________
+    Ensures loading completion. After the call, all UUIDs, dimensions, delays
+    and frame counts become valid. Unblocks rendering.
+    _________________________________________________________________________
+    LOOP: indicates whether the call is made before or after RunMainLoop(), 0
+          means before, !0 means after.
+    _________________________________________________________________________
+ **/
+LIB_OPEN void EngineFinishLoading(long loop);
 
 /** _________________________________________________________________________
     Executes the main loop, frees all internal memory chunks on exit.

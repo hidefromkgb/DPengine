@@ -66,6 +66,9 @@
 		<Unit filename="../../core/core.h">
 			<Option virtualFolder="src/core/" />
 		</Unit>
+		<Unit filename="../../core/engine.h">
+			<Option virtualFolder="src/" />
+		</Unit>
 		<Unit filename="../../core/gif/common.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/core/gif/" />
@@ -93,9 +96,6 @@
 		<Unit filename="../../core/ogl/util.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/core/ogl/" />
-		</Unit>
-		<Unit filename="../../core/engine.h">
-			<Option virtualFolder="src/" />
 		</Unit>
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />

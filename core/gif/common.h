@@ -47,14 +47,12 @@ typedef struct _RGBX {
 
 
 /** _________________________________________________________________________
-    Initial reader. Returns raw GIF data (beginning with main header) if the
-    stream is loaded, NULL otherwise. Can be left NULL if the implementation
-    does not support anything else except file reading (which may be reading
-    from resources or from raw byte streams or [insert I/O method here]).
+    Initial reader. Returns raw GIF data (beginning with main header) in case
+    of succesful loading, NULL otherwise.
     _________________________________________________________________________
     INPT: may be anything, from simple CHAR* to a complex structure of custom
           design, or even a single identifier. Anything that fits in VOID* :)
-          It will be copied from MakeAnim()`s INPT if its GGET() != NULL.
+          It will be copied from MakeAnim()`s INPT.
  **/
 typedef GHDR* (*GGET)(void *inpt);
 
@@ -92,14 +90,11 @@ typedef long (*GWFR)(GHDR *ghdr, FHDR *fhdr, void *anim,
                      long tran, long time, long curr, long next);
 
 /** _________________________________________________________________________
-    Animation finalizer. Returns frame count if the animation is successfully
-    finalized (i.e. all intermediate values are freed, etc.), zero otherwise.
-    Can be left NULL if freeing is done elsewhere.
+    Animation finalizer. Frees what has been read.
     _________________________________________________________________________
     DATA: the location where animation data resides
-    ANIM: implementation-specific data (i.e. a structure or a pointer to it)
  **/
-typedef long (*GPUT)(void *data, void *anim);
+typedef void (*GPUT)(void *data);
 
 
 

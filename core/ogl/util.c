@@ -328,14 +328,21 @@ int sizecmp(const void *a, const void *b) {
 
 
 
-void MakeRendererOGL(UNIT *uarr, ulong uniq,
-                     T2UV *data, ulong size, ulong rgba) {
+void FreeRendererOGL() {
+    FreeVBO(&surf);
+}
+
+
+
+void MakeRendererOGL(UNIT *uarr, ulong uniq, ulong size, ulong rgba) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
     GLubyte *atex, *aptr;
     T4FV *dims, *bank;
     GLuint *indx;
     TXSZ *txsz;
     BGRA *apal;
+
+    FreeRendererOGL();
 
     glCullFace(GL_BACK);
     glDisable(GL_CULL_FACE);
@@ -434,7 +441,7 @@ void MakeRendererOGL(UNIT *uarr, ulong uniq,
 
     MakeTex(&surf->ptex[0], mtex, dhei, 0,
             GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
-            GL_UNSIGNED_INT, GL_RG32UI, GL_RG_INTEGER, data);
+            GL_UNSIGNED_INT, GL_RG32UI, GL_RG_INTEGER, 0);
 
     MakeTex(&surf->ptex[1], mtex, mtex, cbnk + 1,
             GL_TEXTURE_2D_ARRAY, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
@@ -478,10 +485,4 @@ void DrawRendererOGL(T2UV *data, ulong size) {
                     ceil((GLfloat)size / surf->ptex[0].xdim),
                     GL_RG_INTEGER, GL_UNSIGNED_INT, data);
     DrawVBO(surf, 0);
-}
-
-
-
-void FreeRendererOGL() {
-    FreeVBO(&surf);
 }
