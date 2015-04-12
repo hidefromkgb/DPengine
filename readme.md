@@ -1,14 +1,16 @@
 # DPengine
 
-An alternative, experimental engine for [Desktop Ponies](https://github.com/RoosterDragon/Desktop-Ponies/), written in C and focused on performance.
+An alternative experimental engine for [Desktop Ponies](https://github.com/RoosterDragon/Desktop-Ponies/) written in C and GLSL and focused on performance.
 
-The [animation base](anim) is a downscaled version of the [original base](https://github.com/RoosterDragon/Desktop-Ponies/tree/master/Content/Ponies), created by artists contributing to DP.
+To run properly, DPE requires the [DP animation base](https://github.com/RoosterDragon/Desktop-Ponies/tree/master/Content/Ponies) directory to be present in the project root.
 
-The source code is meant to be built with Code::Blocks. In case you want to use another IDE, refer to .CBP files for library lists and compilation flags.
+The source code is meant to be built via either Code::Blocks IDE or makefiles included in the project.
+
+N.B.: to be able to build on Windows using Code::Blocks, go to Settings → Compiler and Debugger → Toolchain Executables, and change 'Make program' to 'mingw32-make.exe'. It`s how it was meant to be.
 
 ## Release notes
 
-For now, this project is in a pre-alpha state: it only supports Windows and Linux (but not Mac), it lacks interactions and controls, it contains glitchy animations, it… meh. I hope it all gets better soon ^_^
+Still no Mac support, but other things like hardware compatibility and cross-platform code percent have undergone many improvements. Stay tuned.
 
 ## License
 

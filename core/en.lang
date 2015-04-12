@@ -1,0 +1,17 @@
+[Desktop Ponies Engine]
+Renderer
+OS Specific options
+Opaque window
+Pause animation
+Hide window
+Exit
+Standard (CPU)
+OpenGL-accelerated
+[none available]
+Can`t init OpenGL v2.0!
+Show console
+Use regions
+Enable BGRA
+Enable PBO
+Useless on full opacity!
+Useless without OpenGL!

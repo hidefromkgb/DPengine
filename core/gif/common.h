@@ -12,7 +12,8 @@
 
 #pragma pack(push, 1)
 typedef struct _GHDR {    /// ============== GLOBAL GIF HEADER ==============
-    uint8_t head[6];      /// 'GIF87a' or 'GIF89a' signature
+    uint32_t head;        /// 'GIF8' header signature
+    uint16_t type;        /// '7a' or '9a', depending on the type
     uint16_t xdim, ydim;  /// total image width, total image height
     uint8_t flgs;         /** FLAGS:
                               GlobalPlt    bit 7     1: global palette exists
@@ -47,69 +48,43 @@ typedef struct _RGBX {
 
 
 /** _________________________________________________________________________
-    Initial reader. Returns raw GIF data (beginning with main header) in case
-    of succesful loading, NULL otherwise.
-    _________________________________________________________________________
-    INPT: may be anything, from simple CHAR* to a complex structure of custom
-          design, or even a single identifier. Anything that fits in VOID* :)
-          It will be copied from MakeAnim()`s INPT.
- **/
-typedef GHDR* (*GGET)(void *inpt);
-
-/** _________________________________________________________________________
-    Animation structure initializer. Returns positive values if the structure
-    is successfully initialized, zero otherwise.
-    _________________________________________________________________________
-    GHDR: animation global header
-    ANIM: implementation-specific data (i.e. a structure or a pointer to it)
-    CFRM: the total number of frames in animation
- **/
-typedef long (*GINI)(GHDR *ghdr, void *anim, long cfrm);
-
-/** _________________________________________________________________________
-    Decoded frame transferrer and frame delay setter. Returns positive values
-    on success, zero otherwise. NB: it has to recalculate interlaced pictures
-    (based on GIF_FINT flag state in FHDR->flgs: 0 = normal, 1 = interlaced).
+    Decoded frame transferrer and frame delay setter. NB: it has to recompute
+    interlaced pictures based on GIF_FINT flag in FHDR->flgs: 1 = interlaced,
+    0 = progressive.
     _________________________________________________________________________
     GHDR: animation global header
     FHDR: header of the resulting frame (the one just decoded)
-    ANIM: implementation-specific data (i.e. a structure or a pointer to it)
-    BPTR: decoded array of color indices
+    BACK: may take different values depending on the frame background mode
+          0: no background needed (used in single-frame GIFs / first frames)
+          1: background is a previous frame
+          2: background is a frame before previous
+          [actual FHDR]: previous frame + "hole" in the bounds of this FHDR
     CPAL: palette associated with the frame
     CLRS: number of colors in the palette
+    BPTR: decoded array of color indices
+    ANIM: implementation-specific data (i.e. a structure or a pointer to it)
+    NFRM: frame count (may be partial; in this case it`s negative)
     TRAN: transparent color index (or -1 if there`s none)
     TIME: next frame delay, in GIF time units (1 unit = 10 ms); can be 0
-    CURR: index of the resulting frame
-    NEXT: the frame that serves as background for the next (SIC! next) frame
-          = 0: just transparency (in FHDR bounds; the rest is current frame)
-          > 0: [actual frame index] + 1
-          < 0: no backing needed (used in single-frame GIFs)
+    INDX: index of the resulting frame
  **/
-typedef long (*GWFR)(GHDR *ghdr, FHDR *fhdr, void *anim,
-                     uint8_t *bptr, RGBX *cpal, long clrs,
-                     long tran, long time, long curr, long next);
-
-/** _________________________________________________________________________
-    Animation finalizer. Frees what has been read.
-    _________________________________________________________________________
-    DATA: the location where animation data resides
- **/
-typedef void (*GPUT)(void *data);
+typedef void (*GWFR)(GHDR *ghdr, FHDR *fhdr, FHDR *back, RGBX *cpal,
+                     long clrs, uint8_t *bptr, void *anim, long nfrm,
+                     long tran, long time, long indx);
 
 
 
 /** _________________________________________________________________________
-    The main loading function. Returns 0 when the animation could not be read
-    at all, or frame count in case of successful loading; otherwise the value
-    returned is negative and equals -[index of the erroneous frame] - 1.
+    The main loading function. Returns the total number of frames if the data
+    includes proper GIF ending, and otherwise it returns the number of frames
+    loaded per current call, multiplied by -1. So, the data may be incomplete
+    and in this case the function can be called again when more data arrives,
+    just remember to keep SKIP up to date.
     _________________________________________________________________________
-    INPT: ASCIIZ-string if GGET() == NULL, otherwise it may contain anything;
-          see GGET() documentation given above
+    DATA: raw data chunk, may be partial
+    SIZE: size of the data chunk that`s currently present
+    SKIP: number of frames to skip before resuming
+    GWFR: callback function described above
     ANIM: implementation-specific data (i.e. a structure or a pointer to it)
-    GGET,
-    GINI,
-    GWFR,
-    GPUT: implementations of callback functions described above
  **/
-long MakeAnim(void *inpt, void *anim,
-              GGET gget, GINI gini, GWFR gwfr, GPUT gput);
+long MakeAnim(void *data, long size, long skip, GWFR gwfr, void *anim);

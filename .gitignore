@@ -4,6 +4,9 @@ linux-gtk
 *.dll
 *.so
 
+# Animations
+Ponies
+
 # Code::Blocks service files
 *.layout
 *.depend

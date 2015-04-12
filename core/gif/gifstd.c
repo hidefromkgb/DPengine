@@ -1,89 +1,63 @@
-#include <string.h>
 #include "common.h"
 #include "gifstd.h"
 
 
 
-long InitAnimStd(GHDR *ghdr, void *anim, long cfrm) {
+void WriteFrameStd(GHDR *ghdr, FHDR *fhdr, FHDR *back, RGBX *cpal,
+                   long clrs, uint8_t *bptr, void *anim, long nfrm,
+                   long tran, long time, long indx) {
+    long x, y, yoff, iter, ifin, dsrc, ddst;
     ASTD *retn = (ASTD*)anim;
 
-    if (retn && ghdr && (ghdr->flgs & GIF_FPAL)) {
-        retn->fcnt = cfrm;
-        retn->xdim = ghdr->xdim;
-        retn->ydim = ghdr->ydim;
-        retn->time = malloc(cfrm * sizeof(*retn->time));
-        retn->bptr = malloc(cfrm * ghdr->xdim * ghdr->ydim);
-        return ~0;
-    }
-    return 0;
-}
-
-
-
-long WriteFrameStd(GHDR *ghdr, FHDR *fhdr, void *anim,
-                   uint8_t *bptr, RGBX *cpal, long clrs,
-                   long tran, long time, long curr, long next) {
-    ASTD *retn = (ASTD*)anim;
-    long x, y, dsrc, ddst;
-
-    retn->time[curr] = time * 10;
+    yoff = ghdr->xdim * ghdr->ydim;
+    if (retn->fcnt < (x = abs(nfrm)))
+        *retn = (ASTD){realloc(retn->bptr, x * yoff), ghdr->xdim, ghdr->ydim,
+                       x, realloc(retn->time, x * sizeof(*retn->time)),
+                       retn->bpal};
+    retn->time[indx] = time * 10;
     if (!retn->bpal) {
         retn->bpal = malloc(256 * sizeof(*retn->bpal));
-        for (clrs--; clrs >= 0; clrs--) {
-            retn->bpal[clrs].B = cpal[clrs].B;
-            retn->bpal[clrs].G = cpal[clrs].G;
-            retn->bpal[clrs].R = cpal[clrs].R;
-            retn->bpal[clrs].A = 0xFF;
-        }
+        for (clrs--; clrs >= 0; clrs--)
+            retn->bpal[clrs] =
+                (BGRA){{cpal[clrs].B, cpal[clrs].G, cpal[clrs].R, 0xFF}};
         retn->bpal[0xFF].BGRA = 0x00000000;
     }
+    iter = ghdr->xdim;
+    ifin = ghdr->ydim;
+    dsrc = indx * yoff;
+    ddst = 0;
+    /// background = some previous frame (maybe with a hole)
+    if (back) {
+        ddst = ((uintptr_t)back < (uintptr_t)sizeof(back))?
+               yoff * (indx - (uintptr_t)back) : yoff * (indx - 1);
+        for (y = 0; y < yoff; y++)
+            retn->bptr[dsrc + y] = retn->bptr[ddst + y];
 
-    /// TODO: PROPERLY HANDLE INTERLACING!!! (fhdr->flgs & GIF_FINT)
-
-    if (!curr)
-        for (y = ghdr->xdim * ghdr->ydim - 1; y >= 0; y--)
-            retn->bptr[y] = 0xFF;
-
-    ddst = ghdr->xdim * (ghdr->ydim * curr + fhdr->yoff) + fhdr->xoff;
-    for (y = 0; y < fhdr->ydim; y++)
-        for (x = 0; x < fhdr->xdim; x++)
-            if (bptr[fhdr->xdim * y + x] != tran)
-                retn->bptr[ghdr->xdim * y + x + ddst] =
-                      bptr[fhdr->xdim * y + x];
-    if (next >= 0) {
-        x = ghdr->xdim * ghdr->ydim;
-        dsrc = x * ((next)? (next - 1) : curr);
-        ddst = x * (curr + 1);
-        for (y = 0; y < x; y++)
-            retn->bptr[ddst + y] = retn->bptr[dsrc + y];
+        if ((uintptr_t)back >= (uintptr_t)sizeof(back)) {
+            ddst = dsrc + ghdr->xdim * back->yoff + back->xoff;
+            iter = back->xdim;
+            ifin = back->ydim;
+            back = 0;
+        }
     }
-    if (!next) {
-        ddst = ghdr->xdim * (ghdr->ydim * ++curr + fhdr->yoff) + fhdr->xoff;
-        for (y = 0; y < fhdr->ydim; y++)
-            for (x = 0; x < fhdr->xdim; x++)
+    /// empty background or hole in the previous frame
+    if (!back)
+        for (y = 0; y < ifin; y++)
+            for (x = 0; x < iter; x++)
                 retn->bptr[ghdr->xdim * y + x + ddst] = 0xFF;
-    }
-    return ~0;
-}
 
+    ddst = dsrc + ghdr->xdim * fhdr->yoff + fhdr->xoff;
+    iter = (fhdr->flgs & GIF_FINT)? 0 : 4;
+    ifin = (fhdr->flgs & GIF_FINT)? 4 : 5;
 
-
-ASTD *MakeAnimStd(char *name) {
-    struct {
-        char *name;
-        long size;
-    } file = {name, 0};
-    ASTD *retn;
-
-    retn = malloc(sizeof(*retn));
-    retn->bpal = NULL;
-    if (MakeAnim((void*)&file, (void*)retn,
-                 (GGET)LoadFile, InitAnimStd, WriteFrameStd, free) <= 0) {
-        free(retn->bpal);
-        free(retn);
-        retn = NULL;
-    }
-    return retn;
+    /// [TODO:] the frame is assumed to be inside global bounds,
+    ///         however it might exceed them in some GIFs; fix me.
+    for (dsrc = -1; iter < ifin; iter++)
+        for (yoff = 16 >> ((iter > 1)? iter : 1), y = (8 >> iter) & 7;
+             y < fhdr->ydim; y += yoff)
+            for (x = 0; x < fhdr->xdim; x++)
+                if (tran != (typeof(tran))bptr[++dsrc])
+                    retn->bptr[ghdr->xdim * y + x + ddst] = bptr[dsrc];
 }
 
 
@@ -94,6 +68,31 @@ void FreeAnimStd(ASTD **anim) {
         free((*anim)->bpal);
         free((*anim)->time);
         free(*anim);
-        *anim = NULL;
+        *anim = 0;
     }
+}
+
+
+
+ASTD *MakeDataAnimStd(char *data, long size) {
+    ASTD *retn;
+
+    if (!data || (size <= 0))
+        return 0;
+    if (!MakeAnim((void*)data, size, 0, WriteFrameStd,
+                  (void*)(retn = calloc(1, sizeof(*retn)))))
+        FreeAnimStd(&retn);
+    return retn;
+}
+
+
+
+ASTD *MakeFileAnimStd(char *name) {
+    ASTD *retn;
+    long size;
+
+    name = LoadFile(name, &size);
+    retn = MakeDataAnimStd(name, size);
+    free(name);
+    return retn;
 }

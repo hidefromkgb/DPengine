@@ -1,75 +1,252 @@
+#include <math.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../core/engine.h"
+#include <engine.h>
 
 
 
+/// a macro to count the capacity of static arrays
+#define countof(a) (sizeof(a) / sizeof(*(a)))
+
+#ifndef min
+#define min(a, b) (((a) < (b))? (a) : (b))
+#endif
+
+#ifndef max
+#define max(a, b) (((a) > (b))? (a) : (b))
+#endif
+
+
+
+/// default directory separator
 #define DEF_DSEP "/"
-#define DEF_FLDR ".."DEF_DSEP"anim"
-/// Default config file
+/// default animation folder
+#define DEF_FLDR "Ponies"
+/// default config file
 #define DEF_CONF "pony.ini"
-/// Default comment character
+/// default comment character
 #define DEF_CMNT '\''
-/// Default token separator
+/// default token separator
 #define DEF_TSEP ','
 
-/// [not recognized / comment / invalid token]
-#define AVT_NONE 0x00000000
-/// 'Name'
-#define AVT_NAME 0xC6961EB1
-/// 'Effect'
-#define AVT_EFCT 0xE708AEFF
-/// 'Behavior'
-#define AVT_BHVR 0xB6AB6234
+/// degrees to radians conversion coef
+#define DTR_CONV (M_PI / 180.0)
+/// radians to degrees conversion coef
+#define RTD_CONV (1.0 / DTR_CONV)
+
+
+
+/// invalid hash
+#define ERR_HASH 0x00000000
+
+
+
+/// truth values
+
+/// 'true'
+#define VAL_TRUE 0x390A9E10
+/// 'false'
+#define VAL_FALS 0xD6A90B70
+
+
+
+/// section value types
+
+/// 'name'
+#define SVT_NAME 0x692C5651
+/// 'effect'
+#define SVT_EFCT 0x80720D9F
+/// 'behavior'
+#define SVT_BHVR 0x532A0FD4
 /// 'behaviorgroup'
-#define AVT_BGRP 0xA40004B2
-/// 'Categories'
-#define AVT_CTGS 0xC831B868
-/// 'Speak'
-#define AVT_PHRS 0x90E5E31D
+#define SVT_BGRP 0xA40004B2
+/// 'categories'
+#define SVT_CTGS 0x21179D08
+/// 'speak'
+#define SVT_PHRS 0xF708913D
 
 
 
+/// behaviour movement types
+
+/// 'none'
+#define BMT_NONM 0xF3B3E074
+/// 'horizontal_only'
+#define BMT_HORM 0x2359740E
+/// 'vertical_only'
+#define BMT_VERM 0x4753BD0C
+/// 'diagonal_only'
+#define BMT_DIAM 0xA988F1D9
+/// 'horizontal_vertical'
+#define BMT_HNVM 0x9D44367E
+/// 'diagonal_horizontal'
+#define BMT_HNDM 0x590262FB
+/// 'diagonal_vertical'
+#define BMT_DNVM 0xE2676419
+/// 'all'
+#define BMT_ALLM 0x43E72DD0
+/// 'mouseover'
+#define BMT_OVRM 0xB73EDCDE
+/// 'dragged'
+#define BMT_DRGM 0x4A4CCCE1
+/// 'sleep'
+#define BMT_SLPM 0x62B9B962
+
+
+
+/// behaviour/effect flags
+
+/// no movement at all
+#define BHV_NONM (0      )
+/// horizontal movement allowed
+#define BHV_HORM (1 <<  0)
+/// diagonal movement allowed
+#define BHV_DIAM (1 <<  1)
+/// vertical movement allowed
+#define BHV_VERM (1 <<  2)
+/// movement control flag
+#define BHV_CTLM (1 <<  3)
+
+/// horizontal + vertical movement
+#define BHV_HNVM (BHV_HORM | BHV_VERM)
+/// horizontal + diagonal movement
+#define BHV_HNDM (BHV_HORM | BHV_DIAM)
+/// diagonal + vertical movement
+#define BHV_DNVM (BHV_DIAM | BHV_VERM)
+/// horizontal + diagonal + vertical movement
+#define BHV_ALLM (BHV_HORM | BHV_DIAM | BHV_VERM)
+/// 'mouse-over' movement state
+#define BHV_OVRM (BHV_CTLM | BHV_HORM)
+/// 'dragged' movement state
+#define BHV_DRGM (BHV_CTLM | BHV_DIAM)
+/// 'sleep' movement state
+#define BHV_SLPM (BHV_CTLM | BHV_VERM)
+/// all movement flags together
+#define BHV_MMMM (BHV_HORM | BHV_DIAM | BHV_VERM | BHV_CTLM)
+
+/// this item can be executed at random
+#define BHV_EXEC (1 <<  4)
+/// [a flag yet to be understood]
+#define BHV_____ (1 <<  5)
+/// this item`s animation can be looped
+#define BHV_LOOP (1 <<  6)
+/// the target offset shall be mirrored
+#define BHV_MIRR (1 <<  7)
+
+/// this item is an effect
+#define BHV_EFCT (1 << 31)
+
+
+
+/// follow offset type values
+
+/// 'fixed'
+#define FOT_FIXD 0x9A8F97BD
+/// 'mirror'
+#define FOT_MIRR 0x304E7075
+
+
+
+/// engine flags
+
+/// exiting request
+#define ENG_QUIT (1 << 31)
+
+
+
+/// default frame rate limiter in msec
 #define FRM_WAIT 40
 
 
 
-/// elementary animation unit
-typedef struct _UNIT {
-    char *path;           /// path to the original animation file
-    uint32_t uuid, *time; /// unique unit identifier and frame delays array
-    uint32_t fram, fcnt;  /// current frame and frame count
-    uint32_t xdim, ydim;  /// dimensions (actual, non-modified)
-    uint32_t xpos, ypos;  /// position of the unit`s lower-left corner
-    uint32_t xptr, yptr;  /// mouse position for dragging
-    uint64_t tstp;        /// timestamp of the previous frame
-    struct _UNIT *prev;   /// previous unit in the list
-    struct _UNIT *next;   /// next unit in the list
-} UNIT;
+/// doubly-linked list header
+#define HDR_LIST \
+    struct _LHDR *prev, *next;
+typedef struct _LHDR {
+    HDR_LIST;
+} LHDR;
 
-/// unit library
-typedef struct _ULIB {
-    char *path;           /// the folder from which the library was built
-    UNIT **uarr;          /// array of animation units
-    long ucnt;            /// length of the array
-    uint32_t flgs;        /// library flags (ULF_ prefix)
-    struct _ULIB *prev;   /// previous library in the list
-    struct _ULIB *next;   /// next library in the list
-} ULIB;
+/// doubly-linked list iterator
+typedef void (*ITER)(LHDR *item, uintptr_t data);
+
+/// behaviour/effect unit info (write-once, read-only)
+typedef struct _BINF {
+    AINF  unit[2];      /// image pair
+    T2IV  cntr[2];      /// image centers
+    T2IV  ptgt;         /// follow target relative coords
+    long  prob,         /// probability, 0-1000
+          dmin,         /// minimum duration in msec
+          dmax;         /// maximum duration in msec
+    float move;         /// movement speed in pixels per frame
+    uint32_t name,      /// behaviour/effect name hash
+             flgs;      /// behaviour/effect flags
+    struct _BINF *link, /// linked behaviour
+                 *trgt; /// follow target or effect target
+} BINF;
+
+/// unit library info (write-once, read-only)
+/// [TODO] behaviour groups
+/// [TODO] speech
+/// [TODO] interactions
+/// [TODO] categories
+typedef struct _LINF {
+    HDR_LIST;           /// list header
+    char *path,         /// the folder from which the library was built
+         *name;         /// human-readable name (may differ from PATH!)
+    BINF *barr;         /// available behaviours and effects
+    long  bcnt,         /// behaviours/effects count
+          icnt;         /// number of on-screen sprites from the library
+} LINF;
+
+/// actual on-screen sprite
+typedef struct _PICT {
+    HDR_LIST;           /// list header
+    T2FV  move,         /// movement direction
+          offs;         /// position of the unit`s lower-left corner
+    LINF *ulib;         /// unit library which the sprite belongs to
+    uint32_t indx,      /// behaviour index and direction (lowest bit)
+             fram;      /// current frame
+    uint64_t tfrm,      /// timestamp of the previous frame in msec
+             tmov,      /// timestamp of the previous movement in msec
+             tbhv;      /// timestamp of the previous behaviour in msec
+} PICT;
+
+/// engine data (client side)
+typedef struct _ENGC {
+    MENU *menu;         /// per-sprite context menu
+    LINF *libs;         /// sprite libraries list
+    PICT *pcur,         /// the sprite currently picked
+         *plst,         /// on-screen sprites list
+        **parr;         /// on-screen sprite pointers array
+    T2IV  ppos,         /// mouse pointer position
+          dims;         /// drawing area dimensions
+    uintptr_t engh;     /// rendering engine handle
+    uint32_t  pcnt,     /// number of on-screen sprites
+              seed,     /// random seed
+              flgs;     /// flags
+} ENGC;
 
 
 
-void MakeEmptyLib(ULIB **head, char *base, char *path);
-void FillLib(ULIB *ulib, char *pcnf, LOAD load);
-long UnitListFromLib(ULIB *ulib, long uses, long xdim, long ydim);
-void FreeEverything(ULIB **ulib);
+void  ListAppendHead(LHDR **list, long size);
+void  ListAppendTail(LHDR **list, long size);
+LHDR *ListIterateHeadToTail(LHDR *list, ITER iter, uintptr_t data);
+LHDR *ListIterateTailToHead(LHDR *list, ITER iter, uintptr_t data);
 
-uint32_t UpdateFrame(T2UV *data, uint64_t *time, uint32_t flgs,
+void InitMainMenu(ENGC *engc);
+long MakeSpriteArr(ENGC *engc);
+void FreeEverything(ENGC *engc);
+void FreeEmptySprite(LINF *elem, LINF **edge);
+void AppendLib(ENGC *engc, char *pcnf, char *base, char *path);
+
+uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
+                     T4FV *data, uint64_t *time, uint32_t flgs,
                      int32_t xptr, int32_t yptr, int32_t isel);
 
 
 
 /// external functions, have to be implemented or imported
-char *LoadFile(char *name, long *size);
+char *LoadFileZ(char *name, long *size);
