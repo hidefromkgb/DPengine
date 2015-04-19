@@ -20,11 +20,13 @@
 #define SCM_RSTD 1
 #define SCM_ROGL 2
 
-#define COM_IOPQ (1 << 31)
+#define COM_IOPQ  (1 << 31)
 
-#define WIN_IBGR (1 << 0)
-#define WIN_IPBO (1 << 1)
-#define WIN_IRGN (1 << 2)
+#define WIN_IBGR  (1 << 0)
+#define WIN_IPBO  (1 << 1)
+#define WIN_IRGN  (1 << 2)
+
+/// menu constants
 
 /// menu item is disabled
 #define MFL_GRAY  (1 << 0)
@@ -34,6 +36,17 @@
 #define MFL_CCHK  (1 << 2)
 /// checkbox is a radiobutton
 #define MFL_RCHK ((1 << 3) | MFL_CCHK)
+
+/// UFRM constants
+
+/// left mouse button
+#define UFR_LBTN  (1 << 0)
+/// middle mouse button
+#define UFR_MBTN  (1 << 1)
+/// right mouse button
+#define UFR_RBTN  (1 << 2)
+/// mouse input enabled
+#define UFR_MOUS  (1 << 3)
 
 
 
@@ -99,9 +112,9 @@ typedef struct _MENU {
     _________________________________________________________________________
     ENGH: handle of the engine object the call refers to
     USER: user-defined data pointer
-    DATA: display list; shares the format with <DATA> uniform (see the source
-          in core/ogl/shad.c, look for "main vertex shader" tag), except that
-          W is just the element`s UUID
+    DATA: display list; shares the format with <DATA> uniform (see comment in
+          ./ogl/oglstd.c, look for "main vertex shader" tag) except that W is
+          just the element`s UUID
     TIME: pointer to the current time value in ms (may update asynchronously)
     FLGS: mouse button flags (0 = released, 1 = pressed)
           bit 0: left
@@ -125,6 +138,14 @@ typedef uint32_t (*UFRM)(uintptr_t engh, uintptr_t user,
 LIB_OPEN MENU *EngineMenuFromTemplate(MENU *tmpl);
 
 /** _________________________________________________________________________
+    Updates menu item text.
+    _________________________________________________________________________
+    ITEM: pointer to the menu item
+    TEXT: UTF8 string that contains the new text
+ **/
+LIB_OPEN void EngineUpdateMenuItemText(MENU *item, uint8_t *text);
+
+/** _________________________________________________________________________
     Frees all memory that EngineMenuFromTemplate() used to create the menu.
     _________________________________________________________________________
     MENU: pointer to where the menu structure is located
@@ -145,8 +166,8 @@ LIB_OPEN void EngineOpenContextMenu(MENU *menu);
 LIB_OPEN uintptr_t EngineInitialize();
 
 /** _________________________________________________________________________
-    Reads animations asynchronously. All pointers (except PATH) are to remain
-    valid till EngineFinishLoading() call, since they are only updated there.
+    Reads animations asynchronously. All AINF`s have to remain valid till the
+    call to EngineFinishLoading(), since they are only updated there.
     AINF::UUID will contain a positive integer on success, 0 on error.
     _________________________________________________________________________
     ENGH: handle of the engine object the call refers to

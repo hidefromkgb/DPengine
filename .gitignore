@@ -1,7 +1,9 @@
 # Binaries
 win32.exe
+cocoa-mac
 linux-gtk
 *.dll
+*.dylib
 *.so
 
 # Animations
@@ -16,3 +18,7 @@ Ponies
 Thumbs.db
 *.def
 *.a
+
+# MacOS-specific
+.DS_Store
+__MACOSX

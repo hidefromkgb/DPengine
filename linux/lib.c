@@ -208,7 +208,7 @@ GdkGLDrawable *gtk_widget_gl_begin(GtkWidget *gwnd) {
 
 
 uint64_t TimeFunc() {
-    struct timespec spec;
+    struct timespec spec = {};
 
     clock_gettime(CLOCK_REALTIME, &spec);
     return spec.tv_sec * 1000 + spec.tv_nsec / 1000000;
@@ -254,9 +254,10 @@ gboolean DrawFunc(gpointer user) {
         return TRUE;
 
     gdk_window_get_pointer(hwnd, &xptr, &yptr, &gmod);
-    flgs = (gmod & GDK_BUTTON1_MASK)? 1 : 0
-         | (gmod & GDK_BUTTON2_MASK)? 2 : 0
-         | (gmod & GDK_BUTTON3_MASK)? 4 : 0;
+    flgs = ((gmod & GDK_BUTTON1_MASK)? UFR_LBTN : 0)
+         | ((gmod & GDK_BUTTON2_MASK)? UFR_MBTN : 0)
+         | ((gmod & GDK_BUTTON3_MASK)? UFR_RBTN : 0)
+         | ((gtk_window_is_active((GtkWindow*)engd->user[0]))? UFR_MOUS : 0);
     pick = SelectUnit(engd->uarr, engd->data, engd->size, xptr, yptr);
     engd->size = engd->ufrm((uintptr_t)engd, engd->udat, engd->data,
                             &engd->time, flgs, xptr, yptr, pick);

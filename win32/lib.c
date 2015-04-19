@@ -647,9 +647,10 @@ void RunMainLoop(ENGD *engd) {
             continue;
         GetCursorPos(&cpos);
         ScreenToClient(hwnd, &cpos);
-        xoff = ((GetAsyncKeyState(VK_LBUTTON))? 1 : 0)
-             | ((GetAsyncKeyState(VK_MBUTTON))? 2 : 0)
-             | ((GetAsyncKeyState(VK_RBUTTON))? 4 : 0);
+        xoff = ((GetAsyncKeyState(VK_LBUTTON))? UFR_LBTN : 0)
+             | ((GetAsyncKeyState(VK_MBUTTON))? UFR_MBTN : 0)
+             | ((GetAsyncKeyState(VK_RBUTTON))? UFR_RBTN : 0)
+             | ((GetActiveWindow() == hwnd)?    UFR_MOUS : 0);
         engd->size = engd->ufrm((uintptr_t)engd, engd->udat, engd->data,
                                 &engd->time, xoff, cpos.x, cpos.y,
                                  SelectUnit(engd->uarr, engd->data,

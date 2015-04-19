@@ -496,7 +496,7 @@ long SelectUnit(UNIT *uarr, T4FV *data, long size, long xptr, long yptr) {
 
 
 THR_FUNC ThrdFunc(THRD *data) {
-    while (~0) {
+    while (!0) {
         WaitSemaphore(data->orig, 0, data->uuid);
         if (!data->loop)
             break;
@@ -747,6 +747,16 @@ void EngineFreeMenu(MENU **menu) {
 
 
 
+void EngineUpdateMenuItemText(MENU *item, uint8_t *text) {
+    if (!item || !text)
+        return;
+
+    free(item->text);
+    item->text = (uint8_t*)ConvertUTF8((char*)text);
+}
+
+
+
 MENU *EngineMenuFromTemplate(MENU *tmpl) {
     MENU *retn, *iter;
 
@@ -935,8 +945,8 @@ void EngineRunMainLoop(uintptr_t engh, uint32_t xdim, uint32_t ydim,
         engd->data = calloc(size, sizeof(*engd->data));
 
         mtmp = TimeFunc() - engd->time;
-        printf(TXL_AEND" %lu objects, %lu ms: %0.3f ms/obj\n%s\n",
-               engd->uniq, mtmp, (float)mtmp / engd->uniq,
+        printf(TXL_AEND" (%lu CPUs) %lu objects, %lu ms: %0.3f ms/obj\n%s\n",
+               engd->ncpu, engd->uniq, mtmp, (float)mtmp / engd->uniq,
               (engd->rscm == SCM_ROGL)? TXL_ROGL : TXL_RSTD);
 
         FreeLocalization(&engd->tran);

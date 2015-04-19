@@ -226,9 +226,9 @@ ROGL *MakeRendererOGL(UNIT *uarr, ulong uniq, ulong size, ulong rgba) {
     fill = 6 * sizeof(*indx);
     curr = 4 * sizeof(*vert);
 
-    UNIF satr[] = {{.cdat = mtex * dhei * fill, .draw = GL_STATIC_DRAW_ARB,
+    UNIF satr[] = {{.cdat = mtex * dhei * fill, .draw = GL_STATIC_DRAW,
                     /** No name/type for indices! **/ .pdat = indx},
-                   {.cdat = mtex * dhei * curr, .draw = GL_STATIC_DRAW_ARB,
+                   {.cdat = mtex * dhei * curr, .draw = GL_STATIC_DRAW,
                     .name = "vert", .type = UNI_T3FV, .pdat = vert}},
          suni[] = {{.name = "data", .type = UNI_T1II, .pdat = (GLvoid*)0},
                    {.name = "dims", .type = UNI_T1II, .pdat = (GLvoid*)1},

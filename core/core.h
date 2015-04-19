@@ -4,7 +4,9 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
+
 #include <engine.h>
 #include <gif/gifstd.h>
 
@@ -30,12 +32,31 @@
         ".section .text;"          \
     );                             \
     extern char pvar[]
+#elif __APPLE__
+    #include <pthread.h>
+    #define THR_EXIT 0
+    #define THR_FAIL 0
+    #define THR_FUNC void *
+    #define HDR_SEMD pthread_mutex_t cmtx; \
+                     pthread_cond_t cvar;  \
+                     SEM_TYPE list, full;
+    #define INCBIN(file, pvar)     \
+    __asm__(                       \
+        ".section __DATA,__data\n" \
+        ".globl _"STRING(pvar)"\n" \
+        "_"STRING(pvar)":\n"       \
+        ".incbin \""file"\"\n"     \
+        ".byte 0\n"                \
+        ".align 4\n"               \
+        ".section __TEXT,__text\n" \
+    );                             \
+    extern char pvar[]
 #else
     #define THR_EXIT 0
     #define THR_FAIL 0
     #define THR_FUNC void *
     #define HDR_SEMD pthread_mutex_t cmtx; \
-                     pthread_cond_t  cvar; \
+                     pthread_cond_t cvar;  \
                      SEM_TYPE list, full;
     #define INCBIN(file, pvar)     \
     __asm__(                       \

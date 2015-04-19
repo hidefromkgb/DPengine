@@ -8,6 +8,31 @@ GLvoid *LoadedOpenGLFunctions[countof(StringOpenGLFunctions)] = {};
 
 
 
+#ifdef _WIN32
+GLvoid *GL_GET_PROC_ADDR(GLchar *name) {
+    return wglGetProcAddress(name);
+}
+#elif __APPLE__
+GLvoid *GL_GET_PROC_ADDR(GLchar *name) {
+    GLchar *real = malloc(strlen(name) + 2);
+    NSSymbol addr = NULL;
+
+    strcpy(real + 1, name);
+    *real = '_';
+    if (NSIsSymbolNameDefined(real))
+        addr = NSLookupAndBindSymbol(real);
+    free(real);
+
+    return (addr)? NSAddressOfSymbol(addr) : NULL;
+}
+#else
+GLvoid *GL_GET_PROC_ADDR(GLchar *name) {
+    return glXGetProcAddress((GLubyte*)name);
+}
+#endif
+
+
+
 GLint LoadOpenGLFunctions() {
     GLint iter = -1;
 
@@ -274,25 +299,25 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
     glGenBuffersARB(catr, retn->pvbo = malloc(catr * sizeof(*retn->pvbo)));
 
     retn->cind = patr[0].cdat / sizeof(GLuint);
-    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, retn->pvbo[0]);
-    glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER_ARB,
+    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, retn->pvbo[0]);
+    glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER,
                     patr[0].cdat, patr[0].pdat, patr[0].draw);
 
     for (iter = 1; iter < catr; iter++) {
-        glBindBufferARB(GL_ARRAY_BUFFER_ARB, retn->pvbo[iter]);
-        glBufferDataARB(GL_ARRAY_BUFFER_ARB,
+        glBindBufferARB(GL_ARRAY_BUFFER, retn->pvbo[iter]);
+        glBufferDataARB(GL_ARRAY_BUFFER,
                         patr[iter].cdat, patr[iter].pdat, patr[iter].draw);
     }
     for (shdr = 0; shdr < retn->cshd; shdr++) {
         glUseProgramObjectARB(retn->pshd[shdr].prog);
         glBindVertexArray(retn->pshd[shdr].pvao);
-        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, retn->pvbo[0]);
+        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, retn->pvbo[0]);
 
         for (iter = 1; iter < catr; iter++) {
             if (patr[iter].name
             && (aloc = glGetAttribLocation(retn->pshd[shdr].prog,
                                            patr[iter].name)) != -1) {
-                glBindBufferARB(GL_ARRAY_BUFFER_ARB, retn->pvbo[iter]);
+                glBindBufferARB(GL_ARRAY_BUFFER, retn->pvbo[iter]);
                 ecnt = 0;
                 switch (patr[iter].type) {
                     case UNI_T1IV:
@@ -341,8 +366,8 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
     }
     glUseProgramObjectARB(0);
     glBindVertexArray(0);
-    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
+    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindBufferARB(GL_ARRAY_BUFFER, 0);
     return retn;
 }
 
@@ -427,11 +452,11 @@ FRBO *MakeRBO(GLint xdim, GLint ydim) {
     data = retn->xdim * retn->ydim * 4;
 
     glGenBuffersARB(2, retn->pbuf);
-    glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, retn->pbuf[0]);
-    glBufferDataARB(GL_PIXEL_PACK_BUFFER_ARB, data, 0, GL_STREAM_READ_ARB);
-    glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, retn->pbuf[1]);
-    glBufferDataARB(GL_PIXEL_PACK_BUFFER_ARB, data, 0, GL_STREAM_READ_ARB);
-    glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
+    glBindBufferARB(GL_PIXEL_PACK_BUFFER, retn->pbuf[0]);
+    glBufferDataARB(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
+    glBindBufferARB(GL_PIXEL_PACK_BUFFER, retn->pbuf[1]);
+    glBufferDataARB(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
+    glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     return retn;
@@ -449,7 +474,7 @@ GLvoid BindRBO(FRBO *robj, GLboolean bind) {
 
 GLvoid FreeRBO(FRBO **robj) {
     if (robj && *robj) {
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glDeleteRenderbuffers(2, (*robj)->rbuf);
         glDeleteFramebuffers(1, &(*robj)->fbuf);

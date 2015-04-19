@@ -1,7 +1,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <dirent.h>
-#include <X11/Xlib.h>
 #include "../exec/exec.h"
 
 
@@ -31,15 +30,8 @@ int main(int argc, char *argv[]) {
     ENGC engc = {};
     LINF *libs;
 
-    Display *disp = XOpenDisplay(0);
-    if (!disp) {
-        printf("Failed to init X Window System!\n");
-        return -1;
-    }
-    Screen *pscr = DefaultScreenOfDisplay(disp);
-    engc.dims.x = pscr->width;
-    engc.dims.y = pscr->height;
-    XCloseDisplay(disp);
+    engc.dims.x = 800;
+    engc.dims.y = 600;
 
     uses = (argc > 1)? atol(argv[1]) : 0;
     uses = (uses > 0)? uses : 1;

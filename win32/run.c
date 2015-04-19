@@ -167,8 +167,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
 
         InitMainMenu(&engc);
         EngineFinishLoading(engc.engh);
-        ListIterateTailToHead((LHDR*)engc.libs,
-                              (ITER)FreeEmptySprite, (uintptr_t)&engc.libs);
+        TTH_ITER(engc.libs, PrepareSpriteArr, &engc.libs);
 
         /// [TODO] substitute this by GUI selection
         libs = engc.libs;

@@ -3,17 +3,15 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <GL/gl.h>
-
 #ifdef _WIN32
     typedef char GLchar;
+    #include <GL/gl.h>
     #include <windows.h>
-    #define GL_GET_PROC_ADDR(s)  wglGetProcAddress(s)
     #define GL_COMPILE_STATUS               0x8B81
     #define GL_FRAGMENT_SHADER              0x8B30
     #define GL_VERTEX_SHADER                0x8B31
     #define GL_READ_ONLY_ARB                0x88B8
-    #define GL_PIXEL_PACK_BUFFER_ARB        0x88EB
+    #define GL_PIXEL_PACK_BUFFER            0x88EB
     #define GL_READ_FRAMEBUFFER             0x8CA8
     #define GL_DRAW_FRAMEBUFFER             0x8CA9
     #define GL_FRAMEBUFFER                  0x8D40
@@ -25,16 +23,16 @@
     #define GL_TEXTURE_WRAP_R               0x8072
     #define GL_TEXTURE_3D                   0x806F
     #define GL_TEXTURE_2D_ARRAY             0x8C1A
-    #define GL_ARRAY_BUFFER_ARB             0x8892
-    #define GL_ELEMENT_ARRAY_BUFFER_ARB     0x8893
+    #define GL_ARRAY_BUFFER                 0x8892
+    #define GL_ELEMENT_ARRAY_BUFFER         0x8893
     #define GL_DEPTH_COMPONENT16            0x81A5
     #define GL_DEPTH_COMPONENT24            0x81A6
     #define GL_DEPTH_COMPONENT32            0x81A7
     #define GL_DEPTH_ATTACHMENT             0x8D00
-    #define GL_STREAM_READ_ARB              0x88E1
-    #define GL_STREAM_DRAW_ARB              0x88E0
-    #define GL_STATIC_DRAW_ARB              0x88E4
-    #define GL_DYNAMIC_DRAW_ARB             0x88E8
+    #define GL_STREAM_READ                  0x88E1
+    #define GL_STREAM_DRAW                  0x88E0
+    #define GL_STATIC_DRAW                  0x88E4
+    #define GL_DYNAMIC_DRAW                 0x88E8
     #define GL_CLAMP_TO_EDGE                0x812F
     #define GL_R8                           0x8229
     #define GL_RG8                          0x822B
@@ -54,9 +52,13 @@
     #define WGL_CONTEXT_MAJOR_VERSION_ARB   0x2091
     #define WGL_CONTEXT_MINOR_VERSION_ARB   0x2092
     #define WGL_CONTEXT_FLAGS_ARB           0x2094
+#elif __APPLE__
+    #include <mach-o/dyld.h>
+    #include <OpenGL/gl3.h>
+    #define APIENTRY
 #else
+    #include <GL/gl.h>
     #include <GL/glx.h>
-    #define GL_GET_PROC_ADDR(s)  glXGetProcAddress((GLubyte*)(s))
 #endif
 
 

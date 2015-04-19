@@ -97,6 +97,33 @@
 
 
 
+/// effect alignment types
+
+/// 'top_left'
+#define EMT_TNLA 0xE73713ED
+/// 'top'
+#define EMT_TOPA 0xA47C2B7E
+/// 'top_right'
+#define EMT_TNRA 0xECF514DD
+/// 'left'
+#define EMT_CNLA 0x7D6BA6E7
+/// 'center'
+#define EMT_CNTA 0x4E745BAB
+/// 'right'
+#define EMT_CNRA 0x0F854D3F
+/// 'bottom_left'
+#define EMT_BNLA 0x884F61CE
+/// 'bottom'
+#define EMT_BTMA 0x8819E73B
+/// 'bottom_right'
+#define EMT_BNRA 0xB9049E02
+/// 'any'
+#define EMT_RNDA 0x43E92567
+/// 'any-not_center'
+#define EMT_RCLA 0xD76D8510
+
+
+
 /// behaviour/effect flags
 
 /// no movement at all
@@ -128,16 +155,45 @@
 #define BHV_MMMM (BHV_HORM | BHV_DIAM | BHV_VERM | BHV_CTLM)
 
 /// this item can be executed at random
-#define BHV_EXEC (1 <<  4)
+#define BHV_EXEC (1 << 27)
 /// [a flag yet to be understood]
-#define BHV_____ (1 <<  5)
-/// this item`s animation can be looped
-#define BHV_LOOP (1 <<  6)
+#define BHV_____ (1 << 28)
 /// the target offset shall be mirrored
-#define BHV_MIRR (1 <<  7)
+#define BHV_MIRR (1 << 29)
+
+/// top-left alignment
+#define EFF_TNLA 0
+/// top alignment
+#define EFF_TOPA 1
+/// top-right alignment
+#define EFF_TNRA 2
+/// center-left alignment
+#define EFF_CNLA 3
+/// center alignment
+#define EFF_CNTA 4
+/// center-right alignment
+#define EFF_CNRA 5
+/// bottom-left alignment
+#define EFF_BNLA 6
+/// bottom alignment
+#define EFF_BTMA 7
+/// bottom-right alignment
+#define EFF_BNRA 8
+/// random alignment
+#define EFF_RNDA 9
+/// random centerless alignment
+#define EFF_RCLA 10
+/// alignment extraction value
+#define EFF_AAAA 0xF
+
+/// this item shall stay where it is and not follow its parent
+#define EFF_STAY (1 << 29)
+
+/// this item`s animation can be looped
+#define FLG_LOOP (1 << 30)
 
 /// this item is an effect
-#define BHV_EFCT (1 << 31)
+#define FLG_EFCT (1 << 31)
 
 
 
@@ -174,17 +230,20 @@ typedef void (*ITER)(LHDR *item, uintptr_t data);
 
 /// behaviour/effect unit info (write-once, read-only)
 typedef struct _BINF {
-    AINF  unit[2];      /// image pair
-    T2IV  cntr[2];      /// image centers
-    T2IV  ptgt;         /// follow target relative coords
-    long  prob,         /// probability, 0-1000
-          dmin,         /// minimum duration in msec
-          dmax;         /// maximum duration in msec
-    float move;         /// movement speed in pixels per frame
-    uint32_t name,      /// behaviour/effect name hash
-             flgs;      /// behaviour/effect flags
-    struct _BINF *link, /// linked behaviour
-                 *trgt; /// follow target or effect target
+    AINF  unit[2];  /// image pair
+    T2IV  cntr[2];  /// image centers
+    T2IV  ptgt;     /// follow target relative coords
+    long  prob,     /// probability, 0-1000
+          dmin,     /// minimum duration in msec
+          dmax,     /// maximum duration / cooldown in msec
+          neff,     /// number of linked effects
+          ieff,     /// effect array index of the first linked effect
+          igrp;     /// behaviour group index
+    float move;     /// movement speed in pixels per frame
+    uint32_t name,  /// name hash for behaviour / target for effect
+             flgs,  /// behaviour / effect flags
+             link,  /// linked behaviour index
+             trgt;  /// follow target name hash
 } BINF;
 
 /// unit library info (write-once, read-only)
@@ -193,40 +252,48 @@ typedef struct _BINF {
 /// [TODO] interactions
 /// [TODO] categories
 typedef struct _LINF {
-    HDR_LIST;           /// list header
-    char *path,         /// the folder from which the library was built
-         *name;         /// human-readable name (may differ from PATH!)
-    BINF *barr;         /// available behaviours and effects
-    long  bcnt,         /// behaviours/effects count
-          icnt;         /// number of on-screen sprites from the library
+    HDR_LIST;       /// list header
+    BINF *barr,     /// available behaviours
+         *earr,     /// available effects
+        **bgrp;     /// BARR elements ordered by behaviour group + probability
+    char *path,     /// the folder from which the library was built
+         *name;     /// human-readable name (may differ from PATH!)
+    long *ngrp,     /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
+         *prob,     /// sum of all behaviour probability coeffs per group
+          flgs,     /// flags
+          gcnt,     /// behaviour groups count
+          zcnt,     /// nonzero probability behaviours count
+          bcnt,     /// total behaviours count
+          ecnt,     /// total effects count
+          icnt;     /// number of on-screen sprites from the library
 } LINF;
 
 /// actual on-screen sprite
 typedef struct _PICT {
-    HDR_LIST;           /// list header
-    T2FV  move,         /// movement direction
-          offs;         /// position of the unit`s lower-left corner
-    LINF *ulib;         /// unit library which the sprite belongs to
-    uint32_t indx,      /// behaviour index and direction (lowest bit)
-             fram;      /// current frame
-    uint64_t tfrm,      /// timestamp of the previous frame in msec
-             tmov,      /// timestamp of the previous movement in msec
-             tbhv;      /// timestamp of the previous behaviour in msec
+    HDR_LIST;       /// list header
+    T2FV  move,     /// movement direction
+          offs;     /// position of the unit`s lower-left corner
+    LINF *ulib;     /// unit library which the sprite belongs to
+    uint32_t indx,  /// behaviour index and direction (lowest bit)
+             fram;  /// current frame
+    uint64_t tfrm,  /// timestamp of the next frame in msec
+             tmov,  /// timestamp of the next movement in msec
+             tbhv;  /// timestamp of the next behaviour in msec
 } PICT;
 
 /// engine data (client side)
 typedef struct _ENGC {
-    MENU *menu;         /// per-sprite context menu
-    LINF *libs;         /// sprite libraries list
-    PICT *pcur,         /// the sprite currently picked
-         *plst,         /// on-screen sprites list
-        **parr;         /// on-screen sprite pointers array
-    T2IV  ppos,         /// mouse pointer position
-          dims;         /// drawing area dimensions
-    uintptr_t engh;     /// rendering engine handle
-    uint32_t  pcnt,     /// number of on-screen sprites
-              seed,     /// random seed
-              flgs;     /// flags
+    MENU *menu;     /// per-sprite context menu
+    LINF *libs;     /// sprite libraries list
+    PICT *pcur,     /// the sprite currently picked
+         *plst,     /// on-screen sprites list
+        **parr;     /// on-screen sprite pointers array
+    T2IV  ppos,     /// mouse pointer position
+          dims;     /// drawing area dimensions
+    uintptr_t engh; /// rendering engine handle
+    uint32_t  pcnt, /// number of on-screen sprites
+              seed, /// random seed
+              flgs; /// flags
 } ENGC;
 
 
@@ -236,10 +303,15 @@ void  ListAppendTail(LHDR **list, long size);
 LHDR *ListIterateHeadToTail(LHDR *list, ITER iter, uintptr_t data);
 LHDR *ListIterateTailToHead(LHDR *list, ITER iter, uintptr_t data);
 
+#define HTT_ITER(list, iter, data) \
+    ListIterateHeadToTail((LHDR*)(list), (ITER)(iter), (uintptr_t)(data))
+#define TTH_ITER(list, iter, data) \
+    ListIterateTailToHead((LHDR*)(list), (ITER)(iter), (uintptr_t)(data))
+
 void InitMainMenu(ENGC *engc);
 long MakeSpriteArr(ENGC *engc);
 void FreeEverything(ENGC *engc);
-void FreeEmptySprite(LINF *elem, LINF **edge);
+void PrepareSpriteArr(LINF *elem, LINF **edge);
 void AppendLib(ENGC *engc, char *pcnf, char *base, char *path);
 
 uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
