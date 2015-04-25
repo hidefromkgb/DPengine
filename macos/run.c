@@ -3,6 +3,8 @@
 #include <dirent.h>
 #include "../exec/exec.h"
 
+#include <objc/objc-runtime.h>
+
 
 
 char *LoadFileZ(char *name, long *size) {
@@ -30,8 +32,14 @@ int main(int argc, char *argv[]) {
     ENGC engc = {};
     LINF *libs;
 
-    engc.dims.x = 800;
-    engc.dims.y = 600;
+    struct {
+        double x, y, z, w;
+    } dims;
+    objc_msgSend_stret((void*)&dims,
+                       (void*)objc_msgSend(objc_getClass("NSScreen"),
+                                           sel_registerName("mainScreen")),
+                       sel_registerName("visibleFrame"));
+    engc.dims = (T2IV){dims.z - dims.x, dims.w - dims.y};
 
     uses = (argc > 1)? atol(argv[1]) : 0;
     uses = (uses > 0)? uses : 1;

@@ -11,9 +11,8 @@
 			<Target title="RelJoined">
 				<Option output="../cocoa-mac" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
-				<Option type="1" />
+				<Option type="0" />
 				<Option compiler="gcc" />
-				<Option use_console_runner="0" />
 			</Target>
 			<Target title="DbgJoined">
 				<Option output="../cocoa-mac" prefix_auto="1" extension_auto="1" />
@@ -107,6 +106,9 @@
 		</Unit>
 		<Unit filename="lib.c">
 			<Option compilerVar="CC" />
+			<Option virtualFolder="src/lib/" />
+		</Unit>
+		<Unit filename="mac.h">
 			<Option virtualFolder="src/lib/" />
 		</Unit>
 		<Unit filename="run.c">

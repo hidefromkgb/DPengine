@@ -509,7 +509,7 @@ void RunMainLoop(ENGD *engd) {
                      G_CALLBACK(PopupMenu), engd);
 
     tmrt = g_timeout_add(   1, TimeFuncWrapper, &engd->time);
-    tmrf = g_timeout_add(1000, FPSFunc,  engd);
+    tmrf = g_timeout_add(1000, FPSFunc, engd);
     tmrd = g_idle_add(DrawFunc, engd);
 
     gtk_main();

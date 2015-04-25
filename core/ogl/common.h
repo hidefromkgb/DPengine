@@ -52,13 +52,16 @@
     #define WGL_CONTEXT_MAJOR_VERSION_ARB   0x2091
     #define WGL_CONTEXT_MINOR_VERSION_ARB   0x2092
     #define WGL_CONTEXT_FLAGS_ARB           0x2094
+    #define GL_GET_PROC_ADDR(s)  wglGetProcAddress(s)
 #elif __APPLE__
-    #include <mach-o/dyld.h>
     #include <OpenGL/gl3.h>
+    #include <dlfcn.h>
     #define APIENTRY
+    #define GL_GET_PROC_ADDR(s)  dlsym(RTLD_DEFAULT, s)
 #else
     #include <GL/gl.h>
     #include <GL/glx.h>
+    #define GL_GET_PROC_ADDR(s)  glXGetProcAddress((GLubyte*)s)
 #endif
 
 

@@ -8,31 +8,6 @@ GLvoid *LoadedOpenGLFunctions[countof(StringOpenGLFunctions)] = {};
 
 
 
-#ifdef _WIN32
-GLvoid *GL_GET_PROC_ADDR(GLchar *name) {
-    return wglGetProcAddress(name);
-}
-#elif __APPLE__
-GLvoid *GL_GET_PROC_ADDR(GLchar *name) {
-    GLchar *real = malloc(strlen(name) + 2);
-    NSSymbol addr = NULL;
-
-    strcpy(real + 1, name);
-    *real = '_';
-    if (NSIsSymbolNameDefined(real))
-        addr = NSLookupAndBindSymbol(real);
-    free(real);
-
-    return (addr)? NSAddressOfSymbol(addr) : NULL;
-}
-#else
-GLvoid *GL_GET_PROC_ADDR(GLchar *name) {
-    return glXGetProcAddress((GLubyte*)name);
-}
-#endif
-
-
-
 GLint LoadOpenGLFunctions() {
     GLint iter = -1;
 
