@@ -463,7 +463,7 @@ void RunMainLoop(ENGD *engd) {
             gtk_widget_realize(gwnd);
 
             if (!(pGLD = gtk_widget_gl_begin(gwnd))
-            ||  !LoadOpenGLFunctions()) {
+            || (LoadOpenGLFunctions() <= 0)) {
                 printf(TXL_FAIL" %s\n", engd->tran[TXT_NOGL]);
                 gtk_widget_destroy(gwnd);
                 RestartEngine(engd, SCM_RSTD);

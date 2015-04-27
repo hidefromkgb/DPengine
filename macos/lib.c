@@ -3,9 +3,61 @@
 #include <ogl/oglstd.h>
 #include <core.h>
 
-/// contains variable definitions and function implementations
-/// shall -NOT- be reincluded
 #include "mac.h"
+
+/// name of the instance variable to access the engine structure
+#define ENGD_ACCESSOR "e"
+
+
+
+const char *StringObjCClasses[] = {STRING_OBJC_CLASSES, 0};
+id LoadedObjCClasses[countof(StringObjCClasses)] = {};
+
+const char *StringObjCSelectors[] = {STRING_OBJC_SELECTORS, 0};
+SEL LoadedObjCSelectors[countof(StringObjCSelectors)] = {};
+
+
+
+void LoadObjC() {
+    long iter;
+
+    if (!*LoadedObjCClasses) {
+        iter = -1;
+        while (StringObjCClasses[++iter])
+            LoadedObjCClasses[iter] =
+                objc_getClass(StringObjCClasses[iter]);
+        iter = -1;
+        while (StringObjCSelectors[++iter])
+            LoadedObjCSelectors[iter] =
+                sel_registerName(StringObjCSelectors[iter]);
+    }
+}
+
+
+
+id Subclass(id base, char *name, char *flds[], OMSC *mths) {
+    Class retn = objc_allocateClassPair((Class)base, name, 0);
+    long iter;
+
+    iter = -1;
+    /// adding fields
+    while (flds[++iter])
+        class_addIvar(retn, flds[iter],
+                      sizeof(id), (sizeof(id) >= 8)? 3 : 2, 0);
+    iter = -1;
+    /// overloading methods
+    while (mths[++iter].func)
+        class_addMethod(retn, mths[iter].name, mths[iter].func, 0);
+
+    objc_registerClassPair(retn);
+    return (id)retn;
+}
+
+
+
+inline id UTF8(void *utf8) {
+    return stringWithUTF8String_(NSString, utf8);
+}
 
 
 
@@ -151,20 +203,6 @@ void InitRenderer(ENGD *engd) {
 
 
 
-void MenuResponder(id send) {
-    MENU *item =
-        (typeof(item))objc_getAssociatedObject(send, MenuResponderSelector);
-
-    if (item) {
-        ProcessMenuItem(item);
-        if (item->flgs & MFL_CCHK)
-            setState_(objc_getAssociatedObject(send, MenuResponder),
-                     (item->flgs & MFL_VCHK)? NSOnState : NSOffState);
-    }
-}
-
-
-
 id Submenu(MENU *menu, id base) {
     if (!menu)
         return 0;
@@ -183,8 +221,7 @@ id Submenu(MENU *menu, id base) {
         }
         else {
             item = initWithTitle_action_keyEquivalent_
-                  (alloc(NSMenuItem), UTF8(menu->text),
-                   MenuResponderSelector, null);
+                  (alloc(NSMenuItem), UTF8(menu->text), MenuSelector, null);
             if (menu->flgs & MFL_CCHK) {
                 setOnStateImage_(item, (menu->flgs & MFL_RCHK & ~MFL_CCHK)?
                                         rbtn : cbtn);
@@ -196,22 +233,30 @@ id Submenu(MENU *menu, id base) {
                 setSubmenu_(item, next);
                 release(next);
             }
+            /// might be dangerous if sizeof(long) is less than sizeof(MENU*)
+            setTag_(item, menu);
+
             setEnabled_(item, (menu->flgs & MFL_GRAY)? false : true);
-            id prox = alloc(base);
-            objc_setAssociatedObject(prox, MenuResponderSelector, (id)menu,
-                                     OBJC_ASSOCIATION_ASSIGN);
-            objc_setAssociatedObject(prox, MenuResponder, item,
-                                     OBJC_ASSOCIATION_ASSIGN);
-            setTarget_(item, prox);
+            setTarget_(item, base);
             addItem_(retn, item);
-            /// SHALL BE FREED, BUT IT BREAKS MENU HANDLING; MEMLEAK FOR NOW
-//            release(prox);
             release(item);
             release(null);
         }
         menu++;
     }
     return retn;
+}
+
+
+
+void OnMenu(id send, id bred, id this) {
+    MENU *item = (typeof(item))tag(this);
+
+    if (item) {
+        ProcessMenuItem(item);
+        if (item->flgs & MFL_CCHK)
+            setState_(this, (item->flgs & MFL_VCHK)? NSOnState : NSOffState);
+    }
 }
 
 
@@ -233,23 +278,34 @@ void OnFPS(CFRunLoopTimerRef time, void *data) {
 
 
 void OnCalc(CFRunLoopTimerRef time, void *data) {
+    static CGPoint (*GetT2DV)(id, SEL) = (typeof(GetT2DV))
+#ifdef __i386__
+        /// unsure if this is the correct function
+        objc_msgSend_fpret;
+#else
+        objc_msgSend;
+#endif
+
     ENGD *engd = (typeof(engd))data;
     long pick, flgs;
-    CGPoint spot;
+    CGPoint dptr;
 
     engd->tfrm = engd->time;
     if (!engd->draw)
         return;
 
-//    mouseLocationOutsideOfEventStream((id)engd->user[2], &spot);
+    dptr = GetT2DV((id)engd->user[2], mouseLocationOutsideOfEventStream);
+    dptr.y = engd->pict.ydim - dptr.y;
+    pick = pressedMouseButtons(NSEvent);
 
-    flgs = ((/**  left  mouse button pressed **/0)? UFR_LBTN : 0)
-         | ((/** middle mouse button pressed **/0)? UFR_MBTN : 0)
-         | ((/**  right mouse button pressed **/0)? UFR_RBTN : 0)
-         | ((/** the main window got focused **/0)? UFR_MOUS : 0);
-    pick = SelectUnit(engd->uarr, engd->data, engd->size, spot.x, spot.y);
+    /// [TODO] properly determine if the window is active
+    flgs = 1;
+
+    flgs = ((pick & 1)? UFR_LBTN : 0) | ((pick & 2)? UFR_RBTN : 0)
+         | ((pick & 4)? UFR_MBTN : 0) | ((flgs)? UFR_MOUS : 0);
+    pick = SelectUnit(engd->uarr, engd->data, engd->size, dptr.x, dptr.y);
     engd->size = engd->ufrm((uintptr_t)engd, engd->udat, engd->data,
-                            &engd->time, flgs, spot.x, spot.y, pick);
+                            &engd->time, flgs, dptr.x, dptr.y, pick);
     if (!engd->size) {
         RestartEngine(engd, SCM_QUIT);
         return;
@@ -266,8 +322,6 @@ void OnCalc(CFRunLoopTimerRef time, void *data) {
             break;
         }
         case SCM_ROGL: {
-            /// get current context here
-            ///
             DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
                             engd->size, engd->flgs & COM_IOPQ);
             break;
@@ -279,9 +333,10 @@ void OnCalc(CFRunLoopTimerRef time, void *data) {
 
 
 
-void OnDraw(CGRect rect) {
-    id thrd = sharedApplication(NSApplication);
-    ENGD *engd = (typeof(engd))objc_getAssociatedObject(thrd, RunMainLoop);
+void OnDraw(CGRect rect, id this) {
+    ENGD *engd;
+
+    object_getInstanceVariable(this, ENGD_ACCESSOR, (void**)&engd);
     CGRect full = {{0, 0}, {engd->pict.xdim, engd->pict.ydim}};
 
     if (!engd->draw)
@@ -299,9 +354,9 @@ void OnDraw(CGRect rect) {
             CGImageRelease(iref);
             break;
         }
-        case SCM_ROGL: {
+        case SCM_ROGL:
+            flushBuffer(openGLContext(this));
             break;
-        }
     }
 }
 
@@ -321,23 +376,28 @@ CFRunLoopTimerRef AddTimer(ulong time, void *func, void *data) {
 void RunMainLoop(ENGD *engd) {
     INCBIN("../core/icon.gif", MainIcon);
 
-    static SEL DrawRect;
+    static CGFloat (*GetT1DV)(id, SEL) = (typeof(GetT1DV))
+#ifdef __i386__
+        objc_msgSend_fpret;
+#else
+        objc_msgSend;
+#endif
 
     /// very important call; without it, nothing below would ever work
-    if (LoadObjC()) {
-        DrawRect = N("drawRect:");
-        MenuResponderSelector = N("_M");
-    }
+    LoadObjC();
+
 //    printf("BEGIN\n");
 
-    /// menu delegate class, view delegate class, view delegate instance
-    id mdlg, vdlg, view;
+    /// view delegate class, view delegate instance
+    id vdlg, view;
+
+    /// view delegate`s methods (line 1) and custom fields (line 2)
+    OMSC  vmet[] = {{drawRect_, OnDraw}, {MenuSelector, OnMenu}, {}};
+    char *vfld[] = {ENGD_ACCESSOR, 0};
 
     id pool = init(alloc(NSAutoreleasePool));
     id thrd = sharedApplication(NSApplication);
     setActivationPolicy_(thrd, NSApplicationActivationPolicyAccessory);
-    objc_setAssociatedObject(thrd, RunMainLoop, (id)engd,
-                             OBJC_ASSOCIATION_ASSIGN);
 
     CGRect dims = {{0, 0}, {engd->pict.xdim, engd->pict.ydim}};
 
@@ -345,34 +405,31 @@ void RunMainLoop(ENGD *engd) {
              (alloc(NSWindow), dims, NSClosableWindowMask,
               NSBackingStoreBuffered, false);
     setLevel_(hwnd, NSMainMenuWindowLevel + 1);
-    setBackgroundColor_(hwnd, colorWithCalibratedRed_green_blue_alpha_(NSColor, 0.0, 0.0, 0.0, 0.0));
+    setBackgroundColor_(hwnd, clearColor(NSColor));
     setHasShadow_(hwnd, false);
     setOpaque_(hwnd, false);
 
-    /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME
-    engd->rscm = SCM_RSTD;
-
     switch (engd->rscm) {
         case SCM_ROGL:
-            if (!LoadOpenGLFunctions()) {
-                printf(TXL_FAIL" %s\n", engd->tran[TXT_NOGL]);
-                engd->rscm = SCM_RSTD;
-            }
-            else {
-                vdlg = Overload(NSOpenGLView, "MyNSOpenGLView",
-                               (OVER[]){{DrawRect, OnDraw}, {}});
-                uint32_t attr[] = {
-                    NSOpenGLPFADoubleBuffer,
-                    NSOpenGLPFADepthSize, 32,
-                    0
-                };
-                id pfmt =
-                    initWithAttributes_(alloc(NSOpenGLPixelFormat), attr);
+            if (LoadOpenGLFunctions() > 0) {
+                id pfmt, ctxt;
+                GLint attr[] = {NSOpenGLPFADoubleBuffer,
+                                NSOpenGLPFADepthSize, 32, 0},
+                      opaq = 0;
+
+                vdlg = Subclass(NSOpenGLView, "MyOpenGLView", vfld, vmet);
+                pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat), attr);
                 view = initWithFrame_pixelFormat_(alloc(vdlg), dims, pfmt);
-                setContentView_(hwnd, view);
-                setDelegate_(hwnd, view);
+
+                makeCurrentContext((ctxt = openGLContext(view)));
+                setValues_forParameter_(ctxt, &opaq, NSOpenGLCPSurfaceOpacity);
+                release(pfmt);
                 break;
             }
+            printf(TXL_FAIL" %s\n", engd->tran[TXT_NOGL]);
+            engd->rscm = SCM_RSTD;
+            /// falling through
+
         case SCM_RSTD: {
             CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
             engd->user[0] = (typeof(*engd->user))
@@ -385,23 +442,21 @@ void RunMainLoop(ENGD *engd) {
                 CGBitmapContextGetData((CGContextRef)engd->user[0]);
             CGColorSpaceRelease(drgb);
 
-            vdlg = Overload(NSView, "MyNSView",
-                           (OVER[]){{DrawRect, OnDraw}, {}});
+            vdlg = Subclass(NSView, "MyView", vfld, vmet);
             view = initWithFrame_(alloc(vdlg), dims);
-            setContentView_(hwnd, view);
-            setDelegate_(hwnd, view);
             break;
         }
     }
+    object_setInstanceVariable(view, ENGD_ACCESSOR, engd);
+    setContentView_(hwnd, view);
+    setDelegate_(hwnd, view);
     InitRenderer(engd);
 
     id sbar = systemStatusBar(NSStatusBar);
     id icon = statusItemWithLength_(sbar, NSVariableStatusItemLength);
     setHighlightMode_(icon, true);
 
-
-
-    size_t sdim = thickness(sbar);
+    size_t sdim = GetT1DV(sbar, thickness);
 
     /// the size is wrong, but let it be: MainIcon does have a GIF ending
     ASTD *igif = MakeDataAnimStd(MainIcon, 1024 * 1024);
@@ -423,11 +478,7 @@ void RunMainLoop(ENGD *engd) {
     CGContextRelease(ctxt);
     free(bptr);
 
-
-
-    mdlg = Overload(NSMenuItem, "MyNSMenuItem",
-                   (OVER[]){{MenuResponderSelector, MenuResponder}, {}});
-    id menu = Submenu(engd->menu, mdlg);
+    id menu = Submenu(engd->menu, view);
     setMenu_(icon, menu);
     release(menu);
 
@@ -441,17 +492,12 @@ void RunMainLoop(ENGD *engd) {
     makeKeyAndOrderFront_(hwnd, hwnd);
     set(pointingHandCursor(NSCursor)); /// why does this change nothing?
 
-    /// dispatch loop starts here
+    /// run loop starts here
     run(thrd);
 
     CFRunLoopTimerInvalidate(tmrd);
     CFRunLoopTimerInvalidate(tmrf);
     CFRunLoopTimerInvalidate(tmrt);
-    release(view);
-    release(hwnd);
-    release(pool);
-    objc_disposeClassPair((Class)mdlg);
-    objc_disposeClassPair((Class)vdlg);
 
     switch (engd->rscm) {
         case SCM_RSTD:
@@ -464,5 +510,10 @@ void RunMainLoop(ENGD *engd) {
             break;
         }
     }
+    release(view);
+    release(hwnd);
+    release(pool);
+    objc_disposeClassPair((Class)vdlg);
+
 //    printf("END!\n");
 }

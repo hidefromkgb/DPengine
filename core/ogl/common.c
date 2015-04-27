@@ -3,7 +3,7 @@
 
 
 
-GLchar *StringOpenGLFunctions[] = {GL_FUNCTION_NAMES_LIST, 0};
+GLchar *StringOpenGLFunctions[] = {STRING_OPENGL_FUNCTIONS, 0};
 GLvoid *LoadedOpenGLFunctions[countof(StringOpenGLFunctions)] = {};
 
 
@@ -16,9 +16,9 @@ GLint LoadOpenGLFunctions() {
             continue;
         if (!(LoadedOpenGLFunctions[iter] =
               GL_GET_PROC_ADDR(StringOpenGLFunctions[iter])))
-            return 0;
+            return -iter - 1;
     }
-    return ~0;
+    return iter;
 }
 
 

@@ -240,7 +240,7 @@ void ReadRBO(FRBO *robj, PICT *pict, ulong flgs) {
     void *bptr;
 
     if (flgs & WIN_IPBO)
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, robj->pbuf[robj->swiz]);
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, robj->fbuf);
     glReadPixels(0, 0, robj->xdim, robj->ydim,
                 (flgs & WIN_IBGR)? GL_BGRA : GL_RGBA,
@@ -249,13 +249,13 @@ void ReadRBO(FRBO *robj, PICT *pict, ulong flgs) {
 
     if (flgs & WIN_IPBO) {
         robj->swiz ^= 1;
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, robj->pbuf[robj->swiz]);
-        bptr = glMapBufferARB(GL_PIXEL_PACK_BUFFER_ARB, GL_READ_ONLY_ARB);
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
+        bptr = glMapBufferARB(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
         if (bptr) {
             memcpy(pict->bptr, bptr, pict->xdim * pict->ydim * sizeof(BGRA));
-            glUnmapBufferARB(GL_PIXEL_PACK_BUFFER_ARB);
+            glUnmapBufferARB(GL_PIXEL_PACK_BUFFER);
         }
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
     }
 }
 
@@ -612,7 +612,7 @@ void RunMainLoop(ENGD *engd) {
             ppfd.iLayerType = PFD_MAIN_PLANE;
             SetPixelFormat(mwdc, ChoosePixelFormat(mwdc, &ppfd), &ppfd);
             wglMakeCurrent(mwdc, mwrc = wglCreateContext(mwdc));
-            if (!LoadOpenGLFunctions()) {
+            if (LoadOpenGLFunctions() <= 0) {
                 Message(NULL, (char*)engd->tran[TXT_NOGL],
                         NULL, MB_OK | MB_ICONEXCLAMATION);
                 RestartEngine(engd, SCM_RSTD);

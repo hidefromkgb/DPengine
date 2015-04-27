@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <math.h>
 
+#define GL_GEN_VERTEX_ARRAYS "glGenVertexArrays"
+#define GL_BIND_VERTEX_ARRAY "glBindVertexArray"
+#define GL_DEL_VERTEX_ARRAYS "glDeleteVertexArrays"
+
 #ifdef _WIN32
     typedef char GLchar;
     #include <GL/gl.h>
@@ -10,7 +14,7 @@
     #define GL_COMPILE_STATUS               0x8B81
     #define GL_FRAGMENT_SHADER              0x8B30
     #define GL_VERTEX_SHADER                0x8B31
-    #define GL_READ_ONLY_ARB                0x88B8
+    #define GL_READ_ONLY                    0x88B8
     #define GL_PIXEL_PACK_BUFFER            0x88EB
     #define GL_READ_FRAMEBUFFER             0x8CA8
     #define GL_DRAW_FRAMEBUFFER             0x8CA9
@@ -58,6 +62,14 @@
     #include <dlfcn.h>
     #define APIENTRY
     #define GL_GET_PROC_ADDR(s)  dlsym(RTLD_DEFAULT, s)
+    /// wasted a gazillion hours in CGDB tracking this down...
+    /// why, Apple, why??? >_<
+    #undef  GL_GEN_VERTEX_ARRAYS
+    #undef  GL_BIND_VERTEX_ARRAY
+    #undef  GL_DEL_VERTEX_ARRAYS
+    #define GL_GEN_VERTEX_ARRAYS "glGenVertexArraysAPPLE"
+    #define GL_BIND_VERTEX_ARRAY "glBindVertexArrayAPPLE"
+    #define GL_DEL_VERTEX_ARRAYS "glDeleteVertexArraysAPPLE"
 #else
     #include <GL/gl.h>
     #include <GL/glx.h>
@@ -66,59 +78,59 @@
 
 
 
-#define GL_FUNCTION_NAMES_LIST \
-       "glUniform1iv", \
-       "glUniform1uiv", \
-       "glUniform1fv", \
-       "glUniform2iv", \
-       "glUniform2uiv", \
-       "glUniform2fv", \
-       "glUniform3iv", \
-       "glUniform3uiv", \
-       "glUniform3fv", \
-       "glUniform4iv", \
-       "glUniform4uiv", \
-       "glUniform4fv", \
-       "glUniformMatrix4fv", \
-       "glUseProgramObjectARB", \
-       "glGetProgramInfoLog", \
-       "glGetShaderInfoLog", \
-       "glGetProgramiv", \
-       "glGetShaderiv", \
-       "glCreateProgram", \
-       "glDeleteProgram", \
-       "glCreateShader", \
-       "glDeleteShader", \
-       "glAttachShader", \
-       "glShaderSource", \
-       "glCompileShader", \
-       "glLinkProgram", \
-       "glGetAttribLocation", \
-       "glGetUniformLocation", \
-       "glEnableVertexAttribArray", \
-       "glVertexAttribPointer", \
-       "glVertexAttribIPointer", \
-       "glGenVertexArrays", \
-       "glBindVertexArray", \
-       "glDeleteVertexArrays", \
-       "glActiveTextureARB", \
-       "glGenBuffersARB", \
-       "glBindBufferARB", \
-       "glBufferDataARB", \
-       "glBufferSubDataARB", \
-       "glDeleteBuffersARB", \
-       "glGenFramebuffers", \
-       "glGenRenderbuffers", \
-       "glDeleteFramebuffers", \
-       "glDeleteRenderbuffers", \
-       "glBindFramebuffer", \
-       "glBindRenderbuffer", \
-       "glRenderbufferStorage", \
-       "glFramebufferTexture2D", \
-       "glFramebufferRenderbuffer", \
-       "glMapBufferARB", \
-       "glUnmapBufferARB", \
-       "glTexImage3D"
+#define STRING_OPENGL_FUNCTIONS  \
+    "glUniform1iv",              \
+    "glUniform1uiv",             \
+    "glUniform1fv",              \
+    "glUniform2iv",              \
+    "glUniform2uiv",             \
+    "glUniform2fv",              \
+    "glUniform3iv",              \
+    "glUniform3uiv",             \
+    "glUniform3fv",              \
+    "glUniform4iv",              \
+    "glUniform4uiv",             \
+    "glUniform4fv",              \
+    "glUniformMatrix4fv",        \
+    "glUseProgramObjectARB",     \
+    "glGetProgramInfoLog",       \
+    "glGetShaderInfoLog",        \
+    "glGetProgramiv",            \
+    "glGetShaderiv",             \
+    "glCreateProgram",           \
+    "glDeleteProgram",           \
+    "glCreateShader",            \
+    "glDeleteShader",            \
+    "glAttachShader",            \
+    "glShaderSource",            \
+    "glCompileShader",           \
+    "glLinkProgram",             \
+    "glGetAttribLocation",       \
+    "glGetUniformLocation",      \
+    "glEnableVertexAttribArray", \
+    "glVertexAttribPointer",     \
+    "glVertexAttribIPointer",    \
+     GL_GEN_VERTEX_ARRAYS,       \
+     GL_BIND_VERTEX_ARRAY,       \
+     GL_DEL_VERTEX_ARRAYS,       \
+    "glActiveTextureARB",        \
+    "glGenBuffersARB",           \
+    "glBindBufferARB",           \
+    "glBufferDataARB",           \
+    "glBufferSubDataARB",        \
+    "glDeleteBuffersARB",        \
+    "glGenFramebuffers",         \
+    "glGenRenderbuffers",        \
+    "glDeleteFramebuffers",      \
+    "glDeleteRenderbuffers",     \
+    "glBindFramebuffer",         \
+    "glBindRenderbuffer",        \
+    "glRenderbufferStorage",     \
+    "glFramebufferTexture2D",    \
+    "glFramebufferRenderbuffer", \
+    "glMapBufferARB",            \
+    "glUnmapBufferARB",          \
+    "glTexImage3D"
 
 /// uniform type constants have to match the corresponding
 /// uniform loaders in LoadedOpenGLFunctions[] table

@@ -10,7 +10,11 @@ N.B.: to be able to build on Windows using Code::Blocks, go to Settings → Comp
 
 ## Release notes
 
-Still no Mac support, but other things like hardware compatibility and cross-platform code percent have undergone many improvements. Stay tuned.
+MacOS X support! Finally!
+
+By now, only tested on a virtualized 10.8, but theoretically the oldest supported version is somewhere near 10.5.
+
+OpenGL renderer is present but mostly untested, due to VM being the only Mac around.
 
 ## License
 
