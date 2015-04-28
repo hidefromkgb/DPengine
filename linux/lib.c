@@ -137,13 +137,15 @@ char *ConvertUTF8(char *utf8) {
 
 
 long CountCPUs() {
-    return min(sizeof(SEM_TYPE) * 8, max(1, sysconf(_SC_NPROCESSORS_ONLN)));
+    return min(sizeof(SEM_TYPE) * CHAR_BIT,
+               max(1, sysconf(_SC_NPROCESSORS_ONLN)));
 }
 
 
 
 void MakeThread(THRD *thrd) {
     pthread_t pthr;
+
     pthread_create(&pthr, 0, (void *(*)(void*))ThrdFunc, thrd);
 }
 
@@ -498,7 +500,7 @@ void RunMainLoop(ENGD *engd) {
     BGRA *bptr = ExtractRescaleSwizzleAlign(igif, 0xC6, 0, xdim, ydim);
 
     pbuf = gdk_pixbuf_new_from_data((guchar*)bptr, GDK_COLORSPACE_RGB, TRUE,
-                                    8, xdim, ydim, xdim * sizeof(*bptr),
+                                    CHAR_BIT, xdim, ydim, xdim * sizeof(*bptr),
                                     (GdkPixbufDestroyNotify)free, bptr);
     FreeAnimStd(&igif);
 

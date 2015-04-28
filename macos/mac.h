@@ -1,6 +1,6 @@
+#include <ApplicationServices/ApplicationServices.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CGBitmapContext.h>
-#include <CoreGraphics/CGImage.h>
 #include <objc/objc-runtime.h>
 
 
@@ -38,6 +38,43 @@ enum {
     NSDockWindowLevel     =  5,
     NSSubmenuWindowLevel  = 10,
     NSMainMenuWindowLevel = 20,
+};
+enum {
+    NSTrackingMouseEnteredAndExited    = (1 << 0),
+    NSTrackingMouseMoved               = (1 << 1),
+    NSTrackingCursorUpdate             = (1 << 2),
+    NSTrackingActiveWhenFirstResponder = (1 << 3),
+    NSTrackingActiveInKeyWindow        = (1 << 4),
+    NSTrackingActiveInActiveApp        = (1 << 5),
+    NSTrackingActiveAlways             = (1 << 6),
+    NSTrackingAssumeInside             = (1 << 7),
+    NSTrackingInVisibleRect            = (1 << 8),
+    NSTrackingEnabledDuringMouseDrag   = (1 << 9),
+};
+enum {
+    NSLeftMouseDown      =  1,
+    NSLeftMouseUp        =  2,
+    NSRightMouseDown     =  3,
+    NSRightMouseUp       =  4,
+    NSMouseMoved         =  5,
+    NSLeftMouseDragged   =  6,
+    NSRightMouseDragged  =  7,
+    NSMouseEntered       =  8,
+    NSMouseExited        =  9,
+    NSKeyDown            = 10,
+    NSKeyUp              = 11,
+    NSFlagsChanged       = 12,
+    NSAppKitDefined      = 13,
+    NSSystemDefined      = 14,
+    NSApplicationDefined = 15,
+    NSPeriodic           = 16,
+    NSCursorUpdate       = 17,
+    NSScrollWheel        = 22,
+    NSTabletPoint        = 23,
+    NSTabletProximity    = 24,
+    NSOtherMouseDown     = 25,
+    NSOtherMouseUp       = 26,
+    NSOtherMouseDragged  = 27,
 };
 enum {
     NSOpenGLPFAAllRenderers          =   1,
@@ -120,7 +157,8 @@ typedef struct _OMSC {
        "NSOpenGLPixelFormat",  \
        "NSGraphicsContext",    \
        "NSCursor",             \
-       "NSEvent"
+       "NSEvent",              \
+       "NSTrackingArea"
 
 #define NSObject             (LoadedObjCClasses[ 0])
 #define NSApplication        (LoadedObjCClasses[ 1])
@@ -139,6 +177,7 @@ typedef struct _OMSC {
 #define NSGraphicsContext    (LoadedObjCClasses[14])
 #define NSCursor             (LoadedObjCClasses[15])
 #define NSEvent              (LoadedObjCClasses[16])
+#define NSTrackingArea       (LoadedObjCClasses[17])
 
 
 
@@ -152,6 +191,7 @@ typedef struct _OMSC {
        "clearColor",                                   \
        "imageNamed:",                                  \
        "initWithCGImage:size:",                        \
+       "initWithRect:options:owner:userInfo:",         \
        "initWithContentRect:styleMask:backing:defer:", \
        "initWithTitle:action:keyEquivalent:",          \
        "makeKeyAndOrderFront:",                        \
@@ -207,9 +247,16 @@ typedef struct _OMSC {
        "openGLContext",                                \
        "flushBuffer",                                  \
        "makeCurrentContext",                           \
-       "setValues:forParameter:"
-
-
+       "setValues:forParameter:",                      \
+       "popUpContextMenu:withEvent:forView:",          \
+       "windowNumber",                                 \
+       "postEvent:atStart:",                           \
+       "addTrackingArea:",                             \
+       "enableCursorRects",                            \
+       "resetCursorRects",                             \
+       "addCursorRect:cursor:",                        \
+       /** srsly, next line is just batshit insane **/ \
+       "otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:"
 
 #define init(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[ 0])
 #define alloc(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[ 1])
@@ -220,59 +267,73 @@ typedef struct _OMSC {
 #define clearColor(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[ 6])
 #define imageNamed_(inst, s)                                           objc_msgSend(inst, LoadedObjCSelectors[ 7], s)
 #define initWithCGImage_size_(inst, i, s)                              objc_msgSend(inst, LoadedObjCSelectors[ 8], i, s)
-#define initWithContentRect_styleMask_backing_defer_(inst, r, m, b, d) objc_msgSend(inst, LoadedObjCSelectors[ 9], r, (unsigned)(m), (unsigned)(b), (bool)(d))
-#define initWithTitle_action_keyEquivalent_(inst, t, a, k)             objc_msgSend(inst, LoadedObjCSelectors[10], t, a, k)
-#define makeKeyAndOrderFront_(inst, w)                                 objc_msgSend(inst, LoadedObjCSelectors[11], w)
-#define run(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[12])
-#define separatorItem(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[13])
-#define setActivationPolicy_(inst, p)                                  objc_msgSend(inst, LoadedObjCSelectors[14], (unsigned)(p))
-#define setAutoenablesItems_(inst, b)                                  objc_msgSend(inst, LoadedObjCSelectors[15], (bool)(b))
-#define setBackgroundColor_(inst, c)                                   objc_msgSend(inst, LoadedObjCSelectors[16], c)
-#define setDelegate_(inst, d)                                          objc_msgSend(inst, LoadedObjCSelectors[17], d)
-#define setEnabled_(inst, b)                                           objc_msgSend(inst, LoadedObjCSelectors[18], (bool)(b))
-#define setHasShadow_(inst, b)                                         objc_msgSend(inst, LoadedObjCSelectors[19], (bool)(b))
-#define setHighlightMode_(inst, b)                                     objc_msgSend(inst, LoadedObjCSelectors[20], (bool)(b))
-#define setImage_(inst, i)                                             objc_msgSend(inst, LoadedObjCSelectors[21], i)
-#define setMenu_(inst, m)                                              objc_msgSend(inst, LoadedObjCSelectors[22], m)
-#define setOnStateImage_(inst, i)                                      objc_msgSend(inst, LoadedObjCSelectors[23], i)
-#define setOpaque_(inst, b)                                            objc_msgSend(inst, LoadedObjCSelectors[24], (bool)(b))
-#define setState_(inst, s)                                             objc_msgSend(inst, LoadedObjCSelectors[25], (unsigned)(s))
-#define setSubmenu_(inst, m)                                           objc_msgSend(inst, LoadedObjCSelectors[26], m)
-#define sharedApplication(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[27])
-#define statusItemWithLength_(inst, l)                                 objc_msgSend(inst, LoadedObjCSelectors[28], (double)(l))
-#define stringWithUTF8String_(inst, s)                                 objc_msgSend(inst, LoadedObjCSelectors[29], (char*)(s))
-#define systemStatusBar(inst)                                          objc_msgSend(inst, LoadedObjCSelectors[30])
-#define thickness                                                                         LoadedObjCSelectors[31]
-#define mainScreen(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[32])
-#define stop_(inst, s)                                                 objc_msgSend(inst, LoadedObjCSelectors[33], s)
-#define drain(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[34])
-#define delegate(inst)                                                 objc_msgSend(inst, LoadedObjCSelectors[35])
-#define setTag_(inst, t)                                               objc_msgSend(inst, LoadedObjCSelectors[36], t)
-#define tag(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[37])
-#define setRepresentedObject_(inst, o)                                 objc_msgSend(inst, LoadedObjCSelectors[38], o)
-#define representedObject(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[39])
-#define setTarget_(inst, t)                                            objc_msgSend(inst, LoadedObjCSelectors[40], t)
-#define target(inst)                                                   objc_msgSend(inst, LoadedObjCSelectors[41])
-#define setIgnoresMouseEvents_(inst, i)                                objc_msgSend(inst, LoadedObjCSelectors[42], (bool)(i))
-#define hide_(inst, e)                                                 objc_msgSend(inst, LoadedObjCSelectors[43], e)
-#define unhide_(inst, e)                                               objc_msgSend(inst, LoadedObjCSelectors[44], e)
-#define retain(inst)                                                   objc_msgSend(inst, LoadedObjCSelectors[45])
-#define retainCount(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[46])
-#define initWithFrame_(inst, r)                                        objc_msgSend(inst, LoadedObjCSelectors[47], r)
-#define initWithFrame_pixelFormat_(inst, f, p)                         objc_msgSend(inst, LoadedObjCSelectors[48], f, p)
-#define setContentView_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[49], v)
-#define initWithAttributes_(inst, a)                                   objc_msgSend(inst, LoadedObjCSelectors[50], (uint32_t*)(a))
-#define currentContext(inst)                                           objc_msgSend(inst, LoadedObjCSelectors[51])
-#define graphicsPort(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[52])
-#define setLevel_(inst, l)                                             objc_msgSend(inst, LoadedObjCSelectors[53], (long)(l))
-#define pointingHandCursor(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[54])
-#define set(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[55])
-#define setNeedsDisplay_(inst, d)                                      objc_msgSend(inst, LoadedObjCSelectors[56], (bool)(d))
-#define drawRect_                                                                         LoadedObjCSelectors[57]
-#define MenuSelector                                                                      LoadedObjCSelectors[58]
-#define mouseLocationOutsideOfEventStream                                                 LoadedObjCSelectors[59]
-#define pressedMouseButtons(inst)                                (long)objc_msgSend(inst, LoadedObjCSelectors[60])
-#define openGLContext(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[61])
-#define flushBuffer(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[62])
-#define makeCurrentContext(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[63])
-#define setValues_forParameter_(inst, v, p)                            objc_msgSend(inst, LoadedObjCSelectors[64], (GLint*)(v), (GLint)(p))
+#define initWithRect_options_owner_userInfo_(inst, r, o, w, i)         objc_msgSend(inst, LoadedObjCSelectors[ 9], (CGRect)(r), o, w, i)
+#define initWithContentRect_styleMask_backing_defer_(inst, r, m, b, d) objc_msgSend(inst, LoadedObjCSelectors[10], r, (unsigned)(m), (unsigned)(b), (bool)(d))
+#define initWithTitle_action_keyEquivalent_(inst, t, a, k)             objc_msgSend(inst, LoadedObjCSelectors[11], t, a, k)
+#define makeKeyAndOrderFront_(inst, w)                                 objc_msgSend(inst, LoadedObjCSelectors[12], w)
+#define run(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[13])
+#define separatorItem(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[14])
+#define setActivationPolicy_(inst, p)                                  objc_msgSend(inst, LoadedObjCSelectors[15], (unsigned)(p))
+#define setAutoenablesItems_(inst, b)                                  objc_msgSend(inst, LoadedObjCSelectors[16], (bool)(b))
+#define setBackgroundColor_(inst, c)                                   objc_msgSend(inst, LoadedObjCSelectors[17], c)
+#define setDelegate_(inst, d)                                          objc_msgSend(inst, LoadedObjCSelectors[18], d)
+#define setEnabled_(inst, b)                                           objc_msgSend(inst, LoadedObjCSelectors[19], (bool)(b))
+#define setHasShadow_(inst, b)                                         objc_msgSend(inst, LoadedObjCSelectors[20], (bool)(b))
+#define setHighlightMode_(inst, b)                                     objc_msgSend(inst, LoadedObjCSelectors[21], (bool)(b))
+#define setImage_(inst, i)                                             objc_msgSend(inst, LoadedObjCSelectors[22], i)
+#define setMenu_(inst, m)                                              objc_msgSend(inst, LoadedObjCSelectors[23], m)
+#define setOnStateImage_(inst, i)                                      objc_msgSend(inst, LoadedObjCSelectors[24], i)
+#define setOpaque_(inst, b)                                            objc_msgSend(inst, LoadedObjCSelectors[25], (bool)(b))
+#define setState_(inst, s)                                             objc_msgSend(inst, LoadedObjCSelectors[26], (unsigned)(s))
+#define setSubmenu_(inst, m)                                           objc_msgSend(inst, LoadedObjCSelectors[27], m)
+#define sharedApplication(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[28])
+#define statusItemWithLength_(inst, l)                                 objc_msgSend(inst, LoadedObjCSelectors[29], (double)(l))
+#define stringWithUTF8String_(inst, s)                                 objc_msgSend(inst, LoadedObjCSelectors[30], (char*)(s))
+#define systemStatusBar(inst)                                          objc_msgSend(inst, LoadedObjCSelectors[31])
+#define thickness                                                                         LoadedObjCSelectors[32]
+#define mainScreen(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[33])
+#define stop_(inst, s)                                                 objc_msgSend(inst, LoadedObjCSelectors[34], s)
+#define drain(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[35])
+#define delegate(inst)                                                 objc_msgSend(inst, LoadedObjCSelectors[36])
+#define setTag_(inst, t)                                               objc_msgSend(inst, LoadedObjCSelectors[37], t)
+#define tag(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[38])
+#define setRepresentedObject_(inst, o)                                 objc_msgSend(inst, LoadedObjCSelectors[39], o)
+#define representedObject(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[40])
+#define setTarget_(inst, t)                                            objc_msgSend(inst, LoadedObjCSelectors[41], t)
+#define target(inst)                                                   objc_msgSend(inst, LoadedObjCSelectors[42])
+#define setIgnoresMouseEvents_(inst, i)                                objc_msgSend(inst, LoadedObjCSelectors[43], (bool)(i))
+#define hide_(inst, e)                                                 objc_msgSend(inst, LoadedObjCSelectors[44], e)
+#define unhide_(inst, e)                                               objc_msgSend(inst, LoadedObjCSelectors[45], e)
+#define retain(inst)                                                   objc_msgSend(inst, LoadedObjCSelectors[46])
+#define retainCount(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[47])
+#define initWithFrame_(inst, r)                                        objc_msgSend(inst, LoadedObjCSelectors[48], r)
+#define initWithFrame_pixelFormat_(inst, f, p)                         objc_msgSend(inst, LoadedObjCSelectors[49], f, p)
+#define setContentView_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[50], v)
+#define initWithAttributes_(inst, a)                                   objc_msgSend(inst, LoadedObjCSelectors[51], (uint32_t*)(a))
+#define currentContext(inst)                                           objc_msgSend(inst, LoadedObjCSelectors[52])
+#define graphicsPort(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[53])
+#define setLevel_(inst, l)                                             objc_msgSend(inst, LoadedObjCSelectors[54], (long)(l))
+#define pointingHandCursor(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[55])
+#define set(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[56])
+#define setNeedsDisplay_(inst, d)                                      objc_msgSend(inst, LoadedObjCSelectors[57], (bool)(d))
+#define drawRect_                                                                         LoadedObjCSelectors[58]
+#define MenuSelector                                                                      LoadedObjCSelectors[59]
+#define mouseLocationOutsideOfEventStream                                                 LoadedObjCSelectors[60]
+#define pressedMouseButtons(inst)                                (long)objc_msgSend(inst, LoadedObjCSelectors[61])
+#define openGLContext(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[62])
+#define flushBuffer(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[63])
+#define makeCurrentContext(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[64])
+#define setValues_forParameter_(inst, v, p)                            objc_msgSend(inst, LoadedObjCSelectors[65], (GLint*)(v), (GLint)(p))
+#define popUpContextMenu_withEvent_forView_(inst, m, e, v)             objc_msgSend(inst, LoadedObjCSelectors[66], m, e, v)
+#define windowNumber(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[67])
+#define postEvent_atStart_(inst, e, s)                                 objc_msgSend(inst, LoadedObjCSelectors[68], e, (bool)(s))
+#define addTrackingArea_(inst, a)                                      objc_msgSend(inst, LoadedObjCSelectors[69], a)
+#define enableCursorRects(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[70])
+#define resetCursorRects                                                                  LoadedObjCSelectors[71]
+#define addCursorRect_cursor_(inst, r, c)                              objc_msgSend(inst, LoadedObjCSelectors[72], r, c)
+#define MakeEvent(t, l, m, s, w, c)                                 objc_msgSend(NSEvent, LoadedObjCSelectors[73], t, l, m, (CGFloat)(s), w, c, 0, 0, 0)
+
+
+
+#define GET_IVAR(inst, name, data) object_getInstanceVariable(inst, name, (void**)(data))
+#define SET_IVAR(inst, name, data) object_setInstanceVariable(inst, name, (void*)(data))

@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
     engc.dims = (T2IV){dims.z - dims.x, dims.w - dims.y};
 
     uses = (argc > 1)? atol(argv[1]) : 0;
-    uses = (uses > 0)? uses : 1;
+    uses = (uses > 0)? uses : -1;
 
     if ((engc.engh = EngineInitialize())) {
         if ((size = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {

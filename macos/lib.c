@@ -1,14 +1,39 @@
-#include <limits.h>
 #include <sys/time.h>
+
 #include <ogl/oglstd.h>
 #include <core.h>
 
 #include "mac.h"
 
+/// name for NSApplication delegate subclass
+#define SUB_ADLG "a"
+/// name for NSView or NSOpenGLView delegate subclass
+#define SUB_VDLG "v"
+
 /// name of the instance variable to access the engine structure
-#define ENGD_ACCESSOR "e"
+#define VAR_ENGD "e"
+/// name of the instance variable to access the window
+#define VAR_HWND "w"
+/// name of the instance variable to access the view
+#define VAR_VIEW "i"
 
 
+
+CGFloat (*GetT1DV)(id, SEL) = (typeof(GetT1DV))
+#ifdef __i386__
+    /// unsure if this is the correct function
+    objc_msgSend_fpret;
+#else
+    objc_msgSend;
+#endif
+
+CGPoint (*GetT2DV)(id, SEL) = (typeof(GetT2DV))
+#ifdef __i386__
+    /// unsure if this is the correct function
+    objc_msgSend_fpret;
+#else
+    objc_msgSend;
+#endif
 
 const char *StringObjCClasses[] = {STRING_OBJC_CLASSES, 0};
 id LoadedObjCClasses[countof(StringObjCClasses)] = {};
@@ -62,8 +87,16 @@ inline id UTF8(void *utf8) {
 
 
 void RestartEngine(ENGD *engd, ulong rscm) {
+    id thrd = sharedApplication(NSApplication);
+    CGPoint dptr = {};
+
     engd->draw = rscm;
-    stop_(sharedApplication(NSApplication), 0);
+    stop_(thrd, 0);
+    /// if called from inside a timer context, bump an event to the loop
+    /// to ensure that it did process the stop notification we just sent;
+    /// if not in a timer context, a dummy event will be rejected anyway
+    postEvent_atStart_(thrd, MakeEvent(NSApplicationDefined, dptr,
+                                       NSApplicationDefined, 0, 0, 0), true);
 }
 
 
@@ -79,14 +112,73 @@ void ShowMainWindow(ENGD *engd, ulong show) {
 
 
 
+id Submenu(MENU *menu, id base) {
+    if (!menu)
+        return 0;
+
+    id retn = init(alloc(NSMenu)),
+       cbtn = imageNamed_(NSImage, UTF8("NSMenuCheckmark")),
+       rbtn = imageNamed_(NSImage, UTF8("NSMenuRadio")),
+       null = UTF8(""),
+       item;
+
+    setAutoenablesItems_(retn, false);
+    while (menu->text) {
+        if (!*menu->text) {
+            item = separatorItem(NSMenuItem);
+            addItem_(retn, item);
+        }
+        else {
+            item = initWithTitle_action_keyEquivalent_
+                  (alloc(NSMenuItem), UTF8(menu->text), MenuSelector, null);
+            if (menu->flgs & MFL_CCHK) {
+                setOnStateImage_(item, (menu->flgs & MFL_RCHK & ~MFL_CCHK)?
+                                        rbtn : cbtn);
+                setState_(item, (menu->flgs & MFL_VCHK)?
+                                 NSOnState : NSOffState);
+            }
+            if (menu->chld) {
+                id next = Submenu(menu->chld, base);
+                setSubmenu_(item, next);
+                release(next);
+            }
+            /// might be dangerous if sizeof(long) is less than sizeof(MENU*)
+            setTag_(item, menu);
+
+            setEnabled_(item, (menu->flgs & MFL_GRAY)? false : true);
+            setTarget_(item, base);
+            addItem_(retn, item);
+            release(item);
+            release(null);
+        }
+        menu++;
+    }
+    return retn;
+}
+
+
+
 inline MENU *OSSpecificMenu(ENGD *engd) {
-    return NULL;
+    return 0;
 }
 
 
 
 void EngineOpenContextMenu(MENU *menu) {
-    /// [TODO]
+    id temp, ievt, thrd;
+    CGPoint dptr;
+
+    thrd = delegate(sharedApplication(NSApplication));
+    GET_IVAR(thrd, VAR_HWND, &temp);
+    dptr = GetT2DV(temp, mouseLocationOutsideOfEventStream);
+
+    ievt = MakeEvent(NSApplicationDefined, dptr, NSApplicationDefined, 0.0,
+                     windowNumber(temp), currentContext(NSGraphicsContext));
+
+    GET_IVAR(thrd, VAR_VIEW, &temp);
+    thrd = Submenu(menu, temp);
+    popUpContextMenu_withEvent_forView_(NSMenu, thrd, ievt, temp);
+    release(thrd);
 }
 
 
@@ -116,13 +208,15 @@ char *ConvertUTF8(char *utf8) {
 
 
 long CountCPUs() {
-    return min(sizeof(SEM_TYPE) * 8, max(1, sysconf(_SC_NPROCESSORS_ONLN)));
+    return min(sizeof(SEM_TYPE) * CHAR_BIT,
+               max(1, sysconf(_SC_NPROCESSORS_ONLN)));
 }
 
 
 
 void MakeThread(THRD *thrd) {
     pthread_t pthr;
+
     pthread_create(&pthr, 0, (void *(*)(void*))ThrdFunc, thrd);
 }
 
@@ -203,53 +297,8 @@ void InitRenderer(ENGD *engd) {
 
 
 
-id Submenu(MENU *menu, id base) {
-    if (!menu)
-        return 0;
-
-    id retn = init(alloc(NSMenu)),
-       cbtn = imageNamed_(NSImage, UTF8("NSMenuCheckmark")),
-       rbtn = imageNamed_(NSImage, UTF8("NSMenuRadio")),
-       null = UTF8(""),
-       item;
-
-    setAutoenablesItems_(retn, false);
-    while (menu->text) {
-        if (!*menu->text) {
-            item = separatorItem(NSMenuItem);
-            addItem_(retn, item);
-        }
-        else {
-            item = initWithTitle_action_keyEquivalent_
-                  (alloc(NSMenuItem), UTF8(menu->text), MenuSelector, null);
-            if (menu->flgs & MFL_CCHK) {
-                setOnStateImage_(item, (menu->flgs & MFL_RCHK & ~MFL_CCHK)?
-                                        rbtn : cbtn);
-                setState_(item, (menu->flgs & MFL_VCHK)?
-                                 NSOnState : NSOffState);
-            }
-            if (menu->chld) {
-                id next = Submenu(menu->chld, base);
-                setSubmenu_(item, next);
-                release(next);
-            }
-            /// might be dangerous if sizeof(long) is less than sizeof(MENU*)
-            setTag_(item, menu);
-
-            setEnabled_(item, (menu->flgs & MFL_GRAY)? false : true);
-            setTarget_(item, base);
-            addItem_(retn, item);
-            release(item);
-            release(null);
-        }
-        menu++;
-    }
-    return retn;
-}
-
-
-
-void OnMenu(id send, id bred, id this) {
+/// NAME holds the selector associated with this function
+void OnMenu(id send, SEL name, id this) {
     MENU *item = (typeof(item))tag(this);
 
     if (item) {
@@ -278,14 +327,6 @@ void OnFPS(CFRunLoopTimerRef time, void *data) {
 
 
 void OnCalc(CFRunLoopTimerRef time, void *data) {
-    static CGPoint (*GetT2DV)(id, SEL) = (typeof(GetT2DV))
-#ifdef __i386__
-        /// unsure if this is the correct function
-        objc_msgSend_fpret;
-#else
-        objc_msgSend;
-#endif
-
     ENGD *engd = (typeof(engd))data;
     long pick, flgs;
     CGPoint dptr;
@@ -336,7 +377,7 @@ void OnCalc(CFRunLoopTimerRef time, void *data) {
 void OnDraw(CGRect rect, id this) {
     ENGD *engd;
 
-    object_getInstanceVariable(this, ENGD_ACCESSOR, (void**)&engd);
+    GET_IVAR(this, VAR_ENGD, &engd);
     CGRect full = {{0, 0}, {engd->pict.xdim, engd->pict.ydim}};
 
     if (!engd->draw)
@@ -361,6 +402,20 @@ void OnDraw(CGRect rect, id this) {
 }
 
 
+/*
+void OnRect(id this) {
+    id curs;
+    CGRect dims;
+    ENGD *engd;
+
+    GET_IVAR(this, VAR_ENGD, &engd);
+    dims = (CGRect){{0, 0}, {engd->pict.xdim, engd->pict.ydim}};
+    curs = pointingHandCursor(NSCursor);
+    addCursorRect_cursor_(this, dims, curs);
+    objc_msgSend(curs, sel_registerName("setOnMouseEntered:"), true);
+}
+//*/
+
 
 CFRunLoopTimerRef AddTimer(ulong time, void *func, void *data) {
     CFRunLoopTimerContext ctxt = {0, data};
@@ -376,28 +431,28 @@ CFRunLoopTimerRef AddTimer(ulong time, void *func, void *data) {
 void RunMainLoop(ENGD *engd) {
     INCBIN("../core/icon.gif", MainIcon);
 
-    static CGFloat (*GetT1DV)(id, SEL) = (typeof(GetT1DV))
-#ifdef __i386__
-        objc_msgSend_fpret;
-#else
-        objc_msgSend;
-#endif
-
     /// very important call; without it, nothing below would ever work
     LoadObjC();
 
 //    printf("BEGIN\n");
 
-    /// view delegate class, view delegate instance
-    id vdlg, view;
-
     /// view delegate`s methods (line 1) and custom fields (line 2)
-    OMSC  vmet[] = {{drawRect_, OnDraw}, {MenuSelector, OnMenu}, {}};
-    char *vfld[] = {ENGD_ACCESSOR, 0};
+    OMSC  vmet[] = {{drawRect_, OnDraw}, {MenuSelector, OnMenu},
+                  /*{resetCursorRects, OnRect},*/ {}};
+    char *vfld[] = {VAR_ENGD, 0};
+
+    /// app delegate class, app delegate instance
+    id adlg, ains;
+    /// view delegate class, view delegate instance
+    id vdlg, vins;
+
+    adlg = Subclass(NSObject, SUB_ADLG,
+                   (char*[]){VAR_HWND, VAR_ENGD, VAR_VIEW, 0}, (OMSC[]){{}});
 
     id pool = init(alloc(NSAutoreleasePool));
     id thrd = sharedApplication(NSApplication);
     setActivationPolicy_(thrd, NSApplicationActivationPolicyAccessory);
+    setDelegate_(thrd, (ains = init(alloc(adlg))));
 
     CGRect dims = {{0, 0}, {engd->pict.xdim, engd->pict.ydim}};
 
@@ -417,11 +472,11 @@ void RunMainLoop(ENGD *engd) {
                                 NSOpenGLPFADepthSize, 32, 0},
                       opaq = 0;
 
-                vdlg = Subclass(NSOpenGLView, "MyOpenGLView", vfld, vmet);
+                vdlg = Subclass(NSOpenGLView, SUB_VDLG, vfld, vmet);
                 pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat), attr);
-                view = initWithFrame_pixelFormat_(alloc(vdlg), dims, pfmt);
+                vins = initWithFrame_pixelFormat_(alloc(vdlg), dims, pfmt);
 
-                makeCurrentContext((ctxt = openGLContext(view)));
+                makeCurrentContext((ctxt = openGLContext(vins)));
                 setValues_forParameter_(ctxt, &opaq, NSOpenGLCPSurfaceOpacity);
                 release(pfmt);
                 break;
@@ -442,14 +497,22 @@ void RunMainLoop(ENGD *engd) {
                 CGBitmapContextGetData((CGContextRef)engd->user[0]);
             CGColorSpaceRelease(drgb);
 
-            vdlg = Subclass(NSView, "MyView", vfld, vmet);
-            view = initWithFrame_(alloc(vdlg), dims);
+            vdlg = Subclass(NSView, SUB_VDLG, vfld, vmet);
+            vins = initWithFrame_(alloc(vdlg), dims);
             break;
         }
     }
-    object_setInstanceVariable(view, ENGD_ACCESSOR, engd);
-    setContentView_(hwnd, view);
-    setDelegate_(hwnd, view);
+    SET_IVAR(vins, VAR_ENGD, engd);
+    setContentView_(hwnd, vins);
+    setDelegate_(hwnd, vins);
+
+//    id area = initWithRect_options_owner_userInfo_(alloc(NSTrackingArea), dims,
+//                                                   NSTrackingCursorUpdate |
+//                                                   NSTrackingActiveAlways,
+//                                                   vins, 0);
+//    addTrackingArea_(vins, area);
+//    release(area);
+
     InitRenderer(engd);
 
     id sbar = systemStatusBar(NSStatusBar);
@@ -478,19 +541,24 @@ void RunMainLoop(ENGD *engd) {
     CGContextRelease(ctxt);
     free(bptr);
 
-    id menu = Submenu(engd->menu, view);
+    id menu = Submenu(engd->menu, vins);
     setMenu_(icon, menu);
     release(menu);
 
-    engd->user[1] = (typeof(*engd->user))view;
+    engd->user[1] = (typeof(*engd->user))vins;
     engd->user[2] = (typeof(*engd->user))hwnd;
     CFRunLoopTimerRef tmrt = AddTimer(   1, OnTime, &engd->time),
                       tmrf = AddTimer(1000, OnFPS,   engd),
                       tmrd = AddTimer(  32, OnCalc,  engd);
 
+    SET_IVAR(ains, VAR_ENGD, engd);
+    SET_IVAR(ains, VAR_HWND, hwnd);
+    SET_IVAR(ains, VAR_VIEW, vins);
+
     activateIgnoringOtherApps_(thrd, true);
-    makeKeyAndOrderFront_(hwnd, hwnd);
-    set(pointingHandCursor(NSCursor)); /// why does this change nothing?
+    makeKeyAndOrderFront_(hwnd, thrd);
+//    enableCursorRects(hwnd);
+//    objc_msgSend(vins, resetCursorRects);
 
     /// run loop starts here
     run(thrd);
@@ -510,10 +578,12 @@ void RunMainLoop(ENGD *engd) {
             break;
         }
     }
-    release(view);
+    release(vins);
     release(hwnd);
+    release(ains);
     release(pool);
     objc_disposeClassPair((Class)vdlg);
+    objc_disposeClassPair((Class)adlg);
 
 //    printf("END!\n");
 }

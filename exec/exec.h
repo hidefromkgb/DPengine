@@ -206,13 +206,6 @@
 
 
 
-/// engine flags
-
-/// exiting request
-#define ENG_QUIT (1 << 31)
-
-
-
 /// default frame rate limiter in msec
 #define FRM_WAIT 40
 
@@ -293,7 +286,8 @@ typedef struct _ENGC {
     uintptr_t engh; /// rendering engine handle
     uint32_t  pcnt, /// number of on-screen sprites
               seed, /// random seed
-              flgs; /// flags
+              flgs, /// flags
+              quit; /// special termination flag
 } ENGC;
 
 

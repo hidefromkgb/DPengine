@@ -926,7 +926,7 @@ void MMH(MENU *item) {
         case MMI_EXIT: {
             ENGC *engc = (ENGC*)item->data;
 
-            engc->flgs |= ENG_QUIT;
+            engc->quit = 1;
             break;
         }
     }
@@ -973,7 +973,7 @@ uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
     uint64_t curr;
     long indx;
 
-    if (engc->flgs & ENG_QUIT)
+    if (engc->quit)
         return 0;
 
 //    EngineBeginAddition(engh);
