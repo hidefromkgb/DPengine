@@ -36,13 +36,13 @@ int main(int argc, char *argv[]) {
         double x, y, z, w;
     } dims;
     objc_msgSend_stret((void*)&dims,
-                       (void*)objc_msgSend(objc_getClass("NSScreen"),
-                                           sel_registerName("mainScreen")),
-                       sel_registerName("visibleFrame"));
+                       (void*)objc_msgSend((id)objc_getClass("NSScreen"),
+                                            sel_registerName("mainScreen")),
+                        sel_registerName("visibleFrame"));
     engc.dims = (T2IV){dims.z - dims.x, dims.w - dims.y};
 
     uses = (argc > 1)? atol(argv[1]) : 0;
-    uses = (uses > 0)? uses : -1;
+    uses = (uses > 0)? uses : 1;
 
     if ((engc.engh = EngineInitialize())) {
         if ((size = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
@@ -63,14 +63,16 @@ int main(int argc, char *argv[]) {
         /// [TODO] substitute this by GUI selection
         libs = engc.libs;
         while (libs) {
-            libs->icnt = abs(uses);
+            libs->icnt = labs(uses);
             libs = (LINF*)libs->prev;
         }
         engc.seed = time(0);
         printf("[((RNG))] seed = 0x%08X\n", engc.seed);
-        EngineRunMainLoop(engc.engh, engc.dims.x, engc.dims.y, 0, FRM_WAIT,
-                         (uses < 0)? SCM_RSTD : SCM_ROGL, (uintptr_t)&engc,
-                          0, MakeSpriteArr(&engc), UpdateFrame);
+        MakeSpriteArr(&engc);
+        EngineRunMainLoop(engc.engh, 0, 0, engc.dims.x, engc.dims.y, 0,
+                          FRM_WAIT, (uses < 0)? SCM_RSTD : SCM_ROGL,
+                          0, /// localization goes here
+                         (uintptr_t)&engc, UpdateFrame);
         FreeEverything(&engc);
     }
     return 0;

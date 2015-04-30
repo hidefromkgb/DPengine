@@ -624,6 +624,8 @@ void SwitchThreads(ENGD *engd, long draw) {
     ulong iter, temp;
 
     if (draw) {
+        if (!engd->ncpu || (engd->thrd[0].func == PTHR))
+            return;
         temp = (engd->pict.ydim / engd->ncpu) + 1;
         for (iter = 0; iter < engd->ncpu; iter++) {
             engd->thrd[iter] = (THRD){1, 1 << iter, engd, PTHR,
@@ -913,19 +915,16 @@ void EngineFinishLoading(uintptr_t engh) {
     }
     MakeUnitArray(engd);
 
-    if (engd->uarr) {
-        if (engd->data)
-            InitRenderer(engd);
+    if (engd->uarr)
         engd->draw = ~0;
-    }
 }
 
 
 
-void EngineRunMainLoop(uintptr_t engh, uint32_t xdim, uint32_t ydim,
-                       uint32_t  flgs, uint32_t msec, uint32_t rscm,
-                       uintptr_t user, uint8_t *lang, uint32_t size,
-                       UFRM func) {
+void EngineRunMainLoop(uintptr_t engh, int32_t  xpos, int32_t  ypos,
+                       uint32_t  xdim, uint32_t ydim, uint32_t flgs,
+                       uint32_t  msec, uint32_t rscm, uint8_t *lang,
+                       uintptr_t user, UFRM func) {
     INCBIN("../core/en.lang", DefaultLanguage);
 
     ENGD *engd = (ENGD*)engh;
@@ -940,9 +939,7 @@ void EngineRunMainLoop(uintptr_t engh, uint32_t xdim, uint32_t ydim,
         engd->udat = user;
         engd->rscm = rscm;
         engd->flgs = flgs;
-        engd->size = size;
         engd->msec = msec;
-        engd->data = calloc(size, sizeof(*engd->data));
 
         mtmp = TimeFunc() - engd->time;
         printf(TXL_AEND" (%lu CPUs) %lu objects, %lu ms: %0.3f ms/obj\n%s\n",
@@ -999,8 +996,6 @@ void EngineRunMainLoop(uintptr_t engh, uint32_t xdim, uint32_t ydim,
         } while ((engd->rscm = engd->draw) != SCM_QUIT);
 
         EngineFreeMenu(&engd->menu);
-        free(engd->data);
-        engd->data = 0;
     }
     else
         printf(TXL_FAIL" No animation base found! Exiting...\n");

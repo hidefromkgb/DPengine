@@ -249,7 +249,7 @@ long MakeAnim(void *data, long size, long skip, GWFR gwfr, void *anim) {
     /// extracting frames
     ifrm = 0;
     bptr = malloc(ghdr->xdim * ghdr->ydim * sizeof(*bptr));
-    while (skip < abs(nfrm)) {
+    while (skip < labs(nfrm)) {
         size--;
         desc = *buff++;
         /// found a frame

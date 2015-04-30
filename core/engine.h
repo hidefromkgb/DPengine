@@ -37,7 +37,7 @@
 /// checkbox is a radiobutton
 #define MFL_RCHK ((1 << 3) | MFL_CCHK)
 
-/// UFRM constants
+/// UFRM flags
 
 /// left mouse button
 #define UFR_LBTN  (1 << 0)
@@ -112,20 +112,17 @@ typedef struct _MENU {
     _________________________________________________________________________
     ENGH: handle of the engine object the call refers to
     USER: user-defined data pointer
-    DATA: display list; shares the format with <DATA> uniform (see comment in
-          ./ogl/oglstd.c, look for "main vertex shader" tag) except that W is
-          just the element`s UUID
+    DATA: callee-managed display list; shares the format with <DATA> uniform
+          (see comments in ./ogl/oglstd.c, look for "main vertex shader" tag)
+          except that W is just the element`s UUID
     TIME: pointer to the current time value in ms (may update asynchronously)
-    FLGS: mouse button flags (0 = released, 1 = pressed)
-          bit 0: left
-          bit 1: middle
-          bit 2: right
+    FLGS: mouse button flags (UFR_ prefix)
     XPTR: cursor X coordinate, relative to the window`s upper left corner
     YPTR: cursor Y coordinate, relative to the window`s upper left corner
     ISEL: index of the element under cursor in the existing list, < 0 if none
  **/
 typedef uint32_t (*UFRM)(uintptr_t engh, uintptr_t user,
-                         T4FV *data, uint64_t *time, uint32_t flgs,
+                         T4FV **data, uint64_t *time, uint32_t flgs,
                          int32_t xptr, int32_t yptr, int32_t isel);
 
 
@@ -204,15 +201,14 @@ LIB_OPEN void EngineFinishLoading(uintptr_t engh);
     RSCM: rendering scheme
           SCM_RSTD - CPU
           SCM_ROGL - GPU
-    USER: user data pointer to be passed to the callback
     LANG: localization file name (0 if default)
-    SIZE: initial display list size in elements
+    USER: user data pointer to be passed to the callback
     FUNC: callback function described above (see UFRM typedef)
  **/
-LIB_OPEN void EngineRunMainLoop(uintptr_t engh, uint32_t xdim, uint32_t ydim,
-                                uint32_t  flgs, uint32_t msec, uint32_t rscm,
-                                uintptr_t user, uint8_t *lang, uint32_t size,
-                                UFRM func);
+LIB_OPEN void EngineRunMainLoop(uintptr_t engh, int32_t  xpos, int32_t  ypos,
+                                uint32_t  xdim, uint32_t ydim, uint32_t flgs,
+                                uint32_t  msec, uint32_t rscm, uint8_t *lang,
+                                uintptr_t user, UFRM func);
 
 /** _________________________________________________________________________
     Frees all resources allocated by the target engine object and invalidates

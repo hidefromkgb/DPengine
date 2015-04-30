@@ -261,7 +261,7 @@ gboolean DrawFunc(gpointer user) {
          | ((gmod & GDK_BUTTON3_MASK)? UFR_RBTN : 0)
          | ((gtk_window_is_active((GtkWindow*)engd->user[0]))? UFR_MOUS : 0);
     pick = SelectUnit(engd->uarr, engd->data, engd->size, xptr, yptr);
-    engd->size = engd->ufrm((uintptr_t)engd, engd->udat, engd->data,
+    engd->size = engd->ufrm((uintptr_t)engd, engd->udat, &engd->data,
                             &engd->time, flgs, xptr, yptr, pick);
     if (!engd->size) {
         RestartEngine(engd, SCM_QUIT);
@@ -281,6 +281,7 @@ gboolean DrawFunc(gpointer user) {
             cairo_set_source_rgba(temp, 0, 0, 0, 0);
             cairo_paint(temp);
             cairo_destroy(temp);
+            SwitchThreads(engd, 1);
             PickSemaphore(engd, 1, SEM_FULL);
             WaitSemaphore(engd, 1, SEM_FULL);
             break;
@@ -288,6 +289,9 @@ gboolean DrawFunc(gpointer user) {
         case SCM_ROGL: {
             GdkGLDrawable *pGLD =
                 gtk_widget_gl_begin((GtkWidget*)engd->user[0]);
+            if (MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr,
+                                         engd->uniq, engd->size, 0))
+                SizeRendererOGL(engd->rndr, engd->pict.xdim, engd->pict.ydim);
             DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
                             engd->size, engd->flgs & COM_IOPQ);
             gdk_gl_drawable_gl_end(pGLD);
@@ -408,26 +412,6 @@ GdkGLConfig *GetGDKGL(GtkWidget *gwnd) {
 
 
 
-void InitRenderer(ENGD *engd) {
-    switch (engd->rscm) {
-        case SCM_RSTD:
-            SwitchThreads(engd, 1);
-            break;
-
-        case SCM_ROGL: {
-            GdkGLDrawable *pGLD =
-                gtk_widget_gl_begin((GtkWidget*)engd->user[0]);
-            engd->rndr = MakeRendererOGL(engd->uarr, engd->uniq,
-                                         engd->size, 0);
-            SizeRendererOGL(engd->rndr, engd->pict.xdim, engd->pict.ydim);
-            gdk_gl_drawable_gl_end(pGLD);
-            break;
-        }
-    }
-}
-
-
-
 void RunMainLoop(ENGD *engd) {
     INCBIN("../core/icon.gif", MainIcon);
 
@@ -474,8 +458,6 @@ void RunMainLoop(ENGD *engd) {
             gdk_gl_drawable_gl_end(pGLD);
             break;
     }
-    InitRenderer(engd);
-
     gtk_widget_set_app_paintable(gwnd, TRUE);
     gtk_widget_set_size_request(gwnd, engd->pict.xdim, engd->pict.ydim);
     gtk_window_set_type_hint(GTK_WINDOW(gwnd), GDK_WINDOW_TYPE_HINT_TOOLBAR);
@@ -524,7 +506,7 @@ void RunMainLoop(ENGD *engd) {
 
         case SCM_ROGL: {
             pGLD = gtk_widget_gl_begin(gwnd);
-            FreeRendererOGL(engd->rndr);
+            FreeRendererOGL((ROGL**)&engd->rndr);
             gdk_gl_drawable_gl_end(pGLD);
             break;
         }

@@ -5,6 +5,8 @@
 
 #include "mac.h"
 
+
+
 /// name for NSApplication delegate subclass
 #define SUB_ADLG "a"
 /// name for NSView or NSOpenGLView delegate subclass
@@ -280,23 +282,6 @@ uint64_t TimeFunc() {
 
 
 
-void InitRenderer(ENGD *engd) {
-    switch (engd->rscm) {
-        case SCM_RSTD:
-            SwitchThreads(engd, 1);
-            break;
-
-        case SCM_ROGL: {
-            engd->rndr = MakeRendererOGL(engd->uarr, engd->uniq,
-                                         engd->size, 0);
-            SizeRendererOGL(engd->rndr, engd->pict.xdim, engd->pict.ydim);
-            break;
-        }
-    }
-}
-
-
-
 /// NAME holds the selector associated with this function
 void OnMenu(id send, SEL name, id this) {
     MENU *item = (typeof(item))tag(this);
@@ -306,6 +291,12 @@ void OnMenu(id send, SEL name, id this) {
         if (item->flgs & MFL_CCHK)
             setState_(this, (item->flgs & MFL_VCHK)? NSOnState : NSOffState);
     }
+}
+
+
+
+bool OnOpaq() {
+    return false;
 }
 
 
@@ -344,9 +335,10 @@ void OnCalc(CFRunLoopTimerRef time, void *data) {
 
     flgs = ((pick & 1)? UFR_LBTN : 0) | ((pick & 2)? UFR_RBTN : 0)
          | ((pick & 4)? UFR_MBTN : 0) | ((flgs)? UFR_MOUS : 0);
-    pick = SelectUnit(engd->uarr, engd->data, engd->size, dptr.x, dptr.y);
-    engd->size = engd->ufrm((uintptr_t)engd, engd->udat, engd->data,
-                            &engd->time, flgs, dptr.x, dptr.y, pick);
+    engd->size = engd->ufrm((uintptr_t)engd, engd->udat, &engd->data,
+                            &engd->time, flgs, dptr.x, dptr.y,
+                             SelectUnit(engd->uarr, engd->data, engd->size,
+                                        dptr.x, dptr.y));
     if (!engd->size) {
         RestartEngine(engd, SCM_QUIT);
         return;
@@ -358,11 +350,15 @@ void OnCalc(CFRunLoopTimerRef time, void *data) {
             CGContextFillRect((CGContextRef)engd->user[0],
                               (CGRect){{0, 0},
                                        {engd->pict.xdim, engd->pict.ydim}});
+            SwitchThreads(engd, 1);
             PickSemaphore(engd, 1, SEM_FULL);
             WaitSemaphore(engd, 1, SEM_FULL);
             break;
         }
         case SCM_ROGL: {
+            if (MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr,
+                                         engd->uniq, engd->size, 0))
+                SizeRendererOGL(engd->rndr, engd->pict.xdim, engd->pict.ydim);
             DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
                             engd->size, engd->flgs & COM_IOPQ);
             break;
@@ -438,7 +434,7 @@ void RunMainLoop(ENGD *engd) {
 
     /// view delegate`s methods (line 1) and custom fields (line 2)
     OMSC  vmet[] = {{drawRect_, OnDraw}, {MenuSelector, OnMenu},
-                  /*{resetCursorRects, OnRect},*/ {}};
+                    {isOpaque,  OnOpaq}, /*{resetCursorRects, OnRect},*/{}};
     char *vfld[] = {VAR_ENGD, 0};
 
     /// app delegate class, app delegate instance
@@ -455,15 +451,6 @@ void RunMainLoop(ENGD *engd) {
     setDelegate_(thrd, (ains = init(alloc(adlg))));
 
     CGRect dims = {{0, 0}, {engd->pict.xdim, engd->pict.ydim}};
-
-    id hwnd = initWithContentRect_styleMask_backing_defer_
-             (alloc(NSWindow), dims, NSClosableWindowMask,
-              NSBackingStoreBuffered, false);
-    setLevel_(hwnd, NSMainMenuWindowLevel + 1);
-    setBackgroundColor_(hwnd, clearColor(NSColor));
-    setHasShadow_(hwnd, false);
-    setOpaque_(hwnd, false);
-
     switch (engd->rscm) {
         case SCM_ROGL:
             if (LoadOpenGLFunctions() > 0) {
@@ -486,15 +473,15 @@ void RunMainLoop(ENGD *engd) {
             /// falling through
 
         case SCM_RSTD: {
+            PICT *pict = &engd->pict;
+            long line = pict->xdim * sizeof(*pict->bptr);
             CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
+
             engd->user[0] = (typeof(*engd->user))
-                CGBitmapContextCreate(0, engd->pict.xdim, engd->pict.ydim,
-                                      CHAR_BIT, engd->pict.xdim
-                                      * sizeof(*engd->pict.bptr), drgb,
-                                      kCGImageAlphaPremultipliedFirst
-                                    | kCGBitmapByteOrder32Little);
-            engd->pict.bptr =
-                CGBitmapContextGetData((CGContextRef)engd->user[0]);
+                CGBitmapContextCreate(pict->bptr = calloc(line, pict->ydim),
+                                      pict->xdim, pict->ydim, CHAR_BIT, line,
+                                      drgb, kCGImageAlphaPremultipliedFirst
+                                          | kCGBitmapByteOrder32Little);
             CGColorSpaceRelease(drgb);
 
             vdlg = Subclass(NSView, SUB_VDLG, vfld, vmet);
@@ -503,8 +490,17 @@ void RunMainLoop(ENGD *engd) {
         }
     }
     SET_IVAR(vins, VAR_ENGD, engd);
+
+    id hwnd = initWithContentRect_styleMask_backing_defer_
+             (alloc(NSWindow), dims, NSBorderlessWindowMask,
+              NSBackingStoreBuffered, false);
+
     setContentView_(hwnd, vins);
     setDelegate_(hwnd, vins);
+    setLevel_(hwnd, NSMainMenuWindowLevel + 1);
+    setBackgroundColor_(hwnd, clearColor(NSColor));
+    setHasShadow_(hwnd, false);
+    setOpaque_(hwnd, false);
 
 //    id area = initWithRect_options_owner_userInfo_(alloc(NSTrackingArea), dims,
 //                                                   NSTrackingCursorUpdate |
@@ -512,8 +508,6 @@ void RunMainLoop(ENGD *engd) {
 //                                                   vins, 0);
 //    addTrackingArea_(vins, area);
 //    release(area);
-
-    InitRenderer(engd);
 
     id sbar = systemStatusBar(NSStatusBar);
     id icon = statusItemWithLength_(sbar, NSVariableStatusItemLength);
@@ -571,10 +565,11 @@ void RunMainLoop(ENGD *engd) {
         case SCM_RSTD:
             StopThreads(engd);
             CGContextRelease((CGContextRef)engd->user[0]);
+            free(engd->pict.bptr);
             break;
 
         case SCM_ROGL: {
-            FreeRendererOGL(engd->rndr);
+            FreeRendererOGL((ROGL**)&engd->rndr);
             break;
         }
     }

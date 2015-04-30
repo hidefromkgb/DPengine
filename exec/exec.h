@@ -278,6 +278,7 @@ typedef struct _PICT {
 typedef struct _ENGC {
     MENU *menu;     /// per-sprite context menu
     LINF *libs;     /// sprite libraries list
+    T4FV *data;     /// main display list passed to the renderer
     PICT *pcur,     /// the sprite currently picked
          *plst,     /// on-screen sprites list
         **parr;     /// on-screen sprite pointers array
@@ -309,7 +310,7 @@ void PrepareSpriteArr(LINF *elem, LINF **edge);
 void AppendLib(ENGC *engc, char *pcnf, char *base, char *path);
 
 uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
-                     T4FV *data, uint64_t *time, uint32_t flgs,
+                     T4FV **data, uint64_t *time, uint32_t flgs,
                      int32_t xptr, int32_t yptr, int32_t isel);
 
 

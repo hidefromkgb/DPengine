@@ -240,6 +240,7 @@ typedef struct _OMSC {
        "pointingHandCursor",                           \
        "set",                                          \
        "setNeedsDisplay:",                             \
+       "isOpaque",                                     \
        "drawRect:",                                    \
        "_M",                                           \
        "mouseLocationOutsideOfEventStream",            \
@@ -316,22 +317,23 @@ typedef struct _OMSC {
 #define pointingHandCursor(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[55])
 #define set(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[56])
 #define setNeedsDisplay_(inst, d)                                      objc_msgSend(inst, LoadedObjCSelectors[57], (bool)(d))
-#define drawRect_                                                                         LoadedObjCSelectors[58]
-#define MenuSelector                                                                      LoadedObjCSelectors[59]
-#define mouseLocationOutsideOfEventStream                                                 LoadedObjCSelectors[60]
-#define pressedMouseButtons(inst)                                (long)objc_msgSend(inst, LoadedObjCSelectors[61])
-#define openGLContext(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[62])
-#define flushBuffer(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[63])
-#define makeCurrentContext(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[64])
-#define setValues_forParameter_(inst, v, p)                            objc_msgSend(inst, LoadedObjCSelectors[65], (GLint*)(v), (GLint)(p))
-#define popUpContextMenu_withEvent_forView_(inst, m, e, v)             objc_msgSend(inst, LoadedObjCSelectors[66], m, e, v)
-#define windowNumber(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[67])
-#define postEvent_atStart_(inst, e, s)                                 objc_msgSend(inst, LoadedObjCSelectors[68], e, (bool)(s))
-#define addTrackingArea_(inst, a)                                      objc_msgSend(inst, LoadedObjCSelectors[69], a)
-#define enableCursorRects(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[70])
-#define resetCursorRects                                                                  LoadedObjCSelectors[71]
-#define addCursorRect_cursor_(inst, r, c)                              objc_msgSend(inst, LoadedObjCSelectors[72], r, c)
-#define MakeEvent(t, l, m, s, w, c)                                 objc_msgSend(NSEvent, LoadedObjCSelectors[73], t, l, m, (CGFloat)(s), w, c, 0, 0, 0)
+#define isOpaque                                                                          LoadedObjCSelectors[58]
+#define drawRect_                                                                         LoadedObjCSelectors[59]
+#define MenuSelector                                                                      LoadedObjCSelectors[60]
+#define mouseLocationOutsideOfEventStream                                                 LoadedObjCSelectors[61]
+#define pressedMouseButtons(inst)                                (long)objc_msgSend(inst, LoadedObjCSelectors[62])
+#define openGLContext(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[63])
+#define flushBuffer(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[64])
+#define makeCurrentContext(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[65])
+#define setValues_forParameter_(inst, v, p)                            objc_msgSend(inst, LoadedObjCSelectors[66], (GLint*)(v), (GLint)(p))
+#define popUpContextMenu_withEvent_forView_(inst, m, e, v)             objc_msgSend(inst, LoadedObjCSelectors[67], m, e, v)
+#define windowNumber(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[68])
+#define postEvent_atStart_(inst, e, s)                                 objc_msgSend(inst, LoadedObjCSelectors[69], e, (bool)(s))
+#define addTrackingArea_(inst, a)                                      objc_msgSend(inst, LoadedObjCSelectors[70], a)
+#define enableCursorRects(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[71])
+#define resetCursorRects                                                                  LoadedObjCSelectors[72]
+#define addCursorRect_cursor_(inst, r, c)                              objc_msgSend(inst, LoadedObjCSelectors[73], r, c)
+#define MakeEvent(t, l, m, s, w, c)                                 objc_msgSend(NSEvent, LoadedObjCSelectors[74], t, l, m, (CGFloat)(s), w, c, 0, 0, 0)
 
 
 

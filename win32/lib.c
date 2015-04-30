@@ -297,23 +297,6 @@ void MakeThread(THRD *thrd) {
 
 
 
-void InitRenderer(ENGD *engd) {
-    switch (engd->rscm) {
-        case SCM_RSTD:
-            SwitchThreads(engd, 1);
-            break;
-
-        case SCM_ROGL: {
-            engd->rndr = MakeRendererOGL(engd->uarr, engd->uniq, engd->size,
-                                       !(engd->flgs & WIN_IBGR));
-            SizeRendererOGL(engd->rndr, engd->pict.xdim, engd->pict.ydim);
-            break;
-        }
-    }
-}
-
-
-
 long PickSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
     SEMD *drop = (open)? &engd->osem : &engd->isem,
          *pick = (open)? &engd->isem : &engd->osem;
@@ -624,8 +607,6 @@ void RunMainLoop(ENGD *engd) {
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
             break;
     }
-    InitRenderer(engd);
-
     time = timeSetEvent(1, 0, TimeFuncWrapper,
                        (DWORD_PTR)&engd->time, TIME_PERIODIC);
     SetWindowPos(hwnd, NULL, 0, 0, dims.cx, dims.cy,
@@ -651,7 +632,7 @@ void RunMainLoop(ENGD *engd) {
              | ((GetAsyncKeyState(VK_MBUTTON))? UFR_MBTN : 0)
              | ((GetAsyncKeyState(VK_RBUTTON))? UFR_RBTN : 0)
              | ((GetActiveWindow() == hwnd)?    UFR_MOUS : 0);
-        engd->size = engd->ufrm((uintptr_t)engd, engd->udat, engd->data,
+        engd->size = engd->ufrm((uintptr_t)engd, engd->udat, &engd->data,
                                 &engd->time, xoff, cpos.x, cpos.y,
                                  SelectUnit(engd->uarr, engd->data,
                                             engd->size, cpos.x, cpos.y));
@@ -661,12 +642,18 @@ void RunMainLoop(ENGD *engd) {
         }
         switch (engd->rscm) {
             case SCM_RSTD:
+                SwitchThreads(engd, 1);
                 FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
                 PickSemaphore(engd, 1, SEM_FULL);
                 WaitSemaphore(engd, 1, SEM_FULL);
                 break;
 
             case SCM_ROGL:
+                if (MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr,
+                                     engd->uniq, engd->size,
+                                   !(engd->flgs & WIN_IBGR)))
+                    SizeRendererOGL(engd->rndr,
+                                    engd->pict.xdim, engd->pict.ydim);
                 ReadRBO(surf, &engd->pict, engd->flgs);
                 BindRBO(surf, GL_TRUE);
                 DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
@@ -684,7 +671,7 @@ void RunMainLoop(ENGD *engd) {
             break;
 
         case SCM_ROGL: {
-            FreeRendererOGL(engd->rndr);
+            FreeRendererOGL((ROGL**)&engd->rndr);
             FreeRBO(&surf);
         _nogl:
             wglMakeCurrent(NULL, NULL);

@@ -219,7 +219,7 @@ typedef struct _ENGD {
           osem;        /// outgoing semaphore
     MENU *menu;        /// engine`s main menu
     THRD *thrd;        /// thread data array
-    T4FV *data;        /// main display list (updated every frame)
+    T4FV *data;        /// main display list (updated every frame; FOREIGN!)
     UNIT *uarr;        /// unique animations source in array form
     SAVL *hstr;        /// AVL tree for animation filename hashes & HPIX links
     PAVL *hpix;        /// AVL tree for animation pixel data (including hashes)
@@ -256,7 +256,6 @@ void MenuHandler(MENU *item);
 void RestartEngine(ENGD *engd, ulong rscm);
 void ShowMainWindow(ENGD *engd, ulong show);
 void MakeThread(THRD *thrd);
-void InitRenderer(ENGD *engd);
 void RunMainLoop(ENGD *engd);
 
 void FreeSemaphore(SEMD *retn, long nthr);

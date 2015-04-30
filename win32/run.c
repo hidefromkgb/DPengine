@@ -177,14 +177,15 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         }
         engc.seed = time(0);
         printf("[((RNG))] seed = 0x%08X\n", engc.seed);
-        EngineRunMainLoop(engc.engh, engc.dims.x, engc.dims.y,
+        MakeSpriteArr(&engc);
+        EngineRunMainLoop(engc.engh, 0, 0, engc.dims.x, engc.dims.y,
                          ((flgs & FLG_IBGR)? WIN_IBGR : 0) |
                          ((flgs & FLG_IPBO)? WIN_IPBO : 0) |
                          ((flgs & FLG_IRGN)? WIN_IRGN : 0) |
                          ((flgs & FLG_IOPQ)? COM_IOPQ : 0), FRM_WAIT,
                           (flgs & FLG_EOGL)? SCM_ROGL : SCM_RSTD,
-                          (uintptr_t)&engc, 0,
-                           MakeSpriteArr(&engc), UpdateFrame);
+                           0, /// localization goes here
+                          (uintptr_t)&engc, UpdateFrame);
         FreeEverything(&engc);
     }
     fclose(stdout);

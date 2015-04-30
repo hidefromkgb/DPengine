@@ -97,15 +97,17 @@ void SizeRendererOGL(ROGL *rndr, ulong xscr, ulong yscr) {
 
 
 
-void FreeRendererOGL(ROGL *rndr) {
-    FreeVBO(&rndr->surf);
-    free(rndr->temp);
-    free(rndr);
+void FreeRendererOGL(ROGL **rndr) {
+    FreeVBO(&(*rndr)->surf);
+    free((*rndr)->temp);
+    free(*rndr);
+    *rndr = 0;
 }
 
 
 
-ROGL *MakeRendererOGL(UNIT *uarr, ulong uniq, ulong size, ulong rgba) {
+long MakeRendererOGL(ROGL **rndr, UNIT *uarr,
+                     ulong uniq, ulong size, ulong rgba) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
     GLchar **sver, **spix;
     GLubyte *atex, *aptr;
@@ -116,6 +118,9 @@ ROGL *MakeRendererOGL(UNIT *uarr, ulong uniq, ulong size, ulong rgba) {
     BGRA *apal;
     FTEX *test;
     ROGL *retn;
+
+    if (!rndr || *rndr)
+        return 0;
 
     glCullFace(GL_BACK);
     glEnable(GL_CULL_FACE);
@@ -275,7 +280,8 @@ ROGL *MakeRendererOGL(UNIT *uarr, ulong uniq, ulong size, ulong rgba) {
     free(bank);
 
     FreeShaderSrc(sver, spix);
-    return retn;
+    *rndr = retn;
+    return ~0;
 }
 
 

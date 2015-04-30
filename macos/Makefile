@@ -6,7 +6,7 @@ OBJDIR = .obj
 
 LLIB = -framework CoreGraphics -framework Cocoa -framework OpenGL
 LINC =
-LCXFLAGS = -pthread
+LCXFLAGS =
 LCFLAGS = -I../core -Wall -fPIC -fvisibility=hidden
 
 LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/common.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/common.o $(OBJDIR)/core/ogl/oglstd.o $(OBJDIR)/lib.o
@@ -55,10 +55,10 @@ cleanRelLibOnly: clean
 cleanDbgLibOnly: clean
 
 
-lrelease: LCFLAGS += -fexpensive-optimizations -O2
+lrelease: LCFLAGS += -O2
 lrelease: lbuild $(LOBJ)
 
-erelease: ECFLAGS += -fexpensive-optimizations -O2
+erelease: ECFLAGS += -O2
 erelease: ebuild $(EOBJ)
 
 ldebug: LCFLAGS += -g

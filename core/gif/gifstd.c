@@ -10,7 +10,7 @@ void WriteFrameStd(GHDR *ghdr, FHDR *fhdr, FHDR *back, RGBX *cpal,
     ASTD *retn = (ASTD*)anim;
 
     yoff = ghdr->xdim * ghdr->ydim;
-    if (retn->fcnt < (x = abs(nfrm)))
+    if (retn->fcnt < (x = labs(nfrm)))
         *retn = (ASTD){realloc(retn->bptr, x * yoff), ghdr->xdim, ghdr->ydim,
                        x, realloc(retn->time, x * sizeof(*retn->time)),
                        retn->bpal};

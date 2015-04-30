@@ -773,9 +773,13 @@ long MakeSpriteArr(ENGC *engc) {
     engc->pcnt = 0;
     TTH_ITER(engc->libs, AppendSpriteArr, engc);
     free(engc->parr);
+    free(engc->data);
     engc->parr = 0;
-    if (engc->pcnt)
+    engc->data = 0;
+    if (engc->pcnt) {
         engc->parr = calloc(engc->pcnt, sizeof(*engc->parr));
+        engc->data = calloc(engc->pcnt, sizeof(*engc->data));
+    }
     SortByY(engc);
     return engc->pcnt;
 }
@@ -872,6 +876,7 @@ void FreeEverything(ENGC *engc) {
     TTH_ITER(engc->plst, free, 0);
     TTH_ITER(engc->libs, FreeLib, 0);
     free(engc->parr);
+    free(engc->data);
     *engc = (ENGC){};
 }
 
@@ -962,7 +967,7 @@ void InitMainMenu(ENGC *engc) {
 
 
 uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
-                     T4FV *data, uint64_t *time, uint32_t flgs,
+                     T4FV **data, uint64_t *time, uint32_t flgs,
                      int32_t xptr, int32_t yptr, int32_t isel) {
     ENGC *engc = (ENGC*)user;
     PICT *pict = engc->pcur;
@@ -1048,8 +1053,9 @@ uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
     for (indx = 0; indx < engc->pcnt; indx++) {
         pict = engc->parr[indx];
         anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
-        data[indx] = (T4FV){pict->offs.x, pict->offs.y,
-                            pict->fram, anim->uuid};
+        engc->data[indx] = (T4FV){pict->offs.x, pict->offs.y,
+                                  pict->fram, anim->uuid};
     }
+    *data = engc->data;
     return engc->pcnt;
 }
