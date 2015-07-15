@@ -500,7 +500,7 @@ void RunMainLoop(ENGD *engd) {
                         1, 8 * sizeof(BGRA), BI_RGB}};
     SIZE dims = {engd->pict.xdim, engd->pict.ydim};
     RECT scrr = {0, 0, dims.cx, dims.cy};
-    POINT cpos, zpos = {};
+    POINT cpos, mpos, zpos = {};
     MSG pmsg = {};
 
     BOOL APIENTRY (*ULW)(HWND, HDC, POINT*, SIZE*, HDC, POINT*,
@@ -554,6 +554,7 @@ void RunMainLoop(ENGD *engd) {
     bptr = &bfun;
     xdim = ULW_ALPHA;
     x = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
+    mpos = (POINT){engd->mpos.x, engd->mpos.y};
 
     InitCommonControlsEx(&icct);
     hlib = LoadLibrary("user32");
@@ -609,8 +610,8 @@ void RunMainLoop(ENGD *engd) {
     }
     time = timeSetEvent(1, 0, TimeFuncWrapper,
                        (DWORD_PTR)&engd->time, TIME_PERIODIC);
-    SetWindowPos(hwnd, NULL, 0, 0, dims.cx, dims.cy,
-                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(hwnd, NULL, mpos.x, mpos.y, dims.cx, dims.cy,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
     while (TRUE) {
         if (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
             if (!IsWindow(hwnd) || (pmsg.message == WM_STOP))
@@ -661,7 +662,7 @@ void RunMainLoop(ENGD *engd) {
                 BindRBO(surf, GL_FALSE);
                 break;
         }
-        ULW(hwnd, mwdc, &zpos, &dims, devc, &zpos, 0, bptr, xdim);
+        ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bptr, xdim);
         engd->fram++;
     }
     timeKillEvent(time);

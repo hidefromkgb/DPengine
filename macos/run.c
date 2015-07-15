@@ -4,6 +4,7 @@
 #include "../exec/exec.h"
 
 #include <objc/objc-runtime.h>
+#include <ApplicationServices/ApplicationServices.h>
 
 
 
@@ -32,14 +33,19 @@ int main(int argc, char *argv[]) {
     ENGC engc = {};
     LINF *libs;
 
-    struct {
-        double x, y, z, w;
-    } dims;
-    objc_msgSend_stret((void*)&dims,
-                       (void*)objc_msgSend((id)objc_getClass("NSScreen"),
-                                            sel_registerName("mainScreen")),
-                        sel_registerName("visibleFrame"));
-    engc.dims = (T2IV){dims.z - dims.x, dims.w - dims.y};
+    SEL fram = sel_registerName("visibleFrame");
+    id scrn = objc_msgSend((id)objc_getClass("NSScreen"),
+                            sel_registerName("mainScreen"));
+    CGRect dims;
+
+#ifdef __i386__
+    typeof(dims) (*GetT4DV)(id, SEL) = (typeof(GetT4DV))objc_msgSend_stret;
+    dims = GetT4DV(scrn, fram);
+#else
+    objc_msgSend_stret((void*)&dims, (void*)scrn, fram);
+#endif
+    engc.dims = (T2IV){dims.size.width  - dims.origin.x,
+                       dims.size.height - dims.origin.y};
 
     uses = (argc > 1)? atol(argv[1]) : 0;
     uses = (uses > 0)? uses : 1;

@@ -32,10 +32,6 @@ uint32_t HashLine(char *line, long size) {
 
 
 
-int probcmp(const void *a, const void *b) {
-    return (*(BINF**)b)->prob - (*(BINF**)a)->prob;
-}
-
 int igrpcmp(const void *a, const void *b) {
     return (*(BINF**)b)->igrp - (*(BINF**)a)->igrp;
 }
@@ -44,11 +40,28 @@ int namecmp(const void *a, const void *b) {
     return ((BINF*)b)->name - ((BINF*)a)->name;
 }
 
+int uintcmp(const void *a, const void *b) {
+    return (*(uint32_t*)a) - (*(uint32_t*)b);
+}
 
 
-/// [TODO] substitute strtod()!
+
 float StrToFloat(char *data) {
-    return strtod(data, 0);
+    char temp[32] = {};
+    double retn = 0.0;
+    long iter = 0;
+
+    while ((iter < 31) && *data) {
+        if ((*data != '.') && (*data != ',')) {
+            if ((retn > 0.0) && (*data >= '0') && (*data <= '9'))
+                retn *= 0.1;
+            temp[iter++] = *data;
+        }
+        else if (retn == 0.0)
+            retn = 1.0;
+        data++;
+    }
+    return ((retn > 0.0)? retn : 1.0) * strtol(temp, 0, 10);
 }
 
 
@@ -280,43 +293,25 @@ void MakeSpritePair(uintptr_t engh, AINF *pair, char *path, char **conf) {
 
 
 
-uint32_t BinarySearch(uint32_t *data, uint32_t size, uint32_t elem) {
-    uint32_t *iter = data, fork = size;
-
-    if (!data || !size)
-        return 0;
-
-    while (fork > 1) {
-        fork = (fork >> 1) + (fork & 1);
-        if (iter[fork - 1] < elem)
-            iter += fork;
-        else if (iter[fork - 1] == elem)
-            break;
-    }
-    return (iter[fork - 1] == elem)? iter + fork - data : 0;
-}
-
-
-
-void AdjustFlags(uint32_t *flgs, char *text, uint32_t hash, uint32_t flag) {
-    uint32_t bred = HashLine(ToLower(text, 0), 0);
-    *flgs = ((bred == hash)? flag : 0)
-          |  (*flgs & ~flag);
-}
-
-
+#define GET_TEMP(conf) (temp = SplitLine(conf, DEF_TSEP, 0))
 
 #define TRY_TEMP(conf) (GET_TEMP(conf) && *temp)
-#define GET_TEMP(conf) (temp = SplitLine(conf, DEF_TSEP, 0))
-#define BIN_FIND(list, temp) BinarySearch(list, countof(list), \
-                                          HashLine(ToLower(temp, 0), 0))
+
+#define SET_FLAG(flgs, temp, hash, flag) \
+    flgs = ((HashLine(ToLower(temp, 0), 0) == hash)? flag : 0) | (flgs & ~flag)
+
+#define IF_BIN_FIND(elem, list, temp) \
+    elem = HashLine(ToLower(GET_TEMP(temp), 0), 0); \
+    iter = bsearch(&elem, list, countof(list), sizeof(elem), uintcmp); \
+    if ((elem = (iter)? iter - list + 1 : 0))
+
 void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
     static uint32_t
         uBMT[] = {BMT_HORM, BMT_ALLM, BMT_VERM, BMT_DRGM, BMT_HNDM, BMT_SLPM,
                   BMT_HNVM, BMT_DIAM, BMT_OVRM, BMT_DNVM, BMT_NONM},
         uBHV[] = {BHV_HORM, BHV_ALLM, BHV_VERM, BHV_DRGM, BHV_HNDM, BHV_SLPM,
                   BHV_HNVM, BHV_DIAM, BHV_OVRM, BHV_DNVM, BHV_NONM};
-    uint32_t elem;
+    uint32_t elem, *iter;
     char *temp;
 
     /// defaults
@@ -348,7 +343,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
     MakeSpritePair(engc->engh, retn->unit, engc->libs->path, conf);
 
     /// possible movement directions...........................................  def = All
-    if ((elem = BIN_FIND(uBMT, GET_TEMP(conf))))
+    IF_BIN_FIND(elem, uBMT, conf)
         retn->flgs = uBHV[elem - 1] | (retn->flgs & ~BHV_MMMM);
 
     /// linked behaviour name..................................................  def = ""
@@ -365,7 +360,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
 
     /// flag to never exec this behaviour at random............................  def = False
     if (TRY_TEMP(conf))
-        AdjustFlags(&retn->flgs, temp, VAL_FALS, BHV_EXEC);
+        SET_FLAG(retn->flgs, temp, VAL_FALS, BHV_EXEC);
 
     /// X target to follow.....................................................  def = 0
     if (TRY_TEMP(conf))
@@ -382,7 +377,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
 /// [TODO:]
     /// [something unintelligible].............................................  def = True
     if (TRY_TEMP(conf))
-        AdjustFlags(&retn->flgs, temp, VAL_TRUE, BHV_____);
+        SET_FLAG(retn->flgs, temp, VAL_TRUE, BHV_____);
 
 /// [TODO:]
     /// [something unintelligible].............................................  def = ""
@@ -404,7 +399,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
     }
     /// flag to prevent animation looping......................................  def = False
     if (TRY_TEMP(conf))
-        AdjustFlags(&retn->flgs, temp, VAL_FALS, FLG_LOOP);
+        SET_FLAG(retn->flgs, temp, VAL_FALS, FLG_LOOP);
 
     /// behaviour group index..................................................  def = 0
     if (TRY_TEMP(conf)) {
@@ -413,7 +408,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
     }
     /// whether target offset shall be mirrored................................  def = Fixed
     if (TRY_TEMP(conf))
-        AdjustFlags(&retn->flgs, temp, FOT_MIRR, BHV_MIRR);
+        SET_FLAG(retn->flgs, temp, FOT_MIRR, BHV_MIRR);
 }
 
 void ParseEffect(ENGC *engc, BINF *retn, char **conf) {
@@ -422,7 +417,7 @@ void ParseEffect(ENGC *engc, BINF *retn, char **conf) {
                   EMT_TOPA, EMT_BNRA, EMT_RCLA, EMT_TNLA, EMT_TNRA},
         uEFF[] = {EFF_CNRA, EFF_RNDA, EFF_CNTA, EFF_CNLA, EFF_BTMA, EFF_BNLA,
                   EFF_TOPA, EFF_BNRA, EFF_RCLA, EFF_TNLA, EFF_TNRA};
-    uint32_t elem;
+    uint32_t elem, *iter;
     char *temp;
 
     /// defaults
@@ -448,28 +443,28 @@ void ParseEffect(ENGC *engc, BINF *retn, char **conf) {
         retn->dmax = StrToFloat(temp) * 1000.0;
 
     /// possible right placements..............................................  def = Any
-    if ((elem = BIN_FIND(uEMT, GET_TEMP(conf))))
+    IF_BIN_FIND(elem, uEMT, conf)
         retn->flgs = (uEFF[elem - 1] <<  0) | (retn->flgs & ~(EFF_AAAA <<  0));
 
     /// possible right centerings..............................................  def = Any
-    if ((elem = BIN_FIND(uEMT, GET_TEMP(conf))))
+    IF_BIN_FIND(elem, uEMT, conf)
         retn->flgs = (uEFF[elem - 1] <<  4) | (retn->flgs & ~(EFF_AAAA <<  4));
 
     /// possible left placements...............................................  def = Any
-    if ((elem = BIN_FIND(uEMT, GET_TEMP(conf))))
+    IF_BIN_FIND(elem, uEMT, conf)
         retn->flgs = (uEFF[elem - 1] <<  8) | (retn->flgs & ~(EFF_AAAA <<  8));
 
     /// possible left centerings...............................................  def = Any
-    if ((elem = BIN_FIND(uEMT, GET_TEMP(conf))))
+    IF_BIN_FIND(elem, uEMT, conf)
         retn->flgs = (uEFF[elem - 1] << 12) | (retn->flgs & ~(EFF_AAAA << 12));
 
     /// flag to keep animation where it is.....................................  def = False
     if (TRY_TEMP(conf))
-        AdjustFlags(&retn->flgs, temp, VAL_FALS, EFF_STAY);
+        SET_FLAG(retn->flgs, temp, VAL_FALS, EFF_STAY);
 
     /// flag to prevent animation looping......................................  def = False
     if (TRY_TEMP(conf))
-        AdjustFlags(&retn->flgs, temp, VAL_FALS, FLG_LOOP);
+        SET_FLAG(retn->flgs, temp, VAL_FALS, FLG_LOOP);
 
     if (!retn->dmax)
         retn->flgs &= ~FLG_LOOP;
@@ -519,7 +514,6 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
 
                 case SVT_BHVR:
                     ParseBehaviour(engc, &engc->libs->barr[bcnt++], &conf);
-                    engc->libs->prob += engc->libs->barr[bcnt - 1].prob;
                     break;
 
                 case SVT_BGRP:
@@ -541,9 +535,10 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
         free(fptr);
     free(conf);
 }
-#undef BIN_FIND
-#undef GET_TEMP
+#undef IF_BIN_FIND
+#undef SET_FLAG
 #undef TRY_TEMP
+#undef GET_TEMP
 
 
 
@@ -554,7 +549,6 @@ void FreeLib(LINF *elem) {
     free(elem->earr);
     free(elem->bgrp);
     free(elem->ngrp);
-    free(elem->prob);
     free(elem);
 }
 
@@ -562,60 +556,39 @@ void FreeLib(LINF *elem) {
 
 #define MAX_YDIM 0x1000
 void SortByY(ENGC *engc) {
-    LHDR elem[MAX_YDIM + 1] = {};
-    PICT *iter;
-    long ymin, ymax, ytmp;
+    PICT *temp, *elem[MAX_YDIM + 1] = {};
+    long ymin, ymax, ytmp, iter;
 
-    if (!(iter = engc->plst))
+    if (engc->pcnt < 2)
         return;
 
-    if (iter->prev) {
-        ymin = MAX_YDIM + 1;
-        ymax = -1;
-        while (!0) {
-            ytmp = iter->offs.y;
-            if ((ytmp >= 0) && (ytmp < MAX_YDIM)) {
-                if (ytmp > ymax)
-                    ymax = ytmp;
-                else if (ytmp < ymin)
-                    ymin = ytmp;
-            }
-            if (!iter->prev)
-                break;
-            iter = (PICT*)iter->prev;
-        }
-        while (iter) {
-            ytmp = iter->offs.y - ymin + 1;
-            if ((ytmp < 0) || (iter->offs.y >= MAX_YDIM))
-                ytmp = 0;
-            if (!elem[ytmp].prev)
-                elem[ytmp].next = elem[ytmp].prev = (LHDR*)iter;
-            else {
-                iter->prev = elem[ytmp].next;
-                elem[ytmp].next = iter->prev->next = (LHDR*)iter;
-            }
-            iter = (PICT*)iter->next;
-        }
-        if ((ymax -= ymin - 1) < 0)
-            ymax = 1;
-        for (ytmp = 0; ytmp <= ymax; ytmp++)
-            if (elem[ytmp].prev) {
-                elem[ytmp].prev->prev = (LHDR*)iter;
-                if (iter)
-                    iter->next = elem[ytmp].prev;
-                iter = (PICT*)elem[ytmp].next;
-            }
+    ymin = MAX_YDIM + 1;
+    ymax = -1;
 
-        ytmp = 0;
-        iter->next = 0;
-        engc->plst = iter;
-        while (iter) {
-            engc->parr[ytmp++] = iter;
-            iter = (PICT*)iter->prev;
+    for (iter = 0; iter < engc->pcnt; iter++) {
+        ytmp = engc->parr[iter]->offs.y;
+        if ((ytmp >= 0) && (ytmp < MAX_YDIM)) {
+            if (ytmp > ymax)
+                ymax = ytmp;
+            else if (ytmp < ymin)
+                ymin = ytmp;
         }
     }
-    else
-        engc->parr[0] = engc->plst;
+    for (iter = 0; iter < engc->pcnt; iter++) {
+        temp = engc->parr[iter];
+        ytmp = temp->offs.y - ymin + 1;
+        if ((ytmp < 0) || (temp->offs.y >= MAX_YDIM))
+            ytmp = 0;
+        temp->next = elem[ytmp];
+        elem[ytmp] = temp;
+    }
+    if ((ymax -= ymin - 1) < 0)
+        ymax = 1;
+    for (iter = 0; ymax >= 0; ymax--)
+        while (elem[ymax]) {
+            engc->parr[iter++] = elem[ymax];
+            elem[ymax] = elem[ymax]->next;
+        }
 }
 #undef MAX_YDIM
 
@@ -624,9 +597,9 @@ void SortByY(ENGC *engc) {
 void PlaceRandomly(ENGC *engc, PICT *pict) {
     AINF *anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
 
-    pict->offs.x = PRNG(&engc->seed) % (engc->dims.x - anim->dims.x);
-    pict->offs.y = PRNG(&engc->seed) % (engc->dims.y - anim->dims.y)
-                                                     + anim->dims.y;
+    pict->offs.x = PRNG(&engc->seed) % (engc->dims.x - anim->xdim);
+    pict->offs.y = PRNG(&engc->seed) % (engc->dims.y - anim->ydim)
+                                                     + anim->ydim;
 }
 
 
@@ -710,40 +683,26 @@ void ChooseDirection(ENGC *engc, PICT *pict) {
 
 
 
-uint32_t BinarySearchQ(uint32_t *data, uint32_t size, uint32_t elem) {
-    uint32_t *iter = data, fork = size;
-
-    if (!data || !size)
-        return 0;
-
-    while (fork > 1) {
-        fork = (fork >> 1) + (fork & 1);
-        if (iter[fork - 1] < elem)
-            iter += fork;
-        else if (iter[fork - 1] == elem)
-            break;
-    }
-    return iter + fork - data;
-}
-
-
-
 void ChooseBehaviour(ENGC *engc, PICT *pict) {
     LINF *ulib = pict->ulib;
-//    long igrp, nmin;
+    long seed, lbgn, lend;
 
     if (ulib->barr[pict->indx >> 1].link)
         pict->indx = (ulib->barr[pict->indx >> 1].link - 1) << 1;
     else {
-//        igrp = ulib->barr[pict->indx >> 1].igrp;
-//        nmin = (igrp)? ulib->ngrp[igrp - 1] : 0;
+        seed = ulib->barr[pict->indx >> 1].igrp;
+        lbgn = (seed)? ulib->ngrp[seed - 1] : 0;
+        lend = ulib->ngrp[seed];
+        seed = PRNG(&engc->seed) % ulib->bgrp[lend - 1]->prob;
 
-//        /// bne - binary search, nonexact
-//        pict->indx = (*bne((PRNG(&engc->seed) % ulib->prob[igrp]) + 1,
-//                           ulib->bgrp + nmin, ulib->ngrp[igrp] - nmin,
-//                           sizeof(*ulib->bgrp), probcmp) - ulib->barr) << 1;
-
-        pict->indx = (PRNG(&engc->seed) % ulib->bcnt) << 1;
+        /// nonexact binary search: finding the first item greater than SEED;
+        /// bsearch() won`t help here, so let`s reinvent the wheel
+        while (lbgn < lend)
+            if (ulib->bgrp[(lend + lbgn) >> 1]->prob <= seed)
+                lbgn = (lend + lbgn + 2) >> 1;
+            else
+                lend = (lend + lbgn + 0) >> 1;
+        pict->indx = (ulib->bgrp[lbgn] - ulib->barr) << 1;
     }
     ChooseDirection(engc, pict);
 }
@@ -751,36 +710,43 @@ void ChooseBehaviour(ENGC *engc, PICT *pict) {
 
 
 void AppendSpriteArr(LINF *elem, ENGC *engc) {
-    long icnt;
+    long iter;
 
-    if (!elem->bcnt)
+    if (!elem->bcnt || !elem->icnt)
         return;
 
     engc->pcnt += elem->icnt;
-    for (icnt = 0; icnt < elem->icnt; icnt++) {
-        ListAppendTail((LHDR**)&engc->plst, sizeof(*engc->plst));
-        engc->plst->ulib = elem;
-        ChooseBehaviour(engc, engc->plst);
-        PlaceRandomly(engc, engc->plst);
+    engc->parr = realloc(engc->parr, engc->pcnt * sizeof(*engc->parr));
+
+    for (iter = engc->pcnt - elem->icnt; iter < engc->pcnt; iter++) {
+        engc->parr[iter] = calloc(1, sizeof(*engc->parr[iter]));
+        engc->parr[iter]->ulib = elem;
+        ChooseBehaviour(engc, engc->parr[iter]);
+        PlaceRandomly(engc, engc->parr[iter]);
     }
 }
 
 
 
-long MakeSpriteArr(ENGC *engc) {
-    TTH_ITER(engc->plst, free, 0);
-    engc->plst = 0;
-    engc->pcnt = 0;
-    TTH_ITER(engc->libs, AppendSpriteArr, engc);
+void FreeSpriteArr(ENGC *engc) {
+    long iter;
+
+    for (iter = 0; iter < engc->pcnt; iter++)
+        free(engc->parr[iter]);
     free(engc->parr);
-    free(engc->data);
     engc->parr = 0;
-    engc->data = 0;
-    if (engc->pcnt) {
-        engc->parr = calloc(engc->pcnt, sizeof(*engc->parr));
-        engc->data = calloc(engc->pcnt, sizeof(*engc->data));
-    }
+    engc->pcnt = 0;
+}
+
+
+
+long MakeSpriteArr(ENGC *engc) {
+    FreeSpriteArr(engc);
+    TTH_ITER(engc->libs, AppendSpriteArr, engc);
     SortByY(engc);
+
+    free(engc->data);
+    engc->data = (engc->pcnt)? calloc(engc->pcnt, sizeof(*engc->data)) : 0;
     return engc->pcnt;
 }
 
@@ -811,8 +777,10 @@ void PrepareSpriteArr(LINF *elem, LINF **edge) {
         return;
     elem->flgs |= 1;
 
+    /// sorting all behaviours and effects by name hash
     TruncateAndSort(&elem->earr, &elem->ecnt);
     if (!TruncateAndSort(&elem->barr, &elem->bcnt)) {
+        /// freeing the library in case it`s got no behaviours
         if (elem->prev)
             elem->prev->next = elem->next;
         if (elem->next)
@@ -822,11 +790,17 @@ void PrepareSpriteArr(LINF *elem, LINF **edge) {
         FreeLib(elem);
         return;
     }
-    for (indx = 0; indx < elem->ecnt; indx++)
+    /// determining the total effect count and min. index for every behaviour
+    /// (note that some behaviours may have no effects)
+    for (indx = elem->ecnt - 1; indx >= 0; indx--)
         if ((iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
-                            sizeof(*elem->barr), namecmp)) && (!iter->neff++))
+                            sizeof(*elem->barr), namecmp))) {
             iter->ieff = indx;
+            iter->neff++;
+        }
+    /// iterating over all behaviours
     for (indx = 0; indx < elem->bcnt; indx++) {
+        /// resolving the linked behaviour, if any
         if (elem->barr[indx].link) {
             temp.name = elem->barr[indx].link;
             if ((iter = bsearch(&temp, elem->barr, elem->bcnt,
@@ -835,17 +809,23 @@ void PrepareSpriteArr(LINF *elem, LINF **edge) {
             else
                 elem->barr[indx].link = 0;
         }
+        /// resolving image centers, if not set already (only possible here!)
         for (iter = &elem->barr[indx], turn = 0; turn <= 1; turn++)
             if (!(iter->cntr[turn].x | iter->cntr[turn].y))
-                iter->cntr[turn] = (T2IV){iter->unit[turn].dims.x >> 1,
-                                          iter->unit[turn].dims.y >> 1};
+                iter->cntr[turn] = (T2IV){iter->unit[turn].xdim >> 1,
+                                          iter->unit[turn].ydim >> 1};
     }
+
+    /// populating BGRP with nonzero-probability behaviours, ZCNT := length
     elem->bgrp = malloc(elem->bcnt * sizeof(*elem->bgrp));
     for (elem->zcnt = indx = 0; indx < elem->bcnt; indx++)
         if (elem->barr[indx].prob)
             elem->bgrp[elem->zcnt++] = &elem->barr[indx];
     elem->bgrp = realloc(elem->bgrp, elem->zcnt * sizeof(*elem->bgrp));
+    /// sorting BGRP by group number
     qsort(elem->bgrp, elem->zcnt, sizeof(*elem->bgrp), igrpcmp);
+
+    /// counting groups and normalizing their indices to [0; GCNT) interval
     for (elem->gcnt = turn = indx = 0; indx < elem->zcnt; indx++) {
         if (elem->bgrp[indx]->igrp != turn) {
             turn = elem->bgrp[indx]->igrp;
@@ -854,16 +834,15 @@ void PrepareSpriteArr(LINF *elem, LINF **edge) {
         elem->bgrp[indx]->igrp = elem->gcnt;
     }
     elem->gcnt++;
+
+    /// filling NGRP with behaviour group boundaries
     elem->ngrp = calloc(elem->gcnt, sizeof(*elem->ngrp));
-    elem->prob = calloc(elem->gcnt, sizeof(*elem->prob));
     for (turn = indx = 0; indx < elem->zcnt; indx++)
         elem->ngrp[elem->bgrp[indx]->igrp] = indx + 1;
+    /// turning probabilities into integral probabilities
     for (turn = indx = 0; indx < elem->gcnt; indx++) {
-        qsort(elem->bgrp + turn, elem->ngrp[indx] - turn,
-              sizeof(*elem->bgrp), probcmp);
         for (++turn; turn < elem->ngrp[indx]; ++turn)
             elem->bgrp[turn]->prob += elem->bgrp[turn - 1]->prob;
-        elem->prob[indx] = elem->bgrp[turn - 1]->prob;
         turn = elem->ngrp[indx];
     }
 }
@@ -873,9 +852,8 @@ void PrepareSpriteArr(LINF *elem, LINF **edge) {
 void FreeEverything(ENGC *engc) {
     EngineFreeMenu(&engc->menu);
     EngineDeinitialize(engc->engh);
-    TTH_ITER(engc->plst, free, 0);
+    FreeSpriteArr(engc);
     TTH_ITER(engc->libs, FreeLib, 0);
-    free(engc->parr);
     free(engc->data);
     *engc = (ENGC){};
 }
@@ -1035,13 +1013,13 @@ uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
             pict->tfrm = curr + anim->time[pict->fram];
         }
         if (curr - pict->tmov >= FRM_WAIT) {
-            if (BoundCrossed(pict->move.x, pict->offs.x + anim->dims.x,
-                             anim->dims.x, engc->dims.x)) {
+            if (BoundCrossed(pict->move.x, pict->offs.x + anim->xdim,
+                             anim->xdim, engc->dims.x)) {
                 pict->move.x = -pict->move.x;
                 pict->indx ^= 1;
             }
             if (BoundCrossed(pict->move.y, pict->offs.y,
-                             anim->dims.y, engc->dims.y))
+                             anim->ydim, engc->dims.y))
                 pict->move.y = -pict->move.y;
 
             pict->offs.x += pict->move.x;
@@ -1050,6 +1028,9 @@ uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
         }
     }
     SortByY(engc);
+
+    /// ALL EFFECTS GO HERE!!!
+
     for (indx = 0; indx < engc->pcnt; indx++) {
         pict = engc->parr[indx];
         anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];

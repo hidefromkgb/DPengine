@@ -1,6 +1,12 @@
 #include <stdint.h>
 
+#define _STRING(s) #s
+#define STRING(s) _STRING(s)
+
+#define LIB_OPEN __attribute__((visibility("default")))
+
 #ifdef _WIN32
+    #undef  LIB_OPEN
     #ifndef LIB_NONE
         #ifdef LIB_MAKE
             #define LIB_OPEN __attribute__((dllexport))
@@ -10,8 +16,41 @@
     #else
         #define LIB_OPEN
     #endif
+    #define INCBIN(file, pvar)     \
+    __asm__(                       \
+        ".section .data;"          \
+        ".global _"STRING(pvar)";" \
+        "_"STRING(pvar)":"         \
+        ".incbin \""file"\";"      \
+        ".byte 0;"                 \
+        ".align 4;"                \
+        ".section .text;"          \
+    );                             \
+    extern char pvar[]
+#elif __APPLE__
+    #define INCBIN(file, pvar)     \
+    __asm__(                       \
+        ".section __DATA,__data\n" \
+        ".globl _"STRING(pvar)"\n" \
+        "_"STRING(pvar)":\n"       \
+        ".incbin \""file"\"\n"     \
+        ".byte 0\n"                \
+        ".align 4\n"               \
+        ".section __TEXT,__text\n" \
+    );                             \
+    extern char pvar[]
 #else
-    #define LIB_OPEN __attribute__((visibility("default")))
+    #define INCBIN(file, pvar)     \
+    __asm__(                       \
+        ".pushsection .data;"      \
+        ".global "STRING(pvar)";"  \
+        STRING(pvar)":"            \
+        ".incbin \""file"\";"      \
+        ".byte 0;"                 \
+        ".align 4;"                \
+        ".popsection;"             \
+    );                             \
+    extern char pvar[]
 #endif
 
 
@@ -90,9 +129,10 @@ typedef struct _T4UV {
 /// animation unit info
 typedef struct _AINF {
     uint32_t uuid,   /// unique animation identifier
+             xdim,   /// frame width (actual, non-modified)
+             ydim,   /// frame height (actual, non-modified)
              fcnt,   /// number of animation`s frames
             *time;   /// frame delays array, allocated and freed by the engine
-    T2UV dims;       /// frame dimensions (actual, non-modified)
 } AINF;
 #pragma pack(pop)
 

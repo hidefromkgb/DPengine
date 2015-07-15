@@ -440,9 +440,9 @@ void UnitArrayFromTree(UNIT *uarr, PAVL *root) {
     uarr[iter].tran = root->tran;
     uarr[iter].offs[0] = root->xoff;
     uarr[iter].offs[2] = root->yoff;
-    uarr[iter].offs[1] = root->ainf.dims.x - root->xoff
+    uarr[iter].offs[1] = root->ainf.xdim - root->xoff
                        - (anim->xdim << root->scal);
-    uarr[iter].offs[3] = root->ainf.dims.y - root->yoff
+    uarr[iter].offs[3] = root->ainf.ydim - root->yoff
                        - (anim->ydim << root->scal);
 }
 
@@ -531,8 +531,8 @@ void LTHR(THRD *data) {
             name[indx - 2] = 'r';
             name[indx - 1] = 't';
             file = LoadFile(name, &indx);
-            elem->epix->ainf = (AINF){0, retn->fcnt, retn->time,
-                                        {retn->xdim, retn->ydim}};
+            elem->epix->ainf = (AINF){0, retn->xdim, retn->ydim,
+                                         retn->fcnt, retn->time};
             elem->epix->tran = RecolorPalette(retn->bpal, file, indx);
             elem->epix->scal = DownsampleAnimStd(retn, &elem->epix->xoff,
                                                        &elem->epix->yoff);
@@ -620,12 +620,14 @@ void StopThreads(ENGD *engd) {
 
 
 
-void SwitchThreads(ENGD *engd, long draw) {
-    ulong iter, temp;
+long SwitchThreads(ENGD *engd, long draw) {
+    long iter, temp;
 
     if (draw) {
-        if (!engd->ncpu || (engd->thrd[0].func == PTHR))
-            return;
+        for (iter = 0; iter < engd->ncpu; iter++)
+            if (engd->thrd[iter].loop)
+                return -1;
+
         temp = (engd->pict.ydim / engd->ncpu) + 1;
         for (iter = 0; iter < engd->ncpu; iter++) {
             engd->thrd[iter] = (THRD){1, 1 << iter, engd, PTHR,
@@ -639,6 +641,7 @@ void SwitchThreads(ENGD *engd, long draw) {
             engd->thrd[iter] = (THRD){1, 1 << iter, engd, LTHR};
             MakeThread(&engd->thrd[iter]);
         }
+    return 0;
 }
 
 
@@ -934,6 +937,8 @@ void EngineRunMainLoop(uintptr_t engh, int32_t  xpos, int32_t  ypos,
     if (engd->uarr) {
         engd->pict.xdim = xdim;
         engd->pict.ydim = ydim;
+        engd->mpos.x    = xpos;
+        engd->mpos.y    = ypos;
 
         engd->ufrm = func;
         engd->udat = user;
@@ -942,8 +947,9 @@ void EngineRunMainLoop(uintptr_t engh, int32_t  xpos, int32_t  ypos,
         engd->msec = msec;
 
         mtmp = TimeFunc() - engd->time;
-        printf(TXL_AEND" (%lu CPUs) %lu objects, %lu ms: %0.3f ms/obj\n%s\n",
-               engd->ncpu, engd->uniq, mtmp, (float)mtmp / engd->uniq,
+        printf(TXL_AEND" %lu threads, %lu objects, %ld ms: %0.3f ms/obj\n%s\n",
+               engd->ncpu, engd->uniq, mtmp,
+              (double)mtmp * engd->ncpu / engd->uniq,
               (engd->rscm == SCM_ROGL)? TXL_ROGL : TXL_RSTD);
 
         FreeLocalization(&engd->tran);

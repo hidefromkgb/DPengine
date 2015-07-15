@@ -13,63 +13,24 @@
 
 
 
-#define _STRING(s) #s
-#define STRING(s) _STRING(s)
-
+#define THR_EXIT 0
+#define THR_FAIL 0
+#define THR_FUNC void *
+#define HDR_SEMD pthread_mutex_t cmtx; \
+                 pthread_cond_t cvar;  \
+                 SEM_TYPE list, full;
 #ifdef _WIN32
     #include <windows.h>
+    #undef  THR_EXIT
+    #undef  THR_FAIL
+    #undef  THR_FUNC
+    #undef  HDR_SEMD
     #define THR_EXIT TRUE
     #define THR_FAIL FALSE
     #define THR_FUNC DWORD APIENTRY
     #define HDR_SEMD HANDLE *list;
-    #define INCBIN(file, pvar)     \
-    __asm__(                       \
-        ".section .data;"          \
-        ".global _"STRING(pvar)";" \
-        "_"STRING(pvar)":"         \
-        ".incbin \""file"\";"      \
-        ".byte 0;"                 \
-        ".align 4;"                \
-        ".section .text;"          \
-    );                             \
-    extern char pvar[]
 #elif __APPLE__
     #include <pthread.h>
-    #define THR_EXIT 0
-    #define THR_FAIL 0
-    #define THR_FUNC void *
-    #define HDR_SEMD pthread_mutex_t cmtx; \
-                     pthread_cond_t cvar;  \
-                     SEM_TYPE list, full;
-    #define INCBIN(file, pvar)     \
-    __asm__(                       \
-        ".section __DATA,__data\n" \
-        ".globl _"STRING(pvar)"\n" \
-        "_"STRING(pvar)":\n"       \
-        ".incbin \""file"\"\n"     \
-        ".byte 0\n"                \
-        ".align 4\n"               \
-        ".section __TEXT,__text\n" \
-    );                             \
-    extern char pvar[]
-#else
-    #define THR_EXIT 0
-    #define THR_FAIL 0
-    #define THR_FUNC void *
-    #define HDR_SEMD pthread_mutex_t cmtx; \
-                     pthread_cond_t cvar;  \
-                     SEM_TYPE list, full;
-    #define INCBIN(file, pvar)     \
-    __asm__(                       \
-        ".pushsection .data;"      \
-        ".global "STRING(pvar)";"  \
-        STRING(pvar)":"            \
-        ".incbin \""file"\";"      \
-        ".byte 0;"                 \
-        ".align 4;"                \
-        ".popsection;"             \
-    );                             \
-    extern char pvar[]
 #endif
 
 
@@ -213,6 +174,7 @@ typedef struct _ENGD {
           ncpu,        /// number of CPU cores the engine is allowed to occupy
           uniq,        /// number of unique animations
           size;        /// length of the main display list
+    T2IV  mpos;        /// main surface position
     PICT  pict;        /// drawing area information
     UFRM  ufrm;        /// callback to update the state of a frame
     SEMD  isem,        /// incoming semaphore
@@ -237,7 +199,7 @@ void OutputFPS(ENGD *engd, char retn[]);
 SEM_TYPE FindBit(SEM_TYPE inpt);
 THR_FUNC ThrdFunc(THRD *data);
 void StopThreads(ENGD *engd);
-void SwitchThreads(ENGD *engd, long draw);
+long SwitchThreads(ENGD *engd, long draw);
 
 uint32_t LoadLocalization(uint8_t ***text, uint8_t *data, uint32_t size);
 void ProcessMenuItem(MENU *item);

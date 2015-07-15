@@ -240,33 +240,32 @@ typedef struct _BINF {
 } BINF;
 
 /// unit library info (write-once, read-only)
-/// [TODO] behaviour groups
 /// [TODO] speech
 /// [TODO] interactions
 /// [TODO] categories
 typedef struct _LINF {
     HDR_LIST;       /// list header
-    BINF *barr,     /// available behaviours
-         *earr,     /// available effects
-        **bgrp;     /// BARR elements ordered by behaviour group + probability
+    BINF *barr,     /// available behaviours ordered by name
+         *earr,     /// available effects ordered by parent bhv. name
+        **bgrp;     /// nonzero-probability BARR elements ordered by bhv. group
     char *path,     /// the folder from which the library was built
          *name;     /// human-readable name (may differ from PATH!)
     long *ngrp,     /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
-         *prob,     /// sum of all behaviour probability coeffs per group
           flgs,     /// flags
           gcnt,     /// behaviour groups count
           zcnt,     /// nonzero probability behaviours count
           bcnt,     /// total behaviours count
           ecnt,     /// total effects count
-          icnt;     /// number of on-screen sprites from the library
+          icnt;     /// number of on-screen bhv. sprites from the library
 } LINF;
 
 /// actual on-screen sprite
 typedef struct _PICT {
-    HDR_LIST;       /// list header
-    T2FV  move,     /// movement direction
-          offs;     /// position of the unit`s lower-left corner
-    LINF *ulib;     /// unit library which the sprite belongs to
+    struct
+    _PICT   *next;  /// linked list support for SortByY(), not used elsewhere
+    LINF    *ulib;  /// unit library which the sprite belongs to
+    T2FV     move,  /// movement direction
+             offs;  /// position of the unit`s lower-left corner
     uint32_t indx,  /// behaviour index and direction (lowest bit)
              fram;  /// current frame
     uint64_t tfrm,  /// timestamp of the next frame in msec
@@ -276,20 +275,53 @@ typedef struct _PICT {
 
 /// engine data (client side)
 typedef struct _ENGC {
-    MENU *menu;     /// per-sprite context menu
-    LINF *libs;     /// sprite libraries list
-    T4FV *data;     /// main display list passed to the renderer
-    PICT *pcur,     /// the sprite currently picked
-         *plst,     /// on-screen sprites list
-        **parr;     /// on-screen sprite pointers array
-    T2IV  ppos,     /// mouse pointer position
-          dims;     /// drawing area dimensions
+    MENU     *menu; /// per-sprite context menu
+    LINF     *libs; /// sprite libraries linked list
+    T4FV     *data; /// main display sequence passed to the renderer
+    PICT     *pcur, /// the sprite currently picked
+            **parr; /// on-screen sprite pointers array
     uintptr_t engh; /// rendering engine handle
     uint32_t  pcnt, /// number of on-screen sprites
+              pmax, /// max. PARR capacity (realloc on exceed)
               seed, /// random seed
               flgs, /// flags
               quit; /// special termination flag
+    T2IV      ppos, /// mouse pointer position
+              dims; /// drawing area dimensions
 } ENGC;
+
+
+
+/// control (checkbox, listbox, counter, etc.)
+typedef struct _CTRL {
+    uint32_t type,
+             flgs;
+    int32_t  xpos,
+             ypos,
+             xdim,
+             ydim;
+    void    *func;
+    union {
+        /// check box
+        struct {
+        } c;
+        /// radio box
+        struct {
+        } r;
+        /// list box
+        struct {
+        } l;
+        /// counter
+        struct {
+        } u;
+        /// progress bar
+        struct {
+        } p;
+        /// static text
+        struct {
+        } t;
+    } p;
+} CTRL;
 
 
 

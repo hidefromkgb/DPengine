@@ -124,11 +124,25 @@ BOOL APIENTRY EnterProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
 
 
+BOOL APIENTRY CalcScreen(HMONITOR hmon, HDC hdcm, LPRECT rect, LPARAM data) {
+    LPRECT retn = (LPRECT)data;
+
+    retn->left   = min(retn->left,   rect->left  );
+    retn->right  = max(retn->right,  rect->right );
+    retn->top    = min(retn->top,    rect->top   );
+    retn->bottom = max(retn->bottom, rect->bottom);
+
+    return TRUE;
+}
+
+
+
 int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
     HANDLE hdir;
     long flgs;
 
+    RECT temp = {MAXLONG, MAXLONG, MINLONG, MINLONG};
     ENGC engc = {};
     LINF *libs;
 
@@ -177,8 +191,13 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         }
         engc.seed = time(0);
         printf("[((RNG))] seed = 0x%08X\n", engc.seed);
+
+        EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&temp);
+        engc.dims = (T2IV){temp.right - temp.left, temp.bottom - temp.top};
+
         MakeSpriteArr(&engc);
-        EngineRunMainLoop(engc.engh, 0, 0, engc.dims.x, engc.dims.y,
+        EngineRunMainLoop(engc.engh, temp.left, temp.top,
+                          engc.dims.x, engc.dims.y,
                          ((flgs & FLG_IBGR)? WIN_IBGR : 0) |
                          ((flgs & FLG_IPBO)? WIN_IPBO : 0) |
                          ((flgs & FLG_IRGN)? WIN_IRGN : 0) |

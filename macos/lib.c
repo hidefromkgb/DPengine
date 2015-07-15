@@ -52,7 +52,7 @@ void LoadObjC() {
         iter = -1;
         while (StringObjCClasses[++iter])
             LoadedObjCClasses[iter] =
-                objc_getClass(StringObjCClasses[iter]);
+                (id)objc_getClass(StringObjCClasses[iter]);
         iter = -1;
         while (StringObjCSelectors[++iter])
             LoadedObjCSelectors[iter] =
@@ -343,6 +343,9 @@ void OnCalc(CFRunLoopTimerRef time, void *data) {
         RestartEngine(engd, SCM_QUIT);
         return;
     }
+    /// [TODO] manual mouse transparency does not work, commented out for now
+//    setIgnoresMouseEvents_((id)engd->user[2],
+//                           (pick >= 0) || (engd->flgs & COM_IOPQ));
     switch (engd->rscm) {
         case SCM_RSTD: {
             CGContextSetBlendMode((CGContextRef)engd->user[0],
@@ -370,10 +373,11 @@ void OnCalc(CFRunLoopTimerRef time, void *data) {
 
 
 
-void OnDraw(CGRect rect, id this) {
+void OnDraw(CGRect rect) {
     ENGD *engd;
 
-    GET_IVAR(this, VAR_ENGD, &engd);
+    GET_IVAR(delegate(sharedApplication(NSApplication)), VAR_ENGD, &engd);
+
     CGRect full = {{0, 0}, {engd->pict.xdim, engd->pict.ydim}};
 
     if (!engd->draw)
@@ -392,7 +396,7 @@ void OnDraw(CGRect rect, id this) {
             break;
         }
         case SCM_ROGL:
-            flushBuffer(openGLContext(this));
+            flushBuffer(openGLContext((id)engd->user[1]));
             break;
     }
 }
@@ -435,7 +439,7 @@ void RunMainLoop(ENGD *engd) {
     /// view delegate`s methods (line 1) and custom fields (line 2)
     OMSC  vmet[] = {{drawRect_, OnDraw}, {MenuSelector, OnMenu},
                     {isOpaque,  OnOpaq}, /*{resetCursorRects, OnRect},*/{}};
-    char *vfld[] = {VAR_ENGD, 0};
+    char *vfld[] = {0};
 
     /// app delegate class, app delegate instance
     id adlg, ains;

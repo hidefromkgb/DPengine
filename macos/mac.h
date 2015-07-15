@@ -1,6 +1,5 @@
 #include <ApplicationServices/ApplicationServices.h>
 #include <CoreFoundation/CoreFoundation.h>
-#include <CoreGraphics/CGBitmapContext.h>
 #include <objc/objc-runtime.h>
 
 

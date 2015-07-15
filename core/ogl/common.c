@@ -15,8 +15,10 @@ GLint LoadOpenGLFunctions() {
         if (LoadedOpenGLFunctions[iter])
             continue;
         if (!(LoadedOpenGLFunctions[iter] =
-              GL_GET_PROC_ADDR(StringOpenGLFunctions[iter])))
+              GL_GET_PROC_ADDR(StringOpenGLFunctions[iter]))) {
+            printf("[%d]: %s\n", iter, StringOpenGLFunctions[iter]);
             return -iter - 1;
+        }
     }
     return iter;
 }
@@ -296,19 +298,15 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
                 ecnt = 0;
                 switch (patr[iter].type) {
                     case UNI_T1IV:
-                    case UNI_T1UV:
                     case UNI_T1FV: ecnt = 1; break;
 
                     case UNI_T2IV:
-                    case UNI_T2UV:
                     case UNI_T2FV: ecnt = 2; break;
 
                     case UNI_T3IV:
-                    case UNI_T3UV:
                     case UNI_T3FV: ecnt = 3; break;
 
                     case UNI_T4IV:
-                    case UNI_T4UV:
                     case UNI_T4FV: ecnt = 4; break;
                 }
                 switch (patr[iter].type) {
@@ -316,15 +314,8 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
                     case UNI_T2IV:
                     case UNI_T3IV:
                     case UNI_T4IV:
-                        glVertexAttribIPointer(aloc, ecnt, GL_INT, 0, 0);
-                        break;
-
-                    case UNI_T1UV:
-                    case UNI_T2UV:
-                    case UNI_T3UV:
-                    case UNI_T4UV:
-                        glVertexAttribIPointer(aloc, ecnt,
-                                               GL_UNSIGNED_INT, 0, 0);
+                        glVertexAttribPointer(aloc, ecnt,
+                                              GL_INT, GL_FALSE, 0, 0);
                         break;
 
                     case UNI_T1FV:
