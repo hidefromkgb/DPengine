@@ -456,8 +456,10 @@ void RunMainLoop(ENGD *engd) {
 
     CGRect dims = {{0, 0}, {engd->pict.xdim, engd->pict.ydim}};
     switch (engd->rscm) {
-        case SCM_ROGL:
-            if (LoadOpenGLFunctions() > 0) {
+        case SCM_ROGL: {
+            GLchar *retn;
+
+            if (!(retn = LoadOpenGLFunctions(NV_vertex_program3))) {
                 id pfmt, ctxt;
                 GLint attr[] = {NSOpenGLPFADoubleBuffer,
                                 NSOpenGLPFADepthSize, 32, 0},
@@ -472,10 +474,11 @@ void RunMainLoop(ENGD *engd) {
                 release(pfmt);
                 break;
             }
-            printf(TXL_FAIL" %s\n", engd->tran[TXT_NOGL]);
+            printf("\n%s\n"TXL_FAIL" %s\n", retn, engd->tran[TXT_NOGL]);
+            free(retn);
             engd->rscm = SCM_RSTD;
             /// falling through
-
+        }
         case SCM_RSTD: {
             PICT *pict = &engd->pict;
             long line = pict->xdim * sizeof(*pict->bptr);

@@ -3,24 +3,51 @@
 
 
 
-GLchar *StringOpenGLFunctions[] = {STRING_OPENGL_FUNCTIONS, 0};
-GLvoid *LoadedOpenGLFunctions[countof(StringOpenGLFunctions)] = {};
+struct {
+    GLchar *name;
+    GLuint  mask;
+} MaskedStringOpenGLFunctions[] = {MASKED_STRING_OPENGL_FUNCTIONS, {}};
+GLvoid *LoadedOpenGLFunctions[countof(MaskedStringOpenGLFunctions)] = {};
 
 
 
-GLint LoadOpenGLFunctions() {
+GLvoid newerror(GLchar **retn, GLchar *frmt, ...) {
+    GLchar buff[2048];
+    va_list list;
+
+    va_start(list, frmt);
+    vsnprintf(buff, countof(buff), frmt, list);
+    va_end(list);
+    if (*retn) {
+        *retn = realloc(*retn, 1 + strlen(*retn) + strlen(buff));
+        strcat(*retn, buff);
+    }
+    else
+        *retn = strdup(buff);
+}
+
+
+
+GLchar *LoadOpenGLFunctions(GLuint mask) {
+    GLchar *retn = 0;
     GLint iter = -1;
 
-    while (StringOpenGLFunctions[++iter]) {
-        if (LoadedOpenGLFunctions[iter])
+    while (MaskedStringOpenGLFunctions[++iter].name) {
+        if (LoadedOpenGLFunctions[iter] ||
+           (MaskedStringOpenGLFunctions[iter].mask &&
+          !(MaskedStringOpenGLFunctions[iter].mask & mask)))
             continue;
         if (!(LoadedOpenGLFunctions[iter] =
-              GL_GET_PROC_ADDR(StringOpenGLFunctions[iter]))) {
-            printf("[%d]: %s\n", iter, StringOpenGLFunctions[iter]);
-            return -iter - 1;
-        }
+              GL_GET_PROC_ADDR(MaskedStringOpenGLFunctions[iter].name)))
+            newerror(&retn, "[%d]: %s\n",
+                     iter, MaskedStringOpenGLFunctions[iter].name);
     }
-    return iter;
+    if (mask & NV_vertex_program3) {
+        glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &iter);
+        if (!iter)
+            newerror(&retn, "NV_vertex_program3\n");
+    }
+    return retn;
 }
 
 
@@ -29,6 +56,7 @@ GLint ShaderProgramStatus(GLuint prog, GLboolean shad, GLenum parm) {
     GLchar buff[2048];
     GLint stat, slen;
 
+    buff[countof(buff) - 1] = 0;
     if (shad) {
         glGetShaderiv(prog, parm, &stat);
         if (stat != GL_TRUE) {
@@ -96,9 +124,7 @@ SHDR *MakeShaderList(GLchar *vert[], GLchar *pixl[],
         ShaderAdd(curp, retn[iter].prog, GL_FRAGMENT_SHADER);
         ShaderAdd(curv, retn[iter].prog, GL_VERTEX_SHADER);
         glLinkProgram(retn[iter].prog);
-        glUseProgramObjectARB(retn[iter].prog);
-        glGenVertexArrays(1, &retn[iter].pvao);
-        glBindVertexArray(retn[iter].pvao);
+        glUseProgram(retn[iter].prog);
 
         for (retn[iter].cuni = ctmp = 0; ctmp < cuni; ctmp++)
             if ((indx = glGetUniformLocation(retn[iter].prog,
@@ -113,7 +139,7 @@ SHDR *MakeShaderList(GLchar *vert[], GLchar *pixl[],
                 retn[iter].puni[step++].indx = indx;
             }
     }
-    glUseProgramObjectARB(0);
+    glUseProgram(0);
     return retn;
 }
 
@@ -132,7 +158,7 @@ GLchar *shader(GLchar *shdr, va_list list) {
             size += strlen(retn);
 
         retn = calloc(sizeof(*retn), size + 1);
-        vsprintf(retn, shdr, dupl);
+        vsnprintf(retn, size + 1, shdr, dupl);
         va_end(dupl);
     }
     return retn;
@@ -286,8 +312,7 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
                         patr[iter].cdat, patr[iter].pdat, patr[iter].draw);
     }
     for (shdr = 0; shdr < retn->cshd; shdr++) {
-        glUseProgramObjectARB(retn->pshd[shdr].prog);
-        glBindVertexArray(retn->pshd[shdr].pvao);
+        glUseProgram(retn->pshd[shdr].prog);
         glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, retn->pvbo[0]);
 
         for (iter = 1; iter < catr; iter++) {
@@ -330,8 +355,7 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
             }
         }
     }
-    glUseProgramObjectARB(0);
-    glBindVertexArray(0);
+    glUseProgram(0);
     glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBufferARB(GL_ARRAY_BUFFER, 0);
     return retn;
@@ -344,8 +368,11 @@ GLvoid DrawVBO(FVBO *vobj, GLuint shad) {
     UNIF *unif;
 
     if (shad < vobj->cshd) {
-        glBindVertexArray(vobj->pshd[shad].pvao);
-        glUseProgramObjectARB(vobj->pshd[shad].prog);
+        glUseProgram(vobj->pshd[shad].prog);
+
+        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, vobj->pvbo[0]);
+        for (iter = 1; iter < vobj->cvbo; iter++)
+            glBindBufferARB(GL_ARRAY_BUFFER, vobj->pvbo[0]);
 
         for (iter = 0; iter < vobj->ctex; iter++)
             BindTex(vobj, iter, TEX_DFLT);
@@ -363,8 +390,9 @@ GLvoid DrawVBO(FVBO *vobj, GLuint shad) {
                            (GLvoid*)&unif->pdat : unif->pdat);
         }
         glDrawElements(vobj->elem, vobj->cind, GL_UNSIGNED_INT, 0);
-        glUseProgramObjectARB(0);
-        glBindVertexArray(0);
+        glBindBufferARB(GL_ARRAY_BUFFER, 0);
+        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glUseProgram(0);
     }
 }
 
@@ -373,8 +401,7 @@ GLvoid DrawVBO(FVBO *vobj, GLuint shad) {
 GLvoid FreeVBO(FVBO **vobj) {
     if (vobj && *vobj) {
         while ((*vobj)->cshd) {
-            glDeleteVertexArrays(1, &(*vobj)->pshd[--(*vobj)->cshd].pvao);
-            glDeleteProgram((*vobj)->pshd[(*vobj)->cshd].prog);
+            glDeleteProgram((*vobj)->pshd[--(*vobj)->cshd].prog);
             free((*vobj)->pshd[(*vobj)->cshd].puni);
         };
         glDeleteBuffersARB((*vobj)->cvbo, (*vobj)->pvbo);

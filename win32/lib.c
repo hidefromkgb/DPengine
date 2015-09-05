@@ -592,13 +592,20 @@ void RunMainLoop(ENGD *engd) {
         case SCM_RSTD:
             break;
 
-        case SCM_ROGL:
+        case SCM_ROGL: {
+            GLchar *retn;
+
             ppfd.iLayerType = PFD_MAIN_PLANE;
             SetPixelFormat(mwdc, ChoosePixelFormat(mwdc, &ppfd), &ppfd);
             wglMakeCurrent(mwdc, mwrc = wglCreateContext(mwdc));
-            if (LoadOpenGLFunctions() <= 0) {
-                Message(NULL, (char*)engd->tran[TXT_NOGL],
-                        NULL, MB_OK | MB_ICONEXCLAMATION);
+            if ((retn = LoadOpenGLFunctions(NV_vertex_program3 |
+                                            ARB_framebuffer_object))) {
+                retn = realloc(retn, 2 + strlen(retn)
+                                       + strlen((char*)engd->tran[TXT_NOGL]));
+                strcat(retn, "\n");
+                strcat(retn, (char*)engd->tran[TXT_NOGL]);
+                Message(NULL, retn, NULL, MB_OK | MB_ICONEXCLAMATION);
+                free(retn);
                 RestartEngine(engd, SCM_RSTD);
                 goto _nogl;
             }
@@ -607,6 +614,7 @@ void RunMainLoop(ENGD *engd) {
             glViewport(0, 0, surf->xdim, surf->ydim);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
             break;
+        }
     }
     time = timeSetEvent(1, 0, TimeFuncWrapper,
                        (DWORD_PTR)&engd->time, TIME_PERIODIC);

@@ -443,20 +443,24 @@ void RunMainLoop(ENGD *engd) {
                 cairo_image_surface_get_data((cairo_surface_t*)engd->user[1]);
             break;
 
-        case SCM_ROGL:
+        case SCM_ROGL: {
+            GLchar *retn;
+
             gtk_widget_set_gl_capability(gwnd, GetGDKGL(gwnd), 0,
                                          TRUE, GDK_GL_RGBA_TYPE);
             gtk_widget_realize(gwnd);
-
-            if (!(pGLD = gtk_widget_gl_begin(gwnd))
-            || (LoadOpenGLFunctions() <= 0)) {
-                printf(TXL_FAIL" %s\n", engd->tran[TXT_NOGL]);
+            pGLD = gtk_widget_gl_begin(gwnd);
+            retn = LoadOpenGLFunctions(NV_vertex_program3);
+            gdk_gl_drawable_gl_end(pGLD);
+            if (retn) {
+                printf("\n%s\n"TXL_FAIL" %s\n", retn, engd->tran[TXT_NOGL]);
+                free(retn);
                 gtk_widget_destroy(gwnd);
                 RestartEngine(engd, SCM_RSTD);
                 return;
             }
-            gdk_gl_drawable_gl_end(pGLD);
             break;
+        }
     }
     gtk_widget_set_app_paintable(gwnd, TRUE);
     gtk_widget_set_size_request(gwnd, engd->pict.xdim, engd->pict.ydim);
