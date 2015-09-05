@@ -121,25 +121,32 @@ SHDR *MakeShaderList(GLchar *vert[], GLchar *pixl[],
                 curv = vert[iter];
         }
         retn[iter].prog = glCreateProgram();
-        ShaderAdd(curp, retn[iter].prog, GL_FRAGMENT_SHADER);
-        ShaderAdd(curv, retn[iter].prog, GL_VERTEX_SHADER);
-        glLinkProgram(retn[iter].prog);
-        glUseProgram(retn[iter].prog);
+        if (ShaderAdd(curp, retn[iter].prog, GL_FRAGMENT_SHADER)
+        &&  ShaderAdd(curv, retn[iter].prog, GL_VERTEX_SHADER)) {
+            glLinkProgram(retn[iter].prog);
+            if (ShaderProgramStatus(retn[iter].prog, GL_FALSE,
+                                    GL_LINK_STATUS) == GL_TRUE) {
+                glUseProgram(retn[iter].prog);
 
-        for (retn[iter].cuni = ctmp = 0; ctmp < cuni; ctmp++)
-            if ((indx = glGetUniformLocation(retn[iter].prog,
-                                             puni[ctmp].name)) != -1)
-                retn[iter].cuni++;
+                for (retn[iter].cuni = ctmp = 0; ctmp < cuni; ctmp++)
+                    if ((indx = glGetUniformLocation(retn[iter].prog,
+                                                     puni[ctmp].name)) != -1)
+                        retn[iter].cuni++;
 
-        retn[iter].puni = malloc(retn[iter].cuni * sizeof(*retn[iter].puni));
-        for (step = ctmp = 0; ctmp < cuni; ctmp++)
-            if ((indx = glGetUniformLocation(retn[iter].prog,
-                                             puni[ctmp].name)) != -1) {
-                retn[iter].puni[step] = puni[ctmp];
-                retn[iter].puni[step++].indx = indx;
+                retn[iter].puni = malloc(retn[iter].cuni *
+                                         sizeof(*retn[iter].puni));
+                for (step = ctmp = 0; ctmp < cuni; ctmp++)
+                    if ((indx = glGetUniformLocation(retn[iter].prog,
+                                                     puni[ctmp].name)) != -1) {
+                        retn[iter].puni[step] = puni[ctmp];
+                        retn[iter].puni[step++].indx = indx;
+                    }
+                glUseProgram(0);
+                continue;
             }
+        }
+        glDeleteProgram(retn[iter].prog);
     }
-    glUseProgram(0);
     return retn;
 }
 
