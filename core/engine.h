@@ -65,17 +65,6 @@
 #define WIN_IPBO  (1 << 1)
 #define WIN_IRGN  (1 << 2)
 
-/// menu constants
-
-/// menu item is disabled
-#define MFL_GRAY  (1 << 0)
-/// current checkbox value
-#define MFL_VCHK  (1 << 1)
-/// menu item has a checkbox
-#define MFL_CCHK  (1 << 2)
-/// checkbox is a radiobutton
-#define MFL_RCHK ((1 << 3) | MFL_CCHK)
-
 /// UFRM flags
 
 /// left mouse button
@@ -90,6 +79,8 @@
 
 
 #pragma pack(push, 1)
+typedef unsigned long ulong;
+
 typedef struct _T2FV {
     float x, y;
 } T2FV;
@@ -136,14 +127,6 @@ typedef struct _AINF {
 } AINF;
 #pragma pack(pop)
 
-typedef struct _MENU {
-    uint8_t *text;
-    void (*func)(struct _MENU *);
-    uintptr_t data;
-    uint32_t flgs, uuid;
-    struct _MENU *chld;
-} MENU;
-
 
 
 /** _________________________________________________________________________
@@ -166,35 +149,6 @@ typedef uint32_t (*UFRM)(uintptr_t engh, uintptr_t user,
                          int32_t xptr, int32_t yptr, int32_t isel);
 
 
-
-/** _________________________________________________________________________
-    Creates a menu from a given menu template and returns it.
-    _________________________________________________________________________
-    MENU: menu template
- **/
-LIB_OPEN MENU *EngineMenuFromTemplate(MENU *tmpl);
-
-/** _________________________________________________________________________
-    Updates menu item text.
-    _________________________________________________________________________
-    ITEM: pointer to the menu item
-    TEXT: UTF8 string that contains the new text
- **/
-LIB_OPEN void EngineUpdateMenuItemText(MENU *item, uint8_t *text);
-
-/** _________________________________________________________________________
-    Frees all memory that EngineMenuFromTemplate() used to create the menu.
-    _________________________________________________________________________
-    MENU: pointer to where the menu structure is located
- **/
-LIB_OPEN void EngineFreeMenu(MENU **menu);
-
-/** _________________________________________________________________________
-    Shows the menu and lets the user make a choice.
-    _________________________________________________________________________
-    MENU: menu structure
- **/
-LIB_OPEN void EngineOpenContextMenu(MENU *menu);
 
 /** _________________________________________________________________________
     Allocates a new engine object and returns a handle to it.
@@ -245,10 +199,10 @@ LIB_OPEN void EngineFinishLoading(uintptr_t engh);
     USER: user data pointer to be passed to the callback
     FUNC: callback function described above (see UFRM typedef)
  **/
-LIB_OPEN void EngineRunMainLoop(uintptr_t engh, int32_t  xpos, int32_t  ypos,
-                                uint32_t  xdim, uint32_t ydim, uint32_t flgs,
-                                uint32_t  msec, uint32_t rscm, uint8_t *lang,
-                                uintptr_t user, UFRM func);
+LIB_OPEN void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
+                                uint32_t xdim, uint32_t ydim, uint32_t flgs,
+                                uint32_t msec, uint32_t rscm, uintptr_t user,
+                                UFRM func);
 
 /** _________________________________________________________________________
     Frees all resources allocated by the target engine object and invalidates

@@ -7,7 +7,7 @@ OBJDIR = .obj
 
 RCFLAGS = -J rc -O coff
 
-LLIB = -lgdi32 -luser32 -lkernel32 -lopengl32 -lcomctl32 -lwinmm
+LLIB = -lgdi32 -lopengl32 -lwinmm
 LINC =
 LCXFLAGS =
 LCFLAGS = -I..\core -Wall -DLIB_MAKE
@@ -38,13 +38,11 @@ DbgJoined: ldebug
 DbgJoined: edebug
 DbgJoined: jlink
 
-RelLibOnly: LOBJ += $(OBJDIR)\rsrc\lib.o
-RelLibOnly: lrelease $(OBJDIR)\rsrc\lib.o
+RelLibOnly: lrelease
 RelLibOnly: LCXFLAGS += -s
 RelLibOnly: llink
 
-DbgLibOnly: LOBJ += $(OBJDIR)\rsrc\lib.o
-DbgLibOnly: ldebug $(OBJDIR)\rsrc\lib.o
+DbgLibOnly: ldebug
 DbgLibOnly: llink
 
 RelSplit: RelLibOnly
@@ -87,12 +85,9 @@ clean:
 
 lbuild:
 	if not exist $(OBJDIR) mkdir $(OBJDIR)
-	if not exist $(OBJDIR)\rsrc mkdir $(OBJDIR)\rsrc
 	if not exist $(OBJDIR)\core mkdir $(OBJDIR)\core
 	if not exist $(OBJDIR)\core\gif mkdir $(OBJDIR)\core\gif
 	if not exist $(OBJDIR)\core\ogl mkdir $(OBJDIR)\core\ogl
-$(OBJDIR)\rsrc\lib.o: rsrc\lib.rc
-	$(RC) $(RCFLAGS) $(LINC) -i rsrc\lib.rc -o $(OBJDIR)\rsrc\lib.o
 $(OBJDIR)\core\core.o: ..\core\core.c
 	$(CC) $(LCFLAGS) $(LINC) -c ..\core\core.c -o $(OBJDIR)\core\core.o
 $(OBJDIR)\core\gif\common.o: ..\core\gif\common.c

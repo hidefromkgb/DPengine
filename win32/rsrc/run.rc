@@ -1,4 +1,4 @@
-#include "lib.rc"
+#include <windows.h>
 #include "run.h"
 
 
@@ -27,3 +27,8 @@ FONT 9, "Verdana", 400, 0, 1
     AUTOCHECKBOX    "&Full opacity", MCB_IOPQ, 4, 44, 60, 12, BS_FLAT
     AUTOCHECKBOX    "Use &regions", MCB_IRGN, 68, 44, 60, 12, BS_FLAT
 }
+
+
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+1                  RT_MANIFEST    "mfst.xml"

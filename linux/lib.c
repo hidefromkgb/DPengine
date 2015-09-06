@@ -17,97 +17,12 @@ void RestartEngine(ENGD *engd, ulong rscm) {
 
 
 
+/** TODO **/
 void ShowMainWindow(ENGD *engd, ulong show) {
     if (show)
         gtk_widget_show((GtkWidget*)engd->user[0]);
     else
         gtk_widget_hide((GtkWidget*)engd->user[0]);
-}
-
-
-
-inline MENU *OSSpecificMenu(ENGD *engd) {
-    return NULL;
-}
-
-
-
-void GTKMenuHandler(GtkWidget *item, gpointer user) {
-    ProcessMenuItem((MENU*)user);
-}
-
-
-
-void GTKMenuDestroy(GtkWidget *item, gpointer user) {
-    GtkWidget *chld = (user)? (GtkWidget*)user
-                            :  gtk_menu_item_get_submenu((GtkMenuItem*)item);
-    if (chld) {
-        gtk_container_foreach((GtkContainer*)chld, GTKMenuDestroy, NULL);
-        gtk_widget_destroy(chld);
-    }
-    if (!user)
-        gtk_widget_destroy(item);
-}
-
-
-
-GtkWidget *Submenu(MENU *menu, ulong chld) {
-    if (!menu)
-        return NULL;
-
-    GtkWidget *item;
-    GtkMenu *retn;
-    ulong indx;
-
-    retn = (GtkMenu*)gtk_menu_new();
-    if (!chld)
-        g_signal_connect(G_OBJECT(retn), "selection-done",
-                         G_CALLBACK(GTKMenuDestroy), retn);
-    indx = 0;
-    while (menu->text) {
-        if (!*menu->text)
-            item = gtk_separator_menu_item_new();
-        else {
-            if (menu->flgs & MFL_CCHK) {
-                item =
-                    gtk_check_menu_item_new_with_mnemonic((char*)menu->text);
-                gtk_check_menu_item_set_active((GtkCheckMenuItem*)item,
-                                                menu->flgs & MFL_VCHK);
-                gtk_check_menu_item_set_draw_as_radio((GtkCheckMenuItem*)item,
-                                                       menu->flgs &  MFL_RCHK
-                                                                  & ~MFL_CCHK);
-            }
-            else
-                item = gtk_menu_item_new_with_mnemonic((char*)menu->text);
-            gtk_widget_set_sensitive(item, !(menu->flgs & MFL_GRAY));
-            g_signal_connect(G_OBJECT(item), "activate",
-                             G_CALLBACK(GTKMenuHandler), menu);
-            if (menu->chld)
-                gtk_menu_item_set_submenu((GtkMenuItem*)item,
-                                           Submenu(menu->chld, ~0));
-        }
-        gtk_menu_attach(retn, item, 0, 1, indx, indx + 1);
-        indx++;
-        menu++;
-    }
-    gtk_widget_show_all((GtkWidget*)retn);
-    return (GtkWidget*)retn;
-}
-
-
-
-void PopupMenu(GtkStatusIcon *icon, guint mbtn, guint32 time, gpointer user) {
-    EngineOpenContextMenu(((ENGD*)user)->menu);
-}
-
-
-
-void EngineOpenContextMenu(MENU *menu) {
-    GtkMenu *mwnd = (GtkMenu*)Submenu(menu, 0);
-
-    if (mwnd)
-        gtk_menu_popup(mwnd, NULL, NULL, NULL, NULL,
-                       0, gtk_get_current_event_time());
 }
 
 
@@ -126,12 +41,6 @@ char *LoadFile(char *name, long *size) {
             *size = flen;
     }
     return retn;
-}
-
-
-
-char *ConvertUTF8(char *utf8) {
-    return strdup(utf8);
 }
 
 
@@ -412,8 +321,6 @@ GdkGLConfig *GetGDKGL(GtkWidget *gwnd) {
 
 
 void RunMainLoop(ENGD *engd) {
-    INCBIN("../core/icon.gif", MainIcon);
-
     guint tmrf, tmrt, tmrd;
     GdkGLDrawable *pGLD;
     GtkWidget *gwnd;
@@ -452,7 +359,8 @@ void RunMainLoop(ENGD *engd) {
             retn = LoadOpenGLFunctions(NV_vertex_program3);
             gdk_gl_drawable_gl_end(pGLD);
             if (retn) {
-                printf("\n%s\n"TXL_FAIL" %s\n", retn, engd->tran[TXT_NOGL]);
+                /** TODO **/
+                printf("\n%s\n"TXL_FAIL" %s\n", retn, "BRED!");//engd->tran[TXT_NOGL]);
                 free(retn);
                 gtk_widget_destroy(gwnd);
                 RestartEngine(engd, SCM_RSTD);
@@ -474,26 +382,6 @@ void RunMainLoop(ENGD *engd) {
     gtk_widget_show(gwnd);
     gdk_window_set_cursor(gtk_widget_get_window(gwnd),
                           gdk_cursor_new(GDK_HAND1));
-
-    long xdim = 128,
-         ydim = 128;
-    GdkPixbuf *pbuf;
-    GtkStatusIcon *icon;
-
-    /// the size is wrong, but let it be: MainIcon does have a GIF ending
-    ASTD *igif = MakeDataAnimStd(MainIcon, 1024 * 1024);
-    BGRA *bptr = ExtractRescaleSwizzleAlign(igif, 0xC6, 0, xdim, ydim);
-
-    pbuf = gdk_pixbuf_new_from_data((guchar*)bptr, GDK_COLORSPACE_RGB, TRUE,
-                                    CHAR_BIT, xdim, ydim, xdim * sizeof(*bptr),
-                                    (GdkPixbufDestroyNotify)free, bptr);
-    FreeAnimStd(&igif);
-
-    icon = gtk_status_icon_new_from_pixbuf(pbuf);
-    gtk_status_icon_set_tooltip_text(icon, (gchar*)engd->tran[TXT_HEAD]);
-    gtk_status_icon_set_visible(icon, TRUE);
-    g_signal_connect(G_OBJECT(icon), "popup-menu",
-                     G_CALLBACK(PopupMenu), engd);
 
     tmrt = g_timeout_add(   1, TimeFuncWrapper, &engd->time);
     tmrf = g_timeout_add(1000, FPSFunc, engd);
@@ -518,6 +406,4 @@ void RunMainLoop(ENGD *engd) {
     g_source_remove(tmrf);
     g_source_remove(tmrt);
     gtk_widget_destroy(gwnd);
-    g_object_unref(G_OBJECT(icon));
-    g_object_unref(G_OBJECT(pbuf));
 }

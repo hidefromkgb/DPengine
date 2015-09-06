@@ -674,168 +674,6 @@ BGRA *ExtractRescaleSwizzleAlign(ASTD *anim, uint8_t swiz,
 
 
 
-void MenuHandler(MENU *item) {
-    switch (item->uuid) {
-        case MMI_RSTD:
-        case MMI_ROGL:
-            RestartEngine((ENGD*)item->data,
-                          (item->uuid == MMI_RSTD)? SCM_RSTD : SCM_ROGL);
-            break;
-
-        case MMI_OPAQ: {
-            ENGD *engd = (ENGD*)item->data;
-
-            if (item->flgs & MFL_VCHK)
-                engd->flgs |= COM_IOPQ;
-            else
-                engd->flgs &= ~COM_IOPQ;
-            RestartEngine(engd, engd->rscm);
-            break;
-        }
-        case MMI_STOP: {
-            ENGD *engd = (ENGD*)item->data;
-
-            engd->draw = !(item->flgs & MFL_VCHK);
-            break;
-        }
-        case MMI_HIDE:
-            ShowMainWindow((ENGD*)item->data, !(item->flgs & MFL_VCHK));
-            break;
-
-        case MMI_EXIT:
-            RestartEngine((ENGD*)item->data, SCM_QUIT);
-            break;
-    }
-}
-
-
-
-void ProcessMenuItem(MENU *item) {
-    MENU *indx;
-
-    if (item->flgs & MFL_CCHK) {
-        if (item->flgs & MFL_RCHK & ~MFL_CCHK) {
-            if (item->flgs & MFL_VCHK)
-                return;
-            item->flgs |= MFL_VCHK;
-            indx = item;
-            while ((--indx)->flgs & MFL_RCHK & ~MFL_CCHK)
-                indx->flgs &= ~MFL_VCHK;
-            indx = item;
-            while ((++indx)->flgs & MFL_RCHK & ~MFL_CCHK)
-                indx->flgs &= ~MFL_VCHK;
-        }
-        else
-            item->flgs ^= MFL_VCHK;
-    }
-    if (!item->chld && item->func)
-        item->func(item);
-}
-
-
-
-void EngineFreeMenu(MENU **menu) {
-    if (!menu || !*menu)
-        return;
-
-    MENU *iter = *menu;
-
-    while (iter->text) {
-        if (iter->chld)
-            EngineFreeMenu(&iter->chld);
-        free(iter->text);
-        iter++;
-    }
-    free(*menu - 1);
-    *menu = 0;
-}
-
-
-
-void EngineUpdateMenuItemText(MENU *item, uint8_t *text) {
-    if (!item || !text)
-        return;
-
-    free(item->text);
-    item->text = (uint8_t*)ConvertUTF8((char*)text);
-}
-
-
-
-MENU *EngineMenuFromTemplate(MENU *tmpl) {
-    MENU *retn, *iter;
-
-    retn = 0;
-    if ((iter = tmpl)) {
-        while (iter++->text);
-        if (iter > tmpl + 1) {
-            retn = calloc(iter - tmpl + 1, sizeof(*iter));
-            iter = ++retn;
-            do {
-                *iter = *tmpl;
-                if (tmpl->chld)
-                    iter->chld = EngineMenuFromTemplate(tmpl->chld);
-                iter++->text = (tmpl->text)?
-                               (uint8_t*)ConvertUTF8((char*)tmpl->text) : 0;
-            } while (tmpl++->text);
-        }
-    }
-    return retn;
-}
-
-
-
-uint32_t LoadLocalization(uint8_t ***text, uint8_t *data, uint32_t size) {
-    long line, nlin, iter, prev;
-    uint8_t **retn;
-
-    if (!data)
-        return 0;
-
-    /// skipping byte-order mark
-    if ((size >= 3) &&
-        (data[0] == 0xEF) && (data[1] == 0xBB) && (data[2] == 0xBF)) {
-        data += 3;
-        size -= 3;
-    }
-    if (*text)
-        for (nlin = 0; (*text)[nlin]; nlin++);
-    else {
-        for (nlin = 2, iter = 0; iter < size; iter++)
-            if (data[iter] == '\n')
-                nlin++;
-        *text = calloc(nlin, sizeof(*retn));
-    }
-    retn = *text;
-    for (line = iter = prev = 0; (line < nlin) && (iter < size); iter++)
-        if ((data[iter] == '\n') || (iter == size - 1)) {
-            if (iter - ((data[prev] == '\r')? 1 : 0) > prev) {
-                free(retn[line]);
-                retn[line] = calloc(iter - prev + 1, sizeof(**retn));
-                strncpy((char*)retn[line], (char*)&data[prev],
-                        iter - prev - ((data[iter - 1] == '\r')? 1 : 0));
-            }
-            line++;
-            prev = iter + 1;
-        }
-    return nlin;
-}
-
-
-
-void FreeLocalization(uint8_t ***text) {
-    long iter = -1;
-
-    if (text && *text) {
-        while ((*text)[++iter])
-            free((*text)[iter]);
-        free(*text);
-        *text = 0;
-    }
-}
-
-
-
 uintptr_t EngineInitialize() {
     ENGD *retn = calloc(1, sizeof(*retn));
 
@@ -924,14 +762,11 @@ void EngineFinishLoading(uintptr_t engh) {
 
 
 
-void EngineRunMainLoop(uintptr_t engh, int32_t  xpos, int32_t  ypos,
-                       uint32_t  xdim, uint32_t ydim, uint32_t flgs,
-                       uint32_t  msec, uint32_t rscm, uint8_t *lang,
-                       uintptr_t user, UFRM func) {
-    INCBIN("../core/en.lang", DefaultLanguage);
-
+void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
+                       uint32_t xdim, uint32_t ydim, uint32_t flgs,
+                       uint32_t msec, uint32_t rscm, uintptr_t user,
+                       UFRM func) {
     ENGD *engd = (ENGD*)engh;
-    uint8_t *data;
     long mtmp;
 
     if (engd->uarr) {
@@ -951,57 +786,9 @@ void EngineRunMainLoop(uintptr_t engh, int32_t  xpos, int32_t  ypos,
                engd->ncpu, engd->uniq, mtmp,
               (double)mtmp * engd->ncpu / engd->uniq,
               (engd->rscm == SCM_ROGL)? TXL_ROGL : TXL_RSTD);
-
-        FreeLocalization(&engd->tran);
-        for (mtmp = 0; DefaultLanguage[mtmp]; mtmp++);
-        LoadLocalization(&engd->tran, (uint8_t*)DefaultLanguage, mtmp);
-        if (lang) {
-            data = (uint8_t*)LoadFile((char*)lang, &mtmp);
-            LoadLocalization(&engd->tran, data, mtmp);
-            free(data);
-        }
-        MENU *spec,
-        menu[] =
-       {{.text = engd->tran[TXT_HEAD], .flgs = MFL_GRAY},
-        {.text = (uint8_t*)""},
-        {.text = engd->tran[TXT_RSCM]},
-        {.text = engd->tran[TXT_SPEC]},
-        {.text = engd->tran[TXT_OPAQ], .uuid = MMI_OPAQ, .func = MenuHandler,
-         .flgs = MFL_CCHK | ((engd->flgs & COM_IOPQ)? MFL_VCHK : 0),
-         .data = (uintptr_t)engd},
-        {.text = engd->tran[TXT_STOP], .uuid = MMI_STOP, .func = MenuHandler,
-         .flgs = MFL_CCHK,
-         .data = (uintptr_t)engd},
-        {.text = engd->tran[TXT_HIDE], .uuid = MMI_HIDE, .func = MenuHandler,
-         .flgs = MFL_CCHK,
-         .data = (uintptr_t)engd},
-        {.text = (uint8_t*)""},
-        {.text = engd->tran[TXT_EXIT], .uuid = MMI_EXIT, .func = MenuHandler,
-         .data = (uintptr_t)engd},
-        {}},
-
-        rndr[] =
-       {{.text = engd->tran[TXT_RSTD], .uuid = MMI_RSTD, .func = MenuHandler,
-         .flgs = MFL_RCHK | ((engd->rscm == SCM_RSTD)? MFL_VCHK : 0),
-         .data = (uintptr_t)engd},
-        {.text = engd->tran[TXT_ROGL], .uuid = MMI_ROGL, .func = MenuHandler,
-         .flgs = MFL_RCHK | ((engd->rscm == SCM_ROGL)? MFL_VCHK : 0),
-         .data = (uintptr_t)engd},
-        {}},
-
-        none[] =
-       {{.text = engd->tran[TXT_NONE], .flgs = MFL_GRAY},
-        {}};
-
-        menu[2].chld = rndr;
-        engd->menu = EngineMenuFromTemplate(menu);
-        engd->menu[3].chld = ((spec = OSSpecificMenu(engd)))?
-                               spec : EngineMenuFromTemplate(none);
         do {
             RunMainLoop(engd);
         } while ((engd->rscm = engd->draw) != SCM_QUIT);
-
-        EngineFreeMenu(&engd->menu);
     }
     else
         printf(TXL_FAIL" No animation base found! Exiting...\n");
@@ -1016,7 +803,6 @@ void EngineDeinitialize(uintptr_t engh) {
         FreeUnitArray(engd);
         FreeHashTrees(engd);
     }
-    FreeLocalization(&engd->tran);
     FreeSemaphore(&engd->isem, engd->ncpu);
     FreeSemaphore(&engd->osem, engd->ncpu);
     free(engd->thrd);

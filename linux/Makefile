@@ -13,10 +13,10 @@ LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/common.o $(OBJDIR)/core/gif/gifs
 LOUT = ../libengine.so
 
 
-ELIB = -lengine -lX11
+ELIB = -lengine
 EINC =
-ECXFLAGS = -L..
-ECFLAGS = -I../core -Wall
+ECXFLAGS = `pkg-config gtk+-2.0 --libs` -L..
+ECFLAGS = `pkg-config gtk+-2.0 --cflags` -I../core -Wall
 
 EOBJ = $(OBJDIR)/exec/exec.o $(OBJDIR)/run.o
 EOUT = ../linux-gtk

@@ -1,3 +1,4 @@
+#include <time.h>
 #include <math.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -211,6 +212,62 @@
 
 
 
+/// menu constants
+
+/// menu item is disabled
+#define MFL_GRAY  (1 << 0)
+/// current checkbox value
+#define MFL_VCHK  (1 << 1)
+/// menu item has a checkbox
+#define MFL_CCHK  (1 << 2)
+/// checkbox is a radiobutton
+#define MFL_RCHK ((1 << 3) | MFL_CCHK)
+
+/// main menu items
+#define MMI_RSTD  1
+#define MMI_ROGL  2
+#define MMI_OPAQ  3
+#define MMI_STOP  4
+#define MMI_HIDE  5
+#define MMI_EXIT  6
+
+/// per-sprite menu items
+#define MMI_CDEL  1
+#define MMI_ADEL  2
+#define MMI_CSLP  3
+#define MMI_ASLP  4
+#define MMI_PONY  5
+#define MMI_HOUS  6
+#define MMI_TPL1  7
+#define MMI_TPL2  8
+#define MMI_OPTS  9
+#define MMI_RETN 10
+#define MMI_QUIT 11
+
+
+
+/// localized text constants
+#define TXT_HEAD  0
+#define TXT_RSCM  1
+#define TXT_SPEC  2
+#define TXT_OPAQ  3
+#define TXT_STOP  4
+#define TXT_HIDE  5
+#define TXT_EXIT  6
+#define TXT_RSTD  7
+#define TXT_ROGL  8
+#define TXT_NONE  9
+#define TXT_NOGL 10
+
+#define TXT_CONS 11
+#define TXT_IRGN 12
+#define TXT_IBGR 13
+#define TXT_IPBO 14
+#define TXT_UOFO 15
+#define TXT_UWGL 16
+
+
+
 /// doubly-linked list header
 #define HDR_LIST \
     struct _LHDR *prev, *next;
@@ -220,6 +277,17 @@ typedef struct _LHDR {
 
 /// doubly-linked list iterator
 typedef void (*ITER)(LHDR *item, uintptr_t data);
+
+/// menu item
+typedef struct _MENU {
+    struct
+    _MENU    *chld; /// submenu (or 0 if none)
+    uint8_t  *text; /// item text
+    uintptr_t data; /// item data
+    uint32_t  flgs, /// item flags
+              uuid; /// item ID
+    void    (*func)(struct _MENU*); /// item handler
+} MENU;
 
 /// behaviour/effect unit info (write-once, read-only)
 typedef struct _BINF {
@@ -275,11 +343,13 @@ typedef struct _PICT {
 
 /// engine data (client side)
 typedef struct _ENGC {
-    MENU     *menu; /// per-sprite context menu
+    MENU     *mspr, /// per-sprite context menu
+             *mctx; /// engine`s main context menu
     LINF     *libs; /// sprite libraries linked list
     T4FV     *data; /// main display sequence passed to the renderer
     PICT     *pcur, /// the sprite currently picked
             **parr; /// on-screen sprite pointers array
+    uint8_t **tran; /// localized text array (ASCIIZ; last item is also 0)
     uintptr_t engh; /// rendering engine handle
     uint32_t  pcnt, /// number of on-screen sprites
               pmax, /// max. PARR capacity (realloc on exceed)
@@ -325,27 +395,15 @@ typedef struct _CTRL {
 
 
 
-void  ListAppendHead(LHDR **list, long size);
-void  ListAppendTail(LHDR **list, long size);
-LHDR *ListIterateHeadToTail(LHDR *list, ITER iter, uintptr_t data);
-LHDR *ListIterateTailToHead(LHDR *list, ITER iter, uintptr_t data);
-
-#define HTT_ITER(list, iter, data) \
-    ListIterateHeadToTail((LHDR*)(list), (ITER)(iter), (uintptr_t)(data))
-#define TTH_ITER(list, iter, data) \
-    ListIterateTailToHead((LHDR*)(list), (ITER)(iter), (uintptr_t)(data))
-
-void InitMainMenu(ENGC *engc);
-long MakeSpriteArr(ENGC *engc);
-void FreeEverything(ENGC *engc);
-void PrepareSpriteArr(LINF *elem, LINF **edge);
+void ProcessMenuItem(MENU *item);
 void AppendLib(ENGC *engc, char *pcnf, char *base, char *path);
-
-uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
-                     T4FV **data, uint64_t *time, uint32_t flgs,
-                     int32_t xptr, int32_t yptr, int32_t isel);
+void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
+                   ulong rscm, uint32_t flgs, uint8_t *lang);
 
 
 
 /// external functions, have to be implemented or imported
+void  OpenContextMenu(MENU *menu);
+MENU *OSSpecificMenu(ENGC *engc);
+char *ConvertUTF8(char *utf8);
 char *LoadFileZ(char *name, long *size);

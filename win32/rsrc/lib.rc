@@ -1,6 +1,0 @@
-#include <windows.h>
-
-
-
-LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-1                  RT_MANIFEST    "mfst.xml"

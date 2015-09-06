@@ -1,8 +1,98 @@
-#include <time.h>
-#include <unistd.h>
 #include <dirent.h>
-#include <X11/Xlib.h>
+#include <gtk/gtk.h>
 #include "../exec/exec.h"
+
+
+
+void GTKMenuHandler(GtkWidget *item, gpointer user) {
+    ProcessMenuItem((MENU*)user);
+}
+
+
+
+void GTKMenuDestroy(GtkWidget *item, gpointer user) {
+    GtkWidget *chld = (user)? (GtkWidget*)user
+                            :  gtk_menu_item_get_submenu((GtkMenuItem*)item);
+    if (chld) {
+        gtk_container_foreach((GtkContainer*)chld, GTKMenuDestroy, NULL);
+        gtk_widget_destroy(chld);
+    }
+    if (!user)
+        gtk_widget_destroy(item);
+}
+
+
+
+GtkWidget *Submenu(MENU *menu, ulong chld) {
+    if (!menu)
+        return NULL;
+
+    GtkWidget *item;
+    GtkMenu *retn;
+    ulong indx;
+
+    retn = (GtkMenu*)gtk_menu_new();
+    if (!chld)
+        g_signal_connect(G_OBJECT(retn), "selection-done",
+                         G_CALLBACK(GTKMenuDestroy), retn);
+    indx = 0;
+    while (menu->text) {
+        if (!*menu->text)
+            item = gtk_separator_menu_item_new();
+        else {
+            if (menu->flgs & MFL_CCHK) {
+                item =
+                    gtk_check_menu_item_new_with_mnemonic((char*)menu->text);
+                gtk_check_menu_item_set_active((GtkCheckMenuItem*)item,
+                                                menu->flgs & MFL_VCHK);
+                gtk_check_menu_item_set_draw_as_radio((GtkCheckMenuItem*)item,
+                                                       menu->flgs &  MFL_RCHK
+                                                                  & ~MFL_CCHK);
+            }
+            else
+                item = gtk_menu_item_new_with_mnemonic((char*)menu->text);
+            gtk_widget_set_sensitive(item, !(menu->flgs & MFL_GRAY));
+            g_signal_connect(G_OBJECT(item), "activate",
+                             G_CALLBACK(GTKMenuHandler), menu);
+            if (menu->chld)
+                gtk_menu_item_set_submenu((GtkMenuItem*)item,
+                                           Submenu(menu->chld, ~0));
+        }
+        gtk_menu_attach(retn, item, 0, 1, indx, indx + 1);
+        indx++;
+        menu++;
+    }
+    gtk_widget_show_all((GtkWidget*)retn);
+    return (GtkWidget*)retn;
+}
+
+
+
+void OpenContextMenu(MENU *menu) {
+    GtkMenu *mwnd = (GtkMenu*)Submenu(menu, 0);
+
+    if (mwnd)
+        gtk_menu_popup(mwnd, NULL, NULL, NULL, NULL,
+                       0, gtk_get_current_event_time());
+}
+
+
+
+void MainMenu(GtkStatusIcon *icon, guint mbtn, guint32 time, gpointer user) {
+    OpenContextMenu(((ENGC*)user)->mctx);
+}
+
+
+
+inline MENU *OSSpecificMenu(ENGC *engc) {
+    return NULL;
+}
+
+
+
+char *ConvertUTF8(char *utf8) {
+    return strdup(utf8);
+}
 
 
 
@@ -26,54 +116,70 @@ char *LoadFileZ(char *name, long *size) {
 
 
 int main(int argc, char *argv[]) {
+/** TODO **/
+//    INCBIN("../core/icon.gif", MainIcon);
+
     struct dirent **dirs;
-    long uses, size;
+    long uses;
+
     ENGC engc = {};
-    LINF *libs;
 
-    Display *disp = XOpenDisplay(0);
-    if (!disp) {
-        printf("Failed to init X Window System!\n");
-        return -1;
-    }
-    Screen *pscr = DefaultScreenOfDisplay(disp);
-    engc.dims.x = pscr->width;
-    engc.dims.y = pscr->height;
-    XCloseDisplay(disp);
-
-    uses = (argc > 1)? atol(argv[1]) : 0;
-    uses = (uses > 0)? uses : 1;
-
+    gtk_init(&argc, &argv);
     if ((engc.engh = EngineInitialize())) {
-        if ((size = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
-            while (size--) {
-                if ((dirs[size]->d_type == DT_DIR)
-                &&  strcmp(dirs[size]->d_name, ".")
-                &&  strcmp(dirs[size]->d_name, "..")) {
-                    AppendLib(&engc, DEF_CONF, DEF_FLDR, dirs[size]->d_name);
-                }
-                free(dirs[size]);
+        if ((uses = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
+            while (uses--) {
+                if ((dirs[uses]->d_type == DT_DIR)
+                &&  strcmp(dirs[uses]->d_name, ".")
+                &&  strcmp(dirs[uses]->d_name, ".."))
+                    AppendLib(&engc, DEF_CONF, DEF_FLDR, dirs[uses]->d_name);
+                free(dirs[uses]);
             }
             free(dirs);
         }
-        InitMainMenu(&engc);
         EngineFinishLoading(engc.engh);
-        TTH_ITER(engc.libs, PrepareSpriteArr, &engc.libs);
+
+        long xdim = 128,
+             ydim = 128;
+        GdkPixbuf *pbuf;
+        GtkStatusIcon *icon;
+
+        /// the size is wrong, but let it be: MainIcon does have a GIF ending
+/** TODO **/
+//        ASTD *igif = MakeDataAnimStd(MainIcon, 1024 * 1024);
+//        BGRA *bptr = ExtractRescaleSwizzleAlign(igif, 0xC6, 0, xdim, ydim);
+        char *bptr = malloc(xdim * ydim * 4);
+        memset(bptr, 0xFF, xdim * ydim * 4);
+
+        pbuf = gdk_pixbuf_new_from_data((guchar*)bptr, GDK_COLORSPACE_RGB,
+                                        TRUE, CHAR_BIT, xdim, ydim,
+                                        xdim * sizeof(*bptr),
+                                       (GdkPixbufDestroyNotify)free, bptr);
+/** TODO **/
+//        FreeAnimStd(&igif);
+
+        icon = gtk_status_icon_new_from_pixbuf(pbuf);
+/** TODO **/
+//        gtk_status_icon_set_tooltip_text(icon, (gchar*)engc.tran[TXT_HEAD]);
+        gtk_status_icon_set_visible(icon, TRUE);
+        g_signal_connect(G_OBJECT(icon), "popup-menu",
+                         G_CALLBACK(MainMenu), &engc);
 
         /// [TODO] substitute this by GUI selection
-        libs = engc.libs;
+        uses = (argc >= 2)? atol(argv[1]) : 0;
+        uses = (uses != 0)? uses : 1;
+        LINF *libs = engc.libs;
         while (libs) {
             libs->icnt = labs(uses);
             libs = (LINF*)libs->prev;
         }
-        engc.seed = time(0);
-        printf("[((RNG))] seed = 0x%08X\n", engc.seed);
-        MakeSpriteArr(&engc);
-        EngineRunMainLoop(engc.engh, 0, 0, engc.dims.x, engc.dims.y, 0,
-                          FRM_WAIT, (uses < 0)? SCM_RSTD : SCM_ROGL,
-                          0, /// localization goes here
-                         (uintptr_t)&engc, UpdateFrame);
-        FreeEverything(&engc);
+
+        GdkScreen *gscr = gdk_screen_get_default();
+        ExecuteEngine(&engc, 0, 0,
+                      gdk_screen_get_width(gscr), gdk_screen_get_height(gscr),
+                     (uses < 0)? SCM_RSTD : SCM_ROGL, 0, 0);
+
+        g_object_unref(G_OBJECT(icon));
+        g_object_unref(G_OBJECT(pbuf));
     }
     return 0;
 }

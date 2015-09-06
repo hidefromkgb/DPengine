@@ -293,6 +293,12 @@ void MakeSpritePair(uintptr_t engh, AINF *pair, char *path, char **conf) {
 
 
 
+#define HTT_ITER(list, iter, data) \
+    ListIterateHeadToTail((LHDR*)(list), (ITER)(iter), (uintptr_t)(data))
+
+#define TTH_ITER(list, iter, data) \
+    ListIterateTailToHead((LHDR*)(list), (ITER)(iter), (uintptr_t)(data))
+
 #define GET_TEMP(conf) (temp = SplitLine(conf, DEF_TSEP, 0))
 
 #define TRY_TEMP(conf) (GET_TEMP(conf) && *temp)
@@ -535,10 +541,6 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
         free(fptr);
     free(conf);
 }
-#undef IF_BIN_FIND
-#undef SET_FLAG
-#undef TRY_TEMP
-#undef GET_TEMP
 
 
 
@@ -849,32 +851,7 @@ void PrepareSpriteArr(LINF *elem, LINF **edge) {
 
 
 
-void FreeEverything(ENGC *engc) {
-    EngineFreeMenu(&engc->menu);
-    EngineDeinitialize(engc->engh);
-    FreeSpriteArr(engc);
-    TTH_ITER(engc->libs, FreeLib, 0);
-    free(engc->data);
-    *engc = (ENGC){};
-}
-
-
-
-#define MMI_CDEL  1
-#define MMI_ADEL  2
-#define MMI_CSLP  3
-#define MMI_ASLP  4
-#define MMI_PONY  5
-#define MMI_HOUS  6
-#define MMI_TPL1  7
-#define MMI_TPL2  8
-#define MMI_OPTS  9
-#define MMI_RETN 10
-#define MMI_EXIT 11
-
-
-
-void MMH(MENU *item) {
+void SMH(MENU *item) {
     switch (item->uuid) {
         case MMI_CDEL:
             break;
@@ -906,7 +883,7 @@ void MMH(MENU *item) {
         case MMI_RETN:
             break;
 
-        case MMI_EXIT: {
+        case MMI_QUIT: {
             ENGC *engc = (ENGC*)item->data;
 
             engc->quit = 1;
@@ -917,29 +894,169 @@ void MMH(MENU *item) {
 
 
 
-void InitMainMenu(ENGC *engc) {
-    MENU tmpl[] =
-        {{.text = (uint8_t*)"", .flgs = MFL_GRAY},
-         {.text = (uint8_t*)""},
-         {.text = (uint8_t*)"Remove pony",               .func = MMH, .uuid = MMI_CDEL},
-         {.text = (uint8_t*)"Remove all similar ponies", .func = MMH, .uuid = MMI_ADEL},
-         {.text = (uint8_t*)""},
-         {.text = (uint8_t*)"Sleep/pause",               .func = MMH, .uuid = MMI_CSLP},
-         {.text = (uint8_t*)"Sleep/pause all",           .func = MMH, .uuid = MMI_ASLP},
-         {.text = (uint8_t*)""},
-         {.text = (uint8_t*)"Add pony >>>",              .func = MMH, .uuid = MMI_PONY},
-         {.text = (uint8_t*)"Add house >>>",             .func = MMH, .uuid = MMI_HOUS},
-         {.text = (uint8_t*)""},
-         {.text = (uint8_t*)"Take control: Player 1",    .func = MMH, .uuid = MMI_TPL1},
-         {.text = (uint8_t*)"Take control: Player 2",    .func = MMH, .uuid = MMI_TPL2},
-         {.text = (uint8_t*)""},
-         {.text = (uint8_t*)"Show options...",           .func = MMH, .uuid = MMI_OPTS},
-         {.text = (uint8_t*)"Return to menu...",         .func = MMH, .uuid = MMI_RETN},
-         {.text = (uint8_t*)"Exit",                      .func = MMH, .uuid = MMI_EXIT,
-          .data = (uintptr_t)engc},
-         {}};
+void CMH(MENU *item) {
+    switch (item->uuid) {
+        case MMI_RSTD:
+        case MMI_ROGL:
+/** TODO **/
+//            RestartEngine((ENGD*)item->data,
+//                          (item->uuid == MMI_RSTD)? SCM_RSTD : SCM_ROGL);
+            break;
 
-    engc->menu = EngineMenuFromTemplate(tmpl);
+        case MMI_OPAQ: {
+/** TODO **/
+//            ENGD *engd = (ENGD*)item->data;
+//
+//            if (item->flgs & MFL_VCHK)
+//                engd->flgs |= COM_IOPQ;
+//            else
+//                engd->flgs &= ~COM_IOPQ;
+//            RestartEngine(engd, engd->rscm);
+            break;
+        }
+        case MMI_STOP: {
+/** TODO **/
+//            ENGD *engd = (ENGD*)item->data;
+
+//            engd->draw = !(item->flgs & MFL_VCHK);
+            break;
+        }
+        case MMI_HIDE:
+/** TODO **/
+//            ShowMainWindow((ENGD*)item->data, !(item->flgs & MFL_VCHK));
+            break;
+
+        case MMI_EXIT:
+/** TODO **/
+//            RestartEngine((ENGD*)item->data, SCM_QUIT);
+            break;
+    }
+}
+
+
+
+uint32_t LoadLocalization(uint8_t ***text, uint8_t *data, uint32_t size) {
+    long line, nlin, iter, prev;
+    uint8_t **retn;
+
+    if (!data)
+        return 0;
+
+    /// skipping byte-order mark
+    if ((size >= 3) &&
+        (data[0] == 0xEF) && (data[1] == 0xBB) && (data[2] == 0xBF)) {
+        data += 3;
+        size -= 3;
+    }
+    if (*text)
+        for (nlin = 0; (*text)[nlin]; nlin++);
+    else {
+        for (nlin = 2, iter = 0; iter < size; iter++)
+            if (data[iter] == '\n')
+                nlin++;
+        *text = calloc(nlin, sizeof(*retn));
+    }
+    retn = *text;
+    for (line = iter = prev = 0; (line < nlin) && (iter < size); iter++)
+        if ((data[iter] == '\n') || (iter == size - 1)) {
+            if (iter - ((data[prev] == '\r')? 1 : 0) > prev) {
+                free(retn[line]);
+                retn[line] = calloc(iter - prev + 1, sizeof(**retn));
+                strncpy((char*)retn[line], (char*)&data[prev],
+                        iter - prev - ((data[iter - 1] == '\r')? 1 : 0));
+            }
+            line++;
+            prev = iter + 1;
+        }
+    return nlin;
+}
+
+
+
+void FreeLocalization(uint8_t ***text) {
+    long iter = -1;
+
+    if (text && *text) {
+        while ((*text)[++iter])
+            free((*text)[iter]);
+        free(*text);
+        *text = 0;
+    }
+}
+
+
+
+void ProcessMenuItem(MENU *item) {
+    MENU *indx;
+
+    if (item->flgs & MFL_CCHK) {
+        if (item->flgs & MFL_RCHK & ~MFL_CCHK) {
+            if (item->flgs & MFL_VCHK)
+                return;
+            item->flgs |= MFL_VCHK;
+            indx = item;
+            while ((--indx)->flgs & MFL_RCHK & ~MFL_CCHK)
+                indx->flgs &= ~MFL_VCHK;
+            indx = item;
+            while ((++indx)->flgs & MFL_RCHK & ~MFL_CCHK)
+                indx->flgs &= ~MFL_VCHK;
+        }
+        else
+            item->flgs ^= MFL_VCHK;
+    }
+    if (!item->chld && item->func)
+        item->func(item);
+}
+
+
+
+void FreeMenu(MENU **menu) {
+    if (!menu || !*menu)
+        return;
+
+    MENU *iter = *menu;
+
+    while (iter->text) {
+        if (iter->chld)
+            FreeMenu(&iter->chld);
+        free(iter->text);
+        iter++;
+    }
+    free(*menu - 1);
+    *menu = 0;
+}
+
+
+
+void UpdateMenuItemText(MENU *item, uint8_t *text) {
+    if (!item || !text)
+        return;
+
+    free(item->text);
+    item->text = (uint8_t*)ConvertUTF8((char*)text);
+}
+
+
+
+MENU *MenuFromTemplate(MENU *tmpl) {
+    MENU *retn, *iter;
+
+    retn = 0;
+    if ((iter = tmpl)) {
+        while (iter++->text);
+        if (iter > tmpl + 1) {
+            retn = calloc(iter - tmpl + 1, sizeof(*iter));
+            iter = ++retn;
+            do {
+                *iter = *tmpl;
+                if (tmpl->chld)
+                    iter->chld = MenuFromTemplate(tmpl->chld);
+                iter++->text = (tmpl->text)?
+                               (uint8_t*)ConvertUTF8((char*)tmpl->text) : 0;
+            } while (tmpl++->text);
+        }
+    }
+    return retn;
 }
 
 
@@ -984,9 +1101,9 @@ uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
                 pict = engc->parr[isel];
             temp = malloc(32 + strlen(pict->ulib->name));
             sprintf((char*)temp, "[ %s ]", pict->ulib->name);
-            EngineUpdateMenuItemText(&engc->menu[0], temp);
+            UpdateMenuItemText(&engc->mspr[0], temp);
             free(temp);
-            EngineOpenContextMenu(engc->menu);
+            OpenContextMenu(engc->mspr);
         }
         engc->flgs = flgs;
     }
@@ -1039,4 +1156,101 @@ uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
     }
     *data = engc->data;
     return engc->pcnt;
+}
+
+
+
+void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
+                   ulong rscm, uint32_t flgs, uint8_t *lang) {
+    INCBIN("../core/en.lang", DefaultLanguage);
+
+    uint8_t *data;
+    long size;
+
+    engc->dims = (T2IV){xdim, ydim};
+    FreeLocalization(&engc->tran);
+    LoadLocalization(&engc->tran,
+                    (uint8_t*)DefaultLanguage, strlen(DefaultLanguage));
+    if (lang) {
+        data = (uint8_t*)LoadFileZ((char*)lang, &size);
+        LoadLocalization(&engc->tran, data, size);
+        free(data);
+    }
+    MENU *spec,
+    mspr[] =
+   {{.text = (uint8_t*)"", .flgs = MFL_GRAY},
+    {.text = (uint8_t*)""},
+    {.text = (uint8_t*)"Remove pony",               .func = SMH, .uuid = MMI_CDEL},
+    {.text = (uint8_t*)"Remove all similar ponies", .func = SMH, .uuid = MMI_ADEL},
+    {.text = (uint8_t*)""},
+    {.text = (uint8_t*)"Sleep/pause",               .func = SMH, .uuid = MMI_CSLP},
+    {.text = (uint8_t*)"Sleep/pause all",           .func = SMH, .uuid = MMI_ASLP},
+    {.text = (uint8_t*)""},
+    {.text = (uint8_t*)"Add pony >>>",              .func = SMH, .uuid = MMI_PONY},
+    {.text = (uint8_t*)"Add house >>>",             .func = SMH, .uuid = MMI_HOUS},
+    {.text = (uint8_t*)""},
+    {.text = (uint8_t*)"Take control: Player 1",    .func = SMH, .uuid = MMI_TPL1},
+    {.text = (uint8_t*)"Take control: Player 2",    .func = SMH, .uuid = MMI_TPL2},
+    {.text = (uint8_t*)""},
+    {.text = (uint8_t*)"Show options...",           .func = SMH, .uuid = MMI_OPTS},
+    {.text = (uint8_t*)"Return to menu...",         .func = SMH, .uuid = MMI_RETN},
+    {.text = (uint8_t*)"Quit",                      .func = SMH, .uuid = MMI_QUIT,
+     .data = (uintptr_t)engc},
+    {}},
+
+    mctx[] =
+   {{.text = engc->tran[TXT_HEAD], .flgs = MFL_GRAY},
+    {.text = (uint8_t*)""},
+    {.text = engc->tran[TXT_RSCM]},
+    {.text = engc->tran[TXT_SPEC]},
+    {.text = engc->tran[TXT_OPAQ], .uuid = MMI_OPAQ, .func = CMH,
+     .flgs = MFL_CCHK | ((engc->flgs & COM_IOPQ)? MFL_VCHK : 0),
+     .data = (uintptr_t)engc},
+    {.text = engc->tran[TXT_STOP], .uuid = MMI_STOP, .func = CMH,
+     .flgs = MFL_CCHK,
+     .data = (uintptr_t)engc},
+    {.text = engc->tran[TXT_HIDE], .uuid = MMI_HIDE, .func = CMH,
+     .flgs = MFL_CCHK,
+     .data = (uintptr_t)engc},
+    {.text = (uint8_t*)""},
+    {.text = engc->tran[TXT_EXIT], .uuid = MMI_EXIT, .func = CMH,
+     .data = (uintptr_t)engc},
+    {}},
+
+    rndr[] =
+   {{.text = engc->tran[TXT_RSTD], .uuid = MMI_RSTD, .func = CMH,
+     .flgs = MFL_RCHK/* | ((engc->rscm == SCM_RSTD)? MFL_VCHK : 0)*/,
+     .data = (uintptr_t)engc},
+    {.text = engc->tran[TXT_ROGL], .uuid = MMI_ROGL, .func = CMH,
+     .flgs = MFL_RCHK/* | ((engc->rscm == SCM_ROGL)? MFL_VCHK : 0)*/,
+     .data = (uintptr_t)engc},
+    {}},
+
+    none[] =
+   {{.text = engc->tran[TXT_NONE], .flgs = MFL_GRAY},
+    {}};
+
+    engc->mspr = MenuFromTemplate(mspr);
+
+    mctx[2].chld = rndr;
+    engc->mctx = MenuFromTemplate(mctx);
+    engc->mctx[3].chld = ((spec = OSSpecificMenu(engc)))?
+                           spec : MenuFromTemplate(none);
+
+    TTH_ITER(engc->libs, PrepareSpriteArr, &engc->libs);
+    MakeSpriteArr(engc);
+
+    engc->seed = time(0);
+    printf("[((RNG))] seed = 0x%08X\n", engc->seed);
+    EngineRunMainLoop(engc->engh, xpos, ypos, engc->dims.x, engc->dims.y,
+                      flgs, FRM_WAIT, rscm, (uintptr_t)engc, UpdateFrame);
+
+    FreeMenu(&engc->mspr);
+    FreeMenu(&engc->mctx);
+    FreeLocalization(&engc->tran);
+    EngineDeinitialize(engc->engh);
+    FreeSpriteArr(engc);
+    TTH_ITER(engc->libs, FreeLib, 0);
+    free(engc->data);
+    *engc = (ENGC){};
 }

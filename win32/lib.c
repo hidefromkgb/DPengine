@@ -3,235 +3,22 @@
 #define WINVER _WIN32_WINNT
 
 #include <windows.h>
-#include <commctrl.h>
 
 #include <core.h>
 #include <ogl/oglstd.h>
 
 
 
-#define WM_TRAY (WM_USER + 1000)
-#define WM_STOP (WM_USER + 1001)
-
-#define MMI_CONS 1
-#define MMI_IRGN 2
-#define MMI_IBGR 3
-#define MMI_IPBO 4
-
-
-
 void RestartEngine(ENGD *engd, ulong rscm) {
     engd->draw = rscm;
-    PostMessage((HWND)engd->user[0], WM_STOP, 0, 0);
+    PostQuitMessage(0);
 }
 
 
 
+/** TODO **/
 void ShowMainWindow(ENGD *engd, ulong show) {
-    ShowWindow((HWND)engd->user[0], (show)? SW_SHOW : SW_HIDE);
-}
-
-
-
-long OldWin32() {
-    return ((GetVersion() & 0xFF) < 5)? 1 : 0;
-}
-
-
-
-LPWSTR UTF16(char *utf8) {
-    long size = strlen(utf8) * 4 + 2;
-    LPWSTR retn = calloc(size, sizeof(*retn));
-    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, retn, size);
-    return retn;
-}
-
-
-
-char *ASCII(LPWSTR wide) {
-    long size = (wcslen(wide) + 1) * 2;
-    char *retn = calloc(size, sizeof(*retn));
-    WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wide, -1,
-                        retn, size - 1, "?", NULL);
-    return retn;
-}
-
-
-
-char *UTF8toASCII(char *utf8) {
-    LPWSTR temp = UTF16(utf8);
-    char *retn = ASCII(temp);
-    free(temp);
-    return retn;
-}
-
-
-
-char *ConvertUTF8(char *utf8) {
-    if (!utf8)
-        return utf8;
-    return (!OldWin32())? (char*)UTF16(utf8) : UTF8toASCII(utf8);
-}
-
-
-
-long Message(HWND hwnd, char *text, char *head, UINT flgs) {
-    char *tttt = ConvertUTF8(text),
-         *hhhh = ConvertUTF8(head);
-    long retn = (OldWin32())? MessageBoxA(hwnd, tttt, hhhh, flgs)
-                            : MessageBoxW(hwnd, (LPWSTR)tttt,
-                                         (LPWSTR)hhhh, flgs);
-    free(tttt);
-    free(hhhh);
-    return retn;
-}
-
-
-
-void OSSpecific(MENU *item) {
-    switch (item->uuid) {
-        case MMI_CONS:
-            if (item->flgs & MFL_VCHK) {
-                AllocConsole();
-                freopen("CONOUT$", "wb", stdout);
-            }
-            else {
-                fclose(stdout);
-                FreeConsole();
-            }
-            break;
-
-        case MMI_IRGN: {
-            ENGD *engd = (ENGD*)item->data;
-
-            if (item->flgs & MFL_VCHK)
-                engd->flgs |= WIN_IRGN;
-            else
-                engd->flgs &= ~WIN_IRGN;
-            if (engd->flgs & COM_IOPQ)
-                Message((HWND)engd->user[0], (char*)engd->tran[TXT_UOFO],
-                         NULL, MB_OK | MB_ICONEXCLAMATION);
-            else
-                RestartEngine(engd, engd->rscm);
-            break;
-        }
-        case MMI_IBGR:
-        case MMI_IPBO: {
-            ENGD *engd = (ENGD*)item->data;
-
-            if (item->flgs & MFL_VCHK)
-                engd->flgs |= ((item->uuid == MMI_IBGR)? WIN_IBGR : WIN_IPBO);
-            else
-                engd->flgs &= ~((item->uuid == MMI_IBGR)? WIN_IBGR : WIN_IPBO);
-            if (engd->rscm != SCM_ROGL)
-                Message((HWND)engd->user[0], (char*)engd->tran[TXT_UWGL],
-                         NULL, MB_OK | MB_ICONEXCLAMATION);
-            else
-                RestartEngine(engd, engd->rscm);
-            break;
-        }
-    }
-}
-
-
-
-MENU *OSSpecificMenu(ENGD *engd) {
-    char buff[1024];
-    MENU tmpl[] =
-        {{.text = engd->tran[TXT_CONS], .uuid = MMI_CONS, .func = OSSpecific,
-          .flgs = MFL_CCHK | ((GetConsoleTitle(buff, 1023))? MFL_VCHK : 0)},
-         {.text = engd->tran[TXT_IRGN], .uuid = MMI_IRGN, .func = OSSpecific,
-          .flgs = MFL_CCHK | ((engd->flgs & WIN_IRGN)? MFL_VCHK : 0) |
-                             (((GetVersion() & 0xFF) < 5)? MFL_GRAY : 0),
-          .data = (uintptr_t)engd},
-         {.text = engd->tran[TXT_IBGR], .uuid = MMI_IBGR, .func = OSSpecific,
-          .flgs = MFL_CCHK | ((engd->flgs & WIN_IBGR)? MFL_VCHK : 0),
-          .data = (uintptr_t)engd},
-         {.text = engd->tran[TXT_IPBO], .uuid = MMI_IPBO, .func = OSSpecific,
-          .flgs = MFL_CCHK | ((engd->flgs & WIN_IPBO)? MFL_VCHK : 0),
-          .data = (uintptr_t)engd},
-         {}};
-    return EngineMenuFromTemplate(tmpl);
-}
-
-
-
-HMENU Submenu(MENU *menu, ulong *chld) {
-    if (!menu)
-        return NULL;
-
-    union {
-        MENUITEMINFOW w;
-        MENUITEMINFOA a;
-    } pmii;
-    ulong indx, oldw;
-    HMENU retn;
-
-    oldw = OldWin32();
-    indx = (chld)? *chld : 1;
-    retn = CreatePopupMenu();
-    while (menu->text) {
-        pmii.w = (MENUITEMINFOW){sizeof(pmii.w),
-                                 MIIM_DATA | MIIM_FTYPE | MIIM_ID | MIIM_STATE,
-                                 MFT_STRING, MFS_UNHILITE};
-        pmii.w.dwItemData = (ULONG_PTR)menu;
-        if (!*menu->text)
-            pmii.w.fType |= MFT_SEPARATOR;
-        else {
-            pmii.w.dwTypeData = (LPWSTR)menu->text;
-            pmii.w.cch = (!oldw)? wcslen((LPWSTR)menu->text)
-                                : strlen((char*)menu->text);
-            pmii.w.fState |= (menu->flgs & MFL_GRAY)? MFS_GRAYED : 0;
-            pmii.w.fMask |= MIIM_STRING;
-            if (menu->flgs & MFL_CCHK) {
-                if (menu->flgs & MFL_RCHK & ~MFL_CCHK)
-                    pmii.w.fType |= MFT_RADIOCHECK;
-                pmii.w.fState |= (menu->flgs & MFL_VCHK)? MFS_CHECKED : 0;
-            }
-            if (menu->chld) {
-                pmii.w.fMask |= MIIM_SUBMENU;
-                pmii.w.hSubMenu = Submenu(menu->chld, &indx);
-            }
-        }
-        pmii.w.wID = indx++;
-        if (oldw)
-            InsertMenuItemA(retn, pmii.a.wID, FALSE, &pmii.a);
-        else
-            InsertMenuItemW(retn, pmii.w.wID, FALSE, &pmii.w);
-        menu++;
-    }
-    if (chld)
-        *chld = indx;
-    return retn;
-}
-
-
-
-DWORD APIENTRY MenuThread(MENU *menu) {
-    MENUITEMINFOA pmii = {sizeof(pmii), MIIM_DATA};
-    HWND  iwnd = CreateWindowEx(0, "STATIC", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    HMENU mwnd = Submenu(menu, NULL);
-    POINT ppos;
-    DWORD retn;
-
-    GetCursorPos(&ppos);
-    SetForegroundWindow(iwnd);
-    if ((retn = TrackPopupMenu(mwnd, TPM_NONOTIFY | TPM_RETURNCMD,
-                               ppos.x, ppos.y, 0, iwnd, NULL))) {
-        GetMenuItemInfoA(mwnd, retn, FALSE, &pmii);
-        ProcessMenuItem((MENU*)pmii.dwItemData);
-    }
-    DestroyWindow(iwnd);
-    DestroyMenu(mwnd);
-    return TRUE;
-}
-
-
-
-void EngineOpenContextMenu(MENU *menu) {
-    DWORD retn;
-
-    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)MenuThread, menu, 0, &retn);
+//    ShowWindow((HWND)engd->user[0], (show)? SW_SHOW : SW_HIDE);
 }
 
 
@@ -266,11 +53,12 @@ char *LoadFile(char *name, long *size) {
     DWORD temp, flen;
     HANDLE file;
 
-    if (OldWin32())
+    if ((GetVersion() & 0xFF) < 5)
         file = CreateFileA(name, GENERIC_READ, FILE_SHARE_READ, 0,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
     else {
-        LPWSTR wide = UTF16(name);
+        LPWSTR wide = calloc((flen = (strlen(name) + 1) * 4), sizeof(*wide));
+        MultiByteToWideChar(CP_UTF8, 0, name, -1, wide, flen);
         file = CreateFileW(wide, GENERIC_READ, FILE_SHARE_READ, 0,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
         free(wide);
@@ -391,13 +179,15 @@ LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             SetTimer(hWnd, 1, 1000, 0);
             return 0;
 
-        case WM_TRAY: {
-            ENGD *engd = (ENGD*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+/** TODO **/
+//        case WM_TRAY: {
+//            ENGD *engd = (ENGD*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+//
+//            if (lPrm == WM_RBUTTONDOWN)
+//                EngineOpenContextMenu(engd->menu);
+//            return 0;
+//        }
 
-            if (lPrm == WM_RBUTTONDOWN)
-                EngineOpenContextMenu(engd->menu);
-            return 0;
-        }
         case WM_KEYDOWN:
             if (wPrm == VK_ESCAPE)
         case WM_CLOSE:
@@ -485,12 +275,7 @@ BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
 
 
 void RunMainLoop(ENGD *engd) {
-    INCBIN("../core/icon.gif", MainIcon);
-
-    INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
     BLENDFUNCTION bfun = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
-    NOTIFYICONDATAW nicd = {sizeof(nicd), 0, 1,
-                            NIF_MESSAGE | NIF_ICON | NIF_TIP, WM_TRAY};
     WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW, WindowProc, 0,
                        0, 0, 0, LoadCursor(0, IDC_HAND), 0, 0, " ", 0};
     PIXELFORMATDESCRIPTOR ppfd = {sizeof(ppfd), 1, PFD_SUPPORT_OPENGL |
@@ -503,46 +288,17 @@ void RunMainLoop(ENGD *engd) {
     POINT cpos, mpos, zpos = {};
     MSG pmsg = {};
 
+    BLENDFUNCTION *bptr;
     BOOL APIENTRY (*ULW)(HWND, HDC, POINT*, SIZE*, HDC, POINT*,
                          COLORREF, BLENDFUNCTION*, DWORD);
-    BLENDFUNCTION *bptr;
-    HBITMAP hdib, hmsk;
+    UINT time, attr, flgs;
     HINSTANCE hlib;
     HDC devc, mwdc;
+    HBITMAP hdib;
     HGLRC mwrc;
     HWND hwnd;
-    UINT time;
-
-    LONG x, y, xdim, ydim, xoff, oldw;
     FRBO *surf;
-    ASTD *igif;
-    BGRA *clrs;
-    {
-        xdim = GetSystemMetrics(SM_CXSMICON);
-        ydim = GetSystemMetrics(SM_CYSMICON);
-        BYTE tran[ydim * (xoff = (xdim >> 3) + ((xdim & 7)? 1 : 0))];
 
-        /// the size is wrong, but let it be: MainIcon does have a GIF ending
-        igif = MakeDataAnimStd(MainIcon, 1024 * 1024);
-        clrs = ExtractRescaleSwizzleAlign(igif, 0xE4, 0, xdim, ydim);
-        FreeAnimStd(&igif);
-
-        for (y = 0; y < ydim; y++)
-            for (x = 0; x < xdim; x++)
-                if (clrs[xdim * y + x].A)
-                    tran[xoff * y + (x >> 3)] &= ~(0x80 >> (x & 7));
-                else
-                    tran[xoff * y + (x >> 3)] |=  (0x80 >> (x & 7));
-
-        hdib = CreateBitmap(xdim, ydim, 1, 32, clrs);
-        hmsk = CreateBitmap(xdim, ydim, 1, 1, tran);
-
-        ICONINFO icon = {FALSE, 0, 0, hmsk, hdib};
-        wndc.hIcon = CreateIconIndirect(&icon);
-        CloseHandle(hdib);
-        CloseHandle(hmsk);
-        free(clrs);
-    }
     mwrc = NULL;
     devc = CreateCompatibleDC(NULL);
     bmpi.bmiHeader.biWidth = dims.cx;
@@ -552,40 +308,24 @@ void RunMainLoop(ENGD *engd) {
     SelectObject(devc, hdib);
 
     bptr = &bfun;
-    xdim = ULW_ALPHA;
-    x = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
+    flgs = ULW_ALPHA;
+    attr = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
     mpos = (POINT){engd->mpos.x, engd->mpos.y};
 
-    InitCommonControlsEx(&icct);
     hlib = LoadLibrary("user32");
     if ((engd->flgs & COM_IOPQ) || (engd->flgs & WIN_IRGN)
     || !(ULW = GetProcAddress(hlib, "UpdateLayeredWindow"))) {
         bptr = (typeof(bptr))engd->pict.bptr;
         zpos.y = bmpi.bmiHeader.biHeight;
         ULW = (typeof(ULW))ULWstub;
-        x &= ~WS_EX_LAYERED;
+        attr &= ~WS_EX_LAYERED;
         if (engd->flgs & COM_IOPQ)
-            xdim = ULW_OPAQUE;
+            flgs = ULW_OPAQUE;
     }
     RegisterClassEx(&wndc);
-    hwnd = CreateWindowEx(x, wndc.lpszClassName, NULL, WS_POPUP | WS_VISIBLE,
-                          0, 0, 0, 0, NULL, NULL, wndc.hInstance, engd);
+    hwnd = CreateWindowEx(attr, wndc.lpszClassName, 0, WS_POPUP | WS_VISIBLE,
+                          0, 0, 0, 0, 0, 0, wndc.hInstance, engd);
     engd->user[0] = (uintptr_t)hwnd;
-    oldw = OldWin32();
-
-    nicd.hWnd = hwnd;
-    nicd.hIcon = wndc.hIcon;
-
-    char *temp = ConvertUTF8((char*)engd->tran[TXT_HEAD]);
-    if (oldw) {
-        strcpy((char*)nicd.szTip, temp);
-        Shell_NotifyIconA(NIM_ADD, (NOTIFYICONDATAA*)&nicd);
-    }
-    else {
-        wcscpy(nicd.szTip, (LPWSTR)temp);
-        Shell_NotifyIconW(NIM_ADD, &nicd);
-    }
-    free(temp);
 
     mwdc = GetDC(hwnd);
     switch (engd->rscm) {
@@ -600,11 +340,12 @@ void RunMainLoop(ENGD *engd) {
             wglMakeCurrent(mwdc, mwrc = wglCreateContext(mwdc));
             if ((retn = LoadOpenGLFunctions(NV_vertex_program3 |
                                             ARB_framebuffer_object))) {
-                retn = realloc(retn, 2 + strlen(retn)
-                                       + strlen((char*)engd->tran[TXT_NOGL]));
-                strcat(retn, "\n");
-                strcat(retn, (char*)engd->tran[TXT_NOGL]);
-                Message(NULL, retn, NULL, MB_OK | MB_ICONEXCLAMATION);
+/** TODO **/
+//                retn = realloc(retn, 2 + strlen(retn)
+//                                       + strlen((char*)engd->tran[TXT_NOGL]));
+//                strcat(retn, "\n");
+//                strcat(retn, (char*)engd->tran[TXT_NOGL]);
+//                Message(NULL, retn, NULL, MB_OK | MB_ICONEXCLAMATION);
                 free(retn);
                 RestartEngine(engd, SCM_RSTD);
                 goto _nogl;
@@ -622,7 +363,7 @@ void RunMainLoop(ENGD *engd) {
                  SWP_NOZORDER | SWP_NOACTIVATE);
     while (TRUE) {
         if (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
-            if (!IsWindow(hwnd) || (pmsg.message == WM_STOP))
+            if (!IsWindow(hwnd) || (pmsg.message == WM_QUIT))
                 break;
             TranslateMessage(&pmsg);
             DispatchMessage(&pmsg);
@@ -637,12 +378,12 @@ void RunMainLoop(ENGD *engd) {
             continue;
         GetCursorPos(&cpos);
         ScreenToClient(hwnd, &cpos);
-        xoff = ((GetAsyncKeyState(VK_LBUTTON))? UFR_LBTN : 0)
+        attr = ((GetAsyncKeyState(VK_LBUTTON))? UFR_LBTN : 0)
              | ((GetAsyncKeyState(VK_MBUTTON))? UFR_MBTN : 0)
              | ((GetAsyncKeyState(VK_RBUTTON))? UFR_RBTN : 0)
              | ((GetActiveWindow() == hwnd)?    UFR_MOUS : 0);
         engd->size = engd->ufrm((uintptr_t)engd, engd->udat, &engd->data,
-                                &engd->time, xoff, cpos.x, cpos.y,
+                                &engd->time, attr, cpos.x, cpos.y,
                                  SelectUnit(engd->uarr, engd->data,
                                             engd->size, cpos.x, cpos.y));
         if (!engd->size) {
@@ -668,7 +409,7 @@ void RunMainLoop(ENGD *engd) {
                 BindRBO(surf, GL_FALSE);
                 break;
         }
-        ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bptr, xdim);
+        ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bptr, flgs);
         engd->fram++;
     }
     timeKillEvent(time);
@@ -687,11 +428,6 @@ void RunMainLoop(ENGD *engd) {
         }
     }
     KillTimer(hwnd, 1);
-    if (oldw)
-        Shell_NotifyIconA(NIM_DELETE, (NOTIFYICONDATAA*)&nicd);
-    else
-        Shell_NotifyIconW(NIM_DELETE, &nicd);
-    DestroyIcon(wndc.hIcon);
     ReleaseDC(hwnd, mwdc);
     DestroyWindow(hwnd);
     /// mandatory: we are a library, not an application
