@@ -289,9 +289,8 @@ gboolean DrawFunc(gpointer user) {
         case SCM_ROGL: {
             GdkGLDrawable *pGLD =
                 gtk_widget_gl_begin((GtkWidget*)engd->user[0]);
-            if (MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr,
-                                         engd->uniq, engd->size, 0))
-                SizeRendererOGL(engd->rndr, engd->pict.xdim, engd->pict.ydim);
+            MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr, 0, engd->uniq,
+                            engd->size, engd->pict.xdim, engd->pict.ydim);
             DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
                             engd->size, engd->flgs & COM_IOPQ);
             gdk_gl_drawable_gl_end(pGLD);

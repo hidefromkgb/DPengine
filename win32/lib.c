@@ -658,11 +658,9 @@ void RunMainLoop(ENGD *engd) {
                 break;
 
             case SCM_ROGL:
-                if (MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr,
-                                     engd->uniq, engd->size,
-                                   !(engd->flgs & WIN_IBGR)))
-                    SizeRendererOGL(engd->rndr,
-                                    engd->pict.xdim, engd->pict.ydim);
+                MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr,
+                               ~engd->flgs & WIN_IBGR, engd->uniq,
+                                engd->size, engd->pict.xdim, engd->pict.ydim);
                 ReadRBO(surf, &engd->pict, engd->flgs);
                 BindRBO(surf, GL_TRUE);
                 DrawRendererOGL(engd->rndr, engd->uarr, engd->data,

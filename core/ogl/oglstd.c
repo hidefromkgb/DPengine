@@ -89,14 +89,6 @@ int sizecmp(const void *a, const void *b) {
 
 
 
-void SizeRendererOGL(ROGL *rndr, ulong xscr, ulong yscr) {
-    rndr->disz.x = 2.0 / xscr;
-    rndr->disz.y = 2.0 / yscr;
-    glViewport(0, 0, xscr, yscr);
-}
-
-
-
 void FreeRendererOGL(ROGL **rndr) {
     FreeVBO(&(*rndr)->surf);
     free((*rndr)->temp);
@@ -106,8 +98,8 @@ void FreeRendererOGL(ROGL **rndr) {
 
 
 
-long MakeRendererOGL(ROGL **rndr, UNIT *uarr,
-                     ulong uniq, ulong size, ulong rgba) {
+long MakeRendererOGL(ROGL **rndr, UNIT *uarr, ulong rgba,
+                     ulong uniq, ulong size, ulong xscr, ulong yscr) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
     GLchar **sver, **spix;
     GLubyte *atex, *aptr;
@@ -148,6 +140,10 @@ long MakeRendererOGL(ROGL **rndr, UNIT *uarr,
 
     MakeShaderSrc(&sver, &spix, tver, tpix, NULL);
     retn = calloc(1, sizeof(*retn));
+
+    retn->disz.x = 2.0 / xscr;
+    retn->disz.y = 2.0 / yscr;
+    glViewport(0, 0, xscr, yscr);
 
     dhei = ceil((GLfloat)size  / mtex) + 1;
     chei = ceil((GLfloat)uniq  / mtex);

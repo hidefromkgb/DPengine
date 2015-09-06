@@ -359,9 +359,8 @@ void OnCalc(CFRunLoopTimerRef time, void *data) {
             break;
         }
         case SCM_ROGL: {
-            if (MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr,
-                                         engd->uniq, engd->size, 0))
-                SizeRendererOGL(engd->rndr, engd->pict.xdim, engd->pict.ydim);
+            MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr, 0, engd->uniq,
+                            engd->size, engd->pict.xdim, engd->pict.ydim);
             DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
                             engd->size, engd->flgs & COM_IOPQ);
             break;
