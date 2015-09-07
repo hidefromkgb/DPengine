@@ -384,10 +384,11 @@ typedef struct _CTRL {
 
 
 uint32_t PRNG(uint32_t *seed);
-void ProcessMenuItem(MENU *item);
-void AppendLib(ENGC *engc, char *pcnf, char *base, char *path);
-void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
-                   uintptr_t icon, ulong rscm, uint32_t flgs, uint8_t *lang);
+MENU *MenuFromTemplate(MENU *tmpl);
+void  ProcessMenuItem(MENU *item);
+void  AppendLib(ENGC *engc, char *pcnf, char *base, char *path);
+void  ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
+                    uintptr_t icon, ulong rscm, uint32_t flgs, uint8_t *lang);
 
 
 

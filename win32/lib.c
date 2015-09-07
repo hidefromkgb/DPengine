@@ -9,16 +9,15 @@
 
 
 
-void RestartEngine(ENGD *engd, ulong rscm) {
-    engd->draw = rscm;
-    PostQuitMessage(0);
+void RestartEngine(ENGD *engd, ulong anew) {
+    engd->anew = anew;
+    PostMessage((HWND)engd->user[0], WM_QUIT, 0, 0);
 }
 
 
 
-/** TODO **/
 void ShowMainWindow(ENGD *engd, ulong show) {
-//    ShowWindow((HWND)engd->user[0], (show)? SW_SHOW : SW_HIDE);
+    ShowWindow((HWND)engd->user[0], (show)? SW_SHOW : SW_HIDE);
 }
 
 
@@ -31,7 +30,7 @@ void ReadRBO(FRBO *robj, PICT *pict, ulong flgs) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, robj->fbuf);
     glReadPixels(0, 0, robj->xdim, robj->ydim,
                 (flgs & WIN_IBGR)? GL_BGRA : GL_RGBA,
-                 GL_UNSIGNED_BYTE, (flgs & WIN_IPBO)? NULL : pict->bptr);
+                 GL_UNSIGNED_BYTE, (flgs & WIN_IPBO)? 0 : pict->bptr);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 
     if (flgs & WIN_IPBO) {
@@ -64,9 +63,9 @@ char *LoadFile(char *name, long *size) {
         free(wide);
     }
     if (file != INVALID_HANDLE_VALUE) {
-        flen = GetFileSize(file, NULL);
+        flen = GetFileSize(file, 0);
         retn = malloc(flen + 1);
-        ReadFile(file, retn, flen, &temp, NULL);
+        ReadFile(file, retn, flen, &temp, 0);
         CloseHandle(file);
         retn[flen] = '\0';
         if (size)
@@ -80,7 +79,7 @@ char *LoadFile(char *name, long *size) {
 void MakeThread(THRD *thrd) {
     DWORD retn;
 
-    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ThrdFunc, thrd, 0, &retn);
+    CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThrdFunc, thrd, 0, &retn);
 }
 
 
@@ -144,7 +143,7 @@ void MakeSemaphore(SEMD *retn, long nthr, SEM_TYPE mask) {
 
     retn->list = malloc(nthr * sizeof(*retn->list));
     for (iter = 0; iter < nthr; iter++)
-        retn->list[iter] = CreateEvent(NULL, TRUE, (mask >> iter) & 1, NULL);
+        retn->list[iter] = CreateEvent(0, TRUE, (mask >> iter) & 1, 0);
 }
 
 
@@ -191,8 +190,8 @@ LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
         case WM_KEYDOWN:
             if (wPrm == VK_ESCAPE)
         case WM_CLOSE:
-                RestartEngine((ENGD*)GetWindowLongPtr(hWnd, GWLP_USERDATA),
-                               SCM_QUIT);
+                EngineCallback(GetWindowLongPtr(hWnd, GWLP_USERDATA),
+                               ECB_QUIT, ~0);
             return 0;
 
 
@@ -255,8 +254,8 @@ BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
                 }
                 if (!(x | y) || (rgns.head.nCount >= MAX_RECT)) {
                     rgns.head.nRgnSize = rgns.head.nCount * sizeof(RECT);
-                    temp = ExtCreateRegion(NULL, rgns.head.dwSize +
-                                                 rgns.head.nRgnSize,
+                    temp = ExtCreateRegion(0, rgns.head.dwSize +
+                                              rgns.head.nRgnSize,
                                           (RGNDATA*)&rgns);
                     CombineRgn(temp, temp, retn, RGN_OR);
                     DeleteObject(retn);
@@ -299,8 +298,8 @@ void RunMainLoop(ENGD *engd) {
     HWND hwnd;
     FRBO *surf;
 
-    mwrc = NULL;
-    devc = CreateCompatibleDC(NULL);
+    mwrc = 0;
+    devc = CreateCompatibleDC(0);
     bmpi.bmiHeader.biWidth = dims.cx;
     bmpi.bmiHeader.biHeight = (engd->rscm == SCM_RSTD)? -dims.cy : dims.cy;
     hdib = CreateDIBSection(devc, &bmpi, DIB_RGB_COLORS,
@@ -313,13 +312,13 @@ void RunMainLoop(ENGD *engd) {
     mpos = (POINT){engd->mpos.x, engd->mpos.y};
 
     hlib = LoadLibrary("user32");
-    if ((engd->flgs & COM_IOPQ) || (engd->flgs & WIN_IRGN)
+    if ((engd->flgs & COM_OPAQ) || (engd->flgs & WIN_IRGN)
     || !(ULW = GetProcAddress(hlib, "UpdateLayeredWindow"))) {
         bptr = (typeof(bptr))engd->pict.bptr;
         zpos.y = bmpi.bmiHeader.biHeight;
         ULW = (typeof(ULW))ULWstub;
         attr &= ~WS_EX_LAYERED;
-        if (engd->flgs & COM_IOPQ)
+        if (engd->flgs & COM_OPAQ)
             flgs = ULW_OPAQUE;
     }
     RegisterClassEx(&wndc);
@@ -340,12 +339,7 @@ void RunMainLoop(ENGD *engd) {
             wglMakeCurrent(mwdc, mwrc = wglCreateContext(mwdc));
             if ((retn = LoadOpenGLFunctions(NV_vertex_program3 |
                                             ARB_framebuffer_object))) {
-/** TODO **/
-//                retn = realloc(retn, 2 + strlen(retn)
-//                                       + strlen((char*)engd->tran[TXT_NOGL]));
-//                strcat(retn, "\n");
-//                strcat(retn, (char*)engd->tran[TXT_NOGL]);
-//                Message(NULL, retn, NULL, MB_OK | MB_ICONEXCLAMATION);
+                MessageBox(hwnd, retn, 0, MB_OK | MB_ICONEXCLAMATION);
                 free(retn);
                 RestartEngine(engd, SCM_RSTD);
                 goto _nogl;
@@ -359,7 +353,7 @@ void RunMainLoop(ENGD *engd) {
     }
     time = timeSetEvent(1, 0, TimeFuncWrapper,
                        (DWORD_PTR)&engd->time, TIME_PERIODIC);
-    SetWindowPos(hwnd, NULL, mpos.x, mpos.y, dims.cx, dims.cy,
+    SetWindowPos(hwnd, 0, mpos.x, mpos.y, dims.cx, dims.cy,
                  SWP_NOZORDER | SWP_NOACTIVATE);
     while (TRUE) {
         if (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
@@ -374,7 +368,7 @@ void RunMainLoop(ENGD *engd) {
             continue;
         }
         engd->tfrm = engd->time;
-        if (!engd->draw)
+        if (!(engd->flgs & COM_DRAW))
             continue;
         GetCursorPos(&cpos);
         ScreenToClient(hwnd, &cpos);
@@ -387,7 +381,7 @@ void RunMainLoop(ENGD *engd) {
                                  SelectUnit(engd->uarr, engd->data,
                                             engd->size, cpos.x, cpos.y));
         if (!engd->size) {
-            RestartEngine(engd, SCM_QUIT);
+            EngineCallback((uintptr_t)engd, ECB_QUIT, ~0);
             break;
         }
         switch (engd->rscm) {
@@ -405,7 +399,7 @@ void RunMainLoop(ENGD *engd) {
                 ReadRBO(surf, &engd->pict, engd->flgs);
                 BindRBO(surf, GL_TRUE);
                 DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
-                                engd->size, engd->flgs & COM_IOPQ);
+                                engd->size, engd->flgs & COM_OPAQ);
                 BindRBO(surf, GL_FALSE);
                 break;
         }
@@ -422,7 +416,7 @@ void RunMainLoop(ENGD *engd) {
             FreeRendererOGL((ROGL**)&engd->rndr);
             FreeRBO(&surf);
         _nogl:
-            wglMakeCurrent(NULL, NULL);
+            wglMakeCurrent(0, 0);
             wglDeleteContext(mwrc);
             break;
         }

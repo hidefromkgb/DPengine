@@ -127,8 +127,9 @@ long SaveFile(char *name, char *data, long size) {
     if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {
         size = write(file, data, size);
         close(file);
+        return size;
     }
-    return size;
+    return 0;
 }
 
 

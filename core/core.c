@@ -771,14 +771,9 @@ void EngineCallback(uintptr_t engh, uint32_t ecba, uintptr_t data) {
                  +  ((xdim % anim->xdim) >> 1);
             bptr = anim->bptr + anim->xdim * anim->ydim * ainf->fcnt;
             for (y = anim->ydim * ycoe - 1; y >= 0; y--)
-                for (x = anim->xdim * xcoe - 1; x >= 0; x--) {
-                    BGRA temp =
+                for (x = anim->xdim * xcoe - 1; x >= 0; x--)
+                    retn[xdim * y + x] =
                         anim->bpal[bptr[anim->xdim * (y / ycoe) + (x / xcoe)]];
-                    retn[xdim * y + x].B = temp.R;
-                    retn[xdim * y + x].G = temp.G;
-                    retn[xdim * y + x].R = temp.B;
-                    retn[xdim * y + x].A = temp.A;
-                }
             break;
         }
         case ECB_LOAD:

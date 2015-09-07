@@ -2,7 +2,6 @@
 #define _WIN32_WINNT 0x0501
 #define WINVER _WIN32_WINNT
 
-#include <time.h>
 #include <windows.h>
 #include <commctrl.h>
 
@@ -22,45 +21,21 @@
 
 
 
+long OldWin32() {
+    static long retn = 2;
+
+    if (retn == 2)
+        retn = ((GetVersion() & 0xFF) < 5)? 1 : 0;
+    return retn;
+}
+
+
+
 char *UTF8(LPWSTR wide) {
     long size = WideCharToMultiByte(CP_UTF8, 0, wide, -1, 0, 0, 0, 0);
     char *retn = calloc(size * 2, sizeof(*retn));
     WideCharToMultiByte(CP_UTF8, 0, wide, -1, retn, size * 2, 0, 0);
     return retn;
-}
-
-
-
-char *LoadFileZ(char *name, long *size) {
-    DWORD temp, flen;
-    char *retn = 0;
-
-    temp = strlen(name) * 4 + 2;
-    LPWSTR wide = calloc(temp, sizeof(*wide));
-    MultiByteToWideChar(CP_UTF8, 0, name, -1, wide, temp);
-
-    HANDLE file = CreateFileW(wide, GENERIC_READ, FILE_SHARE_READ, 0,
-                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-    free(wide);
-    if (GetLastError() == ERROR_CALL_NOT_IMPLEMENTED)
-        file = CreateFileA(name, GENERIC_READ, FILE_SHARE_READ, 0,
-                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-    if (file != INVALID_HANDLE_VALUE) {
-        flen = GetFileSize(file, 0);
-        retn = malloc(flen + 1);
-        ReadFile(file, retn, flen, &temp, 0);
-        CloseHandle(file);
-        retn[flen] = '\0';
-        if (size)
-            *size = flen;
-    }
-    return retn;
-}
-
-
-
-long OldWin32() {
-    return ((GetVersion() & 0xFF) < 5)? 1 : 0;
 }
 
 
@@ -81,15 +56,15 @@ char *ConvertUTF8(char *utf8) {
     LPWSTR wide = UTF16(utf8);
     long size;
 
-    if (!OldWin32())
-        return (char*)wide;
-    else {
+    if (OldWin32()) {
         utf8 = calloc((size = (wcslen(wide) + 1) * 4), sizeof(*utf8));
         WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wide, -1,
                             utf8, size - 1, "#", 0);
         free(wide);
         return utf8;
     }
+    else
+        return (char*)wide;
 }
 
 
@@ -103,6 +78,22 @@ long Message(HWND hwnd, char *text, char *head, UINT flgs) {
     free(tttt);
     free(hhhh);
     return retn;
+}
+
+
+
+void SetTrayIconText(uintptr_t icon, char *text) {
+    char *hint = ConvertUTF8(text);
+
+    if (OldWin32()) {
+        strcpy((char*)((NOTIFYICONDATAA*)icon)->szTip, hint);
+        Shell_NotifyIconA(NIM_MODIFY, (NOTIFYICONDATAA*)icon);
+    }
+    else {
+        wcscpy(((NOTIFYICONDATAW*)icon)->szTip, (LPWSTR)hint);
+        Shell_NotifyIconW(NIM_MODIFY, (NOTIFYICONDATAW*)icon);
+    }
+    free(hint);
 }
 
 
@@ -126,34 +117,33 @@ void OSSpecific(MENU *item) {
             break;
 
         case MMI_IRGN: {
-/** TODO **/
-//            ENGD *engc = (ENGD*)item->data;
+            ENGC *engc = (ENGC*)item->data;
 
-//          if (item->flgs & MFL_VCHK)
-//              engc->flgs |= WIN_IRGN;
-//          else
-//              engc->flgs &= ~WIN_IRGN;
-//          if (engc->flgs & COM_IOPQ)
-//              Message((HWND)engc->user[0], (char*)engc->tran[TXT_UOFO],
-//                       0, MB_OK | MB_ICONEXCLAMATION);
-//            else
-//                RestartEngine(engc, engc->rscm);
+            if (item->flgs & MFL_VCHK)
+                engc->flgs |= WIN_IRGN;
+            else
+                engc->flgs &= ~WIN_IRGN;
+            if (engc->flgs & COM_OPAQ)
+                Message(0, (char*)engc->tran[TXT_UOFO],
+                        0, MB_OK | MB_ICONEXCLAMATION);
+            else
+                EngineCallback(engc->engh, ECB_QUIT, ~0);
             break;
         }
         case MMI_IBGR:
         case MMI_IPBO: {
-/** TODO **/
-//            ENGD *engc = (ENGD*)item->data;
+            ENGC *engc = (ENGC*)item->data;
 
-//            if (item->flgs & MFL_VCHK)
-//                engc->flgs |= ((item->uuid == MMI_IBGR)? WIN_IBGR : WIN_IPBO);
-//            else
-//                engc->flgs &= ~((item->uuid == MMI_IBGR)? WIN_IBGR : WIN_IPBO);
+            if (item->flgs & MFL_VCHK)
+                engc->flgs |= ((item->uuid == MMI_IBGR)? WIN_IBGR : WIN_IPBO);
+            else
+                engc->flgs &= ~((item->uuid == MMI_IBGR)? WIN_IBGR : WIN_IPBO);
+/** TODO **/
 //            if (engc->rscm != SCM_ROGL)
-//                Message((HWND)engc->user[0], (char*)engc->tran[TXT_UWGL],
-//                         0, MB_OK | MB_ICONEXCLAMATION);
+//                Message(0, (char*)engc->tran[TXT_UWGL],
+//                        0, MB_OK | MB_ICONEXCLAMATION);
 //            else
-//                RestartEngine(engc, engc->rscm);
+                EngineCallback(engc->engh, ECB_QUIT, ~0);
             break;
         }
     }
@@ -164,24 +154,24 @@ void OSSpecific(MENU *item) {
 MENU *OSSpecificMenu(ENGC *engc) {
     char buff[1024];
     buff[countof(buff) - 1] = 0;
-/** TODO **/
-//    MENU tmpl[] =
-//   {{.text = engc->tran[TXT_CONS], .uuid = MMI_CONS, .func = OSSpecific,
-//     .flgs = MFL_CCHK | ((GetConsoleTitle(buff, countof(buff) - 1))?
-//                          MFL_VCHK : 0)},
-//    {.text = engc->tran[TXT_IRGN], .uuid = MMI_IRGN, .func = OSSpecific,
-//     .flgs = MFL_CCHK | ((engc->flgs & WIN_IRGN)? MFL_VCHK : 0)
-//                      | ((OldWin32())? MFL_GRAY : 0),
-//     .data = (uintptr_t)engc},
-//    {.text = engc->tran[TXT_IBGR], .uuid = MMI_IBGR, .func = OSSpecific,
-//     .flgs = MFL_CCHK | ((engc->flgs & WIN_IBGR)? MFL_VCHK : 0),
-//     .data = (uintptr_t)engc},
-//    {.text = engc->tran[TXT_IPBO], .uuid = MMI_IPBO, .func = OSSpecific,
-//     .flgs = MFL_CCHK | ((engc->flgs & WIN_IPBO)? MFL_VCHK : 0),
-//     .data = (uintptr_t)engc},
-//    {}};
-//    return MenuFromTemplate(tmpl);
-    return 0;
+
+    MENU tmpl[] =
+   {{.text = engc->tran[TXT_CONS], .uuid = MMI_CONS, .func = OSSpecific,
+     .flgs = MFL_CCHK | ((GetConsoleTitle(buff, countof(buff) - 1))?
+                          MFL_VCHK : 0)},
+    {.text = engc->tran[TXT_IRGN], .uuid = MMI_IRGN, .func = OSSpecific,
+     .flgs = MFL_CCHK | ((engc->flgs & WIN_IRGN)? MFL_VCHK : 0)
+                      | ((OldWin32())? MFL_GRAY : 0),
+     .data = (uintptr_t)engc},
+    {.text = engc->tran[TXT_IBGR], .uuid = MMI_IBGR, .func = OSSpecific,
+     .flgs = MFL_CCHK | ((engc->flgs & WIN_IBGR)? MFL_VCHK : 0),
+     .data = (uintptr_t)engc},
+    {.text = engc->tran[TXT_IPBO], .uuid = MMI_IPBO, .func = OSSpecific,
+     .flgs = MFL_CCHK | ((engc->flgs & WIN_IPBO)? MFL_VCHK : 0),
+     .data = (uintptr_t)engc},
+    {}};
+
+    return MenuFromTemplate(tmpl);
 }
 
 
@@ -239,7 +229,7 @@ HMENU Submenu(MENU *menu, ulong *chld) {
 
 DWORD APIENTRY MenuThread(MENU *menu) {
     MENUITEMINFOA pmii = {sizeof(pmii), MIIM_DATA};
-    HWND  iwnd = CreateWindowEx(0, "STATIC", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    HWND  iwnd = CreateWindowEx(0, WC_STATIC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     HMENU mwnd = Submenu(menu, 0);
     POINT ppos;
     DWORD retn;
@@ -347,117 +337,160 @@ BOOL APIENTRY CalcScreen(HMONITOR hmon, HDC hdcm, LPRECT rect, LPARAM data) {
 
 
 
+char *LoadFileZ(char *name, long *size) {
+    char *retn = 0;
+    HANDLE file;
+    DWORD flen;
+
+    name = ConvertUTF8(name);
+    if (OldWin32())
+        file = CreateFileA(name, GENERIC_READ, FILE_SHARE_READ, 0,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    else
+        file = CreateFileW((LPWSTR)name, GENERIC_READ, FILE_SHARE_READ, 0,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    free(name);
+    if (file != INVALID_HANDLE_VALUE) {
+        flen = GetFileSize(file, 0);
+        retn = malloc(flen + 1);
+        ReadFile(file, retn, flen, &flen, 0);
+        CloseHandle(file);
+        retn[flen] = '\0';
+        if (size)
+            *size = flen;
+    }
+    return retn;
+}
+
+
+
+long SaveFile(char *name, char *data, long size) {
+    HANDLE file;
+    DWORD flen;
+
+    name = ConvertUTF8(name);
+    if (OldWin32())
+        file = CreateFileA(name, GENERIC_WRITE, FILE_SHARE_READ, 0,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, 0);
+    else
+        file = CreateFileW((LPWSTR)name, GENERIC_WRITE, FILE_SHARE_READ, 0,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, 0);
+    free(name);
+    if (file != INVALID_HANDLE_VALUE) {
+        WriteFile(file, data, size, &flen, 0);
+        CloseHandle(file);
+        return flen;
+    }
+    return 0;
+}
+
+
+
 int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
-/** TODO **/
-//    INCBIN("../core/icon.gif", MainIcon);
+    INCBIN("../core/icon.gif", MainIcon);
 
     INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
     NOTIFYICONDATAW nicd = {sizeof(nicd), 0, 1,
                             NIF_MESSAGE | NIF_ICON | NIF_TIP, WM_TRAY};
-    HANDLE hdir;
-    long flgs;
-
     RECT temp = {MAXLONG, MAXLONG, MINLONG, MINLONG};
+    AINF igif = {};
     ENGC engc = {};
 
+    uint32_t flgs;
+    char path[MAX_PATH], file[MAX_PATH];
+
     InitCommonControlsEx(&icct);
-    flgs = DialogBoxParam(inst, MAKEINTRESOURCE(DLG_MAIN), 0, EnterProc, 0);
-    if (!flgs)
+    GetTempPath(MAX_PATH, path);
+    flgs = GetTickCount();
+    sprintf(file, "%s%08X.gif", path, PRNG(&flgs));
+    if (!(flgs = DialogBoxParam(inst, MAKEINTRESOURCE(DLG_MAIN),
+                                0, EnterProc, 0)))
         return 0;
 
     if (flgs & FLG_CONS) {
         AllocConsole();
         freopen("CONOUT$", "wb", stdout);
     }
-    if ((engc.engh = EngineInitialize())) {
-        WIN32_FIND_DATAW dirw;
-        WIN32_FIND_DATAA dira;
-        hdir = FindFirstFileW(L""DEF_FLDR""DEF_DSEP"*", &dirw);
-        if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
-            while ((hdir != INVALID_HANDLE_VALUE) &&
-                   (GetLastError() != ERROR_NO_MORE_FILES)) {
-                char *temp = UTF8(dirw.cFileName);
-                AppendLib(&engc, DEF_CONF, DEF_FLDR, temp);
-                free(temp);
-                FindNextFileW(hdir, &dirw);
-            }
-        else {
-            hdir = FindFirstFileA(DEF_FLDR""DEF_DSEP"*", &dira);
-            while ((hdir != INVALID_HANDLE_VALUE) &&
-                   (GetLastError() != ERROR_NO_MORE_FILES)) {
-                AppendLib(&engc, DEF_CONF, DEF_FLDR, dira.cFileName);
-                FindNextFileA(hdir, &dira);
-            }
+    EngineCallback(0, ECB_INIT, (uintptr_t)&engc.engh);
+
+    WIN32_FIND_DATAW dirw;
+    WIN32_FIND_DATAA dira;
+    HANDLE hdir = FindFirstFileW(L""DEF_FLDR""DEF_DSEP"*", &dirw);
+    if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+        while ((hdir != INVALID_HANDLE_VALUE) &&
+               (GetLastError() != ERROR_NO_MORE_FILES)) {
+            char *temp = UTF8(dirw.cFileName);
+            AppendLib(&engc, DEF_CONF, DEF_FLDR, temp);
+            free(temp);
+            FindNextFileW(hdir, &dirw);
         }
-        FindClose(hdir);
-        EngineFinishLoading(engc.engh);
-
-        /// [TODO] substitute this by GUI selection
-        LINF *libs = engc.libs;
-        while (libs) {
-            libs->icnt = flgs & 0xFFFF;
-            libs = (LINF*)libs->prev;
+    else {
+        hdir = FindFirstFileA(DEF_FLDR""DEF_DSEP"*", &dira);
+        while ((hdir != INVALID_HANDLE_VALUE) &&
+               (GetLastError() != ERROR_NO_MORE_FILES)) {
+            AppendLib(&engc, DEF_CONF, DEF_FLDR, dira.cFileName);
+            FindNextFileA(hdir, &dira);
         }
-
-        EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&temp);
-
-
-/** TODO **/
-//        {
-//            HBITMAP hdib, hmsk;
-//            LONG x, y, xdim, ydim, xoff;
-//            xdim = GetSystemMetrics(SM_CXSMICON);
-//            ydim = GetSystemMetrics(SM_CYSMICON);
-//            BYTE tran[ydim * (xoff = (xdim >> 3) + ((xdim & 7)? 1 : 0))];
-//
-//            /// the size is wrong, but let it be: MainIcon does have a GIF ending
-//            ASTD *igif = MakeDataAnimStd(MainIcon, 1024 * 1024);
-//            BGRA *clrs = ExtractRescaleSwizzleAlign(igif, 0xE4, 0, xdim, ydim);
-//            FreeAnimStd(&igif);
-//
-//            for (y = 0; y < ydim; y++)
-//                for (x = 0; x < xdim; x++)
-//                    if (clrs[xdim * y + x].A)
-//                        tran[xoff * y + (x >> 3)] &= ~(0x80 >> (x & 7));
-//                    else
-//                        tran[xoff * y + (x >> 3)] |=  (0x80 >> (x & 7));
-//
-//            hdib = CreateBitmap(xdim, ydim, 1, 32, clrs);
-//            hmsk = CreateBitmap(xdim, ydim, 1, 1, tran);
-//
-//            ICONINFO icon = {FALSE, 0, 0, hmsk, hdib};
-//            nicd.hIcon = CreateIconIndirect(&icon);
-//            DeleteObject(hdib);
-//            DeleteObject(hmsk);
-//            free(clrs);
-//        }
-//        nicd.hWnd = hwnd;
-//        char *hint = ConvertUTF8((char*)engc->tran[TXT_HEAD]);
-        long oldw = OldWin32();
-        if (oldw) {
-//            strcpy((char*)nicd.szTip, hint);
-            Shell_NotifyIconA(NIM_ADD, (NOTIFYICONDATAA*)&nicd);
-        }
-        else {
-//            wcscpy(nicd.szTip, (LPWSTR)hint);
-            Shell_NotifyIconW(NIM_ADD, &nicd);
-        }
-//        free(hint);
-
-
-        ExecuteEngine(&engc, temp.left, temp.top,
-                       temp.right - temp.left, temp.bottom - temp.top,
-                      (flgs & FLG_EOGL)? SCM_ROGL : SCM_RSTD,
-                     ((flgs & FLG_IBGR)? WIN_IBGR : 0) |
-                     ((flgs & FLG_IPBO)? WIN_IPBO : 0) |
-                     ((flgs & FLG_IRGN)? WIN_IRGN : 0) |
-                     ((flgs & FLG_IOPQ)? COM_IOPQ : 0), 0);
-        if (oldw)
-            Shell_NotifyIconA(NIM_DELETE, (NOTIFYICONDATAA*)&nicd);
-        else
-            Shell_NotifyIconW(NIM_DELETE, &nicd);
-        DestroyIcon(nicd.hIcon);
     }
+    FindClose(hdir);
+    SaveFile(file, MainIcon, MainIcon_end - MainIcon);
+    EngineLoadAnimAsync(engc.engh, (uint8_t*)file, &igif);
+    EngineCallback(engc.engh, ECB_LOAD, 0);
+    DeleteFile(file);
+
+    /// [TODO:] substitute this by GUI selection
+    LINF *libs = engc.libs;
+    while (libs) {
+        libs->icnt = flgs & 0xFFFF;
+        libs = (LINF*)libs->prev;
+    }
+
+    igif.fcnt = 0;
+    igif.xdim = GetSystemMetrics(SM_CXSMICON);
+    igif.ydim = GetSystemMetrics(SM_CYSMICON);
+    igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
+    EngineCallback(engc.engh, ECB_DRAW, (uintptr_t)&igif);
+
+    LONG x, y, xoff = (igif.xdim >> 3) + ((igif.xdim & 7)? 1 : 0);
+    ICONINFO icon = {};
+    LPBYTE tran;
+
+    tran = malloc(igif.ydim * xoff);
+    for (y = 0; y < igif.ydim; y++)
+        for (x = 0; x < igif.xdim; x++)
+            if (igif.time[igif.xdim * y + x] & 0xFF000000)
+                tran[xoff * y + (x >> 3)] &= ~(0x80 >> (x & 7));
+            else
+                tran[xoff * y + (x >> 3)] |=  (0x80 >> (x & 7));
+
+    icon.hbmMask  = CreateBitmap(igif.xdim, igif.ydim, 1,  1, tran);
+    icon.hbmColor = CreateBitmap(igif.xdim, igif.ydim, 1, 32, igif.time);
+    nicd.hWnd  = CreateWindowEx(0, WC_STATIC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    nicd.hIcon = CreateIconIndirect(&icon);
+    DeleteObject(icon.hbmColor);
+    DeleteObject(icon.hbmMask);
+    free(igif.time);
+    free(tran);
+
+    if (OldWin32())
+        Shell_NotifyIconA(NIM_ADD, (NOTIFYICONDATAA*)&nicd);
+    else
+        Shell_NotifyIconW(NIM_ADD, &nicd);
+
+    EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&temp);
+    ExecuteEngine(&engc, temp.left, temp.top, temp.right - temp.left,
+                   temp.bottom - temp.top, (uintptr_t)&nicd,
+                  (flgs & FLG_EOGL)? SCM_ROGL : SCM_RSTD,
+                 ((flgs & FLG_IBGR)? WIN_IBGR : 0) |
+                 ((flgs & FLG_IPBO)? WIN_IPBO : 0) | COM_SHOW |
+                 ((flgs & FLG_IRGN)? WIN_IRGN : 0) | COM_DRAW |
+                 ((flgs & FLG_IOPQ)? COM_OPAQ : 0), 0);
+    if (OldWin32())
+        Shell_NotifyIconA(NIM_DELETE, (NOTIFYICONDATAA*)&nicd);
+    else
+        Shell_NotifyIconW(NIM_DELETE, &nicd);
+    DestroyIcon(nicd.hIcon);
+
     fclose(stdout);
     FreeConsole();
     return 0;

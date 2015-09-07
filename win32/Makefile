@@ -7,7 +7,7 @@ OBJDIR = .obj
 
 RCFLAGS = -J rc -O coff
 
-LLIB = -lgdi32 -lopengl32 -lwinmm
+LLIB = -lgdi32 -lopengl32 -lcomctl32 -lwinmm
 LINC =
 LCXFLAGS =
 LCFLAGS = -I..\core -Wall -DLIB_MAKE

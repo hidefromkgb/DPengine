@@ -138,7 +138,7 @@ long MakeRendererOGL(ROGL **rndr, UNIT *uarr, ulong rgba,
     if (!mtex)
         return 0;
 
-    MakeShaderSrc(&sver, &spix, tver, tpix, NULL);
+    MakeShaderSrc(&sver, &spix, tver, tpix, 0);
     retn = calloc(1, sizeof(*retn));
 
     retn->disz.x = 2.0 / xscr;
@@ -239,7 +239,7 @@ long MakeRendererOGL(ROGL **rndr, UNIT *uarr, ulong rgba,
                    {.name = "disz", .type = UNI_T4FV, .pdat = &retn->disz},
                    {.name = "hitd", .type = UNI_T4FV, .pdat = &retn->hitd}};
 
-    retn->surf = MakeVBO(NULL, sver, spix, GL_TRIANGLES,
+    retn->surf = MakeVBO(0, sver, spix, GL_TRIANGLES,
                          countof(satr), satr, countof(suni), suni, 5);
     retn->surf->cind = 0;
 
