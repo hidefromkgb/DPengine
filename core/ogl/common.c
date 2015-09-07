@@ -47,6 +47,8 @@ GLchar *LoadOpenGLFunctions(GLuint mask) {
         if (!iter)
             newerror(&retn, "NV_vertex_program3\n");
     }
+    if (retn)
+        newerror(&retn, "\nCannot initialize OpenGL 2.1!\n");
     return retn;
 }
 

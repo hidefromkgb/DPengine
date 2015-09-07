@@ -66,7 +66,7 @@ float StrToFloat(char *data) {
 
 
 
-/// [TODO] make this mess UTF8-compliant
+/// [TODO:] make this mess UTF8-compliant
 char *ToLower(char *uppr, long size) {
     long iter;
 
@@ -851,84 +851,60 @@ void PrepareSpriteArr(LINF *elem, LINF **edge) {
 
 
 
-void SMH(MENU *item) {
+void MMH(MENU *item) {
     switch (item->uuid) {
-        case MMI_CDEL:
+        case TXT_CDEL:
             break;
 
-        case MMI_ADEL:
+        case TXT_ADEL:
             break;
 
-        case MMI_CSLP:
+        case TXT_CSLP:
             break;
 
-        case MMI_ASLP:
+        case TXT_ASLP:
             break;
 
-        case MMI_PONY:
+        case TXT_PONY:
             break;
 
-        case MMI_HOUS:
+        case TXT_HOUS:
             break;
 
-        case MMI_TPL1:
+        case TXT_TPL1:
             break;
 
-        case MMI_TPL2:
+        case TXT_TPL2:
             break;
 
-        case MMI_OPTS:
+        case TXT_OPTS:
             break;
 
-        case MMI_RETN:
+        case TXT_RETN:
             break;
 
-        case MMI_QUIT: {
+        case TXT_RSTD:
+        case TXT_ROGL:
+            EngineCallback(((ENGC*)item->data)->engh, ECB_RSCM,
+                          (item->uuid == TXT_RSTD)? SCM_RSTD : SCM_ROGL);
+            break;
+
+        case TXT_SHOW:
+        case TXT_DRAW:
+        case TXT_OPAQ: {
             ENGC *engc = (ENGC*)item->data;
+            uint32_t flag = (item->uuid != TXT_OPAQ)? (item->uuid != TXT_DRAW)?
+                             COM_SHOW : COM_DRAW : COM_OPAQ;
 
-            engc->quit = 1;
+            if (item->flgs & MFL_VCHK)
+                engc->flgs |= flag;
+            else
+                engc->flgs &= ~flag;
+            EngineCallback(engc->engh, ECB_FLGS, engc->flgs);
             break;
         }
-    }
-}
-
-
-
-void CMH(MENU *item) {
-    switch (item->uuid) {
-        case MMI_RSTD:
-        case MMI_ROGL:
-/** TODO **/
-//            RestartEngine((ENGD*)item->data,
-//                          (item->uuid == MMI_RSTD)? SCM_RSTD : SCM_ROGL);
-            break;
-
-        case MMI_OPAQ: {
-/** TODO **/
-//            ENGD *engd = (ENGD*)item->data;
-//
-//            if (item->flgs & MFL_VCHK)
-//                engd->flgs |= COM_IOPQ;
-//            else
-//                engd->flgs &= ~COM_IOPQ;
-//            RestartEngine(engd, engd->rscm);
-            break;
-        }
-        case MMI_STOP: {
-/** TODO **/
-//            ENGD *engd = (ENGD*)item->data;
-
-//            engd->draw = !(item->flgs & MFL_VCHK);
-            break;
-        }
-        case MMI_HIDE:
-/** TODO **/
-//            ShowMainWindow((ENGD*)item->data, !(item->flgs & MFL_VCHK));
-            break;
-
-        case MMI_EXIT:
-/** TODO **/
-//            RestartEngine((ENGD*)item->data, SCM_QUIT);
+        case TXT_EXIT:
+            EngineCallback(((ENGC*)item->data)->engh, ECB_QUIT, ~0);
             break;
     }
 }
@@ -1061,9 +1037,8 @@ MENU *MenuFromTemplate(MENU *tmpl) {
 
 
 
-uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
-                     T4FV **data, uint64_t *time, uint32_t flgs,
-                     int32_t xptr, int32_t yptr, int32_t isel) {
+uint32_t UpdFrame(uintptr_t engh, uintptr_t user, T4FV **data, uint64_t *time,
+                  uint32_t flgs, int32_t xptr, int32_t yptr, int32_t isel) {
     ENGC *engc = (ENGC*)user;
     PICT *pict = engc->pcur;
     BINF *binf;
@@ -1073,12 +1048,9 @@ uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
     uint64_t curr;
     long indx;
 
-    if (engc->quit)
-        return 0;
-
-//    EngineBeginAddition(engh);
+//    EngineCallback(engh, ECB_LOAD, ~0);
 //    /// here you can add new sprites!
-//    EngineFinishLoading(engh);
+//    EngineCallback(engh, ECB_LOAD, 0);
 
     if ((flgs & UFR_MOUS) && ((isel >= 0) || pict)) {
         if (!pict && ((engc->flgs ^ flgs) & UFR_LBTN)) {
@@ -1161,16 +1133,17 @@ uint32_t UpdateFrame(uintptr_t engh, uintptr_t user,
 
 
 void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
-                   ulong rscm, uint32_t flgs, uint8_t *lang) {
+                   uintptr_t icon, ulong rscm, uint32_t flgs, uint8_t *lang) {
     INCBIN("../core/en.lang", DefaultLanguage);
 
     uint8_t *data;
     long size;
 
+    engc->flgs = flgs;
     engc->dims = (T2IV){xdim, ydim};
     FreeLocalization(&engc->tran);
-    LoadLocalization(&engc->tran,
-                    (uint8_t*)DefaultLanguage, strlen(DefaultLanguage));
+    LoadLocalization(&engc->tran, (uint8_t*)DefaultLanguage,
+                     DefaultLanguage_end - DefaultLanguage);
     if (lang) {
         data = (uint8_t*)LoadFileZ((char*)lang, &size);
         LoadLocalization(&engc->tran, data, size);
@@ -1178,23 +1151,23 @@ void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
     }
     MENU *spec,
     mspr[] =
-   {{.text = (uint8_t*)"", .flgs = MFL_GRAY},
+   {{.text = (uint8_t*)"",         .flgs = MFL_GRAY},
     {.text = (uint8_t*)""},
-    {.text = (uint8_t*)"Remove pony",               .func = SMH, .uuid = MMI_CDEL},
-    {.text = (uint8_t*)"Remove all similar ponies", .func = SMH, .uuid = MMI_ADEL},
+    {.text = engc->tran[TXT_CDEL], .uuid = TXT_CDEL, .func = MMH},
+    {.text = engc->tran[TXT_ADEL], .uuid = TXT_ADEL, .func = MMH},
     {.text = (uint8_t*)""},
-    {.text = (uint8_t*)"Sleep/pause",               .func = SMH, .uuid = MMI_CSLP},
-    {.text = (uint8_t*)"Sleep/pause all",           .func = SMH, .uuid = MMI_ASLP},
+    {.text = engc->tran[TXT_CSLP], .uuid = TXT_CSLP, .func = MMH},
+    {.text = engc->tran[TXT_ASLP], .uuid = TXT_ASLP, .func = MMH},
     {.text = (uint8_t*)""},
-    {.text = (uint8_t*)"Add pony >>>",              .func = SMH, .uuid = MMI_PONY},
-    {.text = (uint8_t*)"Add house >>>",             .func = SMH, .uuid = MMI_HOUS},
+    {.text = engc->tran[TXT_PONY], .uuid = TXT_PONY, .func = MMH},
+    {.text = engc->tran[TXT_HOUS], .uuid = TXT_HOUS, .func = MMH},
     {.text = (uint8_t*)""},
-    {.text = (uint8_t*)"Take control: Player 1",    .func = SMH, .uuid = MMI_TPL1},
-    {.text = (uint8_t*)"Take control: Player 2",    .func = SMH, .uuid = MMI_TPL2},
+    {.text = engc->tran[TXT_TPL1], .uuid = TXT_TPL1, .func = MMH},
+    {.text = engc->tran[TXT_TPL2], .uuid = TXT_TPL2, .func = MMH},
     {.text = (uint8_t*)""},
-    {.text = (uint8_t*)"Show options...",           .func = SMH, .uuid = MMI_OPTS},
-    {.text = (uint8_t*)"Return to menu...",         .func = SMH, .uuid = MMI_RETN},
-    {.text = (uint8_t*)"Quit",                      .func = SMH, .uuid = MMI_QUIT,
+    {.text = engc->tran[TXT_OPTS], .uuid = TXT_OPTS, .func = MMH},
+    {.text = engc->tran[TXT_RETN], .uuid = TXT_RETN, .func = MMH},
+    {.text = engc->tran[TXT_EXIT], .uuid = TXT_EXIT, .func = MMH,
      .data = (uintptr_t)engc},
     {}},
 
@@ -1203,26 +1176,26 @@ void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
     {.text = (uint8_t*)""},
     {.text = engc->tran[TXT_RSCM]},
     {.text = engc->tran[TXT_SPEC]},
-    {.text = engc->tran[TXT_OPAQ], .uuid = MMI_OPAQ, .func = CMH,
-     .flgs = MFL_CCHK | ((engc->flgs & COM_IOPQ)? MFL_VCHK : 0),
+    {.text = engc->tran[TXT_OPAQ], .uuid = TXT_OPAQ, .func = MMH,
+     .flgs = MFL_CCHK | ((engc->flgs & COM_OPAQ)? MFL_VCHK : 0),
      .data = (uintptr_t)engc},
-    {.text = engc->tran[TXT_STOP], .uuid = MMI_STOP, .func = CMH,
-     .flgs = MFL_CCHK,
+    {.text = engc->tran[TXT_DRAW], .uuid = TXT_DRAW, .func = MMH,
+     .flgs = MFL_CCHK | ((engc->flgs & COM_DRAW)? MFL_VCHK : 0),
      .data = (uintptr_t)engc},
-    {.text = engc->tran[TXT_HIDE], .uuid = MMI_HIDE, .func = CMH,
-     .flgs = MFL_CCHK,
+    {.text = engc->tran[TXT_SHOW], .uuid = TXT_SHOW, .func = MMH,
+     .flgs = MFL_CCHK | ((engc->flgs & COM_SHOW)? MFL_VCHK : 0),
      .data = (uintptr_t)engc},
     {.text = (uint8_t*)""},
-    {.text = engc->tran[TXT_EXIT], .uuid = MMI_EXIT, .func = CMH,
+    {.text = engc->tran[TXT_EXIT], .uuid = TXT_EXIT, .func = MMH,
      .data = (uintptr_t)engc},
     {}},
 
     rndr[] =
-   {{.text = engc->tran[TXT_RSTD], .uuid = MMI_RSTD, .func = CMH,
-     .flgs = MFL_RCHK/* | ((engc->rscm == SCM_RSTD)? MFL_VCHK : 0)*/,
+   {{.text = engc->tran[TXT_RSTD], .uuid = TXT_RSTD, .func = MMH,
+     .flgs = MFL_RCHK | ((rscm == SCM_RSTD)? MFL_VCHK : 0),
      .data = (uintptr_t)engc},
-    {.text = engc->tran[TXT_ROGL], .uuid = MMI_ROGL, .func = CMH,
-     .flgs = MFL_RCHK/* | ((engc->rscm == SCM_ROGL)? MFL_VCHK : 0)*/,
+    {.text = engc->tran[TXT_ROGL], .uuid = TXT_ROGL, .func = MMH,
+     .flgs = MFL_RCHK | ((rscm == SCM_ROGL)? MFL_VCHK : 0),
      .data = (uintptr_t)engc},
     {}},
 
@@ -1234,21 +1207,23 @@ void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
 
     mctx[2].chld = rndr;
     engc->mctx = MenuFromTemplate(mctx);
-    engc->mctx[3].chld = ((spec = OSSpecificMenu(engc)))?
-                           spec : MenuFromTemplate(none);
+    engc->mctx[3].chld =
+        ((spec = OSSpecificMenu(engc)))? spec : MenuFromTemplate(none);
 
     TTH_ITER(engc->libs, PrepareSpriteArr, &engc->libs);
     MakeSpriteArr(engc);
 
     engc->seed = time(0);
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);
+
+    SetTrayIconText(icon, (char*)engc->tran[TXT_HEAD]);
     EngineRunMainLoop(engc->engh, xpos, ypos, engc->dims.x, engc->dims.y,
-                      flgs, FRM_WAIT, rscm, (uintptr_t)engc, UpdateFrame);
+                      engc->flgs, FRM_WAIT, rscm, (uintptr_t)engc, UpdFrame);
 
     FreeMenu(&engc->mspr);
     FreeMenu(&engc->mctx);
     FreeLocalization(&engc->tran);
-    EngineDeinitialize(engc->engh);
+    EngineCallback(engc->engh, ECB_QUIT, 0);
     FreeSpriteArr(engc);
     TTH_ITER(engc->libs, FreeLib, 0);
     free(engc->data);

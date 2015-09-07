@@ -96,6 +96,12 @@ char *ConvertUTF8(char *utf8) {
 
 
 
+void SetTrayIconText(uintptr_t icon, char *text) {
+    gtk_status_icon_set_tooltip_text((GtkStatusIcon*)icon, (gchar*)text);
+}
+
+
+
 char *LoadFileZ(char *name, long *size) {
     char *retn = 0;
     long file, flen;
@@ -115,71 +121,85 @@ char *LoadFileZ(char *name, long *size) {
 
 
 
+long SaveFile(char *name, char *data, long size) {
+    long file;
+
+    if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {
+        size = write(file, data, size);
+        close(file);
+    }
+    return size;
+}
+
+
+
 int main(int argc, char *argv[]) {
-/** TODO **/
-//    INCBIN("../core/icon.gif", MainIcon);
+    INCBIN("../core/icon.gif", MainIcon);
 
     struct dirent **dirs;
-    long uses;
+    char path[256];
+    int32_t uses;
 
+    AINF igif = {};
     ENGC engc = {};
 
     gtk_init(&argc, &argv);
-    if ((engc.engh = EngineInitialize())) {
-        if ((uses = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
-            while (uses--) {
-                if ((dirs[uses]->d_type == DT_DIR)
-                &&  strcmp(dirs[uses]->d_name, ".")
-                &&  strcmp(dirs[uses]->d_name, ".."))
-                    AppendLib(&engc, DEF_CONF, DEF_FLDR, dirs[uses]->d_name);
-                free(dirs[uses]);
-            }
-            free(dirs);
+    EngineCallback(0, ECB_INIT, (uintptr_t)&engc.engh);
+    if ((uses = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
+        while (uses--) {
+            if ((dirs[uses]->d_type == DT_DIR)
+            &&  strcmp(dirs[uses]->d_name, ".")
+            &&  strcmp(dirs[uses]->d_name, ".."))
+                AppendLib(&engc, DEF_CONF, DEF_FLDR, dirs[uses]->d_name);
+            free(dirs[uses]);
         }
-        EngineFinishLoading(engc.engh);
-
-        long xdim = 128,
-             ydim = 128;
-        GdkPixbuf *pbuf;
-        GtkStatusIcon *icon;
-
-        /// the size is wrong, but let it be: MainIcon does have a GIF ending
-/** TODO **/
-//        ASTD *igif = MakeDataAnimStd(MainIcon, 1024 * 1024);
-//        BGRA *bptr = ExtractRescaleSwizzleAlign(igif, 0xC6, 0, xdim, ydim);
-        char *bptr = malloc(xdim * ydim * 4);
-        memset(bptr, 0xFF, xdim * ydim * 4);
-
-        pbuf = gdk_pixbuf_new_from_data((guchar*)bptr, GDK_COLORSPACE_RGB,
-                                        TRUE, CHAR_BIT, xdim, ydim,
-                                        xdim * sizeof(*bptr),
-                                       (GdkPixbufDestroyNotify)free, bptr);
-/** TODO **/
-//        FreeAnimStd(&igif);
-
-        icon = gtk_status_icon_new_from_pixbuf(pbuf);
-/** TODO **/
-//        gtk_status_icon_set_tooltip_text(icon, (gchar*)engc.tran[TXT_HEAD]);
-        gtk_status_icon_set_visible(icon, TRUE);
-        g_signal_connect(G_OBJECT(icon), "popup-menu",
-                         G_CALLBACK(MainMenu), &engc);
-
-        /// [TODO] substitute this by GUI selection
-        uses = (argc >= 2)? atol(argv[1]) : 0;
-        uses = (uses != 0)? uses : 1;
-        LINF *libs = engc.libs;
-        while (libs) {
-            libs->icnt = labs(uses);
-            libs = (LINF*)libs->prev;
-        }
-
-        GdkScreen *gscr = gdk_screen_get_default();
-        ExecuteEngine(&engc, 0, 0,
-                      gdk_screen_get_width(gscr), gdk_screen_get_height(gscr),
-                     (uses < 0)? SCM_RSTD : SCM_ROGL, 0, 0);
-
-        g_object_unref(G_OBJECT(icon));
-        g_object_unref(G_OBJECT(pbuf));
+        free(dirs);
     }
+    uses = time(0);
+    sprintf(path, "/tmp/%08X.gif", PRNG((uint32_t*)&uses));
+
+    SaveFile(path, MainIcon, MainIcon_end - MainIcon);
+    EngineLoadAnimAsync(engc.engh, (uint8_t*)path, &igif);
+    EngineCallback(engc.engh, ECB_LOAD, 0);
+    unlink(path);
+
+    gint xdim, ydim;
+    GdkPixbuf *pbuf;
+    GtkStatusIcon *icon;
+
+    gtk_icon_size_lookup(GTK_ICON_SIZE_DIALOG, &xdim, &ydim);
+    igif.fcnt = 0;
+    igif.xdim = xdim;
+    igif.ydim = ydim;
+    igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
+    EngineCallback(engc.engh, ECB_DRAW, (uintptr_t)&igif);
+
+    pbuf = gdk_pixbuf_new_from_data((guchar*)igif.time, GDK_COLORSPACE_RGB,
+                                    TRUE, CHAR_BIT, igif.xdim, igif.ydim,
+                                    igif.xdim * sizeof(*igif.time),
+                                   (GdkPixbufDestroyNotify)free, igif.time);
+
+    icon = gtk_status_icon_new_from_pixbuf(pbuf);
+    gtk_status_icon_set_visible(icon, TRUE);
+    g_signal_connect(G_OBJECT(icon), "popup-menu",
+                     G_CALLBACK(MainMenu), &engc);
+
+    /// [TODO:] substitute this by GUI selection
+    uses = (argc >= 2)? atol(argv[1]) : 0;
+    uses = (uses != 0)? uses : 1;
+    LINF *libs = engc.libs;
+    while (libs) {
+        libs->icnt = labs(uses);
+        libs = (LINF*)libs->prev;
+    }
+
+    GdkScreen *gscr = gdk_screen_get_default();
+    ExecuteEngine(&engc, 0, 0,
+                  gdk_screen_get_width(gscr), gdk_screen_get_height(gscr),
+                  (uintptr_t)icon, (uses < 0)? SCM_RSTD : SCM_ROGL,
+                  COM_SHOW | COM_DRAW, 0);
+
+    g_object_unref(G_OBJECT(icon));
+    g_object_unref(G_OBJECT(pbuf));
     return 0;
 }

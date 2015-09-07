@@ -10,14 +10,13 @@
 
 
 
-void RestartEngine(ENGD *engd, ulong rscm) {
-    engd->draw = rscm;
+void RestartEngine(ENGD *engd, ulong anew) {
+    engd->anew = anew;
     gtk_main_quit();
 }
 
 
 
-/** TODO **/
 void ShowMainWindow(ENGD *engd, ulong show) {
     if (show)
         gtk_widget_show((GtkWidget*)engd->user[0]);
@@ -160,7 +159,7 @@ gboolean DrawFunc(gpointer user) {
         return TRUE;
     }
     engd->tfrm = engd->time;
-    if (!engd->draw
+    if ((~engd->flgs & COM_DRAW)
     || !(hwnd = gtk_widget_get_window((GtkWidget*)engd->user[0])))
         return TRUE;
 
@@ -173,10 +172,10 @@ gboolean DrawFunc(gpointer user) {
     engd->size = engd->ufrm((uintptr_t)engd, engd->udat, &engd->data,
                             &engd->time, flgs, xptr, yptr, pick);
     if (!engd->size) {
-        RestartEngine(engd, SCM_QUIT);
+        EngineCallback((uintptr_t)engd, ECB_QUIT, ~0);
         return TRUE;
     }
-    if ((pick >= 0) || (engd->flgs & COM_IOPQ)) {
+    if ((pick >= 0) || (engd->flgs & COM_OPAQ)) {
         rect.width  = engd->pict.xdim;
         rect.height = engd->pict.ydim;
     }
@@ -201,7 +200,7 @@ gboolean DrawFunc(gpointer user) {
             MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr, 0, engd->uniq,
                             engd->size, engd->pict.xdim, engd->pict.ydim);
             DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
-                            engd->size, engd->flgs & COM_IOPQ);
+                            engd->size, engd->flgs & COM_OPAQ);
             gdk_gl_drawable_gl_end(pGLD);
             break;
         }
@@ -215,7 +214,7 @@ gboolean DrawFunc(gpointer user) {
 
 
 gboolean OnDestroy(GtkWidget *gwnd, gpointer user) {
-    RestartEngine((ENGD*)user, SCM_QUIT);
+    EngineCallback((uintptr_t)user, ECB_QUIT, ~0);
     return TRUE;
 }
 
@@ -245,7 +244,7 @@ gboolean OnChange(GtkWidget *gwnd, GdkScreen *scrn, gpointer user) {
 gboolean OnRedraw(GtkWidget *gwnd, GdkEventExpose *eexp, gpointer user) {
     ENGD *engd = user;
 
-    if (!engd->draw)
+    if (~engd->flgs & COM_DRAW)
         return TRUE;
 
     switch (engd->rscm) {
@@ -253,7 +252,7 @@ gboolean OnRedraw(GtkWidget *gwnd, GdkEventExpose *eexp, gpointer user) {
             cairo_t *temp = gdk_cairo_create(gtk_widget_get_window(gwnd));
             cairo_surface_mark_dirty((cairo_surface_t*)engd->user[1]);
             cairo_set_operator(temp, CAIRO_OPERATOR_SOURCE);
-            if (engd->flgs & COM_IOPQ) {
+            if (engd->flgs & COM_OPAQ) {
                 cairo_set_source_rgba(temp, 0, 0, 0, 1);
                 cairo_paint(temp);
                 cairo_set_operator(temp, CAIRO_OPERATOR_OVER);
@@ -359,8 +358,7 @@ void RunMainLoop(ENGD *engd) {
             retn = LoadOpenGLFunctions(NV_vertex_program3);
             gdk_gl_drawable_gl_end(pGLD);
             if (retn) {
-                /** TODO **/
-                printf("\n%s\n"TXL_FAIL" %s\n", retn, "BRED!");//engd->tran[TXT_NOGL]);
+                printf("\n%s\n", retn);
                 free(retn);
                 gtk_widget_destroy(gwnd);
                 RestartEngine(engd, SCM_RSTD);
@@ -382,6 +380,7 @@ void RunMainLoop(ENGD *engd) {
     gtk_widget_show(gwnd);
     gdk_window_set_cursor(gtk_widget_get_window(gwnd),
                           gdk_cursor_new(GDK_HAND1));
+    ShowMainWindow(engd, engd->flgs & COM_SHOW);
 
     tmrt = g_timeout_add(   1, TimeFuncWrapper, &engd->time);
     tmrf = g_timeout_add(1000, FPSFunc, engd);

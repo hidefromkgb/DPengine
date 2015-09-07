@@ -1,14 +1,23 @@
+Remove pony
+Remove all similar
+Sleep/pause
+Sleep/pause all similar
+Add pony >>>
+Add house >>>
+Take control: Player 1
+Take control: Player 2
+Show options...
+Return to menu...
 [ Desktop Ponies Engine ]
 Renderer
 OS specific options
 Disable transparency
-Pause animation
-Hide window
+Play animation
+Show window
 Exit
 Generic (CPU)
 OpenGL (GPU)
 [ none ]
-Can`t init OpenGL 2.0!
 Show console
 Use regions
 Enable BGRA

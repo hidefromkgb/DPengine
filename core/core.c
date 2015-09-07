@@ -646,48 +646,6 @@ long SwitchThreads(ENGD *engd, long draw) {
 
 
 
-BGRA *ExtractRescaleSwizzleAlign(ASTD *anim, uint8_t swiz,
-                                 long fram, long xdim, long ydim) {
-    BGRA *offs, *retn = 0;
-    long x, y, xcoe, ycoe;
-    uint8_t *bptr;
-
-    if (anim && anim->xdim && anim->ydim && (fram < anim->fcnt)
-    && (anim->xdim <= xdim) && (anim->ydim <= ydim)) {
-        xcoe = xdim / anim->xdim;
-        ycoe = ydim / anim->ydim;
-        offs = (retn = calloc(sizeof(*retn), xdim * ydim))
-             +  xdim * ((ydim % anim->ydim) >> 1) + ((xdim % anim->xdim) >> 1);
-        bptr = anim->bptr + anim->xdim * anim->ydim * fram;
-        for (y = anim->ydim * ycoe - 1; y >= 0; y--)
-            for (x = anim->xdim * xcoe - 1; x >= 0; x--) {
-                BGRA temp = anim->bpal[bptr[anim->xdim * (y / ycoe)
-                                                       + (x / xcoe)]];
-                offs[xdim * y + x].B = temp.chan[(swiz >> 0) & 3];
-                offs[xdim * y + x].G = temp.chan[(swiz >> 2) & 3];
-                offs[xdim * y + x].R = temp.chan[(swiz >> 4) & 3];
-                offs[xdim * y + x].A = temp.chan[(swiz >> 6) & 3];
-            }
-    }
-    return retn;
-}
-
-
-
-uintptr_t EngineInitialize() {
-    ENGD *retn = calloc(1, sizeof(*retn));
-
-    retn->ncpu = CountCPUs();
-    retn->thrd = malloc(retn->ncpu * sizeof(*retn->thrd));
-    MakeSemaphore(&retn->isem, retn->ncpu, SEM_NULL);
-    MakeSemaphore(&retn->osem, retn->ncpu, SEM_FULL);
-    SwitchThreads(retn, 0);
-    retn->time = TimeFunc();
-    return (uintptr_t)retn;
-}
-
-
-
 void EngineLoadAnimAsync(uintptr_t engh, uint8_t *path, AINF *ainf) {
     ENGD *engd = (ENGD*)engh;
     SAVL *estr, *retn;
@@ -734,34 +692,6 @@ void EngineLoadAnimAsync(uintptr_t engh, uint8_t *path, AINF *ainf) {
 
 
 
-void EngineBeginAddition(uintptr_t engh) {
-    ENGD *engd = (ENGD*)engh;
-
-    StopThreads(engd);
-    SwitchThreads(engd, 0);
-}
-
-
-
-void EngineFinishLoading(uintptr_t engh) {
-    ENGD *engd = (ENGD*)engh;
-    ulong iter;
-
-    engd->draw = 0;
-    StopThreads(engd);
-    for (iter = 0; iter < engd->ncpu; iter++) {
-        TryUpdatePixTree(engd, engd->thrd[iter].elem);
-        free(engd->thrd[iter].path);
-        engd->thrd[iter].path = 0;
-    }
-    MakeUnitArray(engd);
-
-    if (engd->uarr)
-        engd->draw = ~0;
-}
-
-
-
 void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
                        uint32_t xdim, uint32_t ydim, uint32_t flgs,
                        uint32_t msec, uint32_t rscm, uintptr_t user,
@@ -788,7 +718,7 @@ void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
               (engd->rscm == SCM_ROGL)? TXL_ROGL : TXL_RSTD);
         do {
             RunMainLoop(engd);
-        } while ((engd->rscm = engd->draw) != SCM_QUIT);
+        } while (engd->anew);
     }
     else
         printf(TXL_FAIL" No animation base found! Exiting...\n");
@@ -796,15 +726,91 @@ void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
 
 
 
-void EngineDeinitialize(uintptr_t engh) {
+void EngineCallback(uintptr_t engh, uint32_t ecba, uintptr_t data) {
     ENGD *engd = (ENGD*)engh;
 
-    if (engd->uarr) {
-        FreeUnitArray(engd);
-        FreeHashTrees(engd);
+    switch (ecba) {
+        case ECB_INIT:
+            engd = calloc(1, sizeof(*engd));
+            engd->ncpu = CountCPUs();
+            engd->thrd = malloc(engd->ncpu * sizeof(*engd->thrd));
+            MakeSemaphore(&engd->isem, engd->ncpu, SEM_NULL);
+            MakeSemaphore(&engd->osem, engd->ncpu, SEM_FULL);
+            SwitchThreads(engd, 0);
+            engd->time = TimeFunc();
+            *(uintptr_t*)data = (uintptr_t)engd;
+            break;
+
+        case ECB_RSCM:
+            engd->rscm = data;
+            RestartEngine(engd, ~0);
+            break;
+
+        case ECB_FLGS: {
+            uint32_t mask = data ^ engd->flgs;
+
+            if (mask & COM_SHOW)
+                ShowMainWindow(engd, data & COM_SHOW);
+            engd->flgs = data;
+            break;
+        }
+        /// [TODO:] change to PTHR()
+        case ECB_DRAW: {
+            AINF *ainf = (AINF*)data;
+            BGRA *retn = (BGRA*)ainf->time;
+            ASTD *anim = engd->uarr[ainf->uuid >> 2].anim;
+            long x, y, xcoe, ycoe, xdim = ainf->xdim, ydim = ainf->ydim;
+            uint8_t *bptr;
+
+            if ((ainf->fcnt >= anim->fcnt)
+            || (anim->xdim > xdim) || (anim->ydim > ydim))
+                break;
+            xcoe = xdim / anim->xdim;
+            ycoe = ydim / anim->ydim;
+            retn += ((ydim % anim->ydim) >> 1) * xdim
+                 +  ((xdim % anim->xdim) >> 1);
+            bptr = anim->bptr + anim->xdim * anim->ydim * ainf->fcnt;
+            for (y = anim->ydim * ycoe - 1; y >= 0; y--)
+                for (x = anim->xdim * xcoe - 1; x >= 0; x--) {
+                    BGRA temp =
+                        anim->bpal[bptr[anim->xdim * (y / ycoe) + (x / xcoe)]];
+                    retn[xdim * y + x].B = temp.R;
+                    retn[xdim * y + x].G = temp.G;
+                    retn[xdim * y + x].R = temp.B;
+                    retn[xdim * y + x].A = temp.A;
+                }
+            break;
+        }
+        case ECB_LOAD:
+            StopThreads(engd);
+            if (data)
+                SwitchThreads(engd, 0);
+            else {
+                data = engd->flgs;
+                engd->flgs &= ~COM_DRAW;
+                for (ecba = 0; ecba < engd->ncpu; ecba++) {
+                    TryUpdatePixTree(engd, engd->thrd[ecba].elem);
+                    free(engd->thrd[ecba].path);
+                    engd->thrd[ecba].path = 0;
+                }
+                MakeUnitArray(engd);
+                if (engd->uarr)
+                    engd->flgs = data;
+            }
+            break;
+
+        case ECB_QUIT:
+            RestartEngine(engd, 0);
+            if (data)
+                break;
+            if (engd->uarr) {
+                FreeUnitArray(engd);
+                FreeHashTrees(engd);
+            }
+            FreeSemaphore(&engd->isem, engd->ncpu);
+            FreeSemaphore(&engd->osem, engd->ncpu);
+            free(engd->thrd);
+            free(engd);
+            break;
     }
-    FreeSemaphore(&engd->isem, engd->ncpu);
-    FreeSemaphore(&engd->osem, engd->ncpu);
-    free(engd->thrd);
-    free(engd);
 }

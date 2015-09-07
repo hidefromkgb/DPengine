@@ -22,11 +22,12 @@
         ".global _"STRING(pvar)";" \
         "_"STRING(pvar)":"         \
         ".incbin \""file"\";"      \
+        "_"STRING(pvar)"_end:"     \
         ".byte 0;"                 \
         ".align 4;"                \
         ".section .text;"          \
     );                             \
-    extern char pvar[]
+    extern char pvar[], pvar##_end[]
 #elif __APPLE__
     #define INCBIN(file, pvar)     \
     __asm__(                       \
@@ -34,11 +35,12 @@
         ".globl _"STRING(pvar)"\n" \
         "_"STRING(pvar)":\n"       \
         ".incbin \""file"\"\n"     \
+        "_"STRING(pvar)"_end:\n"   \
         ".byte 0\n"                \
         ".align 4\n"               \
         ".section __TEXT,__text\n" \
     );                             \
-    extern char pvar[]
+    extern char pvar[], pvar##_end[]
 #else
     #define INCBIN(file, pvar)     \
     __asm__(                       \
@@ -46,20 +48,29 @@
         ".global "STRING(pvar)";"  \
         STRING(pvar)":"            \
         ".incbin \""file"\";"      \
+        STRING(pvar)"_end:"        \
         ".byte 0;"                 \
         ".align 4;"                \
         ".popsection;"             \
     );                             \
-    extern char pvar[]
+    extern char pvar[], pvar##_end[]
 #endif
 
 
 
-#define SCM_QUIT 0
-#define SCM_RSTD 1
-#define SCM_ROGL 2
+#define ECB_INIT   0
+#define ECB_RSCM   1
+#define ECB_FLGS   2
+#define ECB_DRAW   3
+#define ECB_LOAD   4
+#define ECB_QUIT   5
 
-#define COM_IOPQ  (1 << 31)
+#define SCM_RSTD   0
+#define SCM_ROGL   1
+
+#define COM_DRAW  (1 << 31)
+#define COM_SHOW  (1 << 30)
+#define COM_OPAQ  (1 << 29)
 
 #define WIN_IBGR  (1 << 0)
 #define WIN_IPBO  (1 << 1)
@@ -151,10 +162,28 @@ typedef uint32_t (*UFRM)(uintptr_t engh, uintptr_t user,
 
 
 /** _________________________________________________________________________
-    Allocates a new engine object and returns a handle to it.
+    Provides the entry gate for all asynchronous engine functionality (except
+    main loop execution and image loading itself), e.g. window manipulations.
     _________________________________________________________________________
+    ENGH: handle of the engine object the call refers to
+    ECBA: callback action to perform:
+          ECB_INIT: initialize the new engine; may be called with ENGH == 0
+                    DATA: pointer to the var that receives the new object
+          ECB_RSCM: change the current rendering scheme
+          ECB_FLGS: change the current state (including OS-dependent flags)
+          ECB_DRAW: "immediate" CPU-to-RAM draw call; DATA -> AINF:
+                    UUID: ID of the target animation
+                    XDIM: width of the draw area
+                    YDIM: height of the draw area
+                    FCNT: frame that needs to be drawn
+                    TIME: pointer to the draw area
+          ECB_LOAD: DATA != 0: interrupt the main loop to load more anims
+                    DATA == 0: wait for anim loading completion
+          ECB_QUIT: DATA != 0: just stop the main loop, do not deallocate
+                    DATA == 0: terminate everything, deallocate resources
+    DATA: accompanying data for the action; may be anything (see above)
  **/
-LIB_OPEN uintptr_t EngineInitialize();
+LIB_OPEN void EngineCallback(uintptr_t engh, uint32_t ecba, uintptr_t data);
 
 /** _________________________________________________________________________
     Reads animations asynchronously. All AINF`s have to remain valid till the
@@ -168,24 +197,11 @@ LIB_OPEN uintptr_t EngineInitialize();
 LIB_OPEN void EngineLoadAnimAsync(uintptr_t engh, uint8_t *path, AINF *ainf);
 
 /** _________________________________________________________________________
-    Blocks rendering and allows adding new sprites to the existing base.
-    _________________________________________________________________________
-    ENGH: handle of the engine object the call refers to
- **/
-LIB_OPEN void EngineBeginAddition(uintptr_t engh);
-
-/** _________________________________________________________________________
-    Ensures loading completion. After the call, all UUIDs, dimensions, delays
-    and frame counts become valid. Unblocks rendering.
-    _________________________________________________________________________
-    ENGH: handle of the engine object the call refers to
- **/
-LIB_OPEN void EngineFinishLoading(uintptr_t engh);
-
-/** _________________________________________________________________________
     Executes the main loop.
     _________________________________________________________________________
     ENGH: handle of the engine object the call refers to
+    XPOS: window position X
+    YPOS: window position Y
     XDIM: window width
     YDIM: window height
     FLGS: OS specific flags
@@ -195,7 +211,6 @@ LIB_OPEN void EngineFinishLoading(uintptr_t engh);
     RSCM: rendering scheme
           SCM_RSTD - CPU
           SCM_ROGL - GPU
-    LANG: localization file name (0 if default)
     USER: user data pointer to be passed to the callback
     FUNC: callback function described above (see UFRM typedef)
  **/
@@ -203,11 +218,3 @@ LIB_OPEN void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
                                 uint32_t xdim, uint32_t ydim, uint32_t flgs,
                                 uint32_t msec, uint32_t rscm, uintptr_t user,
                                 UFRM func);
-
-/** _________________________________________________________________________
-    Frees all resources allocated by the target engine object and invalidates
-    its handle.
-    _________________________________________________________________________
-    ENGH: handle of the engine object the call refers to
- **/
-LIB_OPEN void EngineDeinitialize(uintptr_t engh);

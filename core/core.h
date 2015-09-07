@@ -138,11 +138,11 @@ typedef struct _ENGD {
     uint64_t time,     /// current timestamp
              tfrm,     /// timestamp for the previous frame
              tfps;     /// timestamp for the previous FPS count
+    uint32_t flgs;     /// options
     ulong rscm,        /// rendering scheme
-          flgs,        /// OS-specific options
           fram,        /// FPS counter
           msec,        /// frame delay
-          draw,        /// rendering killswitch
+          anew,        /// restart flag
           ncpu,        /// number of CPU cores the engine is allowed to occupy
           uniq,        /// number of unique animations
           size;        /// length of the main display list
@@ -182,6 +182,8 @@ uint64_t TimeFunc();
 char *LoadFile(char *name, long *size);
 void MakeThread(THRD *thrd);
 void RunMainLoop(ENGD *engd);
+void RestartEngine(ENGD *engd, ulong anew);
+void ShowMainWindow(ENGD *engd, ulong show);
 
 void FreeSemaphore(SEMD *retn, long nthr);
 void MakeSemaphore(SEMD *retn, long nthr, SEM_TYPE mask);

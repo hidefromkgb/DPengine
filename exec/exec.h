@@ -223,48 +223,37 @@
 /// checkbox is a radiobutton
 #define MFL_RCHK ((1 << 3) | MFL_CCHK)
 
-/// main menu items
-#define MMI_RSTD  1
-#define MMI_ROGL  2
-#define MMI_OPAQ  3
-#define MMI_STOP  4
-#define MMI_HIDE  5
-#define MMI_EXIT  6
-
-/// per-sprite menu items
-#define MMI_CDEL  1
-#define MMI_ADEL  2
-#define MMI_CSLP  3
-#define MMI_ASLP  4
-#define MMI_PONY  5
-#define MMI_HOUS  6
-#define MMI_TPL1  7
-#define MMI_TPL2  8
-#define MMI_OPTS  9
-#define MMI_RETN 10
-#define MMI_QUIT 11
-
 
 
 /// localized text constants
-#define TXT_HEAD  0
-#define TXT_RSCM  1
-#define TXT_SPEC  2
-#define TXT_OPAQ  3
-#define TXT_STOP  4
-#define TXT_HIDE  5
-#define TXT_EXIT  6
-#define TXT_RSTD  7
-#define TXT_ROGL  8
-#define TXT_NONE  9
-#define TXT_NOGL 10
+#define TXT_CDEL  0
+#define TXT_ADEL  1
+#define TXT_CSLP  2
+#define TXT_ASLP  3
+#define TXT_PONY  4
+#define TXT_HOUS  5
+#define TXT_TPL1  6
+#define TXT_TPL2  7
+#define TXT_OPTS  8
+#define TXT_RETN  9
 
-#define TXT_CONS 11
-#define TXT_IRGN 12
-#define TXT_IBGR 13
-#define TXT_IPBO 14
-#define TXT_UOFO 15
-#define TXT_UWGL 16
+#define TXT_HEAD 10
+#define TXT_RSCM 11
+#define TXT_SPEC 12
+#define TXT_OPAQ 13
+#define TXT_DRAW 14
+#define TXT_SHOW 15
+#define TXT_EXIT 16
+#define TXT_RSTD 17
+#define TXT_ROGL 18
+#define TXT_NONE 19
+
+#define TXT_CONS 20
+#define TXT_IRGN 21
+#define TXT_IBGR 22
+#define TXT_IPBO 23
+#define TXT_UOFO 24
+#define TXT_UWGL 25
 
 
 
@@ -308,9 +297,9 @@ typedef struct _BINF {
 } BINF;
 
 /// unit library info (write-once, read-only)
-/// [TODO] speech
-/// [TODO] interactions
-/// [TODO] categories
+/// [TODO:] speech
+/// [TODO:] interactions
+/// [TODO:] categories
 typedef struct _LINF {
     HDR_LIST;       /// list header
     BINF *barr,     /// available behaviours ordered by name
@@ -354,8 +343,7 @@ typedef struct _ENGC {
     uint32_t  pcnt, /// number of on-screen sprites
               pmax, /// max. PARR capacity (realloc on exceed)
               seed, /// random seed
-              flgs, /// flags
-              quit; /// special termination flag
+              flgs; /// options
     T2IV      ppos, /// mouse pointer position
               dims; /// drawing area dimensions
 } ENGC;
@@ -395,15 +383,18 @@ typedef struct _CTRL {
 
 
 
+uint32_t PRNG(uint32_t *seed);
 void ProcessMenuItem(MENU *item);
 void AppendLib(ENGC *engc, char *pcnf, char *base, char *path);
 void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
-                   ulong rscm, uint32_t flgs, uint8_t *lang);
+                   uintptr_t icon, ulong rscm, uint32_t flgs, uint8_t *lang);
 
 
 
 /// external functions, have to be implemented or imported
+void  SetTrayIconText(uintptr_t icon, char *text);
 void  OpenContextMenu(MENU *menu);
 MENU *OSSpecificMenu(ENGC *engc);
 char *ConvertUTF8(char *utf8);
 char *LoadFileZ(char *name, long *size);
+long  SaveFile(char *name, char *data, long size);
