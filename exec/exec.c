@@ -286,7 +286,7 @@ void MakeSpritePair(uintptr_t engh, AINF *pair, char *path, char **conf) {
 
     for (iter = 0; iter <= 1; iter++) {
         file = ConcatPath(path, Dequote(SplitLine(conf, DEF_TSEP, 0)));
-        EngineLoadAnimAsync(engh, (uint8_t*)file, &pair[iter]);
+        EngineLoadAnimAsync(engh, (uint8_t*)file, 0, &pair[iter]);
         free(file);
     }
 }
@@ -576,7 +576,7 @@ void SortByY(ENGC *engc) {
                 ymin = ytmp;
         }
     }
-    for (iter = 0; iter < engc->pcnt; iter++) {
+    for (iter = engc->pcnt - 1; iter >= 0; iter--) {
         temp = engc->parr[iter];
         ytmp = temp->offs.y - ymin + 1;
         if ((ytmp < 0) || (temp->offs.y >= MAX_YDIM))
@@ -1143,7 +1143,7 @@ void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
     engc->dims = (T2IV){xdim, ydim};
     FreeLocalization(&engc->tran);
     LoadLocalization(&engc->tran, (uint8_t*)DefaultLanguage,
-                     DefaultLanguage_end - DefaultLanguage);
+                     strlen(DefaultLanguage));
     if (lang) {
         data = (uint8_t*)LoadFileZ((char*)lang, &size);
         LoadLocalization(&engc->tran, data, size);

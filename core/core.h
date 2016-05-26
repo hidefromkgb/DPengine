@@ -124,12 +124,15 @@ typedef struct _THRD {
     struct _ENGD *orig;
     void (*func)(struct _THRD*);
     union {
-        long  ymin;
-        SAVL *elem;
-    };
-    union {
-        long  ymax;
-        char *path;
+        struct {
+            long  ymin,
+                  ymax;
+        };
+        struct {
+            SAVL *elem;
+            char *path,
+                 *load;
+        };
     };
 } THRD;
 

@@ -27,7 +27,7 @@
         ".align 4;"                \
         ".section .text;"          \
     );                             \
-    extern char pvar[], pvar##_end[]
+    extern char pvar[]
 #elif __APPLE__
     #define INCBIN(file, pvar)     \
     __asm__(                       \
@@ -40,7 +40,7 @@
         ".align 4\n"               \
         ".section __TEXT,__text\n" \
     );                             \
-    extern char pvar[], pvar##_end[]
+    extern char pvar[]
 #else
     #define INCBIN(file, pvar)     \
     __asm__(                       \
@@ -53,7 +53,7 @@
         ".align 4;"                \
         ".popsection;"             \
     );                             \
-    extern char pvar[], pvar##_end[]
+    extern char pvar[]
 #endif
 
 
@@ -187,14 +187,16 @@ LIB_OPEN void EngineCallback(uintptr_t engh, uint32_t ecba, uintptr_t data);
 
 /** _________________________________________________________________________
     Reads animations asynchronously. All AINF`s have to remain valid till the
-    call to EngineFinishLoading(), since they are only updated there.
+    call to EngineCallback(ECB_LOAD), since they are only updated there.
     AINF::UUID will contain a positive integer on success, 0 on error.
     _________________________________________________________________________
     ENGH: handle of the engine object the call refers to
     PATH: full path to the loaded animation in UTF8 format
+    LOAD: preloaded GIF data (if any), 0 otherwise
     AINF: pointer to the structure to receive animation properties
  **/
-LIB_OPEN void EngineLoadAnimAsync(uintptr_t engh, uint8_t *path, AINF *ainf);
+LIB_OPEN void EngineLoadAnimAsync(uintptr_t engh,
+                                  uint8_t *path, uint8_t *load, AINF *ainf);
 
 /** _________________________________________________________________________
     Executes the main loop.

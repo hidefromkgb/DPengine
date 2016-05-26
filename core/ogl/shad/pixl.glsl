@@ -13,6 +13,6 @@ void main() {
     vec4 pixl = floor(vtex);
     pixl = texture3D(atex, (floor((pixl.yyw * pixl.zzw + pixl.xxw + voff.xxy)
                                  * hitd.wzw) + coef.zzz) * hitd.zzx);
-    gl_FragColor = texture2D(apal, hitd.zy * (pixl.xx * coef.wy + voff.zw));
     if (pixl.x == coef.x) discard;
+    gl_FragColor = texture2D(apal, hitd.zy * (pixl.xx * coef.wy + voff.zw));
 }

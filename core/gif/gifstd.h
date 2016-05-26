@@ -25,9 +25,5 @@ typedef struct _ASTD {
 
 
 
-ASTD *MakeDataAnimStd(char *data, long size);
-ASTD *MakeFileAnimStd(char *name);
+ASTD *MakeAnimStd(char *data, long size);
 void FreeAnimStd(ASTD **anim);
-
-/// external functions, have to be implemented or imported
-char *LoadFile(char *name, long *size);

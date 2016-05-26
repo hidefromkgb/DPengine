@@ -121,24 +121,10 @@ char *LoadFileZ(char *name, long *size) {
 
 
 
-long SaveFile(char *name, char *data, long size) {
-    long file;
-
-    if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {
-        size = write(file, data, size);
-        close(file);
-        return size;
-    }
-    return 0;
-}
-
-
-
 int main(int argc, char *argv[]) {
     INCBIN("../core/icon.gif", MainIcon);
 
     struct dirent **dirs;
-    char path[256];
     int32_t uses;
 
     AINF igif = {};
@@ -156,13 +142,9 @@ int main(int argc, char *argv[]) {
         }
         free(dirs);
     }
-    uses = time(0);
-    sprintf(path, "/tmp/%08X.gif", PRNG((uint32_t*)&uses));
-
-    SaveFile(path, MainIcon, MainIcon_end - MainIcon);
-    EngineLoadAnimAsync(engc.engh, (uint8_t*)path, &igif);
+    EngineLoadAnimAsync(engc.engh,
+                       (uint8_t*)"/Icon/", (uint8_t*)MainIcon, &igif);
     EngineCallback(engc.engh, ECB_LOAD, 0);
-    unlink(path);
 
     gint xdim, ydim;
     GdkPixbuf *pbuf;

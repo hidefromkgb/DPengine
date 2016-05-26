@@ -513,7 +513,7 @@ THR_FUNC ThrdFunc(THRD *data) {
 
 void LTHR(THRD *data) {
     char *name, *path, *file;
-    long  indx;
+    long  indx, size;
     SAVL *elem;
     ASTD *retn;
 
@@ -522,24 +522,33 @@ void LTHR(THRD *data) {
     elem = data->elem;
     if (path) {
         indx = strlen(path);
-        if (((path[indx - 3] == 'g') || (path[indx - 3] == 'G'))
+        if (data->load
+        || (((path[indx - 3] == 'g') || (path[indx - 3] == 'G'))
         &&  ((path[indx - 2] == 'i') || (path[indx - 2] == 'I'))
-        &&  ((path[indx - 1] == 'f') || (path[indx - 1] == 'F'))
-        &&  (retn = MakeFileAnimStd(path))) {
-            name = strdup(path);
-            name[indx - 3] = 'a';
-            name[indx - 2] = 'r';
-            name[indx - 1] = 't';
-            file = LoadFile(name, &indx);
-            elem->epix->ainf = (AINF){0, retn->xdim, retn->ydim,
-                                         retn->fcnt, retn->time};
-            elem->epix->tran = RecolorPalette(retn->bpal, file, indx);
-            elem->epix->scal = DownsampleAnimStd(retn, &elem->epix->xoff,
-                                                       &elem->epix->yoff);
-            elem->epix->hash = HashAnimStd(retn, &indx);
-            elem->turn = indx & 3;
-            free(file);
-            free(name);
+        &&  ((path[indx - 1] == 'f') || (path[indx - 1] == 'F')))) {
+            if (data->load)
+                retn = MakeAnimStd(data->load, LONG_MAX);
+            else {
+                file = LoadFile(path, &size);
+                retn = MakeAnimStd(file, size);
+                free(file);
+            }
+            if (retn) {
+                name = strdup(path);
+                name[indx - 3] = 'a';
+                name[indx - 2] = 'r';
+                name[indx - 1] = 't';
+                file = (data->load)? 0 : LoadFile(name, &size);
+                elem->epix->ainf = (AINF){0, retn->xdim, retn->ydim,
+                                             retn->fcnt, retn->time};
+                elem->epix->tran = RecolorPalette(retn->bpal, file, size);
+                elem->epix->scal = DownsampleAnimStd(retn, &elem->epix->xoff,
+                                                           &elem->epix->yoff);
+                elem->epix->hash = HashAnimStd(retn, &indx);
+                elem->turn = indx & 3;
+                free(file);
+                free(name);
+            }
         }
         elem->epix->anim = retn;
     }
@@ -631,7 +640,7 @@ long SwitchThreads(ENGD *engd, long draw) {
         temp = (engd->pict.ydim / engd->ncpu) + 1;
         for (iter = 0; iter < engd->ncpu; iter++) {
             engd->thrd[iter] = (THRD){1, 1 << iter, engd, PTHR,
-                                     {temp * iter}, {temp * (iter + 1)}};
+                                     {{temp * iter, temp * (iter + 1)}}};
             MakeThread(&engd->thrd[iter]);
         }
         engd->thrd[engd->ncpu - 1].ymax = engd->pict.ydim;
@@ -646,7 +655,8 @@ long SwitchThreads(ENGD *engd, long draw) {
 
 
 
-void EngineLoadAnimAsync(uintptr_t engh, uint8_t *path, AINF *ainf) {
+void EngineLoadAnimAsync(uintptr_t engh,
+                         uint8_t *path, uint8_t *load, AINF *ainf) {
     ENGD *engd = (ENGD*)engh;
     SAVL *estr, *retn;
     DEST *dest;
@@ -677,6 +687,7 @@ void EngineLoadAnimAsync(uintptr_t engh, uint8_t *path, AINF *ainf) {
         retn = engd->thrd[curr].elem;
         engd->thrd[curr].elem = estr;
         free(engd->thrd[curr].path);
+        engd->thrd[curr].load = (char*)load;
         engd->thrd[curr].path = strdup((char*)path);
         PickSemaphore(engd, 1, 1 << curr);
         TryUpdatePixTree(engd, retn);

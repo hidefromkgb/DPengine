@@ -63,7 +63,7 @@ typedef struct _RGBX {
     CLRS: number of colors in the palette
     BPTR: decoded array of color indices
     ANIM: implementation-specific data (i.e. a structure or a pointer to it)
-    NFRM: frame count (may be partial; in this case it`s negative)
+    NFRM: total frame count (may be partial; in this case it`s negative)
     TRAN: transparent color index (or -1 if there`s none)
     TIME: next frame delay, in GIF time units (1 unit = 10 ms); can be 0
     INDX: index of the resulting frame

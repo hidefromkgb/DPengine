@@ -398,4 +398,3 @@ void  OpenContextMenu(MENU *menu);
 MENU *OSSpecificMenu(ENGC *engc);
 char *ConvertUTF8(char *utf8);
 char *LoadFileZ(char *name, long *size);
-long  SaveFile(char *name, char *data, long size);

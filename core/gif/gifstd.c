@@ -74,7 +74,7 @@ void FreeAnimStd(ASTD **anim) {
 
 
 
-ASTD *MakeDataAnimStd(char *data, long size) {
+ASTD *MakeAnimStd(char *data, long size) {
     ASTD *retn;
 
     if (!data || (size <= 0))
@@ -82,17 +82,5 @@ ASTD *MakeDataAnimStd(char *data, long size) {
     if (!MakeAnim((void*)data, size, 0, WriteFrameStd,
                   (void*)(retn = calloc(1, sizeof(*retn)))))
         FreeAnimStd(&retn);
-    return retn;
-}
-
-
-
-ASTD *MakeFileAnimStd(char *name) {
-    ASTD *retn;
-    long size;
-
-    name = LoadFile(name, &size);
-    retn = MakeDataAnimStd(name, size);
-    free(name);
     return retn;
 }
