@@ -29,26 +29,29 @@ GLvoid newerror(GLchar **retn, GLchar *frmt, ...) {
 
 
 GLchar *LoadOpenGLFunctions(GLuint mask) {
-    GLchar *retn = 0;
+    static GLchar *retn = (typeof(retn))1;
     GLint iter = -1;
 
-    while (MaskedStringOpenGLFunctions[++iter].name) {
-        if (LoadedOpenGLFunctions[iter] ||
-           (MaskedStringOpenGLFunctions[iter].mask &&
-          !(MaskedStringOpenGLFunctions[iter].mask & mask)))
-            continue;
-        if (!(LoadedOpenGLFunctions[iter] =
-              GL_GET_PROC_ADDR(MaskedStringOpenGLFunctions[iter].name)))
-            newerror(&retn, "[%d]: %s\n",
-                     iter, MaskedStringOpenGLFunctions[iter].name);
+    if (retn == (typeof(retn))1) {
+        retn = 0;
+        while (MaskedStringOpenGLFunctions[++iter].name) {
+            if (LoadedOpenGLFunctions[iter] ||
+               (MaskedStringOpenGLFunctions[iter].mask &&
+              !(MaskedStringOpenGLFunctions[iter].mask & mask)))
+                continue;
+            if (!(LoadedOpenGLFunctions[iter] =
+                  GL_GET_PROC_ADDR(MaskedStringOpenGLFunctions[iter].name)))
+                newerror(&retn, "[%d]: %s\n",
+                         iter, MaskedStringOpenGLFunctions[iter].name);
+        }
+        if (mask & NV_vertex_program3) {
+            glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &iter);
+            if (!iter)
+                newerror(&retn, "NV_vertex_program3\n");
+        }
+        if (retn)
+            newerror(&retn, "\nCannot initialize OpenGL 2.1!\n");
     }
-    if (mask & NV_vertex_program3) {
-        glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &iter);
-        if (!iter)
-            newerror(&retn, "NV_vertex_program3\n");
-    }
-    if (retn)
-        newerror(&retn, "\nCannot initialize OpenGL 2.1!\n");
     return retn;
 }
 

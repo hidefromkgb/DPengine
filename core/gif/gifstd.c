@@ -4,10 +4,10 @@
 
 
 void WriteFrameStd(GHDR *ghdr, FHDR *fhdr, FHDR *back, RGBX *cpal,
-                   long clrs, uint8_t *bptr, void *anim, long nfrm,
+                   long clrs, uint8_t *bptr, void *data, long nfrm,
                    long tran, long time, long indx) {
     long x, y, yoff, iter, ifin, dsrc, ddst;
-    ASTD *retn = (ASTD*)anim;
+    ASTD *retn = (ASTD*)data;
 
     yoff = ghdr->xdim * ghdr->ydim;
     if (retn->fcnt < (x = labs(nfrm)))

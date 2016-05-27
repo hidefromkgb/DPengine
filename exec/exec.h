@@ -236,34 +236,28 @@
 #define TXT_RETN  9
 
 #define TXT_HEAD 10
-#define TXT_RSCM 11
-#define TXT_SPEC 12
-#define TXT_OPAQ 13
-#define TXT_DRAW 14
-#define TXT_SHOW 15
-#define TXT_EXIT 16
-#define TXT_RSTD 17
-#define TXT_ROGL 18
-#define TXT_NONE 19
+#define TXT_SPEC 11
+#define TXT_OPAQ 12
+#define TXT_DRAW 13
+#define TXT_SHOW 14
+#define TXT_EXIT 15
+#define TXT_RGPU 16
+#define TXT_NONE 17
 
-#define TXT_CONS 20
-#define TXT_IRGN 21
-#define TXT_IBGR 22
-#define TXT_IPBO 23
-#define TXT_UOFO 24
-#define TXT_UWGL 25
+#define TXT_CONS 18
+#define TXT_IRGN 19
+#define TXT_IBGR 20
+#define TXT_IPBO 21
+#define TXT_UOFO 22
+#define TXT_UWGL 23
 
 
 
-/// doubly-linked list header
-#define HDR_LIST \
-    struct _LHDR *prev, *next;
-typedef struct _LHDR {
-    HDR_LIST;
-} LHDR;
+/// unit library info (write-once, read-only), opaque outside the module
+typedef struct LINF LINF;
 
-/// doubly-linked list iterator
-typedef void (*ITER)(LHDR *item, uintptr_t data);
+/// actual on-screen sprite, opaque outside the module
+typedef struct PICT PICT;
 
 /// menu item
 typedef struct _MENU {
@@ -276,108 +270,22 @@ typedef struct _MENU {
     void    (*func)(struct _MENU*); /// item handler
 } MENU;
 
-/// behaviour/effect unit info (write-once, read-only)
-typedef struct _BINF {
-    AINF  unit[2];  /// image pair
-    T2IV  cntr[2];  /// image centers
-    T2IV  ptgt;     /// follow target relative coords
-    long  prob,     /// probability, 0-1000
-          dmin,     /// minimum duration in msec
-          dmax,     /// maximum duration / cooldown in msec
-          neff,     /// number of linked effects
-          ieff,     /// effect array index of the first linked effect
-          igrp;     /// behaviour group index
-    float move;     /// movement speed in pixels per frame
-    uint32_t name,  /// name hash for behaviour / target for effect
-             flgs,  /// behaviour / effect flags
-             link,  /// linked behaviour index
-             trgt;  /// follow target name hash
-} BINF;
-
-/// unit library info (write-once, read-only)
-/// [TODO:] speech
-/// [TODO:] interactions
-/// [TODO:] categories
-typedef struct _LINF {
-    HDR_LIST;       /// list header
-    BINF *barr,     /// available behaviours ordered by name
-         *earr,     /// available effects ordered by parent bhv. name
-        **bgrp;     /// nonzero-probability BARR elements ordered by bhv. group
-    char *path,     /// the folder from which the library was built
-         *name;     /// human-readable name (may differ from PATH!)
-    long *ngrp,     /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
-          flgs,     /// flags
-          gcnt,     /// behaviour groups count
-          zcnt,     /// nonzero probability behaviours count
-          bcnt,     /// total behaviours count
-          ecnt,     /// total effects count
-          icnt;     /// number of on-screen bhv. sprites from the library
-} LINF;
-
-/// actual on-screen sprite
-typedef struct _PICT {
-    struct
-    _PICT   *next;  /// linked list support for SortByY(), not used elsewhere
-    LINF    *ulib;  /// unit library which the sprite belongs to
-    T2FV     move,  /// movement direction
-             offs;  /// position of the unit`s lower-left corner
-    uint32_t indx,  /// behaviour index and direction (lowest bit)
-             fram;  /// current frame
-    uint64_t tfrm,  /// timestamp of the next frame in msec
-             tmov,  /// timestamp of the next movement in msec
-             tbhv;  /// timestamp of the next behaviour in msec
-} PICT;
-
 /// engine data (client side)
 typedef struct _ENGC {
     MENU     *mspr, /// per-sprite context menu
              *mctx; /// engine`s main context menu
-    LINF     *libs; /// sprite libraries linked list
     T4FV     *data; /// main display sequence passed to the renderer
+    ENGD     *engd; /// rendering engine handle
+    LINF     *libs; /// sprite libraries linked list
     PICT     *pcur, /// the sprite currently picked
             **parr; /// on-screen sprite pointers array
     uint8_t **tran; /// localized text array (ASCIIZ; last item is also 0)
-    uintptr_t engh; /// rendering engine handle
     uint32_t  pcnt, /// number of on-screen sprites
               pmax, /// max. PARR capacity (realloc on exceed)
-              seed, /// random seed
-              flgs; /// options
-    T2IV      ppos, /// mouse pointer position
-              dims; /// drawing area dimensions
+              seed; /// random seed
+    T2IV      dims; /// drawing area dimensions
+    T3IV      ppos; /// mouse pointer position (z = flags)
 } ENGC;
-
-
-
-/// control (checkbox, listbox, counter, etc.)
-typedef struct _CTRL {
-    uint32_t type,
-             flgs;
-    int32_t  xpos,
-             ypos,
-             xdim,
-             ydim;
-    void    *func;
-    union {
-        /// check box
-        struct {
-        } c;
-        /// radio box
-        struct {
-        } r;
-        /// list box
-        struct {
-        } l;
-        /// counter
-        struct {
-        } u;
-        /// progress bar
-        struct {
-        } p;
-        /// static text
-        struct {
-        } t;
-    } p;
-} CTRL;
 
 
 
@@ -386,7 +294,7 @@ MENU *MenuFromTemplate(MENU *tmpl);
 void  ProcessMenuItem(MENU *item);
 void  AppendLib(ENGC *engc, char *pcnf, char *base, char *path);
 void  ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
-                    uintptr_t icon, ulong rscm, uint32_t flgs, uint8_t *lang);
+                    uintptr_t icon, uint32_t flgs, uint8_t *lang);
 
 
 
@@ -396,3 +304,6 @@ void  OpenContextMenu(MENU *menu);
 MENU *OSSpecificMenu(ENGC *engc);
 char *ConvertUTF8(char *utf8);
 char *LoadFileZ(char *name, long *size);
+
+/// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME ///
+void __DEL_ME__SetLibUses(ENGC *engc, int32_t uses);

@@ -2,7 +2,7 @@
 
 
 
-inline long SkipChunk(uint8_t **buff, long *size) {
+static inline long SkipChunk(uint8_t **buff, long *size) {
     long skip;
 
     ++(*buff);

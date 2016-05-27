@@ -62,14 +62,14 @@ typedef struct _RGBX {
     CPAL: palette associated with the frame
     CLRS: number of colors in the palette
     BPTR: decoded array of color indices
-    ANIM: implementation-specific data (i.e. a structure or a pointer to it)
+    DATA: implementation-specific data (i.e. a struxture or a pointer to it)
     NFRM: total frame count (may be partial; in this case it`s negative)
     TRAN: transparent color index (or -1 if there`s none)
     TIME: next frame delay, in GIF time units (1 unit = 10 ms); can be 0
     INDX: index of the resulting frame
  **/
 typedef void (*GWFR)(GHDR *ghdr, FHDR *fhdr, FHDR *back, RGBX *cpal,
-                     long clrs, uint8_t *bptr, void *anim, long nfrm,
+                     long clrs, uint8_t *bptr, void *data, long nfrm,
                      long tran, long time, long indx);
 
 
@@ -85,6 +85,6 @@ typedef void (*GWFR)(GHDR *ghdr, FHDR *fhdr, FHDR *back, RGBX *cpal,
     SIZE: size of the data chunk that`s currently present
     SKIP: number of frames to skip before resuming
     GWFR: callback function described above
-    ANIM: implementation-specific data (i.e. a structure or a pointer to it)
+    ANIM: implementation-specific data (i.e. a struxture or a pointer to it)
  **/
 long MakeAnim(void *data, long size, long skip, GWFR gwfr, void *anim);

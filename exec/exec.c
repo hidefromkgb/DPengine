@@ -1,5 +1,66 @@
 #include "exec.h"
 
+/// doubly-linked list header
+#define HDR_LIST \
+    struct _LHDR *prev, *next;
+typedef struct _LHDR {
+    HDR_LIST;
+} LHDR;
+
+/// doubly-linked list iterator
+typedef void (*ITER)(LHDR *item, uintptr_t data);
+
+/// behaviour/effect unit info (write-once, read-only)
+typedef struct _BINF {
+    AINF  unit[2];  /// image pair
+    T2IV  cntr[2];  /// image centers
+    T2IV  ptgt;     /// follow target relative coords
+    long  prob,     /// probability, 0-1000
+          dmin,     /// minimum duration in msec
+          dmax,     /// maximum duration / cooldown in msec
+          neff,     /// number of linked effects
+          ieff,     /// effect array index of the first linked effect
+          igrp;     /// behaviour group index
+    float move;     /// movement speed in pixels per frame
+    uint32_t name,  /// name hash for behaviour / target for effect
+             flgs,  /// behaviour / effect flags
+             link,  /// linked behaviour index
+             trgt;  /// follow target name hash
+} BINF;
+
+/// unit library info (write-once, read-only), opaque outside the module
+/// [TODO:] speech
+/// [TODO:] interactions
+/// [TODO:] categories
+struct LINF {
+    HDR_LIST;    /// list header
+    BINF *barr,  /// available behaviours ordered by name
+         *earr,  /// available effects ordered by parent bhv. name
+        **bgrp;  /// nonzero-probability BARR elements ordered by bhv. group
+    char *path,  /// the folder from which the library was built
+         *name;  /// human-readable name (may differ from PATH!)
+    long *ngrp,  /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
+          flgs,  /// flags
+          gcnt,  /// behaviour groups count
+          zcnt,  /// nonzero probability behaviours count
+          bcnt,  /// total behaviours count
+          ecnt,  /// total effects count
+          icnt;  /// number of on-screen bhv. sprites from the library
+};
+
+/// actual on-screen sprite, opaque outside the module
+struct PICT {
+    PICT    *next;  /// linked list support for SortByY(), only used there
+    LINF    *ulib;  /// unit library which the sprite belongs to
+    T2FV     move,  /// movement direction
+             offs;  /// position of the unit`s lower-left corner
+    uint32_t indx,  /// behaviour index and direction (lowest bit)
+             fram;  /// current frame
+    uint64_t tfrm,  /// timestamp of the next frame in msec
+             tmov,  /// timestamp of the next movement in msec
+             tbhv;  /// timestamp of the next behaviour in msec
+};
+
 
 
 /// Random number generator modulo
@@ -280,13 +341,13 @@ LHDR *ListIterateTailToHead(LHDR *list, ITER iter, uintptr_t data) {
 
 
 
-void MakeSpritePair(uintptr_t engh, AINF *pair, char *path, char **conf) {
+void MakeSpritePair(ENGD *engd, AINF *pair, char *path, char **conf) {
     char *file;
     long iter;
 
     for (iter = 0; iter <= 1; iter++) {
         file = ConcatPath(path, Dequote(SplitLine(conf, DEF_TSEP, 0)));
-        EngineLoadAnimAsync(engh, (uint8_t*)file, 0, &pair[iter]);
+        EngineLoadAnimAsync(engd, (uint8_t*)file, 0, &pair[iter]);
         free(file);
     }
 }
@@ -346,7 +407,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
 
     /// right-sided image...................................................... !def
     /// left-sided image....................................................... !def
-    MakeSpritePair(engc->engh, retn->unit, engc->libs->path, conf);
+    MakeSpritePair(engc->engd, retn->unit, engc->libs->path, conf);
 
     /// possible movement directions...........................................  def = All
     IF_BIN_FIND(elem, uBMT, conf)
@@ -438,7 +499,7 @@ void ParseEffect(ENGC *engc, BINF *retn, char **conf) {
 
     /// right-sided image...................................................... !def
     /// left-sided image....................................................... !def
-    MakeSpritePair(engc->engh, retn->unit, engc->libs->path, conf);
+    MakeSpritePair(engc->engd, retn->unit, engc->libs->path, conf);
 
     /// duration in sec........................................................  def = 5
     if (TRY_TEMP(conf))
@@ -556,8 +617,8 @@ void FreeLib(LINF *elem) {
 
 
 
-#define MAX_YDIM 0x1000
 void SortByY(ENGC *engc) {
+    #define MAX_YDIM 0x1000
     PICT *temp, *elem[MAX_YDIM + 1] = {};
     long ymin, ymax, ytmp, iter;
 
@@ -591,8 +652,8 @@ void SortByY(ENGC *engc) {
             engc->parr[iter++] = elem[ymax];
             elem[ymax] = elem[ymax]->next;
         }
+    #undef MAX_YDIM
 }
-#undef MAX_YDIM
 
 
 
@@ -666,10 +727,10 @@ void ChooseDirection(ENGC *engc, PICT *pict) {
                 angl = 0.0;
                 break;
         }
-        pict->move = (T2FV){cosf(angl), sinf(angl)};
+        pict->move = (T2FV){{cosf(angl), sinf(angl)}};
     }
     else
-        pict->move = (T2FV){0.0, 0.0};
+        pict->move = (T2FV){{0.0, 0.0}};
 
     pict->move.x *= bhvr->move;
     pict->move.y *= bhvr->move;
@@ -814,8 +875,8 @@ void PrepareSpriteArr(LINF *elem, LINF **edge) {
         /// resolving image centers, if not set already (only possible here!)
         for (iter = &elem->barr[indx], turn = 0; turn <= 1; turn++)
             if (!(iter->cntr[turn].x | iter->cntr[turn].y))
-                iter->cntr[turn] = (T2IV){iter->unit[turn].xdim >> 1,
-                                          iter->unit[turn].ydim >> 1};
+                iter->cntr[turn] = (T2IV){{iter->unit[turn].xdim >> 1,
+                                           iter->unit[turn].ydim >> 1}};
     }
 
     /// populating BGRP with nonzero-probability behaviours, ZCNT := length
@@ -883,28 +944,35 @@ void MMH(MENU *item) {
         case TXT_RETN:
             break;
 
-        case TXT_RSTD:
-        case TXT_ROGL:
-            EngineCallback(((ENGC*)item->data)->engh, ECB_RSCM,
-                          (item->uuid == TXT_RSTD)? SCM_RSTD : SCM_ROGL);
-            break;
+        case TXT_RGPU: {
+            ENGC *engc = (ENGC*)item->data;
+            uint32_t flgs;
 
+            EngineCallback(engc->engd, ECB_GFLG, (uintptr_t)&flgs);
+            if (item->flgs & MFL_VCHK)
+                flgs |= COM_RGPU;
+            else
+                flgs &= ~COM_RGPU;
+            EngineCallback(engc->engd, ECB_SFLG, flgs);
+            break;
+        }
         case TXT_SHOW:
         case TXT_DRAW:
         case TXT_OPAQ: {
             ENGC *engc = (ENGC*)item->data;
             uint32_t flag = (item->uuid != TXT_OPAQ)? (item->uuid != TXT_DRAW)?
-                             COM_SHOW : COM_DRAW : COM_OPAQ;
+                             COM_SHOW : COM_DRAW : COM_OPAQ, flgs;
 
+            EngineCallback(engc->engd, ECB_GFLG, (uintptr_t)&flgs);
             if (item->flgs & MFL_VCHK)
-                engc->flgs |= flag;
+                flgs |= flag;
             else
-                engc->flgs &= ~flag;
-            EngineCallback(engc->engh, ECB_FLGS, engc->flgs);
+                flgs &= ~flag;
+            EngineCallback(engc->engd, ECB_SFLG, flgs);
             break;
         }
         case TXT_EXIT:
-            EngineCallback(((ENGC*)item->data)->engh, ECB_QUIT, ~0);
+            EngineCallback(((ENGC*)item->data)->engd, ECB_QUIT, ~0);
             break;
     }
 }
@@ -1037,8 +1105,9 @@ MENU *MenuFromTemplate(MENU *tmpl) {
 
 
 
-uint32_t UpdFrame(uintptr_t engh, uintptr_t user, T4FV **data, uint64_t *time,
-                  uint32_t flgs, int32_t xptr, int32_t yptr, int32_t isel) {
+uint32_t UpdFrame(ENGD *engd, uintptr_t user,
+                  T4FV **data, uint64_t *time, uint32_t flgs,
+                  int32_t xptr, int32_t yptr, int32_t isel) {
     ENGC *engc = (ENGC*)user;
     PICT *pict = engc->pcur;
     BINF *binf;
@@ -1048,12 +1117,12 @@ uint32_t UpdFrame(uintptr_t engh, uintptr_t user, T4FV **data, uint64_t *time,
     uint64_t curr;
     long indx;
 
-//    EngineCallback(engh, ECB_LOAD, ~0);
-//    /// here you can add new sprites!
-//    EngineCallback(engh, ECB_LOAD, 0);
+    EngineCallback(engd, ECB_LOAD, ~0);
+    /// here you can add new sprites!
+    EngineCallback(engd, ECB_LOAD, 0);
 
     if ((flgs & UFR_MOUS) && ((isel >= 0) || pict)) {
-        if (!pict && ((engc->flgs ^ flgs) & UFR_LBTN)) {
+        if (!pict && ((engc->ppos.z ^ flgs) & UFR_LBTN)) {
             pict = engc->pcur = engc->parr[isel];
             printf("[GRABBED] %s\n", pict->ulib->name);
             engc->ppos.x = xptr - pict->offs.x;
@@ -1068,7 +1137,7 @@ uint32_t UpdFrame(uintptr_t engh, uintptr_t user, T4FV **data, uint64_t *time,
                 printf("[DROPPED] %s\n", pict->ulib->name);
             engc->pcur = 0;
         }
-        if (~flgs & engc->flgs & UFR_RBTN) {
+        if (~flgs & engc->ppos.z & UFR_RBTN) {
             if (!pict)
                 pict = engc->parr[isel];
             temp = malloc(32 + strlen(pict->ulib->name));
@@ -1077,7 +1146,7 @@ uint32_t UpdFrame(uintptr_t engh, uintptr_t user, T4FV **data, uint64_t *time,
             free(temp);
             OpenContextMenu(engc->mspr);
         }
-        engc->flgs = flgs;
+        engc->ppos.z = flgs;
     }
     for (indx = 0; indx < engc->pcnt; indx++) {
         curr = *time;
@@ -1123,8 +1192,8 @@ uint32_t UpdFrame(uintptr_t engh, uintptr_t user, T4FV **data, uint64_t *time,
     for (indx = 0; indx < engc->pcnt; indx++) {
         pict = engc->parr[indx];
         anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
-        engc->data[indx] = (T4FV){pict->offs.x, pict->offs.y,
-                                  pict->fram, anim->uuid};
+        engc->data[indx] = (T4FV){{pict->offs.x, pict->offs.y,
+                                   pict->fram, anim->uuid}};
     }
     *data = engc->data;
     return engc->pcnt;
@@ -1133,14 +1202,13 @@ uint32_t UpdFrame(uintptr_t engh, uintptr_t user, T4FV **data, uint64_t *time,
 
 
 void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
-                   uintptr_t icon, ulong rscm, uint32_t flgs, uint8_t *lang) {
+                   uintptr_t icon, uint32_t flgs, uint8_t *lang) {
     INCBIN("../core/en.lang", DefaultLanguage);
 
     uint8_t *data;
     long size;
 
-    engc->flgs = flgs;
-    engc->dims = (T2IV){xdim, ydim};
+    engc->dims = (T2IV){{xdim, ydim}};
     FreeLocalization(&engc->tran);
     LoadLocalization(&engc->tran, (uint8_t*)DefaultLanguage,
                      strlen(DefaultLanguage));
@@ -1174,28 +1242,21 @@ void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
     mctx[] =
    {{.text = engc->tran[TXT_HEAD], .flgs = MFL_GRAY},
     {.text = (uint8_t*)""},
-    {.text = engc->tran[TXT_RSCM]},
     {.text = engc->tran[TXT_SPEC]},
+    {.text = engc->tran[TXT_RGPU], .uuid = TXT_RGPU, .func = MMH,
+     .flgs = MFL_CCHK | ((flgs & COM_RGPU)? MFL_VCHK : 0),
+     .data = (uintptr_t)engc},
     {.text = engc->tran[TXT_OPAQ], .uuid = TXT_OPAQ, .func = MMH,
-     .flgs = MFL_CCHK | ((engc->flgs & COM_OPAQ)? MFL_VCHK : 0),
+     .flgs = MFL_CCHK | ((flgs & COM_OPAQ)? MFL_VCHK : 0),
      .data = (uintptr_t)engc},
     {.text = engc->tran[TXT_DRAW], .uuid = TXT_DRAW, .func = MMH,
-     .flgs = MFL_CCHK | ((engc->flgs & COM_DRAW)? MFL_VCHK : 0),
+     .flgs = MFL_CCHK | ((flgs & COM_DRAW)? MFL_VCHK : 0),
      .data = (uintptr_t)engc},
     {.text = engc->tran[TXT_SHOW], .uuid = TXT_SHOW, .func = MMH,
-     .flgs = MFL_CCHK | ((engc->flgs & COM_SHOW)? MFL_VCHK : 0),
+     .flgs = MFL_CCHK | ((flgs & COM_SHOW)? MFL_VCHK : 0),
      .data = (uintptr_t)engc},
     {.text = (uint8_t*)""},
     {.text = engc->tran[TXT_EXIT], .uuid = TXT_EXIT, .func = MMH,
-     .data = (uintptr_t)engc},
-    {}},
-
-    rndr[] =
-   {{.text = engc->tran[TXT_RSTD], .uuid = TXT_RSTD, .func = MMH,
-     .flgs = MFL_RCHK | ((rscm == SCM_RSTD)? MFL_VCHK : 0),
-     .data = (uintptr_t)engc},
-    {.text = engc->tran[TXT_ROGL], .uuid = TXT_ROGL, .func = MMH,
-     .flgs = MFL_RCHK | ((rscm == SCM_ROGL)? MFL_VCHK : 0),
      .data = (uintptr_t)engc},
     {}},
 
@@ -1204,10 +1265,8 @@ void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
     {}};
 
     engc->mspr = MenuFromTemplate(mspr);
-
-    mctx[2].chld = rndr;
     engc->mctx = MenuFromTemplate(mctx);
-    engc->mctx[3].chld =
+    engc->mctx[2].chld =
         ((spec = OSSpecificMenu(engc)))? spec : MenuFromTemplate(none);
 
     TTH_ITER(engc->libs, PrepareSpriteArr, &engc->libs);
@@ -1217,15 +1276,25 @@ void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);
 
     SetTrayIconText(icon, (char*)engc->tran[TXT_HEAD]);
-    EngineRunMainLoop(engc->engh, xpos, ypos, engc->dims.x, engc->dims.y,
-                      engc->flgs, FRM_WAIT, rscm, (uintptr_t)engc, UpdFrame);
+    EngineRunMainLoop(engc->engd, xpos, ypos, engc->dims.x, engc->dims.y,
+                      flgs, FRM_WAIT, (uintptr_t)engc, UpdFrame);
 
     FreeMenu(&engc->mspr);
     FreeMenu(&engc->mctx);
     FreeLocalization(&engc->tran);
-    EngineCallback(engc->engh, ECB_QUIT, 0);
+    EngineCallback(engc->engd, ECB_QUIT, 0);
     FreeSpriteArr(engc);
     TTH_ITER(engc->libs, FreeLib, 0);
     free(engc->data);
     *engc = (ENGC){};
+}
+
+
+
+void __DEL_ME__SetLibUses(ENGC *engc, int32_t uses) {
+    LINF *libs = engc->libs;
+    while (libs) {
+        libs->icnt = labs(uses);
+        libs = (LINF*)libs->prev;
+    }
 }

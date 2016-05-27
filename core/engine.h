@@ -59,18 +59,19 @@
 
 
 #define ECB_INIT   0
-#define ECB_RSCM   1
-#define ECB_FLGS   2
-#define ECB_DRAW   3
-#define ECB_LOAD   4
-#define ECB_QUIT   5
+#define ECB_GUSR   1
+#define ECB_GFLG   2
+#define ECB_SFLG   3
+#define ECB_DRAW   4
+#define ECB_LOAD   5
+#define ECB_QUIT   6
 
-#define SCM_RSTD   0
-#define SCM_ROGL   1
+#define COM_RGPU  (1 << 31)
+#define COM_DRAW  (1 << 30)
+#define COM_SHOW  (1 << 29)
+#define COM_OPAQ  (1 << 28)
 
-#define COM_DRAW  (1 << 31)
-#define COM_SHOW  (1 << 30)
-#define COM_OPAQ  (1 << 29)
+#define COM_HALT  (1 << 16)
 
 #define WIN_IBGR  (1 << 0)
 #define WIN_IPBO  (1 << 1)
@@ -90,43 +91,70 @@
 
 
 #pragma pack(push, 1)
+/// engine data
+typedef struct ENGD ENGD;
+
 typedef unsigned long ulong;
 
-typedef struct _T2FV {
-    float x, y;
+typedef union _T2FV {
+    struct {
+        float x, y;
+    };
+    struct {
+        float u, v;
+    };
 } T2FV;
 
-typedef struct _T3FV {
-    float x, y, z;
+typedef union _T3FV {
+    struct {
+        float x, y, z;
+    };
+    struct {
+        float r, g, b;
+    };
 } T3FV;
 
-typedef struct _T4FV {
-    float x, y, z, w;
+typedef union _T4FV {
+    struct {
+        float x, y, z, w;
+    };
+    struct {
+        float r, g, b, a;
+    };
+    struct {
+        float xpos, ypos, xdim, ydim;
+    };
 } T4FV;
 
-typedef struct _T2IV {
-    int32_t x, y;
+typedef union _T2IV {
+    struct {
+        int32_t x, y;
+    };
+    struct {
+        int32_t u, v;
+    };
 } T2IV;
 
-typedef struct _T3IV {
-    int32_t x, y, z;
+typedef union _T3IV {
+    struct {
+        int32_t x, y, z;
+    };
+    struct {
+        int32_t r, g, b;
+    };
 } T3IV;
 
-typedef struct _T4IV {
-    int32_t x, y, z, w;
+typedef union _T4IV {
+    struct {
+        int32_t x, y, z, w;
+    };
+    struct {
+        int32_t r, g, b, a;
+    };
+    struct {
+        int32_t xpos, ypos, xdim, ydim;
+    };
 } T4IV;
-
-typedef struct _T2UV {
-    uint32_t x, y;
-} T2UV;
-
-typedef struct _T3UV {
-    uint32_t x, y, z;
-} T3UV;
-
-typedef struct _T4UV {
-    uint32_t x, y, z, w;
-} T4UV;
 
 /// animation unit info
 typedef struct _AINF {
@@ -144,8 +172,8 @@ typedef struct _AINF {
     Callback function for the main program to modify the display list. Called
     each frame, returns new length of the updated list.
     _________________________________________________________________________
-    ENGH: handle of the engine object the call refers to
-    USER: user-defined data pointer
+    ENGD: handle of the engine object the call refers to
+    USER: user-defined data (may be a pointer)
     DATA: callee-managed display list; shares the format with <DATA> uniform
           (see comments in ./ogl/oglstd.c, look for "main vertex shader" tag)
           except that W is just the element`s UUID
@@ -155,7 +183,7 @@ typedef struct _AINF {
     YPTR: cursor Y coordinate, relative to the window`s upper left corner
     ISEL: index of the element under cursor in the existing list, < 0 if none
  **/
-typedef uint32_t (*UFRM)(uintptr_t engh, uintptr_t user,
+typedef uint32_t (*UFRM)(ENGD *engd, uintptr_t user,
                          T4FV **data, uint64_t *time, uint32_t flgs,
                          int32_t xptr, int32_t yptr, int32_t isel);
 
@@ -165,12 +193,16 @@ typedef uint32_t (*UFRM)(uintptr_t engh, uintptr_t user,
     Provides the entry gate for all asynchronous engine functionality (except
     main loop execution and image loading itself), e.g. window manipulations.
     _________________________________________________________________________
-    ENGH: handle of the engine object the call refers to
+    ENGD: handle of the engine object the call refers to
     ECBA: callback action to perform:
-          ECB_INIT: initialize the new engine; may be called with ENGH == 0
+          ECB_INIT: initialize the new engine; may be called with ENGD == 0
                     DATA: pointer to the var that receives the new object
-          ECB_RSCM: change the current rendering scheme
-          ECB_FLGS: change the current state (including OS-dependent flags)
+          ECB_GUSR: get the current user array
+                    DATA: pointer to the var that receives the array
+          ECB_GFLG: get the current state flags
+                    DATA: pointer to the var that receives the flags
+          ECB_SFLG: set the current state flags
+                    DATA: new flags
           ECB_DRAW: "immediate" CPU-to-RAM draw call; DATA -> AINF:
                     UUID: ID of the target animation
                     XDIM: width of the draw area
@@ -183,40 +215,37 @@ typedef uint32_t (*UFRM)(uintptr_t engh, uintptr_t user,
                     DATA == 0: terminate everything, deallocate resources
     DATA: accompanying data for the action; may be anything (see above)
  **/
-LIB_OPEN void EngineCallback(uintptr_t engh, uint32_t ecba, uintptr_t data);
+LIB_OPEN void EngineCallback(ENGD *engd, uint32_t ecba, uintptr_t data);
 
 /** _________________________________________________________________________
     Reads animations asynchronously. All AINF`s have to remain valid till the
     call to EngineCallback(ECB_LOAD), since they are only updated there.
     AINF::UUID will contain a positive integer on success, 0 on error.
     _________________________________________________________________________
-    ENGH: handle of the engine object the call refers to
+    ENGD: handle of the engine object the call refers to
     PATH: full path to the loaded animation in UTF8 format
     LOAD: preloaded GIF data (if any), 0 otherwise
-    AINF: pointer to the structure to receive animation properties
+    AINF: pointer to the struxture to receive animation properties
  **/
-LIB_OPEN void EngineLoadAnimAsync(uintptr_t engh,
+LIB_OPEN void EngineLoadAnimAsync(ENGD *engd,
                                   uint8_t *path, uint8_t *load, AINF *ainf);
 
 /** _________________________________________________________________________
     Executes the main loop.
     _________________________________________________________________________
-    ENGH: handle of the engine object the call refers to
+    ENGD: handle of the engine object the call refers to
     XPOS: window position X
     YPOS: window position Y
     XDIM: window width
     YDIM: window height
-    FLGS: OS specific flags
+    FLGS: flags
+          COM_RGPU - GPU rendering (CPU otherwise)
           WIN_IBGR - [WIN32] use BGRA
           WIN_IPBO - [WIN32] use PBO
     MSEC: delay between frames in ms
-    RSCM: rendering scheme
-          SCM_RSTD - CPU
-          SCM_ROGL - GPU
     USER: user data pointer to be passed to the callback
     FUNC: callback function described above (see UFRM typedef)
  **/
-LIB_OPEN void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
+LIB_OPEN void EngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
                                 uint32_t xdim, uint32_t ydim, uint32_t flgs,
-                                uint32_t msec, uint32_t rscm, uintptr_t user,
-                                UFRM func);
+                                uint32_t msec, uintptr_t user, UFRM func);

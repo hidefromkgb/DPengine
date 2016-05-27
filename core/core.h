@@ -31,64 +31,25 @@
 #define max(a, b) (((a) > (b))? (a) : (b))
 #endif
 
+#define PFR_HALT (1 << 31)
+#define PFR_SKIP (1 << 30)
+#define PFR_PICK (1 << 29)
 
-
-#define SEM_NULL 0
-#define SEM_FULL ~0
 #define SEM_TYPE uint64_t
 
-#define TXL_UANI "[%4u%c%c%c]"
-#define TXL_UFPS "[%7.3f]"
-#define TXL_EXIT "[//THR//]"
-#define TXL_FAIL "[>>ERR<<]"
-#define TXL_DUPL "[--DUP--]"
-#define TXL_AEND "[==ANI==]"
-#define TXL_ROGL "[++OGL++]"
-#define TXL_RSTD "[++CPU++]"
 
 
+/// semaphore data, defined externally
+typedef struct SEMD SEMD;
 
-/// AVL hash tree header
-#define HDR_TREE \
-    struct _TREE *coll, *next[2]; \
-    long diff; \
-    uint64_t hash;
+/// thread data, opaque outside the module
+typedef struct THRD THRD;
 
-typedef struct _TREE {
-    HDR_TREE;
-} TREE;
+/// AVL hash tree, opaque outside the module
+typedef struct TREE TREE;
 
-/// AVL hash tree iterator
-typedef void (*ITER)(TREE*);
-
-/// animation placement destination
-typedef struct _DEST {
-    struct _DEST *next;
-    AINF *ainf;
-} DEST;
-
-/// pixel-data tree element
-typedef struct _PAVL {
-    HDR_TREE;
-    ASTD *anim;
-    AINF  ainf;
-    long  xoff, yoff, scal, tran;
-} PAVL;
-
-/// filename tree element
-typedef struct _SAVL {
-    HDR_TREE;
-    DEST *dest;
-    char *path;
-    typeof(((AINF*)0)->uuid) turn;
-    PAVL *epix;
-} SAVL;
-
-/// image wrapper, contains raw pixel data and dimensions
-typedef struct _PICT {
-    BGRA *bptr;
-    ulong xdim, ydim;
-} PICT;
+/// renderer data, defined externally
+typedef struct RNDR RNDR;
 
 /// elementary animation unit
 typedef struct _UNIT {
@@ -98,67 +59,13 @@ typedef struct _UNIT {
     ulong offs[4]; /// offsets from the initial size: X_lf, X_rt, Y_up, Y_dn
 } UNIT;
 
-/// semaphore data, defined externally
-struct SEMD;
-
-/// thread data
-typedef struct _THRD {
-    ulong loop;
-    SEM_TYPE uuid;
-    struct _ENGD *orig;
-    void (*func)(struct _THRD*);
-    union {
-        struct {
-            long  ymin,
-                  ymax;
-        };
-        struct {
-            SAVL *elem;
-            char *path,
-                 *load;
-        };
-    };
-} THRD;
-
-/// engine data
-typedef struct _ENGD {
-    uint64_t time,     /// current timestamp
-             tfrm,     /// timestamp for the previous frame
-             tfps;     /// timestamp for the previous FPS count
-    uint32_t flgs;     /// options
-    ulong rscm,        /// rendering scheme
-          fram,        /// FPS counter
-          msec,        /// frame delay
-          anew,        /// restart flag
-          ncpu,        /// number of CPU cores the engine is allowed to occupy
-          uniq,        /// number of unique animations
-          size;        /// length of the main display list
-    T2IV  mpos;        /// main surface position
-    PICT  pict;        /// drawing area information
-    UFRM  ufrm;        /// callback to update the state of a frame
-    THRD *thrd;        /// thread data array
-    T4FV *data;        /// main display list (updated every frame; FOREIGN!)
-    UNIT *uarr;        /// unique animations source in array form
-    SAVL *hstr;        /// AVL tree for animation filename hashes & HPIX links
-    PAVL *hpix;        /// AVL tree for animation pixel data (including hashes)
-    void *rndr;        /// additional renderer (the exact type may vary)
-    struct SEMD *isem, /// incoming semaphore
-                *osem; /// outgoing semaphore
-    uintptr_t udat,    /// user-defined data to be passed to the frame updater
-              user[4]; /// user-defined additional values, just in case
-} ENGD;
 
 
-
-long SelectUnit(UNIT *uarr, T4FV *data, long size, long xptr, long yptr);
+uint32_t PrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t flgs);
+void OutputFrame(ENGD *engd);
+void DeallocFrame(ENGD *engd);
 void OutputFPS(ENGD *engd, char retn[]);
-SEM_TYPE FindBit(SEM_TYPE inpt);
 THR_FUNC ThrdFunc(THRD *data);
-void StopThreads(ENGD *engd);
-long SwitchThreads(ENGD *engd, long draw);
-
-BGRA *ExtractRescaleSwizzleAlign(ASTD *anim, uint8_t swiz,
-                                 long fram, long xdim, long ydim);
 
 
 
@@ -167,13 +74,13 @@ long CountCPUs();
 uint64_t TimeFunc();
 char *LoadFile(char *name, long *size);
 void MakeThread(THRD *thrd);
-void RunMainLoop(ENGD *engd);
-void RestartEngine(ENGD *engd, ulong anew);
+void RestartEngine(ENGD *engd);
 void ShowMainWindow(ENGD *engd, ulong show);
-
-void FreeSemaphore(struct SEMD **retn, long nthr);
-void MakeSemaphore(struct SEMD **retn, long nthr, SEM_TYPE mask);
-long PickSemaphore(ENGD *engd, long open, SEM_TYPE mask);
-SEM_TYPE WaitSemaphore(ENGD *engd, long open, SEM_TYPE mask);
+void RunMainLoop(ENGD *engd, long xdim, long ydim,
+                 BGRA **bptr, uint64_t *time);
+void FreeSemaphore(SEMD **retn, long nthr);
+void MakeSemaphore(SEMD **retn, long nthr, SEM_TYPE mask);
+long PickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask);
+SEM_TYPE WaitSemaphore(SEMD *wait, SEM_TYPE mask);
 
 #endif

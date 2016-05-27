@@ -131,7 +131,7 @@ int main(int argc, char *argv[]) {
     ENGC engc = {};
 
     gtk_init(&argc, &argv);
-    EngineCallback(0, ECB_INIT, (uintptr_t)&engc.engh);
+    EngineCallback(0, ECB_INIT, (uintptr_t)&engc.engd);
     if ((uses = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
         while (uses--) {
             if ((dirs[uses]->d_type == DT_DIR)
@@ -142,9 +142,9 @@ int main(int argc, char *argv[]) {
         }
         free(dirs);
     }
-    EngineLoadAnimAsync(engc.engh,
+    EngineLoadAnimAsync(engc.engd,
                        (uint8_t*)"/Icon/", (uint8_t*)MainIcon, &igif);
-    EngineCallback(engc.engh, ECB_LOAD, 0);
+    EngineCallback(engc.engd, ECB_LOAD, 0);
 
     gint xdim, ydim;
     GdkPixbuf *pbuf;
@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
     igif.xdim = xdim;
     igif.ydim = ydim;
     igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
-    EngineCallback(engc.engh, ECB_DRAW, (uintptr_t)&igif);
+    EngineCallback(engc.engd, ECB_DRAW, (uintptr_t)&igif);
 
     pbuf = gdk_pixbuf_new_from_data((guchar*)igif.time, GDK_COLORSPACE_RGB,
                                     TRUE, CHAR_BIT, igif.xdim, igif.ydim,
@@ -170,17 +170,12 @@ int main(int argc, char *argv[]) {
     /// [TODO:] substitute this by GUI selection
     uses = (argc >= 2)? atol(argv[1]) : 0;
     uses = (uses != 0)? uses : 1;
-    LINF *libs = engc.libs;
-    while (libs) {
-        libs->icnt = labs(uses);
-        libs = (LINF*)libs->prev;
-    }
+    __DEL_ME__SetLibUses(&engc, uses);
 
     GdkScreen *gscr = gdk_screen_get_default();
-    ExecuteEngine(&engc, 0, 0,
-                  gdk_screen_get_width(gscr), gdk_screen_get_height(gscr),
-                  (uintptr_t)icon, (uses < 0)? SCM_RSTD : SCM_ROGL,
-                  COM_SHOW | COM_DRAW, 0);
+    ExecuteEngine(&engc, 0, 0, gdk_screen_get_width(gscr),
+                  gdk_screen_get_height(gscr), (uintptr_t)icon,
+                 ((uses < 0)? 0 : COM_RGPU) | COM_SHOW | COM_DRAW, 0);
 
     g_object_unref(G_OBJECT(icon));
     g_object_unref(G_OBJECT(pbuf));

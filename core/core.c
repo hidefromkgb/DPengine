@@ -1,4 +1,90 @@
+#include <ogl/oglstd.h>
 #include <core.h>
+
+#define SEM_NULL 0
+#define SEM_FULL ~0
+
+#define TXL_UANI "[%4u%c%c%c]"
+#define TXL_UFPS "[%7.3f]"
+#define TXL_FAIL "[>>ERR<<]"
+#define TXL_DUPL "[--DUP--]"
+#define TXL_AEND "[==ANI==]"
+#define TXL_RGPU "[//GPU//]"
+#define TXL_RSTD "[++CPU++]"
+
+/// animation placement destination
+typedef struct _DEST {
+    struct _DEST *next;
+    AINF *ainf;
+} DEST;
+
+/// AVL hash tree, opaque outside the module
+struct TREE {
+    TREE *next[3]; /// NEXT[2] is used for collisions
+    long diff;
+    uint64_t hash;
+    union {
+        struct {
+            /// pixel-data tree element
+            ASTD *anim;
+            AINF  ainf;
+            long  xoff, yoff, scal, tran;
+        };
+        struct {
+            /// filename tree element
+            typeof(((AINF*)0)->uuid) turn;
+            char *path;
+            DEST *dest;
+            TREE *epix;
+        };
+    };
+};
+
+/// AVL hash tree iterator
+typedef void (*ITER)(TREE*);
+
+/// thread data, opaque outside the module
+struct THRD {
+    ulong loop;
+    SEM_TYPE uuid;
+    ENGD *orig;
+    void (*func)(THRD*);
+    union {
+        struct {
+            long ymin, ymax;
+        };
+        struct {
+            TREE *elem;
+            char *path, *load;
+        };
+    };
+};
+
+/// engine data, opaque outside the module
+struct ENGD {
+    uint32_t flgs;    /// options: rendering scheme, restart, etc.
+    uint64_t time,    /// current timestamp
+             tfrm,    /// timestamp for the previous frame
+             tfps;    /// timestamp for the previous FPS count
+    ulong    fram,    /// FPS counter
+             msec,    /// frame delay
+             ncpu,    /// number of CPU cores the engine is allowed to occupy
+             uniq,    /// number of unique animations
+             size;    /// length of the main display list
+    UFRM     ufrm;    /// callback to update the state of a frame
+    T4IV     dims;    /// drawing area position and dimensions
+    BGRA    *bptr;    /// drawing area bits
+    UNIT    *uarr;    /// unique animations source in array form
+    T4FV    *data;    /// main display list (updated every frame; FOREIGN!)
+    THRD    *thrd;    /// thread data array
+    RNDR    *rndr;    /// additional renderer (the exact type may vary)
+    TREE    *hstr,    /// AVL tree for animation filename hashes & HPIX links
+            *hpix;    /// AVL tree for animation pixel data (including hashes)
+    SEMD    *isem,    /// incoming semaphore
+            *osem;    /// outgoing semaphore
+    intptr_t udat,    /// user-defined data to be passed to the frame updater
+             user[4]; /// user-defined additional values, just in case
+};
 
 
 
@@ -201,7 +287,7 @@ char *ExtractLastDirs(char *path, long dcnt) {
 
 
 
-void FlushDest(SAVL *elem, long fill) {
+void FlushDest(TREE *elem, long fill) {
     DEST *item;
 
     while (elem->dest) {
@@ -221,14 +307,14 @@ void FlushDest(SAVL *elem, long fill) {
 
 
 
-void TreeDelPath(SAVL *elem) {
+void TreeDelPath(TREE *elem) {
     FlushDest(elem, 0);
     free(elem->path);
 }
 
 
 
-void TreeDelAnim(PAVL *elem) {
+void TreeDelAnim(TREE *elem) {
     FreeAnimStd(&elem->anim);
 }
 
@@ -236,9 +322,9 @@ void TreeDelAnim(PAVL *elem) {
 
 void TreeDel(TREE **root, ITER func) {
     if (*root) {
-        TreeDel(&(*root)->coll, func);
         TreeDel(&(*root)->next[0], func);
         TreeDel(&(*root)->next[1], func);
+        TreeDel(&(*root)->next[2], func);
         if (func)
             func(*root);
         free(*root);
@@ -249,11 +335,8 @@ void TreeDel(TREE **root, ITER func) {
 
 
 TREE *TreeFind(TREE *root, uint64_t hash) {
-    while (root) {
-        if (hash == root->hash)
-            break;
-        root = root->next[(hash < root->hash)? 0 : 1];
-    }
+    while (root && (root->hash != hash))
+        root = root->next[(root->hash > hash)? 0 : 1];
     return root;
 }
 
@@ -271,8 +354,8 @@ void TreeAdd(TREE **root, TREE *elem) {
     }
     while (iter) {
         if (elem->hash == iter->hash) {
-            elem->coll = iter->coll;
-            iter->coll = elem;
+            elem->next[2] = iter->next[2];
+            iter->next[2] = elem;
             return;          /// collision found; add collision and exit
         }
         if (iter->diff) {
@@ -358,9 +441,9 @@ uint32_t RecolorPalette(BGRA *bpal, char *file, long size) {
 
 
 
-long TryUpdatePixTree(ENGD *engd, SAVL* estr) {
+long TryUpdatePixTree(ENGD *engd, TREE *estr) {
     long turn, stat;
-    PAVL *epix;
+    TREE *epix;
 
     if (!estr)
         return 0;
@@ -368,27 +451,27 @@ long TryUpdatePixTree(ENGD *engd, SAVL* estr) {
     stat = ' ';
     if (estr->epix->anim) {
         /// searching for the appropriate animation
-        epix = (PAVL*)TreeFind((TREE*)engd->hpix, estr->epix->hash);
+        epix = TreeFind(engd->hpix, estr->epix->hash);
         while (epix) {
             if (CompareAnimStd(epix->anim, estr->epix->anim,
                                epix->ainf.uuid ^ estr->turn))
                 break;
-            epix = (PAVL*)epix->coll;
+            epix = epix->next[2];
         }
         /// not found, the animation is new
         if (!epix) {
-            TreeAdd((TREE**)&engd->hpix, (TREE*)estr->epix);
+            TreeAdd(&engd->hpix, estr->epix);
             estr->epix->ainf.uuid = (++engd->uniq << 2) | estr->turn;
         }
         /// found, replacing
         else {
-            TreeDel((TREE**)&estr->epix, (ITER)TreeDelAnim);
+            TreeDel(&estr->epix, TreeDelAnim);
             estr->epix = epix;
             stat = '#';
         }
     }
     else
-        TreeDel((TREE**)&estr->epix, 0);
+        TreeDel(&estr->epix, 0);
 
     if (estr->epix) {
         turn = estr->epix->ainf.uuid ^ estr->turn;
@@ -403,32 +486,32 @@ long TryUpdatePixTree(ENGD *engd, SAVL* estr) {
 
 
 void FreeHashTrees(ENGD *engd) {
-    TreeDel((TREE**)&engd->hstr, (ITER)TreeDelPath);
-    TreeDel((TREE**)&engd->hpix, (ITER)TreeDelAnim);
+    TreeDel(&engd->hstr, TreeDelPath);
+    TreeDel(&engd->hpix, TreeDelAnim);
     engd->uniq = 0;
 }
 
 
 
-void FillDest(SAVL *root) {
+void FillDest(TREE *root) {
     if (!root)
         return;
 
-    FillDest((SAVL*)root->next[1]);
-    FillDest((SAVL*)root->next[0]);
-    FillDest((SAVL*)root->coll);
+    FillDest(root->next[0]);
+    FillDest(root->next[1]);
+    FillDest(root->next[2]);
     FlushDest(root, ~0);
 }
 
 
 
-void UnitArrayFromTree(UNIT *uarr, PAVL *root) {
+void UnitArrayFromTree(UNIT *uarr, TREE *root) {
     if (!root || !uarr)
         return;
 
-    UnitArrayFromTree(uarr, (PAVL*)root->next[1]);
-    UnitArrayFromTree(uarr, (PAVL*)root->next[0]);
-    UnitArrayFromTree(uarr, (PAVL*)root->coll);
+    UnitArrayFromTree(uarr, root->next[0]);
+    UnitArrayFromTree(uarr, root->next[1]);
+    UnitArrayFromTree(uarr, root->next[2]);
 
     ASTD *anim = (ASTD*)root->anim;
     long iter = root->ainf.uuid >> 2;
@@ -495,15 +578,14 @@ long SelectUnit(UNIT *uarr, T4FV *data, long size, long xptr, long yptr) {
 
 THR_FUNC ThrdFunc(THRD *data) {
     while (!0) {
-        WaitSemaphore(data->orig, 0, data->uuid);
+        WaitSemaphore(data->orig->isem, data->uuid);
         if (!data->loop)
             break;
         data->func(data);
-        if (!PickSemaphore(data->orig, 0, data->uuid))
+        if (!PickSemaphore(data->orig->isem, data->orig->osem, data->uuid))
             return THR_FAIL;
     }
-    printf(TXL_EXIT"\n");
-    PickSemaphore(data->orig, 0, data->uuid);
+    PickSemaphore(data->orig->isem, data->orig->osem, data->uuid);
     return THR_EXIT;
 }
 
@@ -511,9 +593,9 @@ THR_FUNC ThrdFunc(THRD *data) {
 
 void LTHR(THRD *data) {
     char *name, *path, *file;
-    long  indx, size;
-    SAVL *elem;
+    long indx, size;
     ASTD *retn;
+    TREE *elem;
 
     retn = 0;
     path = data->path;
@@ -562,8 +644,12 @@ void PTHR(THRD *data) {
     UNIT *tail;
     ASTD *anim;
 
-    bptr = data->orig->pict.bptr;
-    xoff = data->orig->pict.xdim;
+    bptr = data->orig->bptr;
+    xoff = data->orig->dims.xdim;
+    /// manual zeroing
+//    memset(bptr + xoff * data->ymin, 0,
+//           xoff * (data->ymax - data->ymin) << 2);
+
     for (iter = 0; iter < data->orig->size; iter++) {
         xpos = data->orig->data[iter].x;
         ypos = data->orig->data[iter].y;
@@ -617,11 +703,11 @@ void StopThreads(ENGD *engd) {
     for (loop = iter = 0; iter < engd->ncpu; iter++)
         loop |= engd->thrd[iter].loop;
     if (loop) {
-        WaitSemaphore(engd, 1, SEM_FULL);
+        WaitSemaphore(engd->osem, SEM_FULL);
         for (iter = 0; iter < engd->ncpu; iter++)
             engd->thrd[iter].loop = 0;
-        PickSemaphore(engd, 1, SEM_FULL);
-        WaitSemaphore(engd, 1, SEM_FULL);
+        PickSemaphore(engd->osem, engd->isem, SEM_FULL);
+        WaitSemaphore(engd->osem, SEM_FULL);
     }
 }
 
@@ -635,13 +721,13 @@ long SwitchThreads(ENGD *engd, long draw) {
             if (engd->thrd[iter].loop)
                 return -1;
 
-        temp = (engd->pict.ydim / engd->ncpu) + 1;
+        temp = (engd->dims.ydim / engd->ncpu) + 1;
         for (iter = 0; iter < engd->ncpu; iter++) {
             engd->thrd[iter] = (THRD){1, 1 << iter, engd, PTHR,
-                                     {{temp * iter, temp * (iter + 1)}}};
+                                    {{temp * iter, temp * (iter + 1)}}};
             MakeThread(&engd->thrd[iter]);
         }
-        engd->thrd[engd->ncpu - 1].ymax = engd->pict.ydim;
+        engd->thrd[engd->ncpu - 1].ymax = engd->dims.ydim;
     }
     else
         for (iter = 0; iter < engd->ncpu; iter++) {
@@ -653,10 +739,56 @@ long SwitchThreads(ENGD *engd, long draw) {
 
 
 
-void EngineLoadAnimAsync(uintptr_t engh,
+uint32_t PrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t flgs) {
+    long pick;
+
+    if (engd->time - engd->tfrm < engd->msec)
+        return PFR_HALT | PFR_SKIP;
+    engd->tfrm = engd->time;
+    if (~engd->flgs & COM_DRAW)
+        return PFR_HALT;
+
+    pick = SelectUnit(engd->uarr, engd->data, engd->size, xptr, yptr);
+    engd->size = engd->ufrm(engd, engd->udat, &engd->data,
+                            &engd->time, flgs, xptr, yptr, pick);
+    if (!engd->size) {
+        EngineCallback(engd, ECB_QUIT, ~0);
+        return PFR_HALT;
+    }
+    return (((pick >= 0) || (engd->flgs & COM_OPAQ))? PFR_PICK : 0);
+}
+
+
+
+void OutputFrame(ENGD *engd) {
+    if (engd->flgs & COM_RGPU) {
+        MakeRendererOGL(&engd->rndr, engd->uarr, 0, engd->uniq,
+                        engd->size, engd->dims.xdim, engd->dims.ydim);
+        DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
+                        engd->size, engd->flgs & COM_OPAQ);
+    }
+    else {
+        SwitchThreads(engd, 1);
+        PickSemaphore(engd->osem, engd->isem, SEM_FULL);
+        WaitSemaphore(engd->osem, SEM_FULL);
+    }
+    engd->fram++;
+}
+
+
+
+void DeallocFrame(ENGD *engd) {
+    if (engd->flgs & COM_RGPU)
+        FreeRendererOGL(&engd->rndr);
+    else
+        StopThreads(engd);
+}
+
+
+
+void EngineLoadAnimAsync(ENGD *engd,
                          uint8_t *path, uint8_t *load, AINF *ainf) {
-    ENGD *engd = (ENGD*)engh;
-    SAVL *estr, *retn;
+    TREE *estr, *retn;
     DEST *dest;
     char *ptrn;
 
@@ -665,11 +797,11 @@ void EngineLoadAnimAsync(uintptr_t engh,
 
     ptrn = ExtractLastDirs((char*)path, 2);
     hash = (path)? HashLine64(ptrn) : 0;
-    estr = (path)? (SAVL*)TreeFind((TREE*)engd->hstr, hash) : 0;
+    estr = (path)? TreeFind(engd->hstr, hash) : 0;
     while (estr) {
         if (!strcmp(estr->path, ptrn))
             break;
-        estr = (SAVL*)estr->coll;
+        estr = estr->next[2];
     }
     if (!estr) {
         if (path) {
@@ -679,15 +811,15 @@ void EngineLoadAnimAsync(uintptr_t engh,
             estr->epix = calloc(1, sizeof(*estr->epix));
             estr->dest = calloc(1, sizeof(*estr->dest));
             estr->dest->ainf = ainf;
-            TreeAdd((TREE**)&engd->hstr, (TREE*)estr);
+            TreeAdd(&engd->hstr, estr);
         }
-        curr = FindBit(WaitSemaphore(engd, 1, SEM_NULL));
+        curr = FindBit(WaitSemaphore(engd->osem, SEM_NULL));
         retn = engd->thrd[curr].elem;
         engd->thrd[curr].elem = estr;
         free(engd->thrd[curr].path);
         engd->thrd[curr].load = (char*)load;
         engd->thrd[curr].path = strdup((char*)path);
-        PickSemaphore(engd, 1, 1 << curr);
+        PickSemaphore(engd->osem, engd->isem, 1 << curr);
         TryUpdatePixTree(engd, retn);
     }
     else if (estr->epix) {
@@ -701,22 +833,15 @@ void EngineLoadAnimAsync(uintptr_t engh,
 
 
 
-void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
+void EngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
                        uint32_t xdim, uint32_t ydim, uint32_t flgs,
-                       uint32_t msec, uint32_t rscm, uintptr_t user,
-                       UFRM func) {
-    ENGD *engd = (ENGD*)engh;
+                       uint32_t msec, uintptr_t user, UFRM func) {
     long mtmp;
 
     if (engd->uarr) {
-        engd->pict.xdim = xdim;
-        engd->pict.ydim = ydim;
-        engd->mpos.x    = xpos;
-        engd->mpos.y    = ypos;
-
+        engd->dims = (T4IV){{xpos, ypos, xdim, ydim}};
         engd->ufrm = func;
         engd->udat = user;
-        engd->rscm = rscm;
         engd->flgs = flgs;
         engd->msec = msec;
 
@@ -724,10 +849,11 @@ void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
         printf(TXL_AEND" %lu threads, %lu objects, %ld ms: %0.3f ms/obj\n%s\n",
                engd->ncpu, engd->uniq, mtmp,
               (double)mtmp * engd->ncpu / engd->uniq,
-              (engd->rscm == SCM_ROGL)? TXL_ROGL : TXL_RSTD);
+              (engd->flgs & COM_RGPU)? TXL_RGPU : TXL_RSTD);
         do {
-            RunMainLoop(engd);
-        } while (engd->anew);
+            RunMainLoop(engd, engd->dims.xdim, engd->dims.ydim,
+                       &engd->bptr, &engd->time);
+        } while (!(engd->flgs & COM_HALT));
     }
     else
         printf(TXL_FAIL" No animation base found! Exiting...\n");
@@ -735,9 +861,7 @@ void EngineRunMainLoop(uintptr_t engh, int32_t xpos, int32_t ypos,
 
 
 
-void EngineCallback(uintptr_t engh, uint32_t ecba, uintptr_t data) {
-    ENGD *engd = (ENGD*)engh;
-
+void EngineCallback(ENGD *engd, uint32_t ecba, uintptr_t data) {
     switch (ecba) {
         case ECB_INIT:
             engd = calloc(1, sizeof(*engd));
@@ -750,17 +874,25 @@ void EngineCallback(uintptr_t engh, uint32_t ecba, uintptr_t data) {
             *(uintptr_t*)data = (uintptr_t)engd;
             break;
 
-        case ECB_RSCM:
-            engd->rscm = data;
-            RestartEngine(engd, ~0);
+        case ECB_GUSR:
+            if (data)
+                *(intptr_t**)data = engd->user;
             break;
 
-        case ECB_FLGS: {
-            uint32_t mask = data ^ engd->flgs;
+        case ECB_GFLG:
+            if (data)
+                *(uint32_t*)data = engd->flgs;
+            break;
 
-            if (mask & COM_SHOW)
-                ShowMainWindow(engd, data & COM_SHOW);
+        case ECB_SFLG: {
+            uint32_t temp = engd->flgs;
+
             engd->flgs = data;
+            ShowMainWindow(engd, engd->flgs & COM_SHOW);
+            if ((data ^ temp) & COM_RGPU) {
+                engd->flgs &= ~COM_HALT;
+                RestartEngine(engd);
+            }
             break;
         }
         /// [TODO:] change to PTHR()
@@ -804,7 +936,8 @@ void EngineCallback(uintptr_t engh, uint32_t ecba, uintptr_t data) {
             break;
 
         case ECB_QUIT:
-            RestartEngine(engd, 0);
+            engd->flgs |= COM_HALT;
+            RestartEngine(engd);
             if (data)
                 break;
             if (engd->uarr) {

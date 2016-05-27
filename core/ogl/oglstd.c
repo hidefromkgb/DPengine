@@ -1,4 +1,13 @@
+#include "common.h"
 #include "oglstd.h"
+
+struct RNDR {
+    FVBO *surf;
+    T4FV *temp;
+    T4FV  disz;
+    T4FV  hitd;
+    long  size;
+};
 
 
 
@@ -89,19 +98,21 @@ int sizecmp(const void *a, const void *b) {
 
 
 
-void FreeRendererOGL(ROGL **rndr) {
-    FreeVBO(&(*rndr)->surf);
-    free((*rndr)->temp);
-    free(*rndr);
-    *rndr = 0;
+void FreeRendererOGL(RNDR **rndr) {
+    if (rndr && *rndr) {
+        FreeVBO(&(*rndr)->surf);
+        free((*rndr)->temp);
+        free(*rndr);
+        *rndr = 0;
+    }
 }
 
 
 
-long MakeRendererOGL(ROGL **rndr, UNIT *uarr, ulong rgba,
+long MakeRendererOGL(RNDR **rndr, UNIT *uarr, ulong rgba,
                      ulong uniq, ulong size, ulong xscr, ulong yscr) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
-    GLchar **sver, **spix;
+    GLchar *load, **sver, **spix;
     GLubyte *atex, *aptr;
     T4FV *dims, *bank;
     GLuint *indx;
@@ -109,11 +120,15 @@ long MakeRendererOGL(ROGL **rndr, UNIT *uarr, ulong rgba,
     TXSZ *txsz;
     BGRA *apal;
     FTEX *test;
-    ROGL *retn;
+    RNDR *retn;
 
     if (!rndr || *rndr)
         return 0;
 
+    if ((load = LoadOpenGLFunctions(NV_vertex_program3))) {
+        printf("%s\n", load);
+        return 0;
+    }
     glCullFace(GL_BACK);
     glEnable(GL_CULL_FACE);
     glDepthFunc(GL_LESS);
@@ -164,8 +179,8 @@ long MakeRendererOGL(ROGL **rndr, UNIT *uarr, ulong rgba,
             txsz[curr - 1] =
                 (TXSZ){anim->xdim * anim->ydim, anim->fcnt, curr, anim->bptr};
             dims[curr - 1] =
-                (T4FV){(1 << uarr[curr].scal), (1 << uarr[curr].scal),
-                       anim->xdim, anim->ydim};
+                (T4FV){{1 << uarr[curr].scal, 1 << uarr[curr].scal,
+                        anim->xdim, anim->ydim}};
             memcpy(&apal[(curr - 1) << 8], anim->bpal, 256 * sizeof(*apal));
         }
     qsort(txsz, uniq, sizeof(*txsz), sizecmp);
@@ -213,10 +228,10 @@ long MakeRendererOGL(ROGL **rndr, UNIT *uarr, ulong rgba,
     free(txsz);
 
     for (curr = mtex * dhei - 1; curr >= 0; curr--) {
-        vert[curr * 4 + 0] = (T3FV){0, 1, curr};
-        vert[curr * 4 + 1] = (T3FV){0, 0, curr};
-        vert[curr * 4 + 2] = (T3FV){1, 0, curr};
-        vert[curr * 4 + 3] = (T3FV){1, 1, curr};
+        vert[curr * 4 + 0] = (T3FV){{0, 1, curr}};
+        vert[curr * 4 + 1] = (T3FV){{0, 0, curr}};
+        vert[curr * 4 + 2] = (T3FV){{1, 0, curr}};
+        vert[curr * 4 + 3] = (T3FV){{1, 1, curr}};
         indx[curr * 6 + 0] = curr * 4 + 0;
         indx[curr * 6 + 1] = curr * 4 + 1;
         indx[curr * 6 + 2] = curr * 4 + 2;
@@ -245,7 +260,7 @@ long MakeRendererOGL(ROGL **rndr, UNIT *uarr, ulong rgba,
 
     retn->disz.z = 1.0 / dhei;
     retn->disz.w = 1.0 / chei;
-    retn->hitd = (T4FV){1.0 / (cbnk + 1), 1.0 / phei, 1.0 / mtex, 1.0};
+    retn->hitd = (T4FV){{1.0 / (cbnk + 1), 1.0 / phei, 1.0 / mtex, 1.0}};
 
     MakeTex(&retn->surf->ptex[0], mtex, dhei, 0,
             GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
@@ -282,7 +297,7 @@ long MakeRendererOGL(ROGL **rndr, UNIT *uarr, ulong rgba,
 
 
 
-void DrawRendererOGL(ROGL *rndr, UNIT *uarr, T4FV *data,
+void DrawRendererOGL(RNDR *rndr, UNIT *uarr, T4FV *data,
                      ulong size, ulong opaq) {
     long iter, pfwd, pbwd,
          ydim = ceil((GLfloat)size / rndr->surf->ptex[0].xdim);

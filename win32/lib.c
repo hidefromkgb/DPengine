@@ -107,7 +107,7 @@ SEM_TYPE WaitSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
     HANDLE *iter, list[engd->ncpu];
     SEM_TYPE retn, temp;
 
-    if (mask != SEM_NULL) {
+    if (mask) {
         open = 0;
         iter = list;
         retn = mask &= (1 << engd->ncpu) - 1;

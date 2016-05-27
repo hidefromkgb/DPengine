@@ -1,12 +1,11 @@
 #include <gtk/gtk.h>
 #include <gtk/gtkgl.h>
-#include <gdk/gdkkeysyms.h>
-
 #include <gdk/x11/gdkglx.h>
 #include <X11/extensions/Xrender.h>
 
+#include <gdk/gdkkeysyms.h>
+
 #include <core.h>
-#include <ogl/oglstd.h>
 
 struct SEMD {
     pthread_mutex_t cmtx;
@@ -16,18 +15,17 @@ struct SEMD {
 
 
 
-void RestartEngine(ENGD *engd, ulong anew) {
-    engd->anew = anew;
+void RestartEngine(ENGD *engd) {
     gtk_main_quit();
 }
 
 
 
 void ShowMainWindow(ENGD *engd, ulong show) {
-    if (show)
-        gtk_widget_show((GtkWidget*)engd->user[0]);
-    else
-        gtk_widget_hide((GtkWidget*)engd->user[0]);
+    intptr_t *data;
+
+    EngineCallback(engd, ECB_GUSR, (uintptr_t)&data);
+    ((show)? gtk_widget_show : gtk_widget_hide)((GtkWidget*)data[0]);
 }
 
 
@@ -65,7 +63,7 @@ void MakeThread(THRD *thrd) {
 
 
 
-void FreeSemaphore(struct SEMD **retn, long nthr) {
+void FreeSemaphore(SEMD **retn, long nthr) {
     if (retn && *retn) {
         pthread_cond_destroy(&(*retn)->cvar);
         pthread_mutex_destroy(&(*retn)->cmtx);
@@ -76,7 +74,7 @@ void FreeSemaphore(struct SEMD **retn, long nthr) {
 
 
 
-void MakeSemaphore(struct SEMD **retn, long nthr, SEM_TYPE mask) {
+void MakeSemaphore(SEMD **retn, long nthr, SEM_TYPE mask) {
     if (retn) {
         *retn = malloc(sizeof(**retn));
         pthread_mutex_init(&(*retn)->cmtx, 0);
@@ -88,27 +86,24 @@ void MakeSemaphore(struct SEMD **retn, long nthr, SEM_TYPE mask) {
 
 
 
-long PickSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
-    struct SEMD *drop = (open)? engd->osem : engd->isem,
-                *pick = (open)? engd->isem : engd->osem;
+long PickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask) {
+    long retn;
 
-    open = (__sync_fetch_and_and(&drop->list, ~(drop->full & mask)) & mask)?
+    retn = (__sync_fetch_and_and(&drop->list, ~(drop->full & mask)) & mask)?
             TRUE : FALSE;
     __sync_or_and_fetch(&pick->list, pick->full & mask);
 
     pthread_mutex_lock(&pick->cmtx);
     pthread_cond_broadcast(&pick->cvar);
     pthread_mutex_unlock(&pick->cmtx);
-    return open;
+    return retn;
 }
 
 
 
-SEM_TYPE WaitSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
-    struct SEMD *wait = (open)? engd->osem : engd->isem;
-
+SEM_TYPE WaitSemaphore(SEMD *wait, SEM_TYPE mask) {
     pthread_mutex_lock(&wait->cmtx);
-    if (mask != SEM_NULL)
+    if (mask)
         while ((wait->list ^ wait->full) & mask)
             pthread_cond_wait(&wait->cvar, &wait->cmtx);
     else
@@ -148,10 +143,12 @@ gboolean TimeFuncWrapper(gpointer user) {
 
 gboolean FPSFunc(gpointer user) {
     ENGD *engd = user;
+    intptr_t *data;
     char fout[64];
 
     OutputFPS(engd, fout);
-    gtk_window_set_title(GTK_WINDOW(engd->user[0]), fout);
+    EngineCallback(engd, ECB_GUSR, (uintptr_t)&data);
+    gtk_window_set_title(GTK_WINDOW(data[0]), fout);
     printf("%s\n", fout);
     return TRUE;
 }
@@ -160,74 +157,66 @@ gboolean FPSFunc(gpointer user) {
 
 gboolean DrawFunc(gpointer user) {
     ENGD *engd = user;
+    GdkGLDrawable *pGLD = 0;
     GdkRectangle rect = {};
     GdkModifierType gmod;
+    gint xptr, yptr;
     GdkRegion *creg;
     GdkWindow *hwnd;
-    gint xptr, yptr;
-    long pick, flgs;
+    intptr_t *data;
+    uint32_t flgs;
 
-    if (engd->time - engd->tfrm < engd->msec) {
-        usleep(1000);
-        return TRUE;
-    }
-    engd->tfrm = engd->time;
-    if ((~engd->flgs & COM_DRAW)
-    || !(hwnd = gtk_widget_get_window((GtkWidget*)engd->user[0])))
+    EngineCallback(engd, ECB_GUSR, (uintptr_t)&data);
+    if (!(hwnd = gtk_widget_get_window((GtkWidget*)data[0])))
         return TRUE;
 
     gdk_window_get_pointer(hwnd, &xptr, &yptr, &gmod);
     flgs = ((gmod & GDK_BUTTON1_MASK)? UFR_LBTN : 0)
          | ((gmod & GDK_BUTTON2_MASK)? UFR_MBTN : 0)
          | ((gmod & GDK_BUTTON3_MASK)? UFR_RBTN : 0)
-         | ((gtk_window_is_active((GtkWindow*)engd->user[0]))? UFR_MOUS : 0);
-    pick = SelectUnit(engd->uarr, engd->data, engd->size, xptr, yptr);
-    engd->size = engd->ufrm((uintptr_t)engd, engd->udat, &engd->data,
-                            &engd->time, flgs, xptr, yptr, pick);
-    if (!engd->size) {
-        EngineCallback((uintptr_t)engd, ECB_QUIT, ~0);
+         | ((gtk_window_is_active((GtkWindow*)data[0]))? UFR_MOUS : 0);
+    flgs = PrepareFrame(engd, xptr, yptr, flgs);
+
+    if (flgs & PFR_SKIP)
+        usleep(1000);
+    if (flgs & PFR_HALT)
         return TRUE;
-    }
-    if ((pick >= 0) || (engd->flgs & COM_OPAQ)) {
-        rect.width  = engd->pict.xdim;
-        rect.height = engd->pict.ydim;
+    if (flgs & PFR_PICK) {
+        rect.width  = data[2];
+        rect.height = data[3];
     }
     creg = gdk_region_rectangle(&rect);
     gdk_window_input_shape_combine_region(hwnd, creg, 0, 0);
     gdk_region_destroy(creg);
-    switch (engd->rscm) {
-        case SCM_RSTD: {
-            cairo_t *temp = cairo_create((cairo_surface_t*)engd->user[1]);
-            cairo_set_operator(temp, CAIRO_OPERATOR_SOURCE);
-            cairo_set_source_rgba(temp, 0, 0, 0, 0);
-            cairo_paint(temp);
-            cairo_destroy(temp);
-            SwitchThreads(engd, 1);
-            PickSemaphore(engd, 1, SEM_FULL);
-            WaitSemaphore(engd, 1, SEM_FULL);
-            break;
-        }
-        case SCM_ROGL: {
-            GdkGLDrawable *pGLD =
-                gtk_widget_gl_begin((GtkWidget*)engd->user[0]);
-            MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr, 0, engd->uniq,
-                            engd->size, engd->pict.xdim, engd->pict.ydim);
-            DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
-                            engd->size, engd->flgs & COM_OPAQ);
-            gdk_gl_drawable_gl_end(pGLD);
-            break;
-        }
+
+    EngineCallback(engd, ECB_GFLG, (uintptr_t)&flgs);
+    if (flgs & COM_RGPU)
+        pGLD = gtk_widget_gl_begin((GtkWidget*)data[0]);
+    else {
+        /// comment the lines below to enable manual zeroing
+        //*
+        cairo_t *temp = cairo_create((cairo_surface_t*)data[1]);
+        cairo_set_operator(temp, CAIRO_OPERATOR_SOURCE);
+        cairo_set_source_rgba(temp, 0, 0, 0, 0);
+        cairo_paint(temp);
+        cairo_destroy(temp);
+        //*/
     }
+    OutputFrame(engd);
+
+    if (flgs & COM_RGPU)
+        gdk_gl_drawable_gl_end(pGLD);
+
     gdk_window_invalidate_rect(hwnd, 0, FALSE);
     gdk_window_process_updates(hwnd, FALSE);
-    engd->fram++;
+
     return TRUE;
 }
 
 
 
 gboolean OnDestroy(GtkWidget *gwnd, gpointer user) {
-    EngineCallback((uintptr_t)user, ECB_QUIT, ~0);
+    EngineCallback((ENGD*)user, ECB_QUIT, ~0);
     return TRUE;
 }
 
@@ -246,8 +235,8 @@ gboolean OnChange(GtkWidget *gwnd, GdkScreen *scrn, gpointer user) {
     if ((cmap = gdk_screen_get_rgba_colormap(gtk_widget_get_screen(gwnd))))
         gtk_widget_set_colormap(gwnd, cmap);
     else {
-        printf(TXL_FAIL" Transparent windows not supported! Exiting...\n");
-        exit(-1);
+        printf("Transparent windows not supported! Exiting...\n");
+        EngineCallback((ENGD*)user, ECB_QUIT, 0);
     }
     return TRUE;
 }
@@ -256,32 +245,31 @@ gboolean OnChange(GtkWidget *gwnd, GdkScreen *scrn, gpointer user) {
 
 gboolean OnRedraw(GtkWidget *gwnd, GdkEventExpose *eexp, gpointer user) {
     ENGD *engd = user;
+    intptr_t *data;
+    uint32_t flgs;
 
-    if (~engd->flgs & COM_DRAW)
+    EngineCallback(engd, ECB_GFLG, (uintptr_t)&flgs);
+    if (~flgs & COM_DRAW)
         return TRUE;
 
-    switch (engd->rscm) {
-        case SCM_RSTD: {
-            cairo_t *temp = gdk_cairo_create(gtk_widget_get_window(gwnd));
-            cairo_surface_mark_dirty((cairo_surface_t*)engd->user[1]);
-            cairo_set_operator(temp, CAIRO_OPERATOR_SOURCE);
-            if (engd->flgs & COM_OPAQ) {
-                cairo_set_source_rgba(temp, 0, 0, 0, 1);
-                cairo_paint(temp);
-                cairo_set_operator(temp, CAIRO_OPERATOR_OVER);
-            }
-            cairo_set_source_surface(temp,
-                                    (cairo_surface_t*)engd->user[1], 0, 0);
+    if (~flgs & COM_RGPU) {
+        EngineCallback(engd, ECB_GUSR, (uintptr_t)&data);
+        cairo_t *temp = gdk_cairo_create(gtk_widget_get_window(gwnd));
+        cairo_surface_mark_dirty((cairo_surface_t*)data[1]);
+        cairo_set_operator(temp, CAIRO_OPERATOR_SOURCE);
+        if (flgs & COM_OPAQ) {
+            cairo_set_source_rgba(temp, 0, 0, 0, 1);
             cairo_paint(temp);
-            cairo_destroy(temp);
-            break;
+            cairo_set_operator(temp, CAIRO_OPERATOR_OVER);
         }
-        case SCM_ROGL: {
-            GdkGLDrawable *pGLD = gtk_widget_gl_begin(gwnd);
-            gdk_gl_drawable_swap_buffers(pGLD);
-            gdk_gl_drawable_gl_end(pGLD);
-            break;
-        }
+        cairo_set_source_surface(temp, (cairo_surface_t*)data[1], 0, 0);
+        cairo_paint(temp);
+        cairo_destroy(temp);
+    }
+    else {
+        GdkGLDrawable *pGLD = gtk_widget_gl_begin(gwnd);
+        gdk_gl_drawable_swap_buffers(pGLD);
+        gdk_gl_drawable_gl_end(pGLD);
     }
     return TRUE;
 }
@@ -332,16 +320,23 @@ GdkGLConfig *GetGDKGL(GtkWidget *gwnd) {
 
 
 
-void RunMainLoop(ENGD *engd) {
+void RunMainLoop(ENGD *engd, long xdim, long ydim,
+                 BGRA **bptr, uint64_t *time) {
     guint tmrf, tmrt, tmrd;
-    GdkGLDrawable *pGLD;
+    GdkGLDrawable *pGLD = 0;
     GtkWidget *gwnd;
+    intptr_t *data;
+    uint32_t flgs;
 
     gtk_init(0, 0);
     gtk_gl_init(0, 0);
-    engd->user[0] = (uintptr_t)(gwnd = gtk_window_new(GTK_WINDOW_TOPLEVEL));
-    OnChange(gwnd, 0, 0);
+    EngineCallback(engd, ECB_GUSR, (uintptr_t)&data);
+    data[0] = (uintptr_t)(gwnd = gtk_window_new(GTK_WINDOW_TOPLEVEL));
+    data[2] = xdim;
+    data[3] = ydim;
+    OnChange(gwnd, 0, (gpointer)engd);
 
+    EngineCallback(engd, ECB_GFLG, (uintptr_t)&flgs);
     g_signal_connect(G_OBJECT(gwnd), "expose-event",
                      G_CALLBACK(OnRedraw), engd);
     g_signal_connect(G_OBJECT(gwnd), "delete-event",
@@ -352,36 +347,18 @@ void RunMainLoop(ENGD *engd) {
                      G_CALLBACK(OnKeyDown), engd);
     gtk_widget_set_events(gwnd, gtk_widget_get_events(gwnd) |
                                 GDK_KEY_PRESS_MASK);
-    switch (engd->rscm) {
-        case SCM_RSTD:
-            engd->user[1] = (uintptr_t)
-                cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                                           engd->pict.xdim, engd->pict.ydim);
-            engd->pict.bptr = (BGRA*)
-                cairo_image_surface_get_data((cairo_surface_t*)engd->user[1]);
-            break;
-
-        case SCM_ROGL: {
-            GLchar *retn;
-
-            gtk_widget_set_gl_capability(gwnd, GetGDKGL(gwnd), 0,
-                                         TRUE, GDK_GL_RGBA_TYPE);
-            gtk_widget_realize(gwnd);
-            pGLD = gtk_widget_gl_begin(gwnd);
-            retn = LoadOpenGLFunctions(NV_vertex_program3);
-            gdk_gl_drawable_gl_end(pGLD);
-            if (retn) {
-                printf("\n%s\n", retn);
-                free(retn);
-                gtk_widget_destroy(gwnd);
-                RestartEngine(engd, SCM_RSTD);
-                return;
-            }
-            break;
-        }
+    if (~flgs & COM_RGPU) {
+        data[1] = (uintptr_t)
+            cairo_image_surface_create(CAIRO_FORMAT_ARGB32, xdim, ydim);
+        *bptr = (BGRA*)cairo_image_surface_get_data((cairo_surface_t*)data[1]);
+    }
+    else {
+        gtk_widget_set_gl_capability(gwnd, GetGDKGL(gwnd), 0,
+                                     TRUE, GDK_GL_RGBA_TYPE);
+        gtk_widget_realize(gwnd);
     }
     gtk_widget_set_app_paintable(gwnd, TRUE);
-    gtk_widget_set_size_request(gwnd, engd->pict.xdim, engd->pict.ydim);
+    gtk_widget_set_size_request(gwnd, xdim, ydim);
     gtk_window_set_type_hint(GTK_WINDOW(gwnd), GDK_WINDOW_TYPE_HINT_TOOLBAR);
     gtk_window_set_position(GTK_WINDOW(gwnd), GTK_WIN_POS_CENTER);
     gtk_window_set_skip_taskbar_hint(GTK_WINDOW(gwnd), TRUE);
@@ -393,27 +370,22 @@ void RunMainLoop(ENGD *engd) {
     gtk_widget_show(gwnd);
     gdk_window_set_cursor(gtk_widget_get_window(gwnd),
                           gdk_cursor_new(GDK_HAND1));
-    ShowMainWindow(engd, engd->flgs & COM_SHOW);
+    ShowMainWindow(engd, flgs & COM_SHOW);
 
-    tmrt = g_timeout_add(   1, TimeFuncWrapper, &engd->time);
+    tmrt = g_timeout_add(   1, TimeFuncWrapper, time);
     tmrf = g_timeout_add(1000, FPSFunc, engd);
     tmrd = g_idle_add(DrawFunc, engd);
 
     gtk_main();
 
-    switch (engd->rscm) {
-        case SCM_RSTD:
-            StopThreads(engd);
-            cairo_surface_destroy((cairo_surface_t*)engd->user[1]);
-            break;
+    if (flgs & COM_RGPU)
+        pGLD = gtk_widget_gl_begin(gwnd);
+    DeallocFrame(engd);
+    if (flgs & COM_RGPU)
+        gdk_gl_drawable_gl_end(pGLD);
+    else
+        cairo_surface_destroy((cairo_surface_t*)data[1]);
 
-        case SCM_ROGL: {
-            pGLD = gtk_widget_gl_begin(gwnd);
-            FreeRendererOGL((ROGL**)&engd->rndr);
-            gdk_gl_drawable_gl_end(pGLD);
-            break;
-        }
-    }
     g_source_remove(tmrd);
     g_source_remove(tmrf);
     g_source_remove(tmrt);

@@ -9,14 +9,12 @@ Take control: Player 2
 Show options...
 Return to menu...
 [ Desktop Ponies Engine ]
-Renderer
 OS specific options
 Disable transparency
 Play animation
 Show window
 Exit
-Generic (CPU)
-OpenGL (GPU)
+Use GPU for drawing
 [ none ]
 Show console
 Use regions
