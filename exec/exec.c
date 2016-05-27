@@ -193,7 +193,7 @@ char *ConcatPath(char *base, char *path) {
     if (*path == '"')
         path++;
     retn = malloc(strlen(base) + strlen(path) + 2);
-    iter = sprintf(retn, "%s"DEF_DSEP"%s", base, path) - 1;
+    iter = sprintf(retn, "%s/%s", base, path) - 1;
     if (retn[iter] == '"')
         retn[iter] = '\0';
     return retn;

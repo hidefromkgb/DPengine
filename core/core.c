@@ -190,7 +190,7 @@ char *ExtractLastDirs(char *path, long dcnt) {
 
     if (path && ((iter = strlen(path)) > 0)) {
         while (--iter)
-            if ((path[iter] == DEF_DSEP) && !--dcnt) {
+            if ((path[iter] == '/') && !--dcnt) {
                 ++iter;
                 break;
             }
@@ -260,68 +260,66 @@ TREE *TreeFind(TREE *root, uint64_t hash) {
 
 
 void TreeAdd(TREE **root, TREE *elem) {
-    TREE *btop, *iter, *rnew, *temp;
-    long diff, rsub, lsub;
+    TREE *btop, *iter, *temp, *prev;
+    long diff, indx;
 
-    diff = elem->diff = 0;
-    elem->prev = elem->coll = elem->next[0] = elem->next[1] = 0;
-    iter = btop = *root;
+    diff = indx = 0;
+    temp = prev = 0;
+    if (!(btop = iter = *root)) {
+        *root = elem;
+        return;
+    }
     while (iter) {
-        if (iter->diff)
-            btop = iter;
-
         if (elem->hash == iter->hash) {
             elem->coll = iter->coll;
             iter->coll = elem;
-            return;
+            return;          /// collision found; add collision and exit
         }
-        elem->prev = iter;
-        iter = iter->next[diff = (elem->hash < iter->hash)? 0 : 1];
-    }
-    if (elem->prev) {
-        elem->prev->next[diff] = iter = elem;
-        do {
-            iter->prev->diff += (iter->prev->next[0] == iter)? -1 : +1;
-            iter = iter->prev;
-        } while (iter != btop);
-
-        diff = (btop->diff < 0)? -1 : +1;
-        if (btop->diff == diff * 2) {
-            rsub = 1 ^ (lsub = (diff + 1) >> 1);
-            temp = btop->next[lsub];
-            if (temp->diff == diff) {
-                rnew = temp;
-                btop->next[lsub] = temp->next[rsub];
-                temp->next[rsub] = btop;
-                temp->diff = btop->diff = 0;
-                temp->prev = btop->prev;
-                btop->prev = temp;
-            }
-            else {
-                rnew = temp->next[rsub];
-                temp->next[rsub] = rnew->next[lsub];
-                rnew->next[lsub] = temp;
-                btop->next[lsub] = rnew->next[rsub];
-                rnew->next[rsub] = btop;
-                temp->diff = (rnew->diff == -diff)? -rnew->diff : 0;
-                btop->diff = (rnew->diff == +diff)? -rnew->diff : 0;
-                rnew->diff = 0;
-                rnew->prev = btop->prev;
-                temp->prev = btop->prev = rnew;
-                if (temp->next[rsub])
-                    temp->next[rsub]->prev = temp;
-            }
-            if (btop->next[lsub])
-                btop->next[lsub]->prev = btop;
-
-            if (rnew->prev)
-                rnew->prev->next[(rnew->prev->next[0] == btop)? 0 : 1] = rnew;
-            else
-                *root = rnew;
+        if (iter->diff) {
+            btop = iter;     /// ITER is unbalanced: potential turn site
+            prev = temp;     /// saving ITER`s direct parent
+            indx = diff = 0; /// purging node path, as it begins at BTOP
         }
+        temp = iter;         /// max 2^32 nodes in the tree, see below
+        diff |= (elem->hash > iter->hash)? 1 << indx : 0;
+        iter = iter->next[(diff >> indx++) & 1];
     }
-    else
-        *root = elem;
+    /// add ELEM to the tree and rebalance all nodes from BTOP to ELEM
+    iter = btop;
+    temp->next[(diff >> --indx) & 1] = elem;
+    while (iter != elem) {
+        iter->diff += ((diff & 1) << 1) - 1;
+        iter = iter->next[diff & 1];
+        diff >>= 1;
+    }
+    if ((diff = (btop->diff < 0)? -1 : +1) << 1 == btop->diff) {
+        /// absolute branch disbalance exceeds 1, turn needed
+        indx = (diff + 1) >> 1;
+        temp = btop->next[indx];
+        if (temp->diff == diff) {
+            /// small turn:  BTOP > TEMP  ~  TEMP v BTOP
+            btop->next[indx] = temp->next[indx ^ 1];
+            temp->next[indx ^ 1] = btop;
+            temp->diff = btop->diff = 0;
+            iter = temp;
+        }
+        else {
+            /// big turn:  BTOP > TEMP v ITER  ~  (ITER v BTOP) > TEMP
+            iter = temp->next[indx ^ 1];
+            temp->next[indx ^ 1] = iter->next[indx];
+            iter->next[indx] = temp;
+            btop->next[indx] = iter->next[indx ^ 1];
+            iter->next[indx ^ 1] = btop;
+            temp->diff = (iter->diff == -diff)? -iter->diff : 0;
+            btop->diff = (iter->diff == +diff)? -iter->diff : 0;
+            iter->diff = 0;
+        }
+        /// *ROOT == BTOP: replacing the tree root
+        /// *ROOT != BTOP: replacing BTOP`s site in its parent
+        if (*root != btop)
+            root = &prev->next[(prev->next[0] == btop)? 0 : 1];
+        *root = iter;
+    }
 }
 
 

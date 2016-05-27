@@ -22,8 +22,6 @@
 
 
 
-/// default directory separator
-#define DEF_DSEP "/"
 /// default animation folder
 #define DEF_FLDR "Ponies"
 /// default config file

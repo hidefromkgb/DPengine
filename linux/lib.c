@@ -8,6 +8,12 @@
 #include <core.h>
 #include <ogl/oglstd.h>
 
+struct SEMD {
+    pthread_mutex_t cmtx;
+    pthread_cond_t cvar;
+    SEM_TYPE list, full;
+};
+
 
 
 void RestartEngine(ENGD *engd, ulong anew) {
@@ -59,25 +65,32 @@ void MakeThread(THRD *thrd) {
 
 
 
-void FreeSemaphore(SEMD *retn, long nthr) {
-    pthread_cond_destroy(&retn->cvar);
-    pthread_mutex_destroy(&retn->cmtx);
+void FreeSemaphore(struct SEMD **retn, long nthr) {
+    if (retn && *retn) {
+        pthread_cond_destroy(&(*retn)->cvar);
+        pthread_mutex_destroy(&(*retn)->cmtx);
+        free(*retn);
+        *retn = 0;
+    }
 }
 
 
 
-void MakeSemaphore(SEMD *retn, long nthr, SEM_TYPE mask) {
-    pthread_mutex_init(&retn->cmtx, 0);
-    pthread_cond_init(&retn->cvar, 0);
-    retn->full = (1 << nthr) - 1;
-    retn->list = retn->full & mask;
+void MakeSemaphore(struct SEMD **retn, long nthr, SEM_TYPE mask) {
+    if (retn) {
+        *retn = malloc(sizeof(**retn));
+        pthread_mutex_init(&(*retn)->cmtx, 0);
+        pthread_cond_init(&(*retn)->cvar, 0);
+        (*retn)->full = (1 << nthr) - 1;
+        (*retn)->list = (*retn)->full & mask;
+    }
 }
 
 
 
 long PickSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
-    SEMD *drop = (open)? &engd->osem : &engd->isem,
-         *pick = (open)? &engd->isem : &engd->osem;
+    struct SEMD *drop = (open)? engd->osem : engd->isem,
+                *pick = (open)? engd->isem : engd->osem;
 
     open = (__sync_fetch_and_and(&drop->list, ~(drop->full & mask)) & mask)?
             TRUE : FALSE;
@@ -92,7 +105,7 @@ long PickSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
 
 
 SEM_TYPE WaitSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
-    SEMD *wait = (open)? &engd->osem : &engd->isem;
+    struct SEMD *wait = (open)? engd->osem : engd->isem;
 
     pthread_mutex_lock(&wait->cmtx);
     if (mask != SEM_NULL)
