@@ -33,19 +33,21 @@ typedef struct _BINF {
 /// [TODO:] interactions
 /// [TODO:] categories
 struct LINF {
-    HDR_LIST;    /// list header
-    BINF *barr,  /// available behaviours ordered by name
-         *earr,  /// available effects ordered by parent bhv. name
-        **bgrp;  /// nonzero-probability BARR elements ordered by bhv. group
-    char *path,  /// the folder from which the library was built
-         *name;  /// human-readable name (may differ from PATH!)
-    long *ngrp,  /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
-          flgs,  /// flags
-          gcnt,  /// behaviour groups count
-          zcnt,  /// nonzero probability behaviours count
-          bcnt,  /// total behaviours count
-          ecnt,  /// total effects count
-          icnt;  /// number of on-screen bhv. sprites from the library
+    HDR_LIST;     /// list header
+    BINF  *barr,  /// available behaviours ordered by name
+          *earr,  /// available effects ordered by parent bhv. name
+         **bgrp;  /// nonzero-probability BARR elements ordered by bhv. group
+    char **bimp,  /// image paths for behaviours (0 if loaded)
+         **eimp,  /// image paths for effects (0 if loaded)
+          *path,  /// the folder from which the library was built
+          *name;  /// human-readable name (may differ from PATH!)
+    long  *ngrp,  /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
+           flgs,  /// flags
+           gcnt,  /// behaviour groups count
+           zcnt,  /// nonzero probability behaviours count
+           bcnt,  /// total behaviours count
+           ecnt,  /// total effects count
+           icnt;  /// number of on-screen bhv. sprites from the library
 };
 
 /// actual on-screen sprite, opaque outside the module
@@ -89,20 +91,6 @@ uint32_t HashLine(char *line, long size) {
     while (*line && size--)
         hash = SLH_PLUS + SLH_MULT * hash + *line++;
     return hash;
-}
-
-
-
-int igrpcmp(const void *a, const void *b) {
-    return (*(BINF**)b)->igrp - (*(BINF**)a)->igrp;
-}
-
-int namecmp(const void *a, const void *b) {
-    return ((BINF*)b)->name - ((BINF*)a)->name;
-}
-
-int uintcmp(const void *a, const void *b) {
-    return (*(uint32_t*)a) - (*(uint32_t*)b);
 }
 
 
@@ -341,18 +329,17 @@ LHDR *ListIterateTailToHead(LHDR *list, ITER iter, uintptr_t data) {
 
 
 
-void MakeSpritePair(ENGD *engd, AINF *pair, char *path, char **conf) {
-    char *file;
-    long iter;
-
-    for (iter = 0; iter <= 1; iter++) {
-        file = ConcatPath(path, Dequote(SplitLine(conf, DEF_TSEP, 0)));
-        EngineLoadAnimAsync(engd, (uint8_t*)file, 0, &pair[iter]);
-        free(file);
-    }
+int igrpcmp(const void *a, const void *b) {
+    return (*(BINF**)b)->igrp - (*(BINF**)a)->igrp;
 }
 
+int namecmp(const void *a, const void *b) {
+    return ((BINF*)b)->name - ((BINF*)a)->name;
+}
 
+int uintcmp(const void *a, const void *b) {
+    return (*(uint32_t*)a) - (*(uint32_t*)b);
+}
 
 #define HTT_ITER(list, iter, data) \
     ListIterateHeadToTail((LHDR*)(list), (ITER)(iter), (uintptr_t)(data))
@@ -372,7 +359,14 @@ void MakeSpritePair(ENGD *engd, AINF *pair, char *path, char **conf) {
     iter = bsearch(&elem, list, countof(list), sizeof(elem), uintcmp); \
     if ((elem = (iter)? iter - list + 1 : 0))
 
-void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
+void MakeSpritePair(char **dest, char *path, char **conf) {
+    long iter;
+
+    for (iter = 0; iter <= 1; iter++)
+        dest[iter] = ConcatPath(path, Dequote(SplitLine(conf, DEF_TSEP, 0)));
+}
+
+void ParseBehaviour(ENGC *engc, BINF *retn, char **imgp, char **conf) {
     static uint32_t
         uBMT[] = {BMT_HORM, BMT_ALLM, BMT_VERM, BMT_DRGM, BMT_HNDM, BMT_SLPM,
                   BMT_HNVM, BMT_DIAM, BMT_OVRM, BMT_DNVM, BMT_NONM},
@@ -407,7 +401,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
 
     /// right-sided image...................................................... !def
     /// left-sided image....................................................... !def
-    MakeSpritePair(engc->engd, retn->unit, engc->libs->path, conf);
+    MakeSpritePair(imgp, engc->libs->path, conf);
 
     /// possible movement directions...........................................  def = All
     IF_BIN_FIND(elem, uBMT, conf)
@@ -478,7 +472,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **conf) {
         SET_FLAG(retn->flgs, temp, FOT_MIRR, BHV_MIRR);
 }
 
-void ParseEffect(ENGC *engc, BINF *retn, char **conf) {
+void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
     static uint32_t
         uEMT[] = {EMT_CNRA, EMT_RNDA, EMT_CNTA, EMT_CNLA, EMT_BTMA, EMT_BNLA,
                   EMT_TOPA, EMT_BNRA, EMT_RCLA, EMT_TNLA, EMT_TNRA},
@@ -499,7 +493,7 @@ void ParseEffect(ENGC *engc, BINF *retn, char **conf) {
 
     /// right-sided image...................................................... !def
     /// left-sided image....................................................... !def
-    MakeSpritePair(engc->engd, retn->unit, engc->libs->path, conf);
+    MakeSpritePair(imgp, engc->libs->path, conf);
 
     /// duration in sec........................................................  def = 5
     if (TRY_TEMP(conf))
@@ -561,14 +555,16 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     break;
             }
 
-        bcnt = ecnt = 0;
-        if (engc->libs->bcnt)
-            engc->libs->barr = calloc(engc->libs->bcnt,
-                                      sizeof(*engc->libs->barr));
-        if (engc->libs->ecnt)
-            engc->libs->earr = calloc(engc->libs->ecnt,
-                                      sizeof(*engc->libs->earr));
+        if ((bcnt = engc->libs->bcnt)) {
+            engc->libs->barr = calloc(bcnt,     sizeof(*engc->libs->barr));
+            engc->libs->bimp = calloc(bcnt * 2, sizeof(*engc->libs->bimp));
+        }
+        if ((ecnt = engc->libs->ecnt)) {
+            engc->libs->earr = calloc(ecnt,     sizeof(*engc->libs->earr));
+            engc->libs->eimp = calloc(ecnt * 2, sizeof(*engc->libs->eimp));
+        }
         fptr = file;
+        bcnt = ecnt = 0;
         while ((conf = GetNextLine(&fptr)))
             switch (DetermineType(&conf)) {
                 case SVT_NAME:
@@ -576,11 +572,15 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     break;
 
                 case SVT_EFCT:
-                    ParseEffect(engc, &engc->libs->earr[ecnt++], &conf);
+                    ParseEffect(engc, &engc->libs->earr[ecnt],
+                               &engc->libs->eimp[ecnt * 2], &conf);
+                    ecnt++;
                     break;
 
                 case SVT_BHVR:
-                    ParseBehaviour(engc, &engc->libs->barr[bcnt++], &conf);
+                    ParseBehaviour(engc, &engc->libs->barr[bcnt],
+                                  &engc->libs->bimp[bcnt * 2], &conf);
+                    bcnt++;
                     break;
 
                 case SVT_BGRP:
@@ -606,6 +606,17 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
 
 
 void FreeLib(LINF *elem) {
+    long iter = elem->bcnt * 2;
+
+    while (elem->bimp || elem->eimp) {
+        if (elem->bimp)
+            while (iter)
+                free(elem->bimp[--iter]);
+        free(elem->bimp);
+        iter = elem->ecnt * 2;
+        elem->bimp = elem->eimp;
+        elem->eimp = 0;
+    }
     free(elem->path);
     free(elem->name);
     free(elem->barr);
@@ -613,6 +624,40 @@ void FreeLib(LINF *elem) {
     free(elem->bgrp);
     free(elem->ngrp);
     free(elem);
+}
+
+
+
+void LoadLib(LINF *elem, ENGD *engd) {
+    long iter, indx, ncnt;
+    char **nimp;
+    BINF *narr;
+
+    if (!elem->bimp)
+        return;
+    for (indx = 0; indx <= 1; indx++) {
+        narr =  (indx)? elem->earr : elem->barr;
+        nimp =  (indx)? elem->eimp : elem->bimp;
+        ncnt = ((indx)? elem->ecnt : elem->bcnt) * 2;
+        for (iter = 0; iter < ncnt; iter++)
+            if (nimp[iter]) {
+                EngineLoadAnimAsync(engd, (uint8_t*)nimp[iter], 0,
+                                   &narr[iter >> 1].unit[iter & 1]);
+                free(nimp[iter]);
+                nimp[iter] = 0;
+            }
+    }
+}
+
+
+
+void LoadTemplateFromLib(LINF *elem, ENGD *engd) {
+    if (!elem->bimp || !elem->bimp[0])
+        return;
+    EngineLoadAnimAsync(engd, (uint8_t*)elem->bimp[0], 0,
+                       &elem->barr[0].unit[0]);
+    free(elem->bimp[0]);
+    elem->bimp[0] = 0;
 }
 
 
@@ -772,49 +817,6 @@ void ChooseBehaviour(ENGC *engc, PICT *pict) {
 
 
 
-void AppendSpriteArr(LINF *elem, ENGC *engc) {
-    long iter;
-
-    if (!elem->bcnt || !elem->icnt)
-        return;
-
-    engc->pcnt += elem->icnt;
-    engc->parr = realloc(engc->parr, engc->pcnt * sizeof(*engc->parr));
-
-    for (iter = engc->pcnt - elem->icnt; iter < engc->pcnt; iter++) {
-        engc->parr[iter] = calloc(1, sizeof(*engc->parr[iter]));
-        engc->parr[iter]->ulib = elem;
-        ChooseBehaviour(engc, engc->parr[iter]);
-        PlaceRandomly(engc, engc->parr[iter]);
-    }
-}
-
-
-
-void FreeSpriteArr(ENGC *engc) {
-    long iter;
-
-    for (iter = 0; iter < engc->pcnt; iter++)
-        free(engc->parr[iter]);
-    free(engc->parr);
-    engc->parr = 0;
-    engc->pcnt = 0;
-}
-
-
-
-long MakeSpriteArr(ENGC *engc) {
-    FreeSpriteArr(engc);
-    TTH_ITER(engc->libs, AppendSpriteArr, engc);
-    SortByY(engc);
-
-    free(engc->data);
-    engc->data = (engc->pcnt)? calloc(engc->pcnt, sizeof(*engc->data)) : 0;
-    return engc->pcnt;
-}
-
-
-
 long TruncateAndSort(BINF **base, long *rcnt) {
     BINF *root = *base, *iter = root - 1;
     long indx;
@@ -831,83 +833,125 @@ long TruncateAndSort(BINF **base, long *rcnt) {
     return *rcnt;
 }
 
-void PrepareSpriteArr(LINF *elem, LINF **edge) {
+
+
+void FreeSpriteArr(ENGC *engc) {
+    long iter;
+
+    for (iter = 0; iter < engc->pcnt; iter++)
+        free(engc->parr[iter]);
+    free(engc->parr);
+    engc->parr = 0;
+    engc->pcnt = 0;
+}
+
+
+
+void AppendSpriteArr(LINF *elem, ENGC *engc) {
     BINF temp, *iter;
     long indx, turn;
 
-    /// "already prepared" flag
-    if (elem->flgs & 1)
+    if (elem->bimp || elem->eimp) {
+        turn = 0;
+        indx = elem->bcnt * 2;
+        while (indx && !turn)
+            turn |= !!elem->bimp[--indx];
+        indx = elem->ecnt * 2;
+        while (indx && !turn)
+            turn |= !!elem->eimp[--indx];
+
+        /// skip the lib if it`s got animations pending upload
+        if (turn)
+            return;
+
+        /// string arrays exist, but are empty? we`ve got an unprepared lib!
+        free(elem->bimp);
+        free(elem->eimp);
+        elem->bimp = elem->eimp = 0;
+
+        /// sorting all behaviours and effects by name hash
+        TruncateAndSort(&elem->earr, &elem->ecnt);
+        if (!TruncateAndSort(&elem->barr, &elem->bcnt)) {
+            /// freeing the library in case it`s got no behaviours
+            if (elem->prev)
+                elem->prev->next = elem->next;
+            if (elem->next)
+                elem->next->prev = elem->prev;
+            if (elem == engc->libs)
+                engc->libs = (LINF*)((elem->prev)? elem->prev : elem->next);
+            FreeLib(elem);
+            return;
+        }
+        /// determining the effect count and min. index for every behaviour
+        /// (note that some behaviours may have no effects)
+        for (indx = elem->ecnt - 1; indx >= 0; indx--)
+            if ((iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
+                                sizeof(*elem->barr), namecmp))) {
+                iter->ieff = indx;
+                iter->neff++;
+            }
+        /// iterating over all behaviours
+        for (indx = 0; indx < elem->bcnt; indx++) {
+            /// resolving the linked behaviour, if any
+            if (elem->barr[indx].link) {
+                temp.name = elem->barr[indx].link;
+                if ((iter = bsearch(&temp, elem->barr, elem->bcnt,
+                                    sizeof(*elem->barr), namecmp)))
+                    elem->barr[indx].link = iter - elem->barr + 1;
+                else
+                    elem->barr[indx].link = 0;
+            }
+            /// resolving image centers if unset (only possible here!)
+            for (iter = &elem->barr[indx], turn = 0; turn <= 1; turn++)
+                if (!(iter->cntr[turn].x | iter->cntr[turn].y))
+                    iter->cntr[turn] = (T2IV){{iter->unit[turn].xdim >> 1,
+                                               iter->unit[turn].ydim >> 1}};
+        }
+
+        /// populating BGRP with nonzero-probability behaviours, ZCNT := len
+        elem->bgrp = malloc(elem->bcnt * sizeof(*elem->bgrp));
+        for (elem->zcnt = indx = 0; indx < elem->bcnt; indx++)
+            if (elem->barr[indx].prob)
+                elem->bgrp[elem->zcnt++] = &elem->barr[indx];
+        elem->bgrp = realloc(elem->bgrp, elem->zcnt * sizeof(*elem->bgrp));
+        /// sorting BGRP by group number
+        qsort(elem->bgrp, elem->zcnt, sizeof(*elem->bgrp), igrpcmp);
+
+        /// counting groups + normalizing their indices to [0; GCNT) interval
+        for (elem->gcnt = turn = indx = 0; indx < elem->zcnt; indx++) {
+            if (elem->bgrp[indx]->igrp != turn) {
+                turn = elem->bgrp[indx]->igrp;
+                elem->gcnt++;
+            }
+            elem->bgrp[indx]->igrp = elem->gcnt;
+        }
+        elem->gcnt++;
+
+        /// filling NGRP with behaviour group boundaries
+        elem->ngrp = calloc(elem->gcnt, sizeof(*elem->ngrp));
+        for (turn = indx = 0; indx < elem->zcnt; indx++)
+            elem->ngrp[elem->bgrp[indx]->igrp] = indx + 1;
+        /// turning probabilities into integral probabilities
+        for (turn = indx = 0; indx < elem->gcnt; indx++) {
+            for (++turn; turn < elem->ngrp[indx]; ++turn)
+                elem->bgrp[turn]->prob += elem->bgrp[turn - 1]->prob;
+            turn = elem->ngrp[indx];
+        }
+    }
+
+    if (!elem->icnt)
         return;
-    elem->flgs |= 1;
 
-    /// sorting all behaviours and effects by name hash
-    TruncateAndSort(&elem->earr, &elem->ecnt);
-    if (!TruncateAndSort(&elem->barr, &elem->bcnt)) {
-        /// freeing the library in case it`s got no behaviours
-        if (elem->prev)
-            elem->prev->next = elem->next;
-        if (elem->next)
-            elem->next->prev = elem->prev;
-        if (elem == *edge)
-            *edge = (LINF*)((elem->prev)? elem->prev : elem->next);
-        FreeLib(elem);
-        return;
-    }
-    /// determining the total effect count and min. index for every behaviour
-    /// (note that some behaviours may have no effects)
-    for (indx = elem->ecnt - 1; indx >= 0; indx--)
-        if ((iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
-                            sizeof(*elem->barr), namecmp))) {
-            iter->ieff = indx;
-            iter->neff++;
-        }
-    /// iterating over all behaviours
-    for (indx = 0; indx < elem->bcnt; indx++) {
-        /// resolving the linked behaviour, if any
-        if (elem->barr[indx].link) {
-            temp.name = elem->barr[indx].link;
-            if ((iter = bsearch(&temp, elem->barr, elem->bcnt,
-                                sizeof(*elem->barr), namecmp)))
-                elem->barr[indx].link = iter - elem->barr + 1;
-            else
-                elem->barr[indx].link = 0;
-        }
-        /// resolving image centers, if not set already (only possible here!)
-        for (iter = &elem->barr[indx], turn = 0; turn <= 1; turn++)
-            if (!(iter->cntr[turn].x | iter->cntr[turn].y))
-                iter->cntr[turn] = (T2IV){{iter->unit[turn].xdim >> 1,
-                                           iter->unit[turn].ydim >> 1}};
-    }
+    engc->pcnt += elem->icnt;
+    engc->parr = realloc(engc->parr, engc->pcnt * sizeof(*engc->parr));
 
-    /// populating BGRP with nonzero-probability behaviours, ZCNT := length
-    elem->bgrp = malloc(elem->bcnt * sizeof(*elem->bgrp));
-    for (elem->zcnt = indx = 0; indx < elem->bcnt; indx++)
-        if (elem->barr[indx].prob)
-            elem->bgrp[elem->zcnt++] = &elem->barr[indx];
-    elem->bgrp = realloc(elem->bgrp, elem->zcnt * sizeof(*elem->bgrp));
-    /// sorting BGRP by group number
-    qsort(elem->bgrp, elem->zcnt, sizeof(*elem->bgrp), igrpcmp);
-
-    /// counting groups and normalizing their indices to [0; GCNT) interval
-    for (elem->gcnt = turn = indx = 0; indx < elem->zcnt; indx++) {
-        if (elem->bgrp[indx]->igrp != turn) {
-            turn = elem->bgrp[indx]->igrp;
-            elem->gcnt++;
-        }
-        elem->bgrp[indx]->igrp = elem->gcnt;
+    for (indx = engc->pcnt - elem->icnt; indx < engc->pcnt; indx++) {
+        engc->parr[indx] = calloc(1, sizeof(*engc->parr[indx]));
+        engc->parr[indx]->ulib = elem;
+        ChooseBehaviour(engc, engc->parr[indx]);
+        PlaceRandomly(engc, engc->parr[indx]);
     }
-    elem->gcnt++;
-
-    /// filling NGRP with behaviour group boundaries
-    elem->ngrp = calloc(elem->gcnt, sizeof(*elem->ngrp));
-    for (turn = indx = 0; indx < elem->zcnt; indx++)
-        elem->ngrp[elem->bgrp[indx]->igrp] = indx + 1;
-    /// turning probabilities into integral probabilities
-    for (turn = indx = 0; indx < elem->gcnt; indx++) {
-        for (++turn; turn < elem->ngrp[indx]; ++turn)
-            elem->bgrp[turn]->prob += elem->bgrp[turn - 1]->prob;
-        turn = elem->ngrp[indx];
-    }
+    elem->icnt = 0;
 }
 
 
@@ -1201,14 +1245,14 @@ uint32_t UpdFrame(ENGD *engd, uintptr_t user,
 
 
 
-void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
-                   uintptr_t icon, uint32_t flgs, uint8_t *lang) {
+uint32_t *InitEngine(ENGC *engc, uint8_t *lang, long xdim, long ydim) {
     INCBIN("../core/en.lang", DefaultLanguage);
+    INCBIN("../core/icon.gif", MainIcon);
 
+    AINF igif = {};
     uint8_t *data;
     long size;
 
-    engc->dims = (T2IV){{xdim, ydim}};
     FreeLocalization(&engc->tran);
     LoadLocalization(&engc->tran, (uint8_t*)DefaultLanguage,
                      strlen(DefaultLanguage));
@@ -1217,7 +1261,28 @@ void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
         LoadLocalization(&engc->tran, data, size);
         free(data);
     }
+    EngineCallback(0, ECB_INIT, (uintptr_t)&engc->engd);
+    EngineLoadAnimAsync(engc->engd,
+                       (uint8_t*)"/Icon/", (uint8_t*)MainIcon, &igif);
+    TTH_ITER(engc->libs, LoadTemplateFromLib, engc->engd);
+    EngineCallback(engc->engd, ECB_LOAD, 0);
+    EngineCallback(engc->engd, ECB_LOAD, ~0);
+
+    igif.fcnt = 0;
+    igif.xdim = xdim;
+    igif.ydim = ydim;
+    igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
+    EngineCallback(engc->engd, ECB_DRAW, (uintptr_t)&igif);
+
+    return igif.time;
+}
+
+
+
+void ExecEngine(ENGC *engc, uintptr_t icon, long xpos, long ypos,
+                ulong xdim, ulong ydim, uint32_t flgs) {
     MENU *spec,
+
     mspr[] =
    {{.text = (uint8_t*)"",         .flgs = MFL_GRAY},
     {.text = (uint8_t*)""},
@@ -1269,23 +1334,26 @@ void ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
     engc->mctx[2].chld =
         ((spec = OSSpecificMenu(engc)))? spec : MenuFromTemplate(none);
 
-    TTH_ITER(engc->libs, PrepareSpriteArr, &engc->libs);
-    MakeSpriteArr(engc);
-
     engc->seed = time(0);
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);
-
     SetTrayIconText(icon, (char*)engc->tran[TXT_HEAD]);
+
+    engc->dims = (T2IV){{xdim, ydim}};
+    TTH_ITER(engc->libs, LoadLib, engc->engd);
+    EngineCallback(engc->engd, ECB_LOAD, 0);
+
+    TTH_ITER(engc->libs, AppendSpriteArr, engc);
+    engc->data = (engc->pcnt)? calloc(engc->pcnt, sizeof(*engc->data)) : 0;
     EngineRunMainLoop(engc->engd, xpos, ypos, engc->dims.x, engc->dims.y,
                       flgs, FRM_WAIT, (uintptr_t)engc, UpdFrame);
+    FreeSpriteArr(engc);
+    free(engc->data);
 
     FreeMenu(&engc->mspr);
     FreeMenu(&engc->mctx);
     FreeLocalization(&engc->tran);
-    EngineCallback(engc->engd, ECB_QUIT, 0);
-    FreeSpriteArr(engc);
     TTH_ITER(engc->libs, FreeLib, 0);
-    free(engc->data);
+    EngineCallback(engc->engd, ECB_QUIT, 0);
     *engc = (ENGC){};
 }
 

@@ -862,6 +862,8 @@ void EngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
 
 
 void EngineCallback(ENGD *engd, uint32_t ecba, uintptr_t data) {
+    if (!engd && (ecba != ECB_INIT))
+        return;
     switch (ecba) {
         case ECB_INIT:
             engd = calloc(1, sizeof(*engd));

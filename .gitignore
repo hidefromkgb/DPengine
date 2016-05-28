@@ -7,7 +7,7 @@ linux-gtk
 *.so
 
 # Animations
-Ponies
+Ponies*
 
 # Code::Blocks service files
 *.layout

@@ -293,8 +293,9 @@ uint32_t PRNG(uint32_t *seed);
 MENU *MenuFromTemplate(MENU *tmpl);
 void  ProcessMenuItem(MENU *item);
 void  AppendLib(ENGC *engc, char *pcnf, char *base, char *path);
-void  ExecuteEngine(ENGC *engc, long xpos, long ypos, ulong xdim, ulong ydim,
-                    uintptr_t icon, uint32_t flgs, uint8_t *lang);
+void  ExecEngine(ENGC *engc, uintptr_t icon, long xpos, long ypos,
+                 ulong xdim, ulong ydim, uint32_t flgs);
+uint32_t *InitEngine(ENGC *engc, uint8_t *lang, long xdim, long ydim);
 
 
 
