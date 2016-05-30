@@ -59,28 +59,39 @@ typedef struct _UNIT {
     ulong offs[4]; /// offsets from the initial size: X_lf, X_rt, Y_up, Y_dn
 } UNIT;
 
+/// renderbuffer-based framebuffer object
+typedef struct _FRBO {
+    ulong fbuf,    /// framebuffer
+          rbuf[2], /// renderbuffers for pixel and depth data
+          pbuf[2]; /// pixel-transfer buffer array
+    long  xdim,    /// width
+          ydim,    /// height
+          swiz;    /// pixel buffer switcher
+} FRBO;
 
 
-uint32_t PrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t flgs);
-void OutputFrame(ENGD *engd);
-void DeallocFrame(ENGD *engd);
-void OutputFPS(ENGD *engd, char retn[]);
-THR_FUNC ThrdFunc(THRD *data);
+
+uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t flgs);
+void cOutputFrame(ENGD *engd, FRBO **surf);
+void cDeallocFrame(ENGD *engd, FRBO **surf);
+void cOutputFPS(ENGD *engd, char retn[]);
+SEM_TYPE cFindBit(SEM_TYPE inpt);
+THR_FUNC cThrdFunc(THRD *data);
 
 
 
 /// external functions, have to be implemented or imported
-long CountCPUs();
-uint64_t TimeFunc();
-char *LoadFile(char *name, long *size);
-void MakeThread(THRD *thrd);
-void RestartEngine(ENGD *engd);
-void ShowMainWindow(ENGD *engd, ulong show);
-void RunMainLoop(ENGD *engd, long xdim, long ydim,
-                 BGRA **bptr, uint64_t *time);
-void FreeSemaphore(SEMD **retn, long nthr);
-void MakeSemaphore(SEMD **retn, long nthr, SEM_TYPE mask);
-long PickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask);
-SEM_TYPE WaitSemaphore(SEMD *wait, SEM_TYPE mask);
+long lCountCPUs();
+uint64_t lTimeFunc();
+char *lLoadFile(char *name, long *size);
+void lMakeThread(THRD *thrd);
+void lRestartEngine(ENGD *engd);
+void lShowMainWindow(ENGD *engd, ulong show);
+void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
+                  BGRA **bptr, uint64_t *time);
+void lFreeSemaphore(SEMD **retn, long nthr);
+void lMakeSemaphore(SEMD **retn, long nthr, SEM_TYPE mask);
+long lPickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask);
+SEM_TYPE lWaitSemaphore(SEMD *wait, SEM_TYPE mask);
 
 #endif

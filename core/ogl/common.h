@@ -250,16 +250,6 @@ typedef struct _FVBO {
     SHDR   *pshd;
 } FVBO;
 
-/// renderbuffer-based framebuffer object
-typedef struct _FRBO {
-    GLuint fbuf,    /// framebuffer
-           rbuf[2], /// renderbuffers for pixel and depth data
-           pbuf[2]; /// pixel-transfer buffer array
-    GLint  xdim,    /// width
-           ydim,    /// height
-           swiz;    /// pixel buffer switcher
-} FRBO;
-
 
 
 GLvoid MakeShaderSrc(GLchar ***sver, GLchar ***spix,
@@ -275,10 +265,6 @@ FVBO  *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
                GLuint catr, UNIF *patr, GLuint cuni, UNIF *puni, GLuint ctex);
 GLvoid DrawVBO(FVBO *vobj, GLuint shad);
 GLvoid FreeVBO(FVBO **vobj);
-
-FRBO  *MakeRBO(GLint xdim, GLint ydim);
-GLvoid BindRBO(FRBO *robj, GLboolean bind);
-GLvoid FreeRBO(FRBO **robj);
 
 GLchar *LoadOpenGLFunctions(GLuint mask);
 

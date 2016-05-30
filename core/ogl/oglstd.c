@@ -109,10 +109,20 @@ void FreeRendererOGL(RNDR **rndr) {
 
 
 
+long InitRendererOGL() {
+    GLchar *load;
+
+    if ((load = LoadOpenGLFunctions(NV_vertex_program3)))
+        printf("%s\n", load);
+    return !load;
+}
+
+
+
 long MakeRendererOGL(RNDR **rndr, UNIT *uarr, ulong rgba,
                      ulong uniq, ulong size, ulong xscr, ulong yscr) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
-    GLchar *load, **sver, **spix;
+    GLchar **sver, **spix;
     GLubyte *atex, *aptr;
     T4FV *dims, *bank;
     GLuint *indx;
@@ -125,10 +135,6 @@ long MakeRendererOGL(RNDR **rndr, UNIT *uarr, ulong rgba,
     if (!rndr || *rndr)
         return 0;
 
-    if ((load = LoadOpenGLFunctions(NV_vertex_program3))) {
-        printf("%s\n", load);
-        return 0;
-    }
     glCullFace(GL_BACK);
     glEnable(GL_CULL_FACE);
     glDepthFunc(GL_LESS);
@@ -324,4 +330,91 @@ void DrawRendererOGL(RNDR *rndr, UNIT *uarr, T4FV *data,
     glClearColor(0.0, 0.0, 0.0, (opaq)? 1.0 : 0.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     DrawVBO(rndr->surf, 0);
+}
+
+
+
+FRBO *MakeRBO(long xdim, long ydim) {
+    FRBO *retn = calloc(1, sizeof(*retn));
+    GLint data;
+
+    retn->xdim = xdim;
+    retn->ydim = ydim;
+    retn->swiz = 0;
+
+    glGenFramebuffers(1, (GLuint*)&retn->fbuf);
+    glBindFramebuffer(GL_FRAMEBUFFER, retn->fbuf);
+
+    glGenRenderbuffers(2, (GLuint*)retn->rbuf);
+    glBindRenderbuffer(GL_RENDERBUFFER, retn->rbuf[0]);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA,
+                          retn->xdim, retn->ydim);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                              GL_RENDERBUFFER, retn->rbuf[0]);
+    glBindRenderbuffer(GL_RENDERBUFFER, retn->rbuf[1]);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
+                          retn->xdim, retn->ydim);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                              GL_RENDERBUFFER, retn->rbuf[1]);
+    data = retn->xdim * retn->ydim * 4;
+
+    glGenBuffersARB(2, (GLuint*)retn->pbuf);
+    glBindBufferARB(GL_PIXEL_PACK_BUFFER, retn->pbuf[0]);
+    glBufferDataARB(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
+    glBindBufferARB(GL_PIXEL_PACK_BUFFER, retn->pbuf[1]);
+    glBufferDataARB(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
+    glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, retn->fbuf);
+    glViewport(0, 0, retn->xdim, retn->ydim);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return retn;
+}
+
+
+
+void BindRBO(FRBO *robj, long bind) {
+    GLuint buff = (bind)? robj->fbuf : 0;
+
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, buff);
+}
+
+
+
+void ReadRBO(FRBO *robj, void *pict, ulong flgs) {
+    GLvoid *bptr;
+
+    if (flgs & WIN_IPBO)
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, robj->fbuf);
+    glReadPixels(0, 0, robj->xdim, robj->ydim,
+                (flgs & WIN_IBGR)? GL_BGRA : GL_RGBA,
+                 GL_UNSIGNED_BYTE, (flgs & WIN_IPBO)? 0 : pict);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+    if (flgs & WIN_IPBO) {
+        robj->swiz ^= 1;
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
+        bptr = glMapBufferARB(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+        if (bptr) {
+            memcpy(pict, bptr, robj->xdim * robj->ydim * sizeof(BGRA));
+            glUnmapBufferARB(GL_PIXEL_PACK_BUFFER);
+        }
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
+    }
+}
+
+
+
+void FreeRBO(FRBO **robj) {
+    if (robj && *robj) {
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteRenderbuffers(2, (GLuint*)(*robj)->rbuf);
+        glDeleteFramebuffers(1, (GLuint*)&(*robj)->fbuf);
+        glDeleteBuffersARB(2, (GLuint*)(*robj)->pbuf);
+        free(*robj);
+        *robj = 0;
+    }
 }

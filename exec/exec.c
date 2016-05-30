@@ -1,5 +1,137 @@
 #include "exec.h"
 
+/// a macro to count the capacity of static arrays
+#define countof(a) (sizeof(a) / sizeof(*(a)))
+
+/** convert degrees to radians  **/ #define DTR_CONV (M_PI / 180.0)
+/** convert radians to degrees  **/ #define RTD_CONV (1.0 / DTR_CONV)
+
+/** framerate limiter in msec   **/ #define FRM_WAIT 40
+/** invalid hash                **/ #define ERR_HASH 0x00000000
+
+/** default comment character   **/ #define DEF_CMNT '\''
+/** default token separator     **/ #define DEF_TSEP ','
+
+/// /// /// /// /// /// /// /// /// truth values
+/** 'true'                      **/ #define VAL_TRUE 0x390A9E10
+/** 'false'                     **/ #define VAL_FALS 0xD6A90B70
+
+/// /// /// /// /// /// /// /// /// section value types
+/** 'name'                      **/ #define SVT_NAME 0x692C5651
+/** 'effect'                    **/ #define SVT_EFCT 0x80720D9F
+/** 'behavior'                  **/ #define SVT_BHVR 0x532A0FD4
+/** 'behaviorgroup'             **/ #define SVT_BGRP 0xA40004B2
+/** 'categories'                **/ #define SVT_CTGS 0x21179D08
+/** 'speak'                     **/ #define SVT_PHRS 0xF708913D
+
+/// /// /// /// /// /// /// /// /// behaviour movement types
+/** 'none'                      **/ #define BMT_NONM 0xF3B3E074
+/** 'horizontal_only'           **/ #define BMT_HORM 0x2359740E
+/** 'vertical_only'             **/ #define BMT_VERM 0x4753BD0C
+/** 'diagonal_only'             **/ #define BMT_DIAM 0xA988F1D9
+/** 'horizontal_vertical'       **/ #define BMT_HNVM 0x9D44367E
+/** 'diagonal_horizontal'       **/ #define BMT_HNDM 0x590262FB
+/** 'diagonal_vertical'         **/ #define BMT_DNVM 0xE2676419
+/** 'all'                       **/ #define BMT_ALLM 0x43E72DD0
+/** 'mouseover'                 **/ #define BMT_OVRM 0xB73EDCDE
+/** 'dragged'                   **/ #define BMT_DRGM 0x4A4CCCE1
+/** 'sleep'                     **/ #define BMT_SLPM 0x62B9B962
+
+/// /// /// /// /// /// /// /// /// effect alignment types
+/** 'top_left'                  **/ #define EMT_TNLA 0xE73713ED
+/** 'top'                       **/ #define EMT_TOPA 0xA47C2B7E
+/** 'top_right'                 **/ #define EMT_TNRA 0xECF514DD
+/** 'left'                      **/ #define EMT_CNLA 0x7D6BA6E7
+/** 'center'                    **/ #define EMT_CNTA 0x4E745BAB
+/** 'right'                     **/ #define EMT_CNRA 0x0F854D3F
+/** 'bottom_left'               **/ #define EMT_BNLA 0x884F61CE
+/** 'bottom'                    **/ #define EMT_BTMA 0x8819E73B
+/** 'bottom_right'              **/ #define EMT_BNRA 0xB9049E02
+/** 'any'                       **/ #define EMT_RNDA 0x43E92567
+/** 'any-not_center'            **/ #define EMT_RCLA 0xD76D8510
+
+/// /// /// /// /// /// /// /// /// behaviour/effect flags
+/** no movement at all          **/ #define BHV_NONM (0      )
+/** horizontal movement         **/ #define BHV_HORM (1 <<  0)
+/** diagonal movement           **/ #define BHV_DIAM (1 <<  1)
+/** vertical movement           **/ #define BHV_VERM (1 <<  2)
+/** movement control flag       **/ #define BHV_CTLM (1 <<  3)
+
+/** horz + vert movement        **/ #define BHV_HNVM (BHV_HORM | BHV_VERM)
+/** horz + diag movement        **/ #define BHV_HNDM (BHV_HORM | BHV_DIAM)
+/** diag + vert movement        **/ #define BHV_DNVM (BHV_DIAM | BHV_VERM)
+/** horz + diag + vert          **/ #define BHV_ALLM (BHV_HORM | BHV_DIAM | BHV_VERM)
+/** 'mouse-over' state          **/ #define BHV_OVRM (BHV_CTLM | BHV_HORM)
+/** 'dragged' state             **/ #define BHV_DRGM (BHV_CTLM | BHV_DIAM)
+/** 'sleep' state               **/ #define BHV_SLPM (BHV_CTLM | BHV_VERM)
+/** [extractor]                 **/ #define BHV_MMMM (BHV_HORM | BHV_DIAM | BHV_VERM | BHV_CTLM)
+
+/** can be executed at random   **/ #define BHV_EXEC (1 << 27)
+/** [yet to be understood]      **/ #define BHV_____ (1 << 28)
+/** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 29)
+
+/** top-left alignment          **/ #define EFF_TNLA 0
+/** top alignment               **/ #define EFF_TOPA 1
+/** top-right alignment         **/ #define EFF_TNRA 2
+/** center-left alignment       **/ #define EFF_CNLA 3
+/** center alignment            **/ #define EFF_CNTA 4
+/** center-right alignment      **/ #define EFF_CNRA 5
+/** bottom-left alignment       **/ #define EFF_BNLA 6
+/** bottom alignment            **/ #define EFF_BTMA 7
+/** bottom-right alignment      **/ #define EFF_BNRA 8
+/** random alignment            **/ #define EFF_RNDA 9
+/** random centerless align     **/ #define EFF_RCLA 10
+/** [extractor]                 **/ #define EFF_AAAA 0xF
+
+/** do not follow parent        **/ #define EFF_STAY (1 << 29)
+/** animation can be looped     **/ #define FLG_LOOP (1 << 30)
+/** this item is an effect      **/ #define FLG_EFCT (1 << 31)
+
+/// /// /// /// /// /// /// /// /// follow offset type values
+/** 'fixed'                     **/ #define FOT_FIXD 0x9A8F97BD
+/** 'mirror'                    **/ #define FOT_MIRR 0x304E7075
+
+/// /// /// /// /// /// /// /// /// localized text constants
+/** Remove pony                 **/ #define TXT_CDEL  0
+/** Remove all similar          **/ #define TXT_ADEL  1
+/** Sleep/pause                 **/ #define TXT_CSLP  2
+/** Sleep/pause all similar     **/ #define TXT_ASLP  3
+/** Add pony >>>                **/ #define TXT_PONY  4
+/** Add house >>>               **/ #define TXT_HOUS  5
+/** Take control: Player 1      **/ #define TXT_TPL1  6
+/** Take control: Player 2      **/ #define TXT_TPL2  7
+/** Show options...             **/ #define TXT_OPTS  8
+/** Return to menu...           **/ #define TXT_RETN  9
+
+/** [ Desktop Ponies Engine ]   **/ #define TXT_HEAD 10
+/** OS specific options         **/ #define TXT_SPEC 11
+/** Disable transparency        **/ #define TXT_OPAQ 12
+/** Play animation              **/ #define TXT_DRAW 13
+/** Show window                 **/ #define TXT_SHOW 14
+/** Exit                        **/ #define TXT_EXIT 15
+/** Use GPU for drawing         **/ #define TXT_RGPU 16
+/** [ none ]                    **/ #define TXT_NONE 17
+
+/** Show console                **/ #define TXT_CONS 20
+/** Use regions                 **/ #define TXT_IRGN 21
+/** Enable BGRA                 **/ #define TXT_IBGR 22
+/** Enable pixel buffers        **/ #define TXT_IPBO 23
+/** Useless on full opacity!    **/ #define TXT_UOFO 24
+/** Useless without OpenGL!     **/ #define TXT_UWGL 25
+
+/** Desktop Ponies              **/ #define TXT_CAPT 26
+/** Enable filters              **/ #define TXT_FLTR 27
+/** Exact matching              **/ #define TXT_EXAC 28
+/** [At least one:]             **/ #define TXT_OGRP 29
+/** [All at once:]              **/ #define TXT_AGRP 30
+/** Random selection            **/ #define TXT_SRND 31
+/** Group selection             **/ #define TXT_SGRP 32
+/** Add                         **/ #define TXT_BADD 33
+/** Copies                      **/ #define TXT_BDUP 34
+/** Total:                      **/ #define TXT_ITTL 35
+/** More options...             **/ #define TXT_MORE 36
+/** GO!                         **/ #define TXT_GOGO 37
+
 /// doubly-linked list header
 #define HDR_LIST \
     struct _LHDR *prev, *next;
@@ -8,7 +140,7 @@ typedef struct _LHDR {
 } LHDR;
 
 /// doubly-linked list iterator
-typedef void (*ITER)(LHDR *item, uintptr_t data);
+typedef void (*ITER)(LHDR *item, intptr_t data);
 
 /// behaviour/effect unit info (write-once, read-only)
 typedef struct _BINF {
@@ -32,7 +164,7 @@ typedef struct _BINF {
 /// [TODO:] speech
 /// [TODO:] interactions
 /// [TODO:] categories
-struct LINF {
+typedef struct _LINF {
     HDR_LIST;     /// list header
     BINF  *barr,  /// available behaviours ordered by name
           *earr,  /// available effects ordered by parent bhv. name
@@ -48,11 +180,12 @@ struct LINF {
            bcnt,  /// total behaviours count
            ecnt,  /// total effects count
            icnt;  /// number of on-screen bhv. sprites from the library
-};
+} LINF;
 
 /// actual on-screen sprite, opaque outside the module
-struct PICT {
-    PICT    *next;  /// linked list support for SortByY(), only used there
+typedef struct _PICT {
+    struct
+    _PICT   *next;  /// linked list support for SortByY(), only used there
     LINF    *ulib;  /// unit library which the sprite belongs to
     T2FV     move,  /// movement direction
              offs;  /// position of the unit`s lower-left corner
@@ -61,6 +194,23 @@ struct PICT {
     uint64_t tfrm,  /// timestamp of the next frame in msec
              tmov,  /// timestamp of the next movement in msec
              tbhv;  /// timestamp of the next behaviour in msec
+} PICT;
+
+/// engine data (client side), opaque outside the module
+struct ENGC {
+    MENU     *mspr, /// per-sprite context menu
+             *mctx; /// engine`s main context menu
+    T4FV     *data; /// main display sequence passed to the renderer
+    ENGD     *engd; /// rendering engine handle
+    LINF     *libs; /// sprite libraries linked list
+    PICT     *pcur, /// the sprite currently picked
+            **parr; /// on-screen sprite pointers array
+    char    **tran; /// localized text array (ASCIIZ; last item is also 0)
+    uint32_t  pcnt, /// number of on-screen sprites
+              pmax, /// max. PARR capacity (realloc on exceed)
+              seed; /// random seed
+    T2IV      dims; /// drawing area dimensions
+    T3IV      ppos; /// mouse pointer position (z = flags)
 };
 
 
@@ -91,6 +241,13 @@ uint32_t HashLine(char *line, long size) {
     while (*line && size--)
         hash = SLH_PLUS + SLH_MULT * hash + *line++;
     return hash;
+}
+
+
+
+static inline long ClampToBounds(long what, long bmin, long bmax) {
+    what = (what > bmin)? what : bmin;
+    return (what < bmax)? what : bmax;
 }
 
 
@@ -299,7 +456,7 @@ void ListAppendTail(LHDR **list, long size) {
 
 
 
-LHDR *ListIterateHeadToTail(LHDR *list, ITER iter, uintptr_t data) {
+LHDR *ListIterateHeadToTail(LHDR *list, ITER iter, intptr_t data) {
     LHDR *elem;
 
     if (!list)
@@ -314,7 +471,7 @@ LHDR *ListIterateHeadToTail(LHDR *list, ITER iter, uintptr_t data) {
 
 
 
-LHDR *ListIterateTailToHead(LHDR *list, ITER iter, uintptr_t data) {
+LHDR *ListIterateTailToHead(LHDR *list, ITER iter, intptr_t data) {
     LHDR *elem;
 
     if (!list)
@@ -342,10 +499,10 @@ int uintcmp(const void *a, const void *b) {
 }
 
 #define HTT_ITER(list, iter, data) \
-    ListIterateHeadToTail((LHDR*)(list), (ITER)(iter), (uintptr_t)(data))
+    ListIterateHeadToTail((LHDR*)(list), (ITER)(iter), (intptr_t)(data))
 
 #define TTH_ITER(list, iter, data) \
-    ListIterateTailToHead((LHDR*)(list), (ITER)(iter), (uintptr_t)(data))
+    ListIterateTailToHead((LHDR*)(list), (ITER)(iter), (intptr_t)(data))
 
 #define GET_TEMP(conf) (temp = SplitLine(conf, DEF_TSEP, 0))
 
@@ -383,10 +540,9 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **imgp, char **conf) {
     retn->name = HashLine(Dequote(GET_TEMP(conf)), 0);
 
     /// probability of this behaviour..........................................  def = 0
-    if (TRY_TEMP(conf)) {
-        retn->prob = StrToFloat(temp) * 1000.0;
-        retn->prob = min(1000, max(0, retn->prob));
-    }
+    if (TRY_TEMP(conf))
+        retn->prob = ClampToBounds(StrToFloat(temp) * 1000.0, 0, 1000);
+
     /// maximum duration in sec................................................  def = 15
     if (TRY_TEMP(conf))
         retn->dmax = StrToFloat(temp) * 1000.0;
@@ -465,7 +621,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **imgp, char **conf) {
     /// behaviour group index..................................................  def = 0
     if (TRY_TEMP(conf)) {
         retn->igrp = StrToFloat(temp);
-        retn->igrp = max(0, retn->igrp);
+        retn->igrp = (retn->igrp > 0)? retn->igrp : 0;
     }
     /// whether target offset shall be mirrored................................  def = Fixed
     if (TRY_TEMP(conf))
@@ -531,12 +687,12 @@ void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
         retn->flgs &= ~FLG_LOOP;
 }
 
-void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
+void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
     char *file, *fptr, *conf, *temp;
     long bcnt, ecnt;
 
     conf = ConcatPath(fptr = ConcatPath(base, path), pcnf);
-    if ((file = LoadFileZ(conf, 0))) {
+    if ((file = rLoadFile(conf, 0))) {
         free(conf);
 
         ListAppendTail((LHDR**)&engc->libs, sizeof(*engc->libs));
@@ -633,7 +789,7 @@ void LoadLib(LINF *elem, ENGD *engd) {
     char **nimp;
     BINF *narr;
 
-    if (!elem->bimp)
+    if (!elem->bimp || !elem->icnt)
         return;
     for (indx = 0; indx <= 1; indx++) {
         narr =  (indx)? elem->earr : elem->barr;
@@ -641,8 +797,8 @@ void LoadLib(LINF *elem, ENGD *engd) {
         ncnt = ((indx)? elem->ecnt : elem->bcnt) * 2;
         for (iter = 0; iter < ncnt; iter++)
             if (nimp[iter]) {
-                EngineLoadAnimAsync(engd, (uint8_t*)nimp[iter], 0,
-                                   &narr[iter >> 1].unit[iter & 1]);
+                cEngineLoadAnimAsync(engd, (uint8_t*)nimp[iter], 0,
+                                    &narr[iter >> 1].unit[iter & 1]);
                 free(nimp[iter]);
                 nimp[iter] = 0;
             }
@@ -654,8 +810,8 @@ void LoadLib(LINF *elem, ENGD *engd) {
 void LoadTemplateFromLib(LINF *elem, ENGD *engd) {
     if (!elem->bimp || !elem->bimp[0])
         return;
-    EngineLoadAnimAsync(engd, (uint8_t*)elem->bimp[0], 0,
-                       &elem->barr[0].unit[0]);
+    cEngineLoadAnimAsync(engd, (uint8_t*)elem->bimp[0], 0,
+                        &elem->barr[0].unit[0]);
     free(elem->bimp[0]);
     elem->bimp[0] = 0;
 }
@@ -992,12 +1148,12 @@ void MMH(MENU *item) {
             ENGC *engc = (ENGC*)item->data;
             uint32_t flgs;
 
-            EngineCallback(engc->engd, ECB_GFLG, (uintptr_t)&flgs);
+            cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&flgs);
             if (item->flgs & MFL_VCHK)
                 flgs |= COM_RGPU;
             else
                 flgs &= ~COM_RGPU;
-            EngineCallback(engc->engd, ECB_SFLG, flgs);
+            cEngineCallback(engc->engd, ECB_SFLG, flgs);
             break;
         }
         case TXT_SHOW:
@@ -1007,25 +1163,25 @@ void MMH(MENU *item) {
             uint32_t flag = (item->uuid != TXT_OPAQ)? (item->uuid != TXT_DRAW)?
                              COM_SHOW : COM_DRAW : COM_OPAQ, flgs;
 
-            EngineCallback(engc->engd, ECB_GFLG, (uintptr_t)&flgs);
+            cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&flgs);
             if (item->flgs & MFL_VCHK)
                 flgs |= flag;
             else
                 flgs &= ~flag;
-            EngineCallback(engc->engd, ECB_SFLG, flgs);
+            cEngineCallback(engc->engd, ECB_SFLG, flgs);
             break;
         }
         case TXT_EXIT:
-            EngineCallback(((ENGC*)item->data)->engd, ECB_QUIT, ~0);
+            cEngineCallback(((ENGC*)item->data)->engd, ECB_QUIT, ~0);
             break;
     }
 }
 
 
 
-uint32_t LoadLocalization(uint8_t ***text, uint8_t *data, uint32_t size) {
+ulong LoadLocalization(char ***text, char *data, ulong size) {
     long line, nlin, iter, prev;
-    uint8_t **retn;
+    char **retn;
 
     if (!data)
         return 0;
@@ -1061,7 +1217,7 @@ uint32_t LoadLocalization(uint8_t ***text, uint8_t *data, uint32_t size) {
 
 
 
-void FreeLocalization(uint8_t ***text) {
+void FreeLocalization(char ***text) {
     long iter = -1;
 
     if (text && *text) {
@@ -1074,7 +1230,7 @@ void FreeLocalization(uint8_t ***text) {
 
 
 
-void ProcessMenuItem(MENU *item) {
+void eProcessMenuItem(MENU *item) {
     MENU *indx;
 
     if (item->flgs & MFL_CCHK) {
@@ -1116,12 +1272,12 @@ void FreeMenu(MENU **menu) {
 
 
 
-void UpdateMenuItemText(MENU *item, uint8_t *text) {
+void UpdateMenuItemText(MENU *item, char *text) {
     if (!item || !text)
         return;
 
     free(item->text);
-    item->text = (uint8_t*)ConvertUTF8((char*)text);
+    item->text = rConvertUTF8(text);
 }
 
 
@@ -1139,8 +1295,7 @@ MENU *MenuFromTemplate(MENU *tmpl) {
                 *iter = *tmpl;
                 if (tmpl->chld)
                     iter->chld = MenuFromTemplate(tmpl->chld);
-                iter++->text = (tmpl->text)?
-                               (uint8_t*)ConvertUTF8((char*)tmpl->text) : 0;
+                iter++->text = (tmpl->text)? rConvertUTF8(tmpl->text) : 0;
             } while (tmpl++->text);
         }
     }
@@ -1149,21 +1304,21 @@ MENU *MenuFromTemplate(MENU *tmpl) {
 
 
 
-uint32_t UpdFrame(ENGD *engd, uintptr_t user,
-                  T4FV **data, uint64_t *time, uint32_t flgs,
-                  int32_t xptr, int32_t yptr, int32_t isel) {
+uint32_t eUpdFrame(ENGD *engd, intptr_t user,
+                   T4FV **data, uint64_t *time, uint32_t flgs,
+                   int32_t xptr, int32_t yptr, int32_t isel) {
     ENGC *engc = (ENGC*)user;
     PICT *pict = engc->pcur;
     BINF *binf;
     AINF *anim;
 
-    uint8_t *temp;
+    char *temp;
+    long  indx;
     uint64_t curr;
-    long indx;
 
-    EngineCallback(engd, ECB_LOAD, ~0);
+    cEngineCallback(engd, ECB_LOAD, ~0);
     /// here you can add new sprites!
-    EngineCallback(engd, ECB_LOAD, 0);
+    cEngineCallback(engd, ECB_LOAD, 0);
 
     if ((flgs & UFR_MOUS) && ((isel >= 0) || pict)) {
         if (!pict && ((engc->ppos.z ^ flgs) & UFR_LBTN)) {
@@ -1185,10 +1340,10 @@ uint32_t UpdFrame(ENGD *engd, uintptr_t user,
             if (!pict)
                 pict = engc->parr[isel];
             temp = malloc(32 + strlen(pict->ulib->name));
-            sprintf((char*)temp, "[ %s ]", pict->ulib->name);
+            sprintf(temp, "[ %s ]", pict->ulib->name);
             UpdateMenuItemText(&engc->mspr[0], temp);
             free(temp);
-            OpenContextMenu(engc->mspr);
+            rOpenContextMenu(engc->mspr);
         }
         engc->ppos.z = flgs;
     }
@@ -1245,115 +1400,136 @@ uint32_t UpdFrame(ENGD *engd, uintptr_t user,
 
 
 
-uint32_t *InitEngine(ENGC *engc, uint8_t *lang, long xdim, long ydim) {
+void eReallocEngine(ENGC **retn, char *lang) {
     INCBIN("../core/en.lang", DefaultLanguage);
-    INCBIN("../core/icon.gif", MainIcon);
 
-    AINF igif = {};
-    uint8_t *data;
+    if (!retn)
+        return;
+    if (!*retn)
+        *retn = calloc(1, sizeof(**retn));
+
+    ENGC *engc = *retn;
+    char *data;
     long size;
 
     FreeLocalization(&engc->tran);
-    LoadLocalization(&engc->tran, (uint8_t*)DefaultLanguage,
-                     strlen(DefaultLanguage));
+    LoadLocalization(&engc->tran, DefaultLanguage, strlen(DefaultLanguage));
     if (lang) {
-        data = (uint8_t*)LoadFileZ((char*)lang, &size);
+        data = rLoadFile(lang, &size);
         LoadLocalization(&engc->tran, data, size);
         free(data);
     }
-    EngineCallback(0, ECB_INIT, (uintptr_t)&engc->engd);
-    EngineLoadAnimAsync(engc->engd,
-                       (uint8_t*)"/Icon/", (uint8_t*)MainIcon, &igif);
-    TTH_ITER(engc->libs, LoadTemplateFromLib, engc->engd);
-    EngineCallback(engc->engd, ECB_LOAD, 0);
-    EngineCallback(engc->engd, ECB_LOAD, ~0);
 
-    igif.fcnt = 0;
-    igif.xdim = xdim;
-    igif.ydim = ydim;
-    igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
-    EngineCallback(engc->engd, ECB_DRAW, (uintptr_t)&igif);
-
-    return igif.time;
-}
-
-
-
-void ExecEngine(ENGC *engc, uintptr_t icon, long xpos, long ypos,
-                ulong xdim, ulong ydim, uint32_t flgs) {
-    MENU *spec,
+    MENU *spec = 0, *temp = 0,
 
     mspr[] =
-   {{.text = (uint8_t*)"",         .flgs = MFL_GRAY},
-    {.text = (uint8_t*)""},
+   {{.text = "",                   .flgs = MFL_GRAY},
+    {.text = ""},
     {.text = engc->tran[TXT_CDEL], .uuid = TXT_CDEL, .func = MMH},
     {.text = engc->tran[TXT_ADEL], .uuid = TXT_ADEL, .func = MMH},
-    {.text = (uint8_t*)""},
+    {.text = ""},
     {.text = engc->tran[TXT_CSLP], .uuid = TXT_CSLP, .func = MMH},
     {.text = engc->tran[TXT_ASLP], .uuid = TXT_ASLP, .func = MMH},
-    {.text = (uint8_t*)""},
+    {.text = ""},
     {.text = engc->tran[TXT_PONY], .uuid = TXT_PONY, .func = MMH},
     {.text = engc->tran[TXT_HOUS], .uuid = TXT_HOUS, .func = MMH},
-    {.text = (uint8_t*)""},
+    {.text = ""},
     {.text = engc->tran[TXT_TPL1], .uuid = TXT_TPL1, .func = MMH},
     {.text = engc->tran[TXT_TPL2], .uuid = TXT_TPL2, .func = MMH},
-    {.text = (uint8_t*)""},
+    {.text = ""},
     {.text = engc->tran[TXT_OPTS], .uuid = TXT_OPTS, .func = MMH},
     {.text = engc->tran[TXT_RETN], .uuid = TXT_RETN, .func = MMH},
     {.text = engc->tran[TXT_EXIT], .uuid = TXT_EXIT, .func = MMH,
-     .data = (uintptr_t)engc},
+     .data = (intptr_t)engc},
     {}},
 
     mctx[] =
    {{.text = engc->tran[TXT_HEAD], .flgs = MFL_GRAY},
-    {.text = (uint8_t*)""},
+    {.text = ""},
     {.text = engc->tran[TXT_SPEC]},
     {.text = engc->tran[TXT_RGPU], .uuid = TXT_RGPU, .func = MMH,
-     .flgs = MFL_CCHK | ((flgs & COM_RGPU)? MFL_VCHK : 0),
-     .data = (uintptr_t)engc},
+     .flgs = MFL_CCHK, .data = (intptr_t)engc},
     {.text = engc->tran[TXT_OPAQ], .uuid = TXT_OPAQ, .func = MMH,
-     .flgs = MFL_CCHK | ((flgs & COM_OPAQ)? MFL_VCHK : 0),
-     .data = (uintptr_t)engc},
+     .flgs = MFL_CCHK, .data = (intptr_t)engc},
     {.text = engc->tran[TXT_DRAW], .uuid = TXT_DRAW, .func = MMH,
-     .flgs = MFL_CCHK | ((flgs & COM_DRAW)? MFL_VCHK : 0),
-     .data = (uintptr_t)engc},
+     .flgs = MFL_CCHK, .data = (intptr_t)engc},
     {.text = engc->tran[TXT_SHOW], .uuid = TXT_SHOW, .func = MMH,
-     .flgs = MFL_CCHK | ((flgs & COM_SHOW)? MFL_VCHK : 0),
-     .data = (uintptr_t)engc},
-    {.text = (uint8_t*)""},
+     .flgs = MFL_CCHK, .data = (intptr_t)engc},
+    {.text = ""},
     {.text = engc->tran[TXT_EXIT], .uuid = TXT_EXIT, .func = MMH,
-     .data = (uintptr_t)engc},
+     .data = (intptr_t)engc},
     {}},
 
     none[] =
    {{.text = engc->tran[TXT_NONE], .flgs = MFL_GRAY},
     {}};
 
+    if (engc->mspr) {
+        spec = engc->mspr[8].chld; /// Add pony
+        temp = engc->mspr[9].chld; /// Add house
+        engc->mspr[8].chld = engc->mspr[9].chld = 0;
+    }
+    FreeMenu(&engc->mctx);
+    FreeMenu(&engc->mspr);
     engc->mspr = MenuFromTemplate(mspr);
+    engc->mspr[8].chld = spec;
+    engc->mspr[9].chld = temp;
     engc->mctx = MenuFromTemplate(mctx);
-    engc->mctx[2].chld =
-        ((spec = OSSpecificMenu(engc)))? spec : MenuFromTemplate(none);
+    engc->mctx[2].chld = ((spec = rOSSpecificMenu(engc)))?
+                           spec : MenuFromTemplate(none);
+}
+
+
+
+void eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
+                    ulong xdim, ulong ydim, uint32_t flgs) {
+    INCBIN("../core/icon.gif", MainIcon);
+
+    AINF igif = {};
+    intptr_t icon;
+
+    #define FLAG(t, f) t = ((t) & ~MFL_VCHK) | ((flgs & (f))? MFL_VCHK : 0)
+    FLAG(engc->mctx[3].flgs, COM_RGPU);
+    FLAG(engc->mctx[4].flgs, COM_OPAQ);
+    FLAG(engc->mctx[5].flgs, COM_DRAW);
+    FLAG(engc->mctx[6].flgs, COM_SHOW);
+    #undef FLAG
+
+    cEngineCallback(0, ECB_INIT, (intptr_t)&engc->engd);
+    cEngineLoadAnimAsync(engc->engd,
+                       (uint8_t*)"/Icon/", (uint8_t*)MainIcon, &igif);
+    TTH_ITER(engc->libs, LoadTemplateFromLib, engc->engd);
+    cEngineCallback(engc->engd, ECB_LOAD, 0);
+    cEngineCallback(engc->engd, ECB_LOAD, ~0);
 
     engc->seed = time(0);
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);
-    SetTrayIconText(icon, (char*)engc->tran[TXT_HEAD]);
+
+    igif.fcnt = 0;
+    igif.xdim = xico;
+    igif.ydim = yico;
+    igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
+    cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
+    icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
+                         igif.time, igif.xdim, igif.ydim);
 
     engc->dims = (T2IV){{xdim, ydim}};
     TTH_ITER(engc->libs, LoadLib, engc->engd);
-    EngineCallback(engc->engd, ECB_LOAD, 0);
+    cEngineCallback(engc->engd, ECB_LOAD, 0);
 
     TTH_ITER(engc->libs, AppendSpriteArr, engc);
     engc->data = (engc->pcnt)? calloc(engc->pcnt, sizeof(*engc->data)) : 0;
-    EngineRunMainLoop(engc->engd, xpos, ypos, engc->dims.x, engc->dims.y,
-                      flgs, FRM_WAIT, (uintptr_t)engc, UpdFrame);
+    cEngineRunMainLoop(engc->engd, xpos, ypos, engc->dims.x, engc->dims.y,
+                       flgs, FRM_WAIT, (intptr_t)engc, eUpdFrame);
     FreeSpriteArr(engc);
     free(engc->data);
 
     FreeMenu(&engc->mspr);
     FreeMenu(&engc->mctx);
     FreeLocalization(&engc->tran);
+    rFreeTrayIcon(icon);
     TTH_ITER(engc->libs, FreeLib, 0);
-    EngineCallback(engc->engd, ECB_QUIT, 0);
+    cEngineCallback(engc->engd, ECB_QUIT, 0);
     *engc = (ENGC){};
 }
 

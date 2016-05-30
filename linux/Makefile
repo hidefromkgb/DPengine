@@ -100,6 +100,7 @@ $(OBJDIR)/run.o: run.c
 
 jlink:
 	$(CX) $(LCXFLAGS) $(LOBJ) $(EOBJ) -o $(EOUT) $(LLIB)
+	if type upx &> /dev/null; then upx -qq $(EOUT); fi
 
 llink: LCXFLAGS += -shared
 llink:
@@ -107,3 +108,4 @@ llink:
 
 elink:
 	$(CX) $(ECXFLAGS) $(EOBJ) -o $(EOUT) $(ELIB)
+	if type upx &> /dev/null; then upx -qq $(EOUT) $(LOUT); fi

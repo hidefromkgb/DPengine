@@ -162,7 +162,7 @@ typedef struct _AINF {
              xdim,   /// frame width (actual, non-modified)
              ydim,   /// frame height (actual, non-modified)
              fcnt,   /// number of animation`s frames
-            *time;   /// frame delays array, allocated and freed by the engine
+            *time;   /// frame delays array, managed by the engine
 } AINF;
 #pragma pack(pop)
 
@@ -183,7 +183,7 @@ typedef struct _AINF {
     YPTR: cursor Y coordinate, relative to the window`s upper left corner
     ISEL: index of the element under cursor in the existing list, < 0 if none
  **/
-typedef uint32_t (*UFRM)(ENGD *engd, uintptr_t user,
+typedef uint32_t (*UFRM)(ENGD *engd, intptr_t user,
                          T4FV **data, uint64_t *time, uint32_t flgs,
                          int32_t xptr, int32_t yptr, int32_t isel);
 
@@ -203,7 +203,7 @@ typedef uint32_t (*UFRM)(ENGD *engd, uintptr_t user,
                     DATA: pointer to the var that receives the flags
           ECB_SFLG: set the current state flags
                     DATA: new flags
-          ECB_DRAW: "immediate" CPU-to-RAM draw call; DATA -> AINF:
+          ECB_DRAW: "immediate" CPU-to-RAM draw call, DATA -> AINF:
                     UUID: ID of the target animation
                     XDIM: width of the draw area
                     YDIM: height of the draw area
@@ -215,7 +215,7 @@ typedef uint32_t (*UFRM)(ENGD *engd, uintptr_t user,
                     DATA == 0: terminate everything, deallocate resources
     DATA: accompanying data for the action; may be anything (see above)
  **/
-LIB_OPEN void EngineCallback(ENGD *engd, uint32_t ecba, uintptr_t data);
+LIB_OPEN void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data);
 
 /** _________________________________________________________________________
     Reads animations asynchronously. All AINF`s have to remain valid till the
@@ -227,8 +227,8 @@ LIB_OPEN void EngineCallback(ENGD *engd, uint32_t ecba, uintptr_t data);
     LOAD: preloaded GIF data (if any), 0 otherwise
     AINF: pointer to the struxture to receive animation properties
  **/
-LIB_OPEN void EngineLoadAnimAsync(ENGD *engd,
-                                  uint8_t *path, uint8_t *load, AINF *ainf);
+LIB_OPEN void cEngineLoadAnimAsync(ENGD *engd,
+                                   uint8_t *path, uint8_t *load, AINF *ainf);
 
 /** _________________________________________________________________________
     Executes the main loop.
@@ -246,6 +246,6 @@ LIB_OPEN void EngineLoadAnimAsync(ENGD *engd,
     USER: user data pointer to be passed to the callback
     FUNC: callback function described above (see UFRM typedef)
  **/
-LIB_OPEN void EngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
-                                uint32_t xdim, uint32_t ydim, uint32_t flgs,
-                                uint32_t msec, uintptr_t user, UFRM func);
+LIB_OPEN void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
+                                 uint32_t xdim, uint32_t ydim, uint32_t flgs,
+                                 uint32_t msec, intptr_t user, UFRM func);

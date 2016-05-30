@@ -9,45 +9,25 @@
 
 
 
-void RestartEngine(ENGD *engd, ulong anew) {
-    engd->anew = anew;
-    PostMessage((HWND)engd->user[0], WM_QUIT, 0, 0);
+void lRestartEngine(ENGD *engd) {
+    intptr_t *data;
+
+    cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
+    PostMessage((HWND)data[0], WM_QUIT, 0, 0);
 }
 
 
 
-void ShowMainWindow(ENGD *engd, ulong show) {
-    ShowWindow((HWND)engd->user[0], (show)? SW_SHOW : SW_HIDE);
+void lShowMainWindow(ENGD *engd, ulong show) {
+    intptr_t *data;
+
+    cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
+    ShowWindow((HWND)data[0], (show)? SW_SHOW : SW_HIDE);
 }
 
 
 
-void ReadRBO(FRBO *robj, PICT *pict, ulong flgs) {
-    void *bptr;
-
-    if (flgs & WIN_IPBO)
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, robj->fbuf);
-    glReadPixels(0, 0, robj->xdim, robj->ydim,
-                (flgs & WIN_IBGR)? GL_BGRA : GL_RGBA,
-                 GL_UNSIGNED_BYTE, (flgs & WIN_IPBO)? 0 : pict->bptr);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-
-    if (flgs & WIN_IPBO) {
-        robj->swiz ^= 1;
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
-        bptr = glMapBufferARB(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-        if (bptr) {
-            memcpy(pict->bptr, bptr, pict->xdim * pict->ydim * sizeof(BGRA));
-            glUnmapBufferARB(GL_PIXEL_PACK_BUFFER);
-        }
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
-    }
-}
-
-
-
-char *LoadFile(char *name, long *size) {
+char *lLoadFile(char *name, long *size) {
     char *retn = 0;
     DWORD temp, flen;
     HANDLE file;
@@ -76,51 +56,50 @@ char *LoadFile(char *name, long *size) {
 
 
 
-void MakeThread(THRD *thrd) {
+void lMakeThread(THRD *thrd) {
     DWORD retn;
 
-    CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThrdFunc, thrd, 0, &retn);
+    CreateThread(0, 0, (LPTHREAD_START_ROUTINE)cThrdFunc, thrd, 0, &retn);
 }
 
 
 
-long PickSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
-    SEMD *drop = (open)? &engd->osem : &engd->isem,
-         *pick = (open)? &engd->isem : &engd->osem;
+long lPickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask) {
+    HANDLE *dobj = (typeof(dobj))drop + 1, *pobj = (typeof(pobj))pick + 1;
     long iter;
 
-    for (iter = 0; iter < engd->ncpu; iter++)
+    for (iter = 0; iter < (long)dobj[-1]; iter++)
         if (mask & (1 << iter))
-            ResetEvent(drop->list[iter]);
+            ResetEvent(dobj[iter]);
 
-    for (iter = 0; iter < engd->ncpu; iter++)
+    for (iter = 0; iter < (long)pobj[-1]; iter++)
         if (mask & (1 << iter))
-            SetEvent(pick->list[iter]);
+            SetEvent(pobj[iter]);
 
     return TRUE;
 }
 
 
 
-SEM_TYPE WaitSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
-    SEMD *wait = (open)? &engd->osem : &engd->isem;
-    HANDLE *iter, list[engd->ncpu];
+SEM_TYPE lWaitSemaphore(SEMD *wait, SEM_TYPE mask) {
+    HANDLE objs[MAXIMUM_WAIT_OBJECTS], *iter, *list = (typeof(list))wait + 1;
     SEM_TYPE retn, temp;
+    long indx;
 
     if (mask) {
-        open = 0;
-        iter = list;
-        retn = mask &= (1 << engd->ncpu) - 1;
+        indx = 0;
+        iter = objs;
+        retn = mask &= (1 << (long)list[-1]) - 1;
         while (retn) {
-            *iter++ = wait->list[temp = FindBit(retn)];
+            *iter++ = list[temp = cFindBit(retn)];
             retn &= ~(1 << temp);
-            open++;
+            indx++;
         }
-        WaitForMultipleObjects(open, list, TRUE, INFINITE);
+        WaitForMultipleObjects(indx, objs, TRUE, INFINITE);
         retn = mask;
     }
     else {
-        retn = WaitForMultipleObjects(engd->ncpu, wait->list, FALSE, INFINITE);
+        retn = WaitForMultipleObjects((long)list[-1], list, FALSE, INFINITE);
         retn = (retn < MAXIMUM_WAIT_OBJECTS)? 1 << retn : 0;
     }
     return retn;
@@ -128,27 +107,35 @@ SEM_TYPE WaitSemaphore(ENGD *engd, long open, SEM_TYPE mask) {
 
 
 
-void FreeSemaphore(SEMD *retn, long nthr) {
+void lFreeSemaphore(SEMD **retn, long nthr) {
+    HANDLE **list = (typeof(list))retn;
     long iter;
 
-    for (iter = 0; iter < nthr; iter++)
-        CloseHandle(retn->list[iter]);
-    free(retn->list);
+    if (list) {
+        for (iter = 1; iter <= nthr; iter++)
+            CloseHandle((*list)[iter]);
+        free(*list);
+        *list = 0;
+    }
 }
 
 
 
-void MakeSemaphore(SEMD *retn, long nthr, SEM_TYPE mask) {
+void lMakeSemaphore(SEMD **retn, long nthr, SEM_TYPE mask) {
+    HANDLE **list = (typeof(list))retn;
     long iter;
 
-    retn->list = malloc(nthr * sizeof(*retn->list));
-    for (iter = 0; iter < nthr; iter++)
-        retn->list[iter] = CreateEvent(0, TRUE, (mask >> iter) & 1, 0);
+    if (list) {
+        *list = malloc((nthr + 1) * sizeof(**list));
+        (*list)[0] = (HANDLE)nthr;
+        for (iter = 0; iter < nthr; iter++)
+            (*list)[iter + 1] = CreateEvent(0, TRUE, (mask >> iter) & 1, 0);
+    }
 }
 
 
 
-long CountCPUs() {
+long lCountCPUs() {
     SYSTEM_INFO syin = {};
 
     GetSystemInfo(&syin);
@@ -157,7 +144,7 @@ long CountCPUs() {
 
 
 
-uint64_t TimeFunc() {
+uint64_t lTimeFunc() {
     return GetTickCount();
 }
 
@@ -165,7 +152,7 @@ uint64_t TimeFunc() {
 
 void APIENTRY TimeFuncWrapper(UINT uTmr, UINT uMsg, DWORD_PTR dUsr,
                               DWORD_PTR Res1, DWORD_PTR Res2) {
-    *(uint64_t*)dUsr = TimeFunc();
+    *(uint64_t*)dUsr = lTimeFunc();
 }
 
 
@@ -178,20 +165,12 @@ LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             SetTimer(hWnd, 1, 1000, 0);
             return 0;
 
-/** TODO **/
-//        case WM_TRAY: {
-//            ENGD *engd = (ENGD*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-//
-//            if (lPrm == WM_RBUTTONDOWN)
-//                EngineOpenContextMenu(engd->menu);
-//            return 0;
-//        }
 
         case WM_KEYDOWN:
             if (wPrm == VK_ESCAPE)
         case WM_CLOSE:
-                EngineCallback(GetWindowLongPtr(hWnd, GWLP_USERDATA),
-                               ECB_QUIT, ~0);
+                cEngineCallback((ENGD*)GetWindowLongPtr(hWnd, GWLP_USERDATA),
+                                 ECB_QUIT, ~0);
             return 0;
 
 
@@ -208,7 +187,7 @@ LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
         case WM_TIMER: {
             char fout[64];
 
-            OutputFPS((ENGD*)GetWindowLongPtr(hWnd, GWLP_USERDATA), fout);
+            cOutputFPS((ENGD*)GetWindowLongPtr(hWnd, GWLP_USERDATA), fout);
             SetWindowText(hWnd, fout);
             printf("%s\n", fout);
             return 0;
@@ -227,9 +206,9 @@ LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
 
 
-#define MAX_RECT 2000
 BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
                       POINT *psrc, COLORREF ckey, BGRA *bptr, DWORD flgs) {
+    #define MAX_RECT 2000
     struct {
         RGNDATAHEADER head;
         RECT rect[MAX_RECT];
@@ -268,13 +247,14 @@ BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
     }
     BitBlt(hdst, 0, 0, size->cx, size->cy, hsrc, 0, 0, SRCCOPY);
     return TRUE;
+    #undef MAX_RECT
 }
-#undef MAX_RECT
 
 
 
-void RunMainLoop(ENGD *engd) {
-    BLENDFUNCTION bfun = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
+                  BGRA **bptr, uint64_t *time) {
+    BLENDFUNCTION bstr = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
     WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW, WindowProc, 0,
                        0, 0, 0, LoadCursor(0, IDC_HAND), 0, 0, " ", 0};
     PIXELFORMATDESCRIPTOR ppfd = {sizeof(ppfd), 1, PFD_SUPPORT_OPENGL |
@@ -282,77 +262,62 @@ void RunMainLoop(ENGD *engd) {
                                   PFD_TYPE_RGBA, 32};
     BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader), 0, 0,
                         1, 8 * sizeof(BGRA), BI_RGB}};
-    SIZE dims = {engd->pict.xdim, engd->pict.ydim};
+    SIZE dims = {xdim - xpos, ydim - ypos};
     RECT scrr = {0, 0, dims.cx, dims.cy};
     POINT cpos, mpos, zpos = {};
     MSG pmsg = {};
 
-    BLENDFUNCTION *bptr;
+    BLENDFUNCTION *bfun;
     BOOL APIENTRY (*ULW)(HWND, HDC, POINT*, SIZE*, HDC, POINT*,
                          COLORREF, BLENDFUNCTION*, DWORD);
-    UINT time, attr, flgs;
+    UINT ttmr, attr, opts;
     HINSTANCE hlib;
     HDC devc, mwdc;
     HBITMAP hdib;
     HGLRC mwrc;
     HWND hwnd;
-    FRBO *surf;
+    FRBO *surf = 0;
+
+    intptr_t *data;
+    uint32_t flgs;
+
+    cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
+    cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
 
     mwrc = 0;
     devc = CreateCompatibleDC(0);
     bmpi.bmiHeader.biWidth = dims.cx;
-    bmpi.bmiHeader.biHeight = (engd->rscm == SCM_RSTD)? -dims.cy : dims.cy;
-    hdib = CreateDIBSection(devc, &bmpi, DIB_RGB_COLORS,
-                           (void*)&engd->pict.bptr, 0, 0);
+    bmpi.bmiHeader.biHeight = (~flgs & COM_RGPU)? -dims.cy : dims.cy;
+    hdib = CreateDIBSection(devc, &bmpi, DIB_RGB_COLORS, (void*)bptr, 0, 0);
     SelectObject(devc, hdib);
 
-    bptr = &bfun;
-    flgs = ULW_ALPHA;
+    bfun = &bstr;
+    opts = ULW_ALPHA;
     attr = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
-    mpos = (POINT){engd->mpos.x, engd->mpos.y};
+    mpos = (POINT){xpos, ypos};
 
     hlib = LoadLibrary("user32");
-    if ((engd->flgs & COM_OPAQ) || (engd->flgs & WIN_IRGN)
+    if ((flgs & COM_OPAQ) || (flgs & WIN_IRGN)
     || !(ULW = GetProcAddress(hlib, "UpdateLayeredWindow"))) {
-        bptr = (typeof(bptr))engd->pict.bptr;
+        bfun = (typeof(bfun))bptr;
         zpos.y = bmpi.bmiHeader.biHeight;
         ULW = (typeof(ULW))ULWstub;
         attr &= ~WS_EX_LAYERED;
-        if (engd->flgs & COM_OPAQ)
-            flgs = ULW_OPAQUE;
+        if (flgs & COM_OPAQ)
+            opts = ULW_OPAQUE;
     }
     RegisterClassEx(&wndc);
     hwnd = CreateWindowEx(attr, wndc.lpszClassName, 0, WS_POPUP | WS_VISIBLE,
                           0, 0, 0, 0, 0, 0, wndc.hInstance, engd);
-    engd->user[0] = (uintptr_t)hwnd;
+    data[0] = (intptr_t)hwnd;
 
     mwdc = GetDC(hwnd);
-    switch (engd->rscm) {
-        case SCM_RSTD:
-            break;
-
-        case SCM_ROGL: {
-            GLchar *retn;
-
-            ppfd.iLayerType = PFD_MAIN_PLANE;
-            SetPixelFormat(mwdc, ChoosePixelFormat(mwdc, &ppfd), &ppfd);
-            wglMakeCurrent(mwdc, mwrc = wglCreateContext(mwdc));
-            if ((retn = LoadOpenGLFunctions(NV_vertex_program3 |
-                                            ARB_framebuffer_object))) {
-                MessageBox(hwnd, retn, 0, MB_OK | MB_ICONEXCLAMATION);
-                free(retn);
-                RestartEngine(engd, SCM_RSTD);
-                goto _nogl;
-            }
-            surf = MakeRBO(dims.cx, dims.cy);
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, surf->fbuf);
-            glViewport(0, 0, surf->xdim, surf->ydim);
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-            break;
-        }
+    if (flgs & COM_RGPU) {
+        ppfd.iLayerType = PFD_MAIN_PLANE;
+        SetPixelFormat(mwdc, ChoosePixelFormat(mwdc, &ppfd), &ppfd);
+        wglMakeCurrent(mwdc, mwrc = wglCreateContext(mwdc));
     }
-    time = timeSetEvent(1, 0, TimeFuncWrapper,
-                       (DWORD_PTR)&engd->time, TIME_PERIODIC);
+    ttmr = timeSetEvent(1, 0, TimeFuncWrapper, (DWORD_PTR)time, TIME_PERIODIC);
     SetWindowPos(hwnd, 0, mpos.x, mpos.y, dims.cx, dims.cy,
                  SWP_NOZORDER | SWP_NOACTIVATE);
     while (TRUE) {
@@ -363,63 +328,27 @@ void RunMainLoop(ENGD *engd) {
             DispatchMessage(&pmsg);
             continue;
         }
-        if (engd->time - engd->tfrm < engd->msec) {
-            Sleep(1);
-            continue;
-        }
-        engd->tfrm = engd->time;
-        if (!(engd->flgs & COM_DRAW))
-            continue;
         GetCursorPos(&cpos);
         ScreenToClient(hwnd, &cpos);
         attr = ((GetAsyncKeyState(VK_LBUTTON))? UFR_LBTN : 0)
              | ((GetAsyncKeyState(VK_MBUTTON))? UFR_MBTN : 0)
              | ((GetAsyncKeyState(VK_RBUTTON))? UFR_RBTN : 0)
              | ((GetActiveWindow() == hwnd)?    UFR_MOUS : 0);
-        engd->size = engd->ufrm((uintptr_t)engd, engd->udat, &engd->data,
-                                &engd->time, attr, cpos.x, cpos.y,
-                                 SelectUnit(engd->uarr, engd->data,
-                                            engd->size, cpos.x, cpos.y));
-        if (!engd->size) {
-            EngineCallback((uintptr_t)engd, ECB_QUIT, ~0);
-            break;
-        }
-        switch (engd->rscm) {
-            case SCM_RSTD:
-                SwitchThreads(engd, 1);
-                FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
-                PickSemaphore(engd, 1, SEM_FULL);
-                WaitSemaphore(engd, 1, SEM_FULL);
-                break;
-
-            case SCM_ROGL:
-                MakeRendererOGL((ROGL**)&engd->rndr, engd->uarr,
-                               ~engd->flgs & WIN_IBGR, engd->uniq,
-                                engd->size, engd->pict.xdim, engd->pict.ydim);
-                ReadRBO(surf, &engd->pict, engd->flgs);
-                BindRBO(surf, GL_TRUE);
-                DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
-                                engd->size, engd->flgs & COM_OPAQ);
-                BindRBO(surf, GL_FALSE);
-                break;
-        }
-        ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bptr, flgs);
-        engd->fram++;
+        attr = cPrepareFrame(engd, cpos.x, cpos.y, attr);
+        if (attr & PFR_SKIP)
+            Sleep(1);
+        if (attr & PFR_HALT)
+            continue;
+        if (~flgs & COM_RGPU)
+            FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
+        cOutputFrame(engd, &surf);
+        ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bfun, opts);
     }
-    timeKillEvent(time);
-    switch (engd->rscm) {
-        case SCM_RSTD:
-            StopThreads(engd);
-            break;
-
-        case SCM_ROGL: {
-            FreeRendererOGL((ROGL**)&engd->rndr);
-            FreeRBO(&surf);
-        _nogl:
-            wglMakeCurrent(0, 0);
-            wglDeleteContext(mwrc);
-            break;
-        }
+    timeKillEvent(ttmr);
+    cDeallocFrame(engd, &surf);
+    if (flgs & COM_RGPU) {
+        wglMakeCurrent(0, 0);
+        wglDeleteContext(mwrc);
     }
     KillTimer(hwnd, 1);
     ReleaseDC(hwnd, mwdc);
