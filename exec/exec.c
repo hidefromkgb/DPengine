@@ -112,25 +112,26 @@
 /** Use GPU for drawing         **/ #define TXT_RGPU 16
 /** [ none ]                    **/ #define TXT_NONE 17
 
-/** Show console                **/ #define TXT_CONS 20
-/** Use regions                 **/ #define TXT_IRGN 21
-/** Enable BGRA                 **/ #define TXT_IBGR 22
-/** Enable pixel buffers        **/ #define TXT_IPBO 23
-/** Useless on full opacity!    **/ #define TXT_UOFO 24
-/** Useless without OpenGL!     **/ #define TXT_UWGL 25
+/** Show console                **/ #define TXT_CONS 18
+/** Use regions                 **/ #define TXT_IRGN 19
+/** Enable BGRA                 **/ #define TXT_IBGR 20
+/** Enable pixel buffers        **/ #define TXT_IPBO 21
+/** Useless on full opacity!    **/ #define TXT_UOFO 22
+/** Useless without GPU!        **/ #define TXT_UWGL 23
+/** Cannot initialize GPU!      **/ #define TXT_CIGL 24
 
-/** Desktop Ponies              **/ #define TXT_CAPT 26
-/** Enable filters              **/ #define TXT_FLTR 27
-/** Exact matching              **/ #define TXT_EXAC 28
-/** [At least one:]             **/ #define TXT_OGRP 29
-/** [All at once:]              **/ #define TXT_AGRP 30
-/** Random selection            **/ #define TXT_SRND 31
-/** Group selection             **/ #define TXT_SGRP 32
-/** Add                         **/ #define TXT_BADD 33
-/** Copies                      **/ #define TXT_BDUP 34
-/** Total:                      **/ #define TXT_ITTL 35
-/** More options...             **/ #define TXT_MORE 36
-/** GO!                         **/ #define TXT_GOGO 37
+/** Desktop Ponies              **/ #define TXT_CAPT 25
+/** Enable filters              **/ #define TXT_FLTR 26
+/** Exact matching              **/ #define TXT_EXAC 27
+/** [At least one:]             **/ #define TXT_OGRP 28
+/** [All at once:]              **/ #define TXT_AGRP 29
+/** Random selection            **/ #define TXT_SRND 30
+/** Group selection             **/ #define TXT_SGRP 31
+/** Add                         **/ #define TXT_BADD 32
+/** Copies                      **/ #define TXT_BDUP 33
+/** Total:                      **/ #define TXT_ITTL 34
+/** More options...             **/ #define TXT_MORE 35
+/** GO!                         **/ #define TXT_GOGO 36
 
 /// doubly-linked list header
 #define HDR_LIST \
@@ -1187,8 +1188,10 @@ ulong LoadLocalization(char ***text, char *data, ulong size) {
         return 0;
 
     /// skipping byte-order mark
-    if ((size >= 3) &&
-        (data[0] == 0xEF) && (data[1] == 0xBB) && (data[2] == 0xBF)) {
+    if ((size >= 3)
+    && ((uint8_t)data[0] == 0xEF)
+    && ((uint8_t)data[1] == 0xBB)
+    && ((uint8_t)data[2] == 0xBF)) {
         data += 3;
         size -= 3;
     }
@@ -1304,8 +1307,28 @@ MENU *MenuFromTemplate(MENU *tmpl) {
 
 
 
+uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
+    ENGC *engc = (ENGC*)user;
+
+    if (!(flgs & COM_RGPU) && (engc->mctx[3].flgs & MFL_VCHK)) {
+        /// this happens because the engine cannot activate the GPU
+        /// so the best reaction is to complain
+        rMessage(engc->tran[TXT_CIGL], 0, 0);
+    }
+    #define FLAG(t, f) t = ((t) & ~MFL_VCHK) | ((flgs & (f))? MFL_VCHK : 0)
+    FLAG(engc->mctx[3].flgs, COM_RGPU);
+    FLAG(engc->mctx[4].flgs, COM_OPAQ);
+    FLAG(engc->mctx[5].flgs, COM_DRAW);
+    FLAG(engc->mctx[6].flgs, COM_SHOW);
+    #undef FLAG
+
+    return flgs;
+}
+
+
+
 uint32_t eUpdFrame(ENGD *engd, intptr_t user,
-                   T4FV **data, uint64_t *time, uint32_t flgs,
+                   T4FV **data, uint64_t *time, uint32_t attr,
                    int32_t xptr, int32_t yptr, int32_t isel) {
     ENGC *engc = (ENGC*)user;
     PICT *pict = engc->pcur;
@@ -1316,18 +1339,18 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
     long  indx;
     uint64_t curr;
 
-    cEngineCallback(engd, ECB_LOAD, ~0);
-    /// here you can add new sprites!
-    cEngineCallback(engd, ECB_LOAD, 0);
+//    cEngineCallback(engd, ECB_LOAD, ~0);
+//    /// here you can add new sprites!
+//    cEngineCallback(engd, ECB_LOAD, 0);
 
-    if ((flgs & UFR_MOUS) && ((isel >= 0) || pict)) {
-        if (!pict && ((engc->ppos.z ^ flgs) & UFR_LBTN)) {
+    if ((attr & UFR_MOUS) && ((isel >= 0) || pict)) {
+        if (!pict && ((engc->ppos.z ^ attr) & UFR_LBTN)) {
             pict = engc->pcur = engc->parr[isel];
             printf("[GRABBED] %s\n", pict->ulib->name);
             engc->ppos.x = xptr - pict->offs.x;
             engc->ppos.y = yptr - pict->offs.y;
         }
-        if (pict && (flgs & UFR_LBTN)) {
+        if (pict && (attr & UFR_LBTN)) {
             pict->offs.x = xptr - engc->ppos.x;
             pict->offs.y = yptr - engc->ppos.y;
         }
@@ -1336,7 +1359,7 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
                 printf("[DROPPED] %s\n", pict->ulib->name);
             engc->pcur = 0;
         }
-        if (~flgs & engc->ppos.z & UFR_RBTN) {
+        if (~attr & engc->ppos.z & UFR_RBTN) {
             if (!pict)
                 pict = engc->parr[isel];
             temp = malloc(32 + strlen(pict->ulib->name));
@@ -1345,7 +1368,7 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
             free(temp);
             rOpenContextMenu(engc->mspr);
         }
-        engc->ppos.z = flgs;
+        engc->ppos.z = attr;
     }
     for (indx = 0; indx < engc->pcnt; indx++) {
         curr = *time;
@@ -1469,8 +1492,8 @@ void eReallocEngine(ENGC **retn, char *lang) {
         temp = engc->mspr[9].chld; /// Add house
         engc->mspr[8].chld = engc->mspr[9].chld = 0;
     }
-    FreeMenu(&engc->mctx);
     FreeMenu(&engc->mspr);
+    FreeMenu(&engc->mctx);
     engc->mspr = MenuFromTemplate(mspr);
     engc->mspr[8].chld = spec;
     engc->mspr[9].chld = temp;
@@ -1487,13 +1510,6 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
 
     AINF igif = {};
     intptr_t icon;
-
-    #define FLAG(t, f) t = ((t) & ~MFL_VCHK) | ((flgs & (f))? MFL_VCHK : 0)
-    FLAG(engc->mctx[3].flgs, COM_RGPU);
-    FLAG(engc->mctx[4].flgs, COM_OPAQ);
-    FLAG(engc->mctx[5].flgs, COM_DRAW);
-    FLAG(engc->mctx[6].flgs, COM_SHOW);
-    #undef FLAG
 
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc->engd);
     cEngineLoadAnimAsync(engc->engd,
@@ -1520,7 +1536,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
     TTH_ITER(engc->libs, AppendSpriteArr, engc);
     engc->data = (engc->pcnt)? calloc(engc->pcnt, sizeof(*engc->data)) : 0;
     cEngineRunMainLoop(engc->engd, xpos, ypos, engc->dims.x, engc->dims.y,
-                       flgs, FRM_WAIT, (intptr_t)engc, eUpdFrame);
+                       flgs, FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
     FreeSpriteArr(engc);
     free(engc->data);
 

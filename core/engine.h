@@ -71,8 +71,6 @@
 #define COM_SHOW  (1 << 29)
 #define COM_OPAQ  (1 << 28)
 
-#define COM_HALT  (1 << 16)
-
 #define WIN_IBGR  (1 << 0)
 #define WIN_IPBO  (1 << 1)
 #define WIN_IRGN  (1 << 2)
@@ -178,14 +176,16 @@ typedef struct _AINF {
           (see comments in ./ogl/oglstd.c, look for "main vertex shader" tag)
           except that W is just the element`s UUID
     TIME: pointer to the current time value in ms (may update asynchronously)
-    FLGS: mouse button flags (UFR_ prefix)
+    ATTR: control attributes (UFR_ prefix)
     XPTR: cursor X coordinate, relative to the window`s upper left corner
     YPTR: cursor Y coordinate, relative to the window`s upper left corner
     ISEL: index of the element under cursor in the existing list, < 0 if none
  **/
 typedef uint32_t (*UFRM)(ENGD *engd, intptr_t user,
-                         T4FV **data, uint64_t *time, uint32_t flgs,
+                         T4FV **data, uint64_t *time, uint32_t attr,
                          int32_t xptr, int32_t yptr, int32_t isel);
+
+typedef uint32_t (*UFLG)(ENGD *engd, intptr_t user, uint32_t flgs);
 
 
 
@@ -244,8 +244,10 @@ LIB_OPEN void cEngineLoadAnimAsync(ENGD *engd,
           WIN_IPBO - [WIN32] use PBO
     MSEC: delay between frames in ms
     USER: user data pointer to be passed to the callback
-    FUNC: callback function described above (see UFRM typedef)
+    UFRM: (see UFRM typedef)
+    UFLG: (see UFLG typedef) [NOT NECESSARILY NEEDED, MAY BE 0]
  **/
 LIB_OPEN void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
-                                 uint32_t xdim, uint32_t ydim, uint32_t flgs,
-                                 uint32_t msec, intptr_t user, UFRM func);
+                                 uint32_t xdim, uint32_t ydim,
+                                 uint32_t flgs, uint32_t msec,
+                                 intptr_t user, UFRM ufrm, UFLG uflg);

@@ -51,6 +51,9 @@ typedef struct TREE TREE;
 /// renderer data, defined externally
 typedef struct RNDR RNDR;
 
+/// renderbuffer-based framebuffer object, defined externally
+typedef struct FRBO FRBO;
+
 /// elementary animation unit
 typedef struct _UNIT {
     void *anim;    /// animation data (the format may vary)
@@ -59,19 +62,9 @@ typedef struct _UNIT {
     ulong offs[4]; /// offsets from the initial size: X_lf, X_rt, Y_up, Y_dn
 } UNIT;
 
-/// renderbuffer-based framebuffer object
-typedef struct _FRBO {
-    ulong fbuf,    /// framebuffer
-          rbuf[2], /// renderbuffers for pixel and depth data
-          pbuf[2]; /// pixel-transfer buffer array
-    long  xdim,    /// width
-          ydim,    /// height
-          swiz;    /// pixel buffer switcher
-} FRBO;
 
 
-
-uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t flgs);
+uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t attr);
 void cOutputFrame(ENGD *engd, FRBO **surf);
 void cDeallocFrame(ENGD *engd, FRBO **surf);
 void cOutputFPS(ENGD *engd, char retn[]);
@@ -86,9 +79,9 @@ uint64_t lTimeFunc();
 char *lLoadFile(char *name, long *size);
 void lMakeThread(THRD *thrd);
 void lRestartEngine(ENGD *engd);
-void lShowMainWindow(ENGD *engd, ulong show);
+void lShowMainWindow(ENGD *engd, long show);
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
-                  BGRA **bptr, uint64_t *time);
+                  BGRA **bptr, uint64_t *time, intptr_t *data, uint32_t flgs);
 void lFreeSemaphore(SEMD **retn, long nthr);
 void lMakeSemaphore(SEMD **retn, long nthr, SEM_TYPE mask);
 long lPickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask);

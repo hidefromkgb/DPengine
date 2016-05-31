@@ -13,12 +13,12 @@ void lRestartEngine(ENGD *engd) {
     intptr_t *data;
 
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
-    PostMessage((HWND)data[0], WM_QUIT, 0, 0);
+    data[0] = 0;
 }
 
 
 
-void lShowMainWindow(ENGD *engd, ulong show) {
+void lShowMainWindow(ENGD *engd, long show) {
     intptr_t *data;
 
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
@@ -253,15 +253,22 @@ BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
 
 
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
-                  BGRA **bptr, uint64_t *time) {
+                  BGRA **bptr, uint64_t *time, intptr_t *data, uint32_t flgs) {
+    #define EXT_ATTR (WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
     BLENDFUNCTION bstr = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
-    WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW, WindowProc, 0,
-                       0, 0, 0, LoadCursor(0, IDC_HAND), 0, 0, " ", 0};
+    WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW, WindowProc,
+                       0, 0, 0, 0, LoadCursor(0, IDC_HAND), 0, 0, " ", 0};
     PIXELFORMATDESCRIPTOR ppfd = {sizeof(ppfd), 1, PFD_SUPPORT_OPENGL |
                                   PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
                                   PFD_TYPE_RGBA, 32};
     BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader), 0, 0,
                         1, 8 * sizeof(BGRA), BI_RGB}};
+    struct { /// DWM_BLURBEHIND from DWM API (Vista and later)
+        DWORD dwFlags;
+        BOOL  fEnable;     /// dwFlags | 0x01 (DWM_BB_ENABLE)
+        HRGN  hRgnBlur;    /// dwFlags | 0x02 (DWM_BB_BLURREGION)
+        BOOL  fTransition; /// dwFlags | 0x04 (DWM_BB_TRANSITIONONMAXIMIZED)
+    } blur = {0x03, TRUE, CreateRectRgn(0, 0, 1, 1), TRUE};
     SIZE dims = {xdim - xpos, ydim - ypos};
     RECT scrr = {0, 0, dims.cx, dims.cy};
     POINT cpos, mpos, zpos = {};
@@ -269,20 +276,15 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
 
     BLENDFUNCTION *bfun;
     BOOL APIENTRY (*ULW)(HWND, HDC, POINT*, SIZE*, HDC, POINT*,
-                         COLORREF, BLENDFUNCTION*, DWORD);
-    UINT ttmr, attr, opts;
-    HINSTANCE hlib;
+                         COLORREF, BLENDFUNCTION*, DWORD) = 0;
+    HRESULT APIENTRY (*EBW)(HWND, typeof(blur)*) = 0;
+    UINT ttmr, opts, attr;
+    HINSTANCE husr, hdwm;
     HDC devc, mwdc;
     HBITMAP hdib;
     HGLRC mwrc;
     HWND hwnd;
     FRBO *surf = 0;
-
-    intptr_t *data;
-    uint32_t flgs;
-
-    cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
-    cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
 
     mwrc = 0;
     devc = CreateCompatibleDC(0);
@@ -291,15 +293,19 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     hdib = CreateDIBSection(devc, &bmpi, DIB_RGB_COLORS, (void*)bptr, 0, 0);
     SelectObject(devc, hdib);
 
+    if ((hdwm = LoadLibrary("dwmapi")))
+        EBW = (typeof(EBW))GetProcAddress(hdwm, "DwmEnableBlurBehindWindow");
+
     bfun = &bstr;
     opts = ULW_ALPHA;
-    attr = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
+    /// layer the window only if there is no DWM support
+    attr = ((EBW)? 0 : WS_EX_LAYERED) | EXT_ATTR;
     mpos = (POINT){xpos, ypos};
 
-    hlib = LoadLibrary("user32");
+    husr = LoadLibrary("user32");
     if ((flgs & COM_OPAQ) || (flgs & WIN_IRGN)
-    || !(ULW = GetProcAddress(hlib, "UpdateLayeredWindow"))) {
-        bfun = (typeof(bfun))bptr;
+    || !(ULW = GetProcAddress(husr, "UpdateLayeredWindow"))) {
+        bfun = (typeof(bfun))*bptr;
         zpos.y = bmpi.bmiHeader.biHeight;
         ULW = (typeof(ULW))ULWstub;
         attr &= ~WS_EX_LAYERED;
@@ -310,8 +316,10 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     hwnd = CreateWindowEx(attr, wndc.lpszClassName, 0, WS_POPUP | WS_VISIBLE,
                           0, 0, 0, 0, 0, 0, wndc.hInstance, engd);
     data[0] = (intptr_t)hwnd;
-
     mwdc = GetDC(hwnd);
+
+    if (EBW)
+        EBW(hwnd, &blur);
     if (flgs & COM_RGPU) {
         ppfd.iLayerType = PFD_MAIN_PLANE;
         SetPixelFormat(mwdc, ChoosePixelFormat(mwdc, &ppfd), &ppfd);
@@ -320,10 +328,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     ttmr = timeSetEvent(1, 0, TimeFuncWrapper, (DWORD_PTR)time, TIME_PERIODIC);
     SetWindowPos(hwnd, 0, mpos.x, mpos.y, dims.cx, dims.cy,
                  SWP_NOZORDER | SWP_NOACTIVATE);
-    while (TRUE) {
+    while (data[0]) {
         if (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
-            if (!IsWindow(hwnd) || (pmsg.message == WM_QUIT))
-                break;
             TranslateMessage(&pmsg);
             DispatchMessage(&pmsg);
             continue;
@@ -337,15 +343,24 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         attr = cPrepareFrame(engd, cpos.x, cpos.y, attr);
         if (attr & PFR_SKIP)
             Sleep(1);
+        if (!IsWindow(hwnd))
+            break;
         if (attr & PFR_HALT)
             continue;
         if (~flgs & COM_RGPU)
             FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
-        cOutputFrame(engd, &surf);
-        ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bfun, opts);
+        cOutputFrame(engd, (!EBW)? &surf : 0);
+        if (!EBW)
+            ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bfun, opts);
+        else {
+            if (flgs & COM_RGPU)
+                SwapBuffers(mwdc);
+            else
+                BitBlt(mwdc, 0, 0, dims.cx, dims.cy, devc, 0, 0, SRCCOPY);
+        }
     }
     timeKillEvent(ttmr);
-    cDeallocFrame(engd, &surf);
+    cDeallocFrame(engd, (!EBW)? &surf : 0);
     if (flgs & COM_RGPU) {
         wglMakeCurrent(0, 0);
         wglDeleteContext(mwrc);
@@ -358,5 +373,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     DeleteDC(mwdc);
     DeleteDC(devc);
     DeleteObject(hdib);
-    FreeLibrary(hlib);
+    FreeLibrary(husr);
+    FreeLibrary(hdwm);
+    DeleteObject(blur.hRgnBlur);
+    #undef EXT_ATTR
 }

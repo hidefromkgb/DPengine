@@ -91,6 +91,7 @@ void  eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
 
 
 /// external functions, have to be implemented or imported
+long  rMessage(char *text, char *head, uint32_t flgs);
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim);
 void  rFreeTrayIcon(intptr_t icon);

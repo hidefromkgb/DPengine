@@ -95,6 +95,22 @@ char *rConvertUTF8(char *utf8) {
 
 
 
+long rMessage(char *text, char *head, uint32_t flgs) {
+    GtkWidget *hdlg;
+    long retn;
+
+    hdlg = gtk_message_dialog_new(0, GTK_DIALOG_MODAL, GTK_MESSAGE_OTHER,
+                                  GTK_BUTTONS_OK, text);
+    if (head)
+        gtk_window_set_title(GTK_WINDOW(hdlg), head);
+
+    retn = gtk_dialog_run(GTK_DIALOG(hdlg));
+    gtk_widget_destroy(hdlg);
+    return retn;
+}
+
+
+
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                       uint32_t *data, long xdim, long ydim) {
     GtkStatusIcon *icon = 0;

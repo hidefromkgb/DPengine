@@ -9,6 +9,16 @@ struct RNDR {
     long  size;
 };
 
+/// renderbuffer-based framebuffer object, opaque outside the module
+struct FRBO {
+    GLuint fbuf,    /// framebuffer
+           rbuf[2], /// renderbuffers for pixel and depth data
+           pbuf[2]; /// pixel-transfer buffer array
+    GLint  xdim,    /// width
+           ydim,    /// height
+           swiz;    /// pixel buffer switcher
+};
+
 
 
 /** [main vertex shader] (FB = frame bank, CA = current animation)
@@ -109,20 +119,10 @@ void FreeRendererOGL(RNDR **rndr) {
 
 
 
-long InitRendererOGL() {
-    GLchar *load;
-
-    if ((load = LoadOpenGLFunctions(NV_vertex_program3)))
-        printf("%s\n", load);
-    return !load;
-}
-
-
-
-long MakeRendererOGL(RNDR **rndr, UNIT *uarr, ulong rgba,
+long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                      ulong uniq, ulong size, ulong xscr, ulong yscr) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
-    GLchar **sver, **spix;
+    GLchar *load, **sver, **spix;
     GLubyte *atex, *aptr;
     T4FV *dims, *bank;
     GLuint *indx;
@@ -133,15 +133,12 @@ long MakeRendererOGL(RNDR **rndr, UNIT *uarr, ulong rgba,
     RNDR *retn;
 
     if (!rndr || *rndr)
+        return !!rndr;
+    if ((load = LoadOpenGLFunctions(ARB_framebuffer_object
+                                  | NV_vertex_program3))) {
+        printf("%s\n", load);
         return 0;
-
-    glCullFace(GL_BACK);
-    glEnable(GL_CULL_FACE);
-    glDepthFunc(GL_LESS);
-    glEnable(GL_DEPTH_TEST);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_BLEND);
-
+    }
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mtex);
     test = calloc(1, sizeof(*test));
     mtex = min(mtex, 4096);
@@ -158,6 +155,13 @@ long MakeRendererOGL(RNDR **rndr, UNIT *uarr, ulong rgba,
 
     if (!mtex)
         return 0;
+
+    glCullFace(GL_BACK);
+    glEnable(GL_CULL_FACE);
+    glDepthFunc(GL_LESS);
+    glEnable(GL_DEPTH_TEST);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_BLEND);
 
     MakeShaderSrc(&sver, &spix, tver, tpix, 0);
     retn = calloc(1, sizeof(*retn));
@@ -342,10 +346,10 @@ FRBO *MakeRBO(long xdim, long ydim) {
     retn->ydim = ydim;
     retn->swiz = 0;
 
-    glGenFramebuffers(1, (GLuint*)&retn->fbuf);
+    glGenFramebuffers(1, &retn->fbuf);
     glBindFramebuffer(GL_FRAMEBUFFER, retn->fbuf);
 
-    glGenRenderbuffers(2, (GLuint*)retn->rbuf);
+    glGenRenderbuffers(2, retn->rbuf);
     glBindRenderbuffer(GL_RENDERBUFFER, retn->rbuf[0]);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA,
                           retn->xdim, retn->ydim);
@@ -358,7 +362,7 @@ FRBO *MakeRBO(long xdim, long ydim) {
                               GL_RENDERBUFFER, retn->rbuf[1]);
     data = retn->xdim * retn->ydim * 4;
 
-    glGenBuffersARB(2, (GLuint*)retn->pbuf);
+    glGenBuffersARB(2, retn->pbuf);
     glBindBufferARB(GL_PIXEL_PACK_BUFFER, retn->pbuf[0]);
     glBufferDataARB(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
     glBindBufferARB(GL_PIXEL_PACK_BUFFER, retn->pbuf[1]);
@@ -411,9 +415,9 @@ void FreeRBO(FRBO **robj) {
     if (robj && *robj) {
         glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glDeleteRenderbuffers(2, (GLuint*)(*robj)->rbuf);
-        glDeleteFramebuffers(1, (GLuint*)&(*robj)->fbuf);
-        glDeleteBuffersARB(2, (GLuint*)(*robj)->pbuf);
+        glDeleteRenderbuffers(2, (*robj)->rbuf);
+        glDeleteFramebuffers(1, &(*robj)->fbuf);
+        glDeleteBuffersARB(2, (*robj)->pbuf);
         free(*robj);
         *robj = 0;
     }

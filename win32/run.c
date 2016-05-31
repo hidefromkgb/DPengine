@@ -21,7 +21,7 @@
 
 
 
-long OldWin32() {
+static inline long OldWin32() {
     static long retn = 2;
 
     if (retn == 2)
@@ -32,9 +32,9 @@ long OldWin32() {
 
 
 char *UTF8(LPWSTR wide) {
-    long size = WideCharToMultiByte(CP_UTF8, 0, wide, -1, 0, 0, 0, 0);
-    char *retn = calloc(size * 2, sizeof(*retn));
-    WideCharToMultiByte(CP_UTF8, 0, wide, -1, retn, size * 2, 0, 0);
+    long size = 2 * WideCharToMultiByte(CP_UTF8, 0, wide, -1, 0, 0, 0, 0);
+    char *retn = calloc(size, sizeof(*retn));
+    WideCharToMultiByte(CP_UTF8, 0, wide, -1, retn, size, 0, 0);
     return retn;
 }
 
@@ -56,25 +56,26 @@ char *rConvertUTF8(char *utf8) {
     LPWSTR wide = UTF16(utf8);
     long size;
 
-    if (OldWin32()) {
+    if (!OldWin32())
+        return (char*)wide;
+    else {
         utf8 = calloc((size = (wcslen(wide) + 1) * 4), sizeof(*utf8));
         WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wide, -1,
                             utf8, size - 1, "#", 0);
         free(wide);
         return utf8;
     }
-    else
-        return (char*)wide;
 }
 
 
 
-long Message(HWND hwnd, char *text, char *head, UINT flgs) {
+long rMessage(char *text, char *head, uint32_t flgs) {
+    UINT opts = flgs | MB_TASKMODAL;
     char *tttt = rConvertUTF8(text),
          *hhhh = rConvertUTF8(head);
-    long retn = (OldWin32())? MessageBoxA(hwnd, tttt, hhhh, flgs)
-                            : MessageBoxW(hwnd, (LPWSTR)tttt,
-                                         (LPWSTR)hhhh, flgs);
+
+    long retn = (OldWin32())? MessageBoxA(0, tttt, hhhh, opts)
+                            : MessageBoxW(0, (LPWSTR)tttt, (LPWSTR)hhhh, opts);
     free(tttt);
     free(hhhh);
     return retn;
@@ -165,7 +166,7 @@ MENU *rOSSpecificMenu(ENGC *engc) {
 
 
 
-HMENU Submenu(MENU *menu, ulong *chld) {
+HMENU Submenu(MENU *menu, long *chld) {
     if (!menu)
         return 0;
 
@@ -173,7 +174,7 @@ HMENU Submenu(MENU *menu, ulong *chld) {
         MENUITEMINFOW w;
         MENUITEMINFOA a;
     } pmii;
-    ulong indx, oldw;
+    long indx, oldw;
     HMENU retn;
 
     oldw = OldWin32();
@@ -318,9 +319,9 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
 
     icon.hbmMask  = CreateBitmap(xdim, ydim, 1,  1, tran);
     icon.hbmColor = CreateBitmap(xdim, ydim, 1, 32, data);
+    nicd->hIcon = CreateIconIndirect(&icon);
     /// [TODO:] this is not quite right, replace with options window
     nicd->hWnd  = CreateWindowEx(0, WC_STATIC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    nicd->hIcon = CreateIconIndirect(&icon);
     SetWindowLongPtr(nicd->hWnd, GWLP_USERDATA, (LONG_PTR)mctx);
     SetWindowLongPtr(nicd->hWnd, GWLP_WNDPROC, (LONG_PTR)TrayProc);
     DeleteObject(icon.hbmColor);
@@ -329,7 +330,7 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
     free(tran);
 
     if (OldWin32()) {
-        strcpy((char*)((NOTIFYICONDATAA*)nicd)->szTip, hint);
+        strcpy(((NOTIFYICONDATAA*)nicd)->szTip, hint);
         Shell_NotifyIconA(NIM_ADD, (NOTIFYICONDATAA*)nicd);
     }
     else {
@@ -361,7 +362,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     RECT temp = {MAXLONG, MAXLONG, MINLONG, MINLONG};
     ENGC *engc = 0;
 
-    uint32_t flgs = FLG_CONS | 1;
+    uint32_t flgs = FLG_CONS | FLG_EOGL | 1;
 
     InitCommonControlsEx(&icct);
 

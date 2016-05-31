@@ -21,7 +21,8 @@ Use regions
 Enable BGRA
 Enable pixel buffers
 Useless on full opacity!
-Useless without OpenGL!
+Useless without GPU!
+Cannot initialize GPU!
 Desktop Ponies
 Enable filters
 Exact matching

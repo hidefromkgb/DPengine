@@ -104,10 +104,6 @@
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src\lib\" />
 		</Unit>
-		<Unit filename="rsrc\lib.rc">
-			<Option compilerVar="WINDRES" />
-			<Option virtualFolder="src\lib\" />
-		</Unit>
 		<Unit filename="rsrc\run.h">
 			<Option virtualFolder="src\run\" />
 		</Unit>

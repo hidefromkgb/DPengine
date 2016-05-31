@@ -47,33 +47,32 @@ gboolean DrawFunc(gpointer user) {
     GdkRegion *creg;
     GdkWindow *hwnd;
     intptr_t *data;
-    uint32_t flgs;
+    uint32_t attr;
 
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
     if (!(hwnd = gtk_widget_get_window((GtkWidget*)data[0])))
         return TRUE;
 
     gdk_window_get_pointer(hwnd, &xptr, &yptr, &gmod);
-    flgs = ((gmod & GDK_BUTTON1_MASK)? UFR_LBTN : 0)
+    attr = ((gmod & GDK_BUTTON1_MASK)? UFR_LBTN : 0)
          | ((gmod & GDK_BUTTON2_MASK)? UFR_MBTN : 0)
          | ((gmod & GDK_BUTTON3_MASK)? UFR_RBTN : 0)
          | ((gtk_window_is_active((GtkWindow*)data[0]))? UFR_MOUS : 0);
-    flgs = cPrepareFrame(engd, xptr, yptr, flgs);
-
-    if (flgs & PFR_SKIP)
+    attr = cPrepareFrame(engd, xptr, yptr, attr);
+    if (attr & PFR_SKIP)
         usleep(1000);
-    if (flgs & PFR_HALT)
+    if (attr & PFR_HALT)
         return TRUE;
-    if (flgs & PFR_PICK) {
-        rect.width  = data[2];
-        rect.height = data[3];
+    if (attr & PFR_PICK) {
+        rect.width  = (int16_t)(data[2]);
+        rect.height = (int16_t)(data[2] >> 16);
     }
     creg = gdk_region_rectangle(&rect);
     gdk_window_input_shape_combine_region(hwnd, creg, 0, 0);
     gdk_region_destroy(creg);
 
-    cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
-    if (flgs & COM_RGPU)
+    cEngineCallback(engd, ECB_GFLG, (intptr_t)&attr);
+    if (attr & COM_RGPU)
         pGLD = gtk_widget_gl_begin((GtkWidget*)data[0]);
     else {
         /// comment the lines below to enable manual zeroing
@@ -86,8 +85,7 @@ gboolean DrawFunc(gpointer user) {
         //*/
     }
     cOutputFrame(engd, 0);
-
-    if (flgs & COM_RGPU)
+    if (attr & COM_RGPU)
         gdk_gl_drawable_gl_end(pGLD);
 
     gdk_window_invalidate_rect(hwnd, 0, FALSE);
@@ -115,12 +113,11 @@ gboolean OnKeyDown(GtkWidget *gwnd, GdkEventKey *ekey, gpointer user) {
 
 gboolean OnChange(GtkWidget *gwnd, GdkScreen *scrn, gpointer user) {
     GdkColormap *cmap;
+
     if ((cmap = gdk_screen_get_rgba_colormap(gtk_widget_get_screen(gwnd))))
         gtk_widget_set_colormap(gwnd, cmap);
-    else {
-        printf("Transparent windows not supported! Exiting...\n");
+    else
         cEngineCallback((ENGD*)user, ECB_QUIT, 0);
-    }
     return TRUE;
 }
 
@@ -225,7 +222,7 @@ void lRestartEngine(ENGD *engd) {
 
 
 
-void lShowMainWindow(ENGD *engd, ulong show) {
+void lShowMainWindow(ENGD *engd, long show) {
     intptr_t *data;
 
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
@@ -321,21 +318,17 @@ SEM_TYPE lWaitSemaphore(SEMD *wait, SEM_TYPE mask) {
 
 
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
-                  BGRA **bptr, uint64_t *time) {
+                  BGRA **bptr, uint64_t *time, intptr_t *data, uint32_t flgs) {
     guint tmrf, tmrt, tmrd;
     GdkGLDrawable *pGLD = 0;
     GtkWidget *gwnd;
-    intptr_t *data;
-    uint32_t flgs;
 
-    cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
-    cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
-
+    xdim -= xpos;
+    ydim -= ypos;
     gtk_init(0, 0);
     gtk_gl_init(0, 0);
     data[0] = (intptr_t)(gwnd = gtk_window_new(GTK_WINDOW_TOPLEVEL));
-    data[2] = xdim;
-    data[3] = ydim;
+    data[2] = (int16_t)xdim | (int32_t)(ydim << 16);
     OnChange(gwnd, 0, (gpointer)engd);
 
     g_signal_connect(G_OBJECT(gwnd), "expose-event",

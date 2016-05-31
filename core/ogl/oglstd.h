@@ -2,8 +2,7 @@
 
 
 
-long InitRendererOGL();
-long MakeRendererOGL(RNDR **rndr, UNIT *uarr, ulong rgba,
+long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                      ulong uniq, ulong size, ulong xscr, ulong yscr);
 void DrawRendererOGL(RNDR *rndr, UNIT *uarr, T4FV *data,
                      ulong size, ulong opaq);

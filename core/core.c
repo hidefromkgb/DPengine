@@ -68,7 +68,8 @@ struct ENGD {
              msec,    /// frame delay
              ncpu,    /// number of CPU cores the engine is allowed to occupy
              uniq,    /// number of unique animations
-             size;    /// length of the main display list
+             size,    /// length of the main display list
+             halt;    /// halt flag (must NOT be in external-writable flags)
     UFRM     ufrm;    /// callback to update the state of a frame
     T4IV     dims;    /// drawing area position and dimensions
     BGRA    *bptr;    /// drawing area bits
@@ -717,7 +718,7 @@ long SwitchThreads(ENGD *engd, long draw) {
 
 
 
-uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t flgs) {
+uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t attr) {
     long pick;
 
     if (engd->time - engd->tfrm < engd->msec)
@@ -725,10 +726,9 @@ uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t flgs) {
     engd->tfrm = engd->time;
     if (~engd->flgs & COM_DRAW)
         return PFR_HALT;
-
     pick = SelectUnit(engd->uarr, engd->data, engd->size, xptr, yptr);
     engd->size = engd->ufrm(engd, engd->udat, &engd->data,
-                            &engd->time, flgs, xptr, yptr, pick);
+                            &engd->time, attr, xptr, yptr, pick);
     if (!engd->size) {
         cEngineCallback(engd, ECB_QUIT, ~0);
         return PFR_HALT;
@@ -740,7 +740,13 @@ uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t flgs) {
 
 void cOutputFrame(ENGD *engd, FRBO **surf) {
     if (engd->flgs & COM_RGPU) {
-        InitRendererOGL();
+        if (!MakeRendererOGL(&engd->rndr, !!surf && !(engd->flgs & WIN_IBGR),
+                              engd->uarr, engd->uniq, engd->size,
+                              engd->dims.xdim - engd->dims.xpos,
+                              engd->dims.ydim - engd->dims.ypos)) {
+            cEngineCallback(engd, ECB_SFLG, engd->flgs & ~COM_RGPU);
+            return;
+        }
         if (surf) {
             if (!*surf)
                 *surf = MakeRBO(engd->dims.xdim - engd->dims.xpos,
@@ -748,8 +754,6 @@ void cOutputFrame(ENGD *engd, FRBO **surf) {
             ReadRBO(*surf, engd->bptr, engd->flgs);
             BindRBO(*surf, 1);
         }
-        MakeRendererOGL(&engd->rndr, engd->uarr, 0, engd->uniq,
-                        engd->size, engd->dims.xdim, engd->dims.ydim);
         DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
                         engd->size, engd->flgs & COM_OPAQ);
         if (surf)
@@ -828,12 +832,12 @@ void cEngineLoadAnimAsync(ENGD *engd,
 
 void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
                         uint32_t xdim, uint32_t ydim, uint32_t flgs,
-                        uint32_t msec, intptr_t user, UFRM func) {
+                        uint32_t msec, intptr_t user, UFRM ufrm, UFLG uflg) {
     long mtmp;
 
     if (engd->uarr) {
         engd->dims = (T4IV){{xpos, ypos, xdim, ydim}};
-        engd->ufrm = func;
+        engd->ufrm = ufrm;
         engd->udat = user;
         engd->flgs = flgs;
         engd->msec = msec;
@@ -844,10 +848,11 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
               (double)mtmp * engd->ncpu / engd->uniq,
               (engd->flgs & COM_RGPU)? TXL_RGPU : TXL_RSTD);
         do {
+            engd->flgs = uflg(engd, engd->udat, engd->flgs);
             lRunMainLoop(engd, engd->dims.xpos, engd->dims.ypos,
                          engd->dims.xdim, engd->dims.ydim,
-                        &engd->bptr, &engd->time);
-        } while (!(engd->flgs & COM_HALT));
+                        &engd->bptr, &engd->time, engd->user, engd->flgs);
+        } while (!engd->halt);
     }
     else
         printf(TXL_FAIL" No animation base found! Exiting...\n");
@@ -886,7 +891,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
             engd->flgs = data;
             lShowMainWindow(engd, engd->flgs & COM_SHOW);
             if ((data ^ temp) & COM_RGPU) {
-                engd->flgs &= ~COM_HALT;
+                engd->halt = 0;
                 lRestartEngine(engd);
             }
             break;
@@ -932,7 +937,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
             break;
 
         case ECB_QUIT:
-            engd->flgs |= COM_HALT;
+            engd->halt = ~0;
             lRestartEngine(engd);
             if (data)
                 break;
