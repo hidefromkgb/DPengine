@@ -1311,8 +1311,8 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
     ENGC *engc = (ENGC*)user;
 
     if (!(flgs & COM_RGPU) && (engc->mctx[3].flgs & MFL_VCHK)) {
-        /// this happens because the engine cannot activate the GPU
-        /// so the best reaction is to complain
+        /// this happens when the engine cannot activate
+        /// the GPU, so the best reaction is to complain
         rMessage(engc->tran[TXT_CIGL], 0, 0);
     }
     #define FLAG(t, f) t = ((t) & ~MFL_VCHK) | ((flgs & (f))? MFL_VCHK : 0)

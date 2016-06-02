@@ -70,12 +70,17 @@ char *rConvertUTF8(char *utf8) {
 
 
 long rMessage(char *text, char *head, uint32_t flgs) {
-    UINT opts = flgs | MB_TASKMODAL;
     char *tttt = rConvertUTF8(text),
          *hhhh = rConvertUTF8(head);
 
-    long retn = (OldWin32())? MessageBoxA(0, tttt, hhhh, opts)
-                            : MessageBoxW(0, (LPWSTR)tttt, (LPWSTR)hhhh, opts);
+    union {
+        MSGBOXPARAMSA a;
+        MSGBOXPARAMSW w;
+    } msgp = {{sizeof(msgp), 0, GetModuleHandle(0), tttt, hhhh,
+               flgs | MB_TASKMODAL | MB_USERICON, (LPSTR)ICN_MAIN}};
+
+    long retn = (OldWin32())? MessageBoxIndirectA(&msgp.a)
+                            : MessageBoxIndirectW(&msgp.w);
     free(tttt);
     free(hhhh);
     return retn;
@@ -362,7 +367,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     RECT temp = {MAXLONG, MAXLONG, MINLONG, MINLONG};
     ENGC *engc = 0;
 
-    uint32_t flgs = FLG_CONS | FLG_EOGL | 1;
+    uint32_t flgs = FLG_CONS | 1;
 
     InitCommonControlsEx(&icct);
 

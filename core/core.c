@@ -848,7 +848,8 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
               (double)mtmp * engd->ncpu / engd->uniq,
               (engd->flgs & COM_RGPU)? TXL_RGPU : TXL_RSTD);
         do {
-            engd->flgs = uflg(engd, engd->udat, engd->flgs);
+            if (uflg)
+                engd->flgs = uflg(engd, engd->udat, engd->flgs);
             lRunMainLoop(engd, engd->dims.xpos, engd->dims.ypos,
                          engd->dims.xdim, engd->dims.ydim,
                         &engd->bptr, &engd->time, engd->user, engd->flgs);

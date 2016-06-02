@@ -10,7 +10,7 @@ RCFLAGS = -J rc -O coff
 LLIB = -lgdi32 -lopengl32 -lcomctl32 -lwinmm
 LINC =
 LCXFLAGS =
-LCFLAGS = -I..\core -Wall -DLIB_MAKE
+LCFLAGS = -I..\core -march=i486 -Wall -DLIB_MAKE
 
 LOBJ = $(OBJDIR)\core\core.o $(OBJDIR)\core\gif\common.o $(OBJDIR)\core\gif\gifstd.o $(OBJDIR)\core\ogl\common.o $(OBJDIR)\core\ogl\oglstd.o $(OBJDIR)\lib.o
 LOUT = ..\engine.dll

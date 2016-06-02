@@ -7,6 +7,13 @@
 #include <core.h>
 #include <ogl/oglstd.h>
 
+/// hook data
+typedef struct _HDAT {
+    HRGN full;
+    BOOL hcut;
+    POINT last;
+} HDAT;
+
 
 
 void lRestartEngine(ENGD *engd) {
@@ -145,7 +152,28 @@ long lCountCPUs() {
 
 
 uint64_t lTimeFunc() {
+#ifdef OLD_TICK
+    /// overflows in ~49.7 * 24 hours since OS boot
     return GetTickCount();
+#else
+    static int32_t lock = 0;
+    static int32_t hbit = 0;
+    static int32_t lbit = 0;
+    uint64_t retn;
+
+    /// yes, this is a spinlock, requiring at least a 80486
+    while (__sync_fetch_and_or(&lock, 1));
+
+    retn = lbit;
+    lbit = GetTickCount();
+    if ((retn < 0) && (lbit >= 0))
+        hbit++;
+    retn = ((uint64_t)lbit & 0xFFFFFFFF) | ((uint64_t)hbit << 32);
+
+    /// releasing the lock
+    lock = 0;
+    return retn;
+#endif
 }
 
 
@@ -252,6 +280,37 @@ BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
 
 
 
+LRESULT APIENTRY MouseHook(int code, WPARAM wPrm, LPARAM lPrm) {
+    if (code < 0)
+        return CallNextHookEx(0, code, wPrm, lPrm);
+
+    intptr_t *data;
+    MOUSEHOOKSTRUCT *hook = (MOUSEHOOKSTRUCT*)lPrm;
+    ENGD *engd;
+    HDAT *hdat;
+    POINT curr;
+    HRGN hole;
+
+    if (!hook->hwnd || !(engd = (ENGD*)GetWindowLongPtr(hook->hwnd,
+                                                        GWLP_USERDATA)))
+        return 0;
+
+    cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
+    hdat = (HDAT*)data[1];
+    curr = hook->pt;
+    if (!wPrm || (hdat->last.x != curr.x) || (hdat->last.y != curr.y)) {
+        hdat->last = curr;
+        ScreenToClient(hook->hwnd, &curr);
+        hole = CreateRectRgn(curr.x - 1, curr.y - 1, curr.x + 2, curr.y + 2);
+        CombineRgn(hole, hdat->full, hole, (hdat->hcut)? RGN_DIFF : RGN_OR);
+        SetWindowRgn(hook->hwnd, hole, FALSE);
+        return 1;
+    }
+    return 0;
+}
+
+
+
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                   BGRA **bptr, uint64_t *time, intptr_t *data, uint32_t flgs) {
     #define EXT_ATTR (WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
@@ -272,6 +331,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     SIZE dims = {xdim - xpos, ydim - ypos};
     RECT scrr = {0, 0, dims.cx, dims.cy};
     POINT cpos, mpos, zpos = {};
+    MOUSEHOOKSTRUCT mhks = {};
+    HDAT hdat = {};
     MSG pmsg = {};
 
     BLENDFUNCTION *bfun;
@@ -283,10 +344,13 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     HDC devc, mwdc;
     HBITMAP hdib;
     HGLRC mwrc;
+    HHOOK hook;
     HWND hwnd;
-    FRBO *surf = 0;
+    FRBO *surf;
 
     mwrc = 0;
+    hook = 0;
+    surf = 0;
     devc = CreateCompatibleDC(0);
     bmpi.bmiHeader.biWidth = dims.cx;
     bmpi.bmiHeader.biHeight = (~flgs & COM_RGPU)? -dims.cy : dims.cy;
@@ -318,8 +382,15 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     data[0] = (intptr_t)hwnd;
     mwdc = GetDC(hwnd);
 
-    if (EBW)
+    if (EBW) {
         EBW(hwnd, &blur);
+        data[1] = (intptr_t)&hdat;
+        mhks.hwnd = hwnd;
+        hdat.hcut = TRUE;
+        hdat.full = CreateRectRgn(0, 0, dims.cx, dims.cy);
+        hook = SetWindowsHookEx(WH_MOUSE, MouseHook,
+                                GetModuleHandle(0), GetCurrentThreadId());
+    }
     if (flgs & COM_RGPU) {
         ppfd.iLayerType = PFD_MAIN_PLANE;
         SetPixelFormat(mwdc, ChoosePixelFormat(mwdc, &ppfd), &ppfd);
@@ -335,6 +406,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
             continue;
         }
         GetCursorPos(&cpos);
+        mhks.pt = cpos;
         ScreenToClient(hwnd, &cpos);
         attr = ((GetAsyncKeyState(VK_LBUTTON))? UFR_LBTN : 0)
              | ((GetAsyncKeyState(VK_MBUTTON))? UFR_MBTN : 0)
@@ -353,11 +425,17 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         if (!EBW)
             ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bfun, opts);
         else {
+            hdat.hcut = !(attr & PFR_PICK);
+            MouseHook(0, 0, (LPARAM)&mhks);
             if (flgs & COM_RGPU)
                 SwapBuffers(mwdc);
             else
                 BitBlt(mwdc, 0, 0, dims.cx, dims.cy, devc, 0, 0, SRCCOPY);
         }
+    }
+    if (EBW) {
+        UnhookWindowsHookEx(hook);
+        DeleteObject(hdat.full);
     }
     timeKillEvent(ttmr);
     cDeallocFrame(engd, (!EBW)? &surf : 0);
@@ -368,13 +446,16 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     KillTimer(hwnd, 1);
     ReleaseDC(hwnd, mwdc);
     DestroyWindow(hwnd);
-    /// mandatory: we are a library, not an application
-    UnregisterClass(wndc.lpszClassName, wndc.hInstance);
     DeleteDC(mwdc);
     DeleteDC(devc);
     DeleteObject(hdib);
+    DeleteObject(blur.hRgnBlur);
+    /// mandatory: we are a library, not an application
+    UnregisterClass(wndc.lpszClassName, wndc.hInstance);
+    /// finally, we need to purge the message queue, as it may be reused,
+    /// and nobody wants garbage messages for windows that are long gone
+    while (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE));
     FreeLibrary(husr);
     FreeLibrary(hdwm);
-    DeleteObject(blur.hRgnBlur);
     #undef EXT_ATTR
 }
