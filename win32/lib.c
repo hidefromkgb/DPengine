@@ -7,13 +7,6 @@
 #include <core.h>
 #include <ogl/oglstd.h>
 
-/// hook data
-typedef struct _HDAT {
-    HRGN full;
-    BOOL hcut;
-    POINT last;
-} HDAT;
-
 
 
 void lRestartEngine(ENGD *engd) {
@@ -280,40 +273,9 @@ BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
 
 
 
-LRESULT APIENTRY MouseHook(int code, WPARAM wPrm, LPARAM lPrm) {
-    if (code < 0)
-        return CallNextHookEx(0, code, wPrm, lPrm);
-
-    intptr_t *data;
-    MOUSEHOOKSTRUCT *hook = (MOUSEHOOKSTRUCT*)lPrm;
-    ENGD *engd;
-    HDAT *hdat;
-    POINT curr;
-    HRGN hole;
-
-    if (!hook->hwnd || !(engd = (ENGD*)GetWindowLongPtr(hook->hwnd,
-                                                        GWLP_USERDATA)))
-        return 0;
-
-    cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
-    hdat = (HDAT*)data[1];
-    curr = hook->pt;
-    if (!wPrm || (hdat->last.x != curr.x) || (hdat->last.y != curr.y)) {
-        hdat->last = curr;
-        ScreenToClient(hook->hwnd, &curr);
-        hole = CreateRectRgn(curr.x - 1, curr.y - 1, curr.x + 2, curr.y + 2);
-        CombineRgn(hole, hdat->full, hole, (hdat->hcut)? RGN_DIFF : RGN_OR);
-        SetWindowRgn(hook->hwnd, hole, FALSE);
-        return 1;
-    }
-    return 0;
-}
-
-
-
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                   BGRA **bptr, uint64_t *time, intptr_t *data, uint32_t flgs) {
-    #define EXT_ATTR (WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
+    #define EXT_ATTR (WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED)
     BLENDFUNCTION bstr = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
     WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW, WindowProc,
                        0, 0, 0, 0, LoadCursor(0, IDC_HAND), 0, 0, " ", 0};
@@ -331,25 +293,22 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     SIZE dims = {xdim - xpos, ydim - ypos};
     RECT scrr = {0, 0, dims.cx, dims.cy};
     POINT cpos, mpos, zpos = {};
-    MOUSEHOOKSTRUCT mhks = {};
-    HDAT hdat = {};
     MSG pmsg = {};
 
     BLENDFUNCTION *bfun;
     BOOL APIENTRY (*ULW)(HWND, HDC, POINT*, SIZE*, HDC, POINT*,
                          COLORREF, BLENDFUNCTION*, DWORD) = 0;
+    BOOL APIENTRY (*SLW)(HWND, COLORREF, BYTE, DWORD) = 0;
     HRESULT APIENTRY (*EBW)(HWND, typeof(blur)*) = 0;
     UINT ttmr, opts, attr;
     HINSTANCE husr, hdwm;
     HDC devc, mwdc;
     HBITMAP hdib;
     HGLRC mwrc;
-    HHOOK hook;
     HWND hwnd;
     FRBO *surf;
 
     mwrc = 0;
-    hook = 0;
     surf = 0;
     devc = CreateCompatibleDC(0);
     bmpi.bmiHeader.biWidth = dims.cx;
@@ -362,13 +321,12 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
 
     bfun = &bstr;
     opts = ULW_ALPHA;
-    /// layer the window only if there is no DWM support
-    attr = ((EBW)? 0 : WS_EX_LAYERED) | EXT_ATTR;
+    attr = EXT_ATTR;
     mpos = (POINT){xpos, ypos};
 
     husr = LoadLibrary("user32");
     if ((flgs & COM_OPAQ) || (flgs & WIN_IRGN)
-    || !(ULW = GetProcAddress(husr, "UpdateLayeredWindow"))) {
+    || !(ULW = (typeof(ULW))GetProcAddress(husr, "UpdateLayeredWindow"))) {
         bfun = (typeof(bfun))*bptr;
         zpos.y = bmpi.bmiHeader.biHeight;
         ULW = (typeof(ULW))ULWstub;
@@ -383,13 +341,11 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     mwdc = GetDC(hwnd);
 
     if (EBW) {
+        /// if there`s DWM, there absolutely have to be layered windows
+        SLW = (typeof(SLW))GetProcAddress(husr, "SetLayeredWindowAttributes");
+        /// does nothing visible to the window but enables input transparency!
+        SLW(hwnd, 0x000000, 0xFF, 2 /** 2 == LWA_ALPHA **/);
         EBW(hwnd, &blur);
-        data[1] = (intptr_t)&hdat;
-        mhks.hwnd = hwnd;
-        hdat.hcut = TRUE;
-        hdat.full = CreateRectRgn(0, 0, dims.cx, dims.cy);
-        hook = SetWindowsHookEx(WH_MOUSE, MouseHook,
-                                GetModuleHandle(0), GetCurrentThreadId());
     }
     if (flgs & COM_RGPU) {
         ppfd.iLayerType = PFD_MAIN_PLANE;
@@ -406,7 +362,6 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
             continue;
         }
         GetCursorPos(&cpos);
-        mhks.pt = cpos;
         ScreenToClient(hwnd, &cpos);
         attr = ((GetAsyncKeyState(VK_LBUTTON))? UFR_LBTN : 0)
              | ((GetAsyncKeyState(VK_MBUTTON))? UFR_MBTN : 0)
@@ -425,17 +380,13 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         if (!EBW)
             ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bfun, opts);
         else {
-            hdat.hcut = !(attr & PFR_PICK);
-            MouseHook(0, 0, (LPARAM)&mhks);
             if (flgs & COM_RGPU)
                 SwapBuffers(mwdc);
             else
                 BitBlt(mwdc, 0, 0, dims.cx, dims.cy, devc, 0, 0, SRCCOPY);
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, (attr & PFR_PICK)? EXT_ATTR :
+                                               WS_EX_TRANSPARENT | EXT_ATTR);
         }
-    }
-    if (EBW) {
-        UnhookWindowsHookEx(hook);
-        DeleteObject(hdat.full);
     }
     timeKillEvent(ttmr);
     cDeallocFrame(engd, (!EBW)? &surf : 0);
