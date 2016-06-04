@@ -26,6 +26,8 @@ RelJoined: lrelease
 RelJoined: erelease
 RelJoined: LCXFLAGS += -s
 RelJoined: jlink
+RelJoined:
+	if type upx &> /dev/null; then upx -qq $(EOUT); fi
 
 DbgJoined: ldebug
 DbgJoined: edebug
@@ -42,6 +44,8 @@ RelSplit: RelLibOnly
 RelSplit: erelease
 RelSplit: ECXFLAGS += -s
 RelSplit: elink
+RelSplit:
+	if type upx &> /dev/null; then upx -qq $(EOUT) $(LOUT); fi
 
 DbgSplit: DbgLibOnly
 DbgSplit: edebug
@@ -100,7 +104,6 @@ $(OBJDIR)/run.o: run.c
 
 jlink:
 	$(CX) $(LCXFLAGS) $(LOBJ) $(EOBJ) -o $(EOUT) $(LLIB)
-	if type upx &> /dev/null; then upx -qq $(EOUT); fi
 
 llink: LCXFLAGS += -shared
 llink:
@@ -108,4 +111,3 @@ llink:
 
 elink:
 	$(CX) $(ECXFLAGS) $(EOBJ) -o $(EOUT) $(ELIB)
-	if type upx &> /dev/null; then upx -qq $(EOUT) $(LOUT); fi

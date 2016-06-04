@@ -195,6 +195,5 @@ int main(int argc, char *argv[]) {
     eExecuteEngine(engc, xdim, ydim, 0, 0,
                    gdk_screen_get_width(gscr), gdk_screen_get_height(gscr),
                   ((uses < 0)? 0 : COM_RGPU) | COM_SHOW | COM_DRAW);
-    free(engc);
     return 0;
 }

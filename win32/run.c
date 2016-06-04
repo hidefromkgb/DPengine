@@ -414,6 +414,5 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                  ((flgs & FLG_IOPQ)? COM_OPAQ : 0));
     fclose(stdout);
     FreeConsole();
-    free(engc);
     return 0;
 }

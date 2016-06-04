@@ -161,26 +161,34 @@ typedef struct _BINF {
              trgt;  /// follow target name hash
 } BINF;
 
+/// library categories (name string and its hash)
+typedef struct _CTGS {
+    uint32_t hash;
+    char    *name;
+} CTGS;
+
 /// unit library info (write-once, read-only), opaque outside the module
 /// [TODO:] speech
 /// [TODO:] interactions
 /// [TODO:] categories
 typedef struct _LINF {
-    HDR_LIST;     /// list header
-    BINF  *barr,  /// available behaviours ordered by name
-          *earr,  /// available effects ordered by parent bhv. name
-         **bgrp;  /// nonzero-probability BARR elements ordered by bhv. group
-    char **bimp,  /// image paths for behaviours (0 if loaded)
-         **eimp,  /// image paths for effects (0 if loaded)
-          *path,  /// the folder from which the library was built
-          *name;  /// human-readable name (may differ from PATH!)
-    long  *ngrp,  /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
-           flgs,  /// flags
-           gcnt,  /// behaviour groups count
-           zcnt,  /// nonzero probability behaviours count
-           bcnt,  /// total behaviours count
-           ecnt,  /// total effects count
-           icnt;  /// number of on-screen bhv. sprites from the library
+    HDR_LIST;       /// list header
+    CTGS    *ctgs;  /// library categories (hashed and sorted)
+    BINF    *barr,  /// available behaviours ordered by name
+            *earr,  /// available effects ordered by parent bhv. name
+           **bgrp;  /// nonzero-probability BARR elements ordered by bhv. group
+    char   **bimp,  /// image paths for behaviours (0 if loaded)
+           **eimp,  /// image paths for effects (0 if loaded)
+            *path,  /// the folder from which the library was built
+            *name;  /// human-readable name (may differ from PATH!)
+    long    *ngrp,  /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
+             flgs,  /// flags
+             ccnt,  /// categories count
+             gcnt,  /// behaviour groups count
+             zcnt,  /// nonzero probability behaviours count
+             bcnt,  /// total behaviours count
+             ecnt,  /// total effects count
+             icnt;  /// number of on-screen bhv. sprites from the library
 } LINF;
 
 /// actual on-screen sprite, opaque outside the module
@@ -199,19 +207,21 @@ typedef struct _PICT {
 
 /// engine data (client side), opaque outside the module
 struct ENGC {
-    MENU     *mspr, /// per-sprite context menu
-             *mctx; /// engine`s main context menu
-    T4FV     *data; /// main display sequence passed to the renderer
-    ENGD     *engd; /// rendering engine handle
-    LINF     *libs; /// sprite libraries linked list
-    PICT     *pcur, /// the sprite currently picked
-            **parr; /// on-screen sprite pointers array
-    char    **tran; /// localized text array (ASCIIZ; last item is also 0)
-    uint32_t  pcnt, /// number of on-screen sprites
-              pmax, /// max. PARR capacity (realloc on exceed)
-              seed; /// random seed
-    T2IV      dims; /// drawing area dimensions
-    T3IV      ppos; /// mouse pointer position (z = flags)
+    MENU    *mspr,  /// per-sprite context menu
+            *mctx;  /// engine`s main context menu
+    T4FV    *data;  /// main display sequence passed to the renderer
+    ENGD    *engd;  /// rendering engine handle
+    LINF    *libs;  /// sprite libraries linked list
+    CTGS    *ctgs;  /// categories array
+    PICT    *pcur,  /// the sprite currently picked
+           **parr;  /// on-screen sprite pointers array
+    char   **tran;  /// localized text array (ASCIIZ; last item is also 0)
+    uint32_t ccnt,  /// categories count
+             pcnt,  /// on-screen sprites count
+             pmax,  /// max. PARR capacity (realloc on exceed)
+             seed;  /// random seed
+    T2IV     dims;  /// drawing area dimensions
+    T3IV     ppos;  /// mouse pointer position (z = flags)
 };
 
 
@@ -237,6 +247,8 @@ uint32_t PRNG(uint32_t *seed) {
 uint32_t HashLine(char *line, long size) {
     uint32_t hash = 0;
 
+    if (!line)
+        return hash;
     if (!size)
         size--;
     while (*line && size--)
@@ -488,15 +500,23 @@ LHDR *ListIterateTailToHead(LHDR *list, ITER iter, intptr_t data) {
 
 
 int igrpcmp(const void *a, const void *b) {
-    return (*(BINF**)b)->igrp - (*(BINF**)a)->igrp;
+    int64_t retn = (int64_t)(*(BINF**)b)->igrp - (int64_t)(*(BINF**)a)->igrp;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
 }
 
 int namecmp(const void *a, const void *b) {
-    return ((BINF*)b)->name - ((BINF*)a)->name;
+    int64_t retn = (int64_t)((BINF*)b)->name - (int64_t)((BINF*)a)->name;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
 }
 
 int uintcmp(const void *a, const void *b) {
-    return (*(uint32_t*)a) - (*(uint32_t*)b);
+    int64_t retn = (int64_t)*(uint32_t*)a - (int64_t)*(uint32_t*)b;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
+}
+
+int ctgscmp(const void *a, const void *b) {
+    int64_t retn = (int64_t)((CTGS*)a)->hash - (int64_t)((CTGS*)b)->hash;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
 }
 
 #define HTT_ITER(list, iter, data) \
@@ -690,53 +710,57 @@ void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
 
 void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
     char *file, *fptr, *conf, *temp;
-    long bcnt, ecnt;
+    long bcnt, ecnt, ccnt = 0;
+    uint32_t hash;
+    LINF *libs;
+    CTGS *ctgs;
 
     conf = ConcatPath(fptr = ConcatPath(base, path), pcnf);
     if ((file = rLoadFile(conf, 0))) {
         free(conf);
 
         ListAppendTail((LHDR**)&engc->libs, sizeof(*engc->libs));
-        engc->libs->path = fptr;
+        libs = engc->libs;
+        libs->path = fptr;
 
         fptr = file;
-        engc->libs->bcnt = engc->libs->ecnt = 0;
+        libs->bcnt = libs->ecnt = 0;
         while ((conf = SplitLine(&fptr, '\n', 1)))
             switch (DetermineType(&conf)) {
                 case SVT_BHVR:
-                    engc->libs->bcnt++;
+                    libs->bcnt++;
                     break;
 
                 case SVT_EFCT:
-                    engc->libs->ecnt++;
+                    libs->ecnt++;
                     break;
             }
 
-        if ((bcnt = engc->libs->bcnt)) {
-            engc->libs->barr = calloc(bcnt,     sizeof(*engc->libs->barr));
-            engc->libs->bimp = calloc(bcnt * 2, sizeof(*engc->libs->bimp));
+        if ((bcnt = libs->bcnt)) {
+            libs->barr = calloc(bcnt,     sizeof(*libs->barr));
+            libs->bimp = calloc(bcnt * 2, sizeof(*libs->bimp));
         }
-        if ((ecnt = engc->libs->ecnt)) {
-            engc->libs->earr = calloc(ecnt,     sizeof(*engc->libs->earr));
-            engc->libs->eimp = calloc(ecnt * 2, sizeof(*engc->libs->eimp));
+        if ((ecnt = libs->ecnt)) {
+            libs->earr = calloc(ecnt,     sizeof(*libs->earr));
+            libs->eimp = calloc(ecnt * 2, sizeof(*libs->eimp));
         }
         fptr = file;
         bcnt = ecnt = 0;
         while ((conf = GetNextLine(&fptr)))
             switch (DetermineType(&conf)) {
                 case SVT_NAME:
-                    engc->libs->name = strdup(GET_TEMP(&conf));
+                    libs->name = strdup(GET_TEMP(&conf));
                     break;
 
                 case SVT_EFCT:
-                    ParseEffect(engc, &engc->libs->earr[ecnt],
-                               &engc->libs->eimp[ecnt * 2], &conf);
+                    ParseEffect(engc, &libs->earr[ecnt],
+                               &libs->eimp[ecnt * 2], &conf);
                     ecnt++;
                     break;
 
                 case SVT_BHVR:
-                    ParseBehaviour(engc, &engc->libs->barr[bcnt],
-                                  &engc->libs->bimp[bcnt * 2], &conf);
+                    ParseBehaviour(engc, &libs->barr[bcnt],
+                                  &libs->bimp[bcnt * 2], &conf);
                     bcnt++;
                     break;
 
@@ -744,14 +768,55 @@ void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     /// doesn`t help much, skipping
                     break;
 
-                case SVT_CTGS:
-                    break;
-
                 case SVT_PHRS:
                     break;
+
+                case SVT_CTGS:
+                    while ((hash = HashLine(ToLower(Dequote(GET_TEMP(&conf)),
+                                                    0), 0))) {
+                        if (++libs->ccnt > ccnt)
+                            libs->ctgs = realloc(libs->ctgs,
+                                         sizeof(*libs->ctgs) * (ccnt += 32));
+                        libs->ctgs[libs->ccnt - 1] =
+                            (CTGS){hash, Dequote(temp)};
+                    }
+                    break;
             }
-        if (!engc->libs->name)
-            engc->libs->name = strdup(path);
+        if (!libs->name)
+            libs->name = strdup(path);
+        if (libs->ctgs) {
+            /// sorting categories, removing duplicates, truncating the memory
+            qsort(libs->ctgs, libs->ccnt, sizeof(*libs->ctgs), ctgscmp);
+            for (bcnt = ccnt = 1; ccnt < libs->ccnt; ccnt++)
+                if (libs->ctgs[ccnt - 1].hash != libs->ctgs[ccnt].hash)
+                    if (bcnt++ != ccnt)
+                        libs->ctgs[bcnt - 1] = libs->ctgs[ccnt];
+            if (libs->ccnt != bcnt)
+                libs->ctgs = realloc(libs->ctgs,
+                                    (libs->ccnt = bcnt) * sizeof(*libs->ctgs));
+            /// now looking for categories previously unknown
+            for (hash = ccnt = 0; ccnt < libs->ccnt; ccnt++)
+                if ((ctgs = bsearch(&libs->ctgs[ccnt], engc->ctgs, engc->ccnt,
+                                    sizeof(*engc->ctgs), ctgscmp)))
+                    libs->ctgs[ccnt] = (CTGS){0, ctgs->name};
+                else
+                    hash++;
+            /// some categories need to be added to the global category base
+            if (hash)
+                engc->ctgs = realloc(engc->ctgs,
+                                    (engc->ccnt += hash) * sizeof(*ctgs));
+            ctgs = engc->ctgs + engc->ccnt - hash;
+            for (ccnt = 0; ccnt < libs->ccnt; ccnt++)
+                if (!libs->ctgs[ccnt].hash)
+                    libs->ctgs[ccnt].hash = HashLine(libs->ctgs[ccnt].name, 0);
+                else {
+                    libs->ctgs[ccnt].name = strdup(libs->ctgs[ccnt].name);
+                    *libs->ctgs[ccnt].name = toupper(*libs->ctgs[ccnt].name);
+                    *ctgs++ = libs->ctgs[ccnt];
+                }
+            if (hash)
+                qsort(engc->ctgs, engc->ccnt, sizeof(*engc->ctgs), ctgscmp);
+        }
         free(file);
         conf = 0;
     }
@@ -774,6 +839,8 @@ void FreeLib(LINF *elem) {
         elem->bimp = elem->eimp;
         elem->eimp = 0;
     }
+    free(elem->ctgs); /// nothing to free inside CTGS:
+                      /// category names were copied from the engine
     free(elem->path);
     free(elem->name);
     free(elem->barr);
@@ -1488,7 +1555,7 @@ void eReallocEngine(ENGC **retn, char *lang) {
     {}};
 
     if (engc->mspr) {
-        spec = engc->mspr[8].chld; /// Add pony
+        spec = engc->mspr[8].chld; /// Add character
         temp = engc->mspr[9].chld; /// Add house
         engc->mspr[8].chld = engc->mspr[9].chld = 0;
     }
@@ -1545,8 +1612,11 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
     FreeLocalization(&engc->tran);
     rFreeTrayIcon(icon);
     TTH_ITER(engc->libs, FreeLib, 0);
+    for (; engc->ccnt; engc->ccnt--)
+        free(engc->ctgs[engc->ccnt - 1].name);
+    free(engc->ctgs);
     cEngineCallback(engc->engd, ECB_QUIT, 0);
-    *engc = (ENGC){};
+    free(engc);
 }
 
 
