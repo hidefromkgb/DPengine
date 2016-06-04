@@ -309,7 +309,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
 void DrawRendererOGL(RNDR *rndr, UNIT *uarr, T4FV *data,
                      ulong size, ulong opaq) {
-    long iter, pfwd, pbwd,
+    long iter, indx, pfwd, pbwd,
          ydim = ceil((GLfloat)size / rndr->surf->ptex[0].xdim);
 
     if (!(iter = rndr->surf->ptex[0].xdim * ydim))
@@ -320,13 +320,17 @@ void DrawRendererOGL(RNDR *rndr, UNIT *uarr, T4FV *data,
         rndr->temp = malloc(rndr->size * sizeof(*rndr->temp));
     }
     T4FV *temp = rndr->temp;
+    UNIT *retn;
 
-    for (pfwd = iter = 0, pbwd = size; iter < size; iter++)
-        if (uarr[(long)data[iter].w >> 2].tran)
-            temp[--pbwd] = data[iter];
-        else
-            temp[pfwd++] = data[iter];
-
+    for (pfwd = iter = 0, pbwd = size; iter < size; iter++) {
+        retn = &uarr[(indx = (long)data[iter].w) >> 2];
+        /// opaque sprites go to the beginning, translucent ones to the end,
+        /// applying offsets if a sprite was larger than its actual content
+        *((retn->tran)? &temp[--pbwd] : &temp[pfwd++]) =
+            (T4FV){{data[iter].x + retn->offs[indx & 1],
+                    data[iter].y - retn->offs[3 - ((indx >> 1) & 1)],
+                    data[iter].z, data[iter].w}};
+    }
     rndr->surf->cind = size * 6;
     BindTex(rndr->surf, 0, TEX_DFLT);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, rndr->surf->ptex[0].xdim, ydim,

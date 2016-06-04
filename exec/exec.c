@@ -1513,13 +1513,10 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
 
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc->engd);
     cEngineLoadAnimAsync(engc->engd,
-                       (uint8_t*)"/Icon/", (uint8_t*)MainIcon, &igif);
+                        (uint8_t*)"/Icon/", (uint8_t*)MainIcon, &igif);
     TTH_ITER(engc->libs, LoadTemplateFromLib, engc->engd);
     cEngineCallback(engc->engd, ECB_LOAD, 0);
     cEngineCallback(engc->engd, ECB_LOAD, ~0);
-
-    engc->seed = time(0);
-    printf("[((RNG))] seed = 0x%08X\n", engc->seed);
 
     igif.fcnt = 0;
     igif.xdim = xico;
@@ -1532,6 +1529,9 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
     engc->dims = (T2IV){{xdim, ydim}};
     TTH_ITER(engc->libs, LoadLib, engc->engd);
     cEngineCallback(engc->engd, ECB_LOAD, 0);
+
+    engc->seed = time(0);
+    printf("[((RNG))] seed = 0x%08X\n", engc->seed);
 
     TTH_ITER(engc->libs, AppendSpriteArr, engc);
     engc->data = (engc->pcnt)? calloc(engc->pcnt, sizeof(*engc->data)) : 0;

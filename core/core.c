@@ -630,10 +630,10 @@ void PTHR(THRD *data) {
 //           xoff * (data->ymax - data->ymin) << 2);
 
     for (iter = 0; iter < data->orig->size; iter++) {
-        xpos = data->orig->data[iter].x;
-        ypos = data->orig->data[iter].y;
         indx = data->orig->data[iter].w;
         tail = &data->orig->uarr[indx >> 2];
+        xpos = data->orig->data[iter].x + tail->offs[indx & 1];
+        ypos = data->orig->data[iter].y - tail->offs[3 - ((indx >> 1) & 1)];
         anim = tail->anim;
         yoff = anim->xdim * anim->ydim * data->orig->data[iter].z;
         ymax = min(0, data->ymax - ypos);
@@ -728,12 +728,12 @@ uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t attr) {
         return PFR_HALT;
     pick = SelectUnit(engd->uarr, engd->data, engd->size, xptr, yptr);
     engd->size = engd->ufrm(engd, engd->udat, &engd->data,
-                            &engd->time, attr, xptr, yptr, pick);
+                           &engd->time, attr, xptr, yptr, pick);
     if (!engd->size) {
         cEngineCallback(engd, ECB_QUIT, ~0);
         return PFR_HALT;
     }
-    return (((pick >= 0) || (engd->flgs & COM_OPAQ))? PFR_PICK : 0);
+    return ((pick >= 0) || (engd->flgs & COM_OPAQ))? PFR_PICK : 0;
 }
 
 
