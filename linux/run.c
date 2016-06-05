@@ -180,11 +180,12 @@ int main(int argc, char *argv[]) {
     strcat(conf, home);
     strcat(conf, "/.config");
     mkdir(conf, 0700);
-    strcat(conf, "/DesktopPonies");
+    strcat(conf, DEF_OPTS);
     if (!(home = (mkdir(conf, 0755))? (errno != EEXIST)? 0 : conf : conf))
         printf("WARNING: cannot create '%s'!", conf);
 
-    engc = eInitializeEngine(home);
+    engc = eInitializeEngine(conf);
+    free(conf);
     if ((uses = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
         while (uses--) {
             if ((dirs[uses]->d_type == DT_DIR)
@@ -208,6 +209,5 @@ int main(int argc, char *argv[]) {
     gtk_icon_size_lookup(GTK_ICON_SIZE_DIALOG, &xdim, &ydim);
     eExecuteEngine(engc, xdim, ydim, 0, 0,
                    gdk_screen_get_width(gscr), gdk_screen_get_height(gscr));
-    free(conf);
     return 0;
 }

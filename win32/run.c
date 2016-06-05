@@ -1,9 +1,10 @@
-#define _WIN32_IE 0x0400
+#define _WIN32_IE 0x0500
 #define _WIN32_WINNT 0x0501
 #define WINVER _WIN32_WINNT
 
 #include <windows.h>
 #include <commctrl.h>
+#include <shlobj.h>
 
 #include "../exec/exec.h"
 
@@ -363,54 +364,80 @@ void rFreeTrayIcon(intptr_t icon) {
 
 int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
-    RECT temp = {MAXLONG, MAXLONG, MINLONG, MINLONG};
-    ENGC *engc = 0;
+    RECT area = {MAXLONG, MAXLONG, MINLONG, MINLONG};
+    CHAR *conf, path[4 * (MAX_PATH + 1)] = {};
+    LPWSTR wide = 0;
+    HANDLE hdir;
+    ENGC *engc;
+    BOOL retn;
 
-    uint32_t flgs = FLG_CONS | 1;
-
-    InitCommonControlsEx(&icct);
-
-    if (flgs & FLG_CONS) {
+//    if (flgs & FLG_CONS) {
         AllocConsole();
         freopen("CONOUT$", "wb", stdout);
-    }
-    eReallocEngine(&engc, 0);
+//    }
 
-    WIN32_FIND_DATAW dirw;
-    WIN32_FIND_DATAA dira;
-    HANDLE hdir = FindFirstFileW(L""DEF_FLDR"/*", &dirw);
-    if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+    retn = 0;
+    if (OldWin32()) {
+        if (SHGetFolderPathA(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
+                             SHGFP_TYPE_CURRENT, (LPSTR)path) == S_OK) {
+            strcat(path, DEF_OPTS);
+            wide = UTF16(path);
+            retn = CreateDirectoryA((LPSTR)path, 0);
+            if (!retn && (GetLastError() == ERROR_ALREADY_EXISTS))
+                retn = 1;
+        }
+    }
+    else {
+        if (SHGetFolderPathW(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
+                             SHGFP_TYPE_CURRENT, (LPWSTR)path) == S_OK) {
+            wcscat((LPWSTR)path, L""DEF_OPTS);
+            wide = wcsdup((LPWSTR)path);
+            retn = CreateDirectoryW((LPWSTR)path, 0);
+            if (!retn && (GetLastError() == ERROR_ALREADY_EXISTS))
+                retn = 1;
+        }
+    }
+    if (!(conf = (retn && wide)? UTF8(wide) : 0))
+        printf("WARNING: cannot create '%s'!", conf);
+    free(wide);
+
+    engc = eInitializeEngine(conf);
+    free(conf);
+
+    if (OldWin32()) {
+        WIN32_FIND_DATAA dirf;
+
+        hdir = FindFirstFileA(DEF_FLDR"/*", &dirf);
         while ((hdir != INVALID_HANDLE_VALUE) &&
                (GetLastError() != ERROR_NO_MORE_FILES)) {
-            char *temp = UTF8(dirw.cFileName);
+            eAppendLib(engc, DEF_CONF, DEF_FLDR, dirf.cFileName);
+            FindNextFileA(hdir, &dirf);
+        }
+    }
+    else {
+        WIN32_FIND_DATAW dirf;
+
+        hdir = FindFirstFileW(L""DEF_FLDR"/*", &dirf);
+        while ((hdir != INVALID_HANDLE_VALUE) &&
+               (GetLastError() != ERROR_NO_MORE_FILES)) {
+            char *temp = UTF8(dirf.cFileName);
             eAppendLib(engc, DEF_CONF, DEF_FLDR, temp);
             free(temp);
-            FindNextFileW(hdir, &dirw);
-        }
-    else {
-        hdir = FindFirstFileA(DEF_FLDR"/*", &dira);
-        while ((hdir != INVALID_HANDLE_VALUE) &&
-               (GetLastError() != ERROR_NO_MORE_FILES)) {
-            eAppendLib(engc, DEF_CONF, DEF_FLDR, dira.cFileName);
-            FindNextFileA(hdir, &dira);
+            FindNextFileW(hdir, &dirf);
         }
     }
     FindClose(hdir);
 
 
     /// [TODO:] substitute this by GUI selection
-    __DEL_ME__SetLibUses(engc, flgs & 0xFFFF);
+    __DEL_ME__SetLibUses(engc, 1);
 
 
-    EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&temp);
+    InitCommonControlsEx(&icct);
+    EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&area);
     eExecuteEngine(engc, GetSystemMetrics(SM_CXSMICON),
-                   GetSystemMetrics(SM_CYSMICON), temp.left, temp.top,
-                   temp.right - temp.left, temp.bottom - temp.top,
-                 ((flgs & FLG_EOGL)? COM_RGPU : 0) |
-                 ((flgs & FLG_IBGR)? WIN_IBGR : 0) |
-                 ((flgs & FLG_IPBO)? WIN_IPBO : 0) | COM_SHOW |
-                 ((flgs & FLG_IRGN)? WIN_IRGN : 0) | COM_DRAW |
-                 ((flgs & FLG_IOPQ)? COM_OPAQ : 0));
+                   GetSystemMetrics(SM_CYSMICON),
+                   area.left, area.top, area.right, area.bottom);
     fclose(stdout);
     FreeConsole();
     return 0;

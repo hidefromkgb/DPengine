@@ -9,6 +9,8 @@
 
 
 
+/** default config directory    **/ #define DEF_OPTS "/DesktopPonies"
+/** default core config         **/ #define DEF_CORE "/core.conf"
 /** default anim directory      **/ #define DEF_FLDR "Ponies"
 /** default config file         **/ #define DEF_CONF "pony.ini"
 

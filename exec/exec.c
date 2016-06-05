@@ -1612,7 +1612,7 @@ ENGC *eInitializeEngine(char *fcnf) {
         uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
                   WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW};
     ENGC *engc = calloc(1, sizeof(*engc));
-    char *file, *fptr, *conf, *temp, *tran = "/core.conf";
+    char *file, *fptr, *conf, *temp, *tran = DEF_CORE;
     uint32_t elem, *iter;
 
     /// default options
@@ -1689,7 +1689,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
                          igif.time, igif.xdim, igif.ydim);
 
-    engc->dims = (T2IV){{xdim, ydim}};
+    engc->dims = (T2IV){{xdim - xpos, ydim - ypos}};
     TTH_ITER(engc->libs, LoadLib, engc->engd);
     cEngineCallback(engc->engd, ECB_LOAD, 0);
 
@@ -1698,9 +1698,8 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
 
     TTH_ITER(engc->libs, AppendSpriteArr, engc);
     engc->data = (engc->pcnt)? calloc(engc->pcnt, sizeof(*engc->data)) : 0;
-    cEngineRunMainLoop(engc->engd, xpos, ypos, engc->dims.x, engc->dims.y,
-                       engc->ftmp, FRM_WAIT, (intptr_t)engc,
-                       eUpdFrame, eUpdFlags);
+    cEngineRunMainLoop(engc->engd, xpos, ypos, xdim, ydim, engc->ftmp,
+                       FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
     FreeSpriteArr(engc);
     free(engc->data);
 

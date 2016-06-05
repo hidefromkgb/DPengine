@@ -300,12 +300,14 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                          COLORREF, BLENDFUNCTION*, DWORD) = 0;
     BOOL APIENTRY (*SLW)(HWND, COLORREF, BYTE, DWORD) = 0;
     HRESULT APIENTRY (*EBW)(HWND, typeof(blur)*) = 0;
+    HRESULT APIENTRY (*ICE)(BOOL*) = 0;
     UINT ttmr, opts, attr;
     HINSTANCE husr, hdwm;
     HDC devc, mwdc;
     HBITMAP hdib;
     HGLRC mwrc;
     HWND hwnd;
+    BOOL comp;
     FRBO *surf;
 
     mwrc = 0;
@@ -341,11 +343,21 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     mwdc = GetDC(hwnd);
 
     if (EBW) {
+        comp = FALSE;
+        ICE = (typeof(ICE))GetProcAddress(hdwm, "DwmIsCompositionEnabled");
         /// if there`s DWM, there absolutely have to be layered windows
         SLW = (typeof(SLW))GetProcAddress(husr, "SetLayeredWindowAttributes");
-        /// does nothing visible to the window but enables input transparency!
-        SLW(hwnd, 0x000000, 0xFF, 2 /** 2 == LWA_ALPHA **/);
-        EBW(hwnd, &blur);
+        ICE(&comp);
+        ttmr = GetVersion();
+        /// major 6 minor 1 is Win7; in newer versions ICE() is lying to us
+        if (!comp && (MAKEWORD(HIBYTE(ttmr), LOBYTE(ttmr)) <= 0x0601))
+            EBW = 0;
+        else {
+            /// does nothing visible to the window,
+            /// but enables input transparency!
+            SLW(hwnd, 0x000000, 0xFF, 2 /** 2 == LWA_ALPHA **/);
+            EBW(hwnd, &blur);
+        }
     }
     if (flgs & COM_RGPU) {
         ppfd.iLayerType = PFD_MAIN_PLANE;
@@ -353,7 +365,10 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         wglMakeCurrent(mwdc, mwrc = wglCreateContext(mwdc));
     }
     ttmr = timeSetEvent(1, 0, TimeFuncWrapper, (DWORD_PTR)time, TIME_PERIODIC);
-    SetWindowPos(hwnd, 0, mpos.x, mpos.y, dims.cx, dims.cy,
+    /// "+1" is a dirty hack to not let Windows consider us fullscreen if OGL
+    /// is active: all sorts of weird things happen to fullscreen OGL windows
+    /// when they are DWM + layered, at least on Intel HD 3000 + Vista / Win7
+    SetWindowPos(hwnd, 0, mpos.x, mpos.y, dims.cx, dims.cy + ((EBW)? 1 : 0),
                  SWP_NOZORDER | SWP_NOACTIVATE);
     while (data[0]) {
         if (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
