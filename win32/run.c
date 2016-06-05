@@ -1,11 +1,10 @@
-#define _WIN32_IE 0x0300
+#define _WIN32_IE 0x0400
 #define _WIN32_WINNT 0x0501
 #define WINVER _WIN32_WINNT
 
 #include <windows.h>
 #include <commctrl.h>
 
-#include "rsrc/run.h"
 #include "../exec/exec.h"
 
 
@@ -77,7 +76,7 @@ long rMessage(char *text, char *head, uint32_t flgs) {
         MSGBOXPARAMSA a;
         MSGBOXPARAMSW w;
     } msgp = {{sizeof(msgp), 0, GetModuleHandle(0), tttt, hhhh,
-               flgs | MB_TASKMODAL | MB_USERICON, (LPSTR)ICN_MAIN}};
+               flgs | MB_TASKMODAL | MB_USERICON, (LPSTR)1}};
 
     long retn = (OldWin32())? MessageBoxIndirectA(&msgp.a)
                             : MessageBoxIndirectW(&msgp.w);

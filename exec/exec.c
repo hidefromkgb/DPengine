@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include "exec.h"
 
 /// a macro to count the capacity of static arrays
@@ -215,11 +216,13 @@ struct ENGC {
     CTGS    *ctgs;  /// categories array
     PICT    *pcur,  /// the sprite currently picked
            **parr;  /// on-screen sprite pointers array
-    char   **tran;  /// localized text array (ASCIIZ; last item is also 0)
+    char   **tran,  /// localized text array (ASCIIZ; last item is also 0)
+            *conf;  /// name of the main configuration file
     uint32_t ccnt,  /// categories count
              pcnt,  /// on-screen sprites count
              pmax,  /// max. PARR capacity (realloc on exceed)
-             seed;  /// random seed
+             seed,  /// random seed
+             ftmp;  /// temporary storage for engine flags
     T2IV     dims;  /// drawing area dimensions
     T3IV     ppos;  /// mouse pointer position (z = flags)
 };
@@ -1490,15 +1493,9 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
 
 
 
-void eReallocEngine(ENGC **retn, char *lang) {
+void Relocalize(ENGC *engc, char *lang) {
     INCBIN("../core/en.lang", DefaultLanguage);
 
-    if (!retn)
-        return;
-    if (!*retn)
-        *retn = calloc(1, sizeof(**retn));
-
-    ENGC *engc = *retn;
     char *data;
     long size;
 
@@ -1571,8 +1568,107 @@ void eReallocEngine(ENGC **retn, char *lang) {
 
 
 
-void eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
-                    ulong xdim, ulong ydim, uint32_t flgs) {
+char *Concatenate(char *head, ...) {
+    va_list list;
+    char *temp;
+    long size;
+
+    if (!head)
+        return 0;
+    size = strlen(head) + 1;
+
+    va_start(list, head);
+    while ((temp = va_arg(list, typeof(temp))))
+        size += strlen(temp);
+    va_end(list);
+
+    temp = malloc(size);
+    strcpy(temp, head);
+    head = temp;
+
+    va_start(list, head);
+    while ((temp = va_arg(list, typeof(temp))))
+        strcat(head, temp);
+    va_end(list);
+
+    return head;
+}
+
+
+
+ENGC *eInitializeEngine(char *fcnf) {
+    /** 'language' **/ #define CNF_LANG 0x1644959C
+    /** 'flags'    **/ #define CNF_FLGS 0x8ACE03CE
+    /** 'draw'     **/ #define CNF_DRAW 0xE7ABD6EE
+    /** 'show'     **/ #define CNF_SHOW 0x27D90DCD
+    /** 'gpu'      **/ #define CNF_RGPU 0x11927E83
+    /** 'opaque'   **/ #define CNF_OPAQ 0xD246CFE1
+    /** 'wbgra'    **/ #define CNF_IBGR 0xABF3B1E8
+    /** 'wpbo'     **/ #define CNF_IPBO 0x78FE3880
+    /** 'wregion'  **/ #define CNF_IRGN 0xDE0DCCBE
+    static uint32_t
+        uCNF[] = {CNF_RGPU, CNF_SHOW, CNF_IPBO,
+                  CNF_IBGR, CNF_OPAQ, CNF_IRGN, CNF_DRAW},
+        uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
+                  WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW};
+    ENGC *engc = calloc(1, sizeof(*engc));
+    char *file, *fptr, *conf, *temp, *tran = "/core.conf";
+    uint32_t elem, *iter;
+
+    /// default options
+    engc->ftmp = COM_SHOW | COM_DRAW | COM_RGPU;
+    if (!fcnf)
+        tran = 0;
+    else {
+        engc->conf = Concatenate(fcnf, tran, 0);
+        tran = 0;
+
+        fptr = file = rLoadFile(engc->conf, 0);
+        while ((conf = GetNextLine(&fptr))) {
+            switch (DetermineType(&conf)) {
+                case CNF_LANG:
+                    GET_TEMP(&conf);
+                    free(tran);
+                    if (!(tran = (temp)? strdup(Dequote(temp)) : 0))
+                        break;
+                    if ((temp = rLoadFile(tran, 0)))
+                        free(temp);
+                    else {
+                        temp = Concatenate(fcnf, "/", tran, 0);
+                        free(tran);
+                        tran = temp;
+                    }
+                    break;
+
+                case CNF_FLGS:
+                    engc->ftmp = 0;
+                    while (conf) {
+                        IF_BIN_FIND(elem, uCNF, &conf)
+                            engc->ftmp |= uCOM[elem - 1];
+                    }
+                    break;
+            }
+        }
+        free(file);
+    }
+    Relocalize(engc, tran);
+    free(tran);
+    return engc;
+    #undef CNF_LANG
+    #undef CNF_FLGS
+    #undef CNF_RGPU
+    #undef CNF_DRAW
+    #undef CNF_SHOW
+    #undef CNF_OPAQ
+    #undef CNF_IBGR
+    #undef CNF_IPBO
+    #undef CNF_IRGN
+}
+
+
+
+void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
+                    long xpos, long ypos, ulong xdim, ulong ydim) {
     INCBIN("../core/icon.gif", MainIcon);
 
     AINF igif = {};
@@ -1603,7 +1699,8 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
     TTH_ITER(engc->libs, AppendSpriteArr, engc);
     engc->data = (engc->pcnt)? calloc(engc->pcnt, sizeof(*engc->data)) : 0;
     cEngineRunMainLoop(engc->engd, xpos, ypos, engc->dims.x, engc->dims.y,
-                       flgs, FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
+                       engc->ftmp, FRM_WAIT, (intptr_t)engc,
+                       eUpdFrame, eUpdFlags);
     FreeSpriteArr(engc);
     free(engc->data);
 
@@ -1616,6 +1713,10 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
         free(engc->ctgs[engc->ccnt - 1].name);
     free(engc->ctgs);
     cEngineCallback(engc->engd, ECB_QUIT, 0);
+
+    /// [TODO:] here be config file saving
+    free(engc->conf);
+
     free(engc);
 }
 

@@ -1,5 +1,8 @@
+#include <pwd.h>
+#include <errno.h>
 #include <dirent.h>
 #include <gtk/gtk.h>
+#include <sys/stat.h>
 #include "../exec/exec.h"
 
 
@@ -167,10 +170,21 @@ int main(int argc, char *argv[]) {
     gint xdim, ydim;
 
     long uses;
+    char *home, *conf;
     struct dirent **dirs;
-    ENGC *engc = 0;
+    ENGC *engc;
 
-    eReallocEngine(&engc, 0);
+    if (!(home = getenv("HOME")))
+        home = getpwuid(getuid())->pw_dir;
+    conf = calloc(32 + strlen(home), sizeof(*conf));
+    strcat(conf, home);
+    strcat(conf, "/.config");
+    mkdir(conf, 0700);
+    strcat(conf, "/DesktopPonies");
+    if (!(home = (mkdir(conf, 0755))? (errno != EEXIST)? 0 : conf : conf))
+        printf("WARNING: cannot create '%s'!", conf);
+
+    engc = eInitializeEngine(home);
     if ((uses = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
         while (uses--) {
             if ((dirs[uses]->d_type == DT_DIR)
@@ -193,7 +207,7 @@ int main(int argc, char *argv[]) {
     gscr = gdk_screen_get_default();
     gtk_icon_size_lookup(GTK_ICON_SIZE_DIALOG, &xdim, &ydim);
     eExecuteEngine(engc, xdim, ydim, 0, 0,
-                   gdk_screen_get_width(gscr), gdk_screen_get_height(gscr),
-                  ((uses < 0)? 0 : COM_RGPU) | COM_SHOW | COM_DRAW);
+                   gdk_screen_get_width(gscr), gdk_screen_get_height(gscr));
+    free(conf);
     return 0;
 }

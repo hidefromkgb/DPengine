@@ -42,11 +42,11 @@
 
 /// /// /// /// /// /// /// /// /// Flags for Style of B (FCT_BUTN)
 /** Checked                     **/ #define FSB_CHKD 0x040
-/** Act like checkbox           **/ #define FSB_CBOX 0x080
-/** Default button of a window  **/ #define FSB_DFLT 0x100
+/** Default button of a window  **/ #define FSB_DFLT 0x080
 
 /// /// /// /// /// /// /// /// /// Flags for Style of X (FCT_CBOX)
 /** Checked                     **/ #define FSX_CHKD 0x040
+/** Checkbox text on the left   **/ #define FSX_LEFT 0x080
 
 /// /// /// /// /// /// /// /// /// Flags for Style of R (FCT_RBOX)
 /** Checked                     **/ #define FSR_CHKD 0x040
@@ -84,9 +84,9 @@ typedef struct _MENU {
 
 void  eAppendLib(ENGC *engc, char *pcnf, char *base, char *path);
 void  eProcessMenuItem(MENU *item);
-void  eReallocEngine(ENGC **engc, char *lang);
-void  eExecuteEngine(ENGC *engc, ulong xico, ulong yico, long xpos, long ypos,
-                     ulong xdim, ulong ydim, uint32_t flgs);
+ENGC *eInitializeEngine(char *conf);
+void  eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
+                     long xpos, long ypos, ulong xdim, ulong ydim);
 
 
 
@@ -99,6 +99,7 @@ void  rOpenContextMenu(MENU *menu);
 MENU *rOSSpecificMenu(ENGC *engc);
 char *rConvertUTF8(char *utf8);
 char *rLoadFile(char *name, long *size);
+char *rSaveFile(char *name, char *data, long *size);
 
 /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME ///
 void __DEL_ME__SetLibUses(ENGC *engc, int32_t uses);
