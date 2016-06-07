@@ -101,7 +101,7 @@ void  rOpenContextMenu(MENU *menu);
 MENU *rOSSpecificMenu(ENGC *engc);
 char *rConvertUTF8(char *utf8);
 char *rLoadFile(char *name, long *size);
-char *rSaveFile(char *name, char *data, long *size);
+long  rSaveFile(char *name, char *data, long size);
 
 /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME ///
 void __DEL_ME__SetLibUses(ENGC *engc, int32_t uses);

@@ -165,6 +165,19 @@ char *rLoadFile(char *name, long *size) {
 
 
 
+long rSaveFile(char *name, char *data, long size) {
+    long file;
+
+    if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {
+        size = write(file, data, size);
+        close(file);
+        return size;
+    }
+    return 0;
+}
+
+
+
 int main(int argc, char *argv[]) {
     GdkScreen *gscr;
     gint xdim, ydim;

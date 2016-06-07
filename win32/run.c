@@ -303,6 +303,28 @@ char *rLoadFile(char *name, long *size) {
 
 
 
+long rSaveFile(char *name, char *data, long size) {
+    HANDLE file;
+    DWORD flen;
+
+    name = rConvertUTF8(name);
+    if (OldWin32())
+        file = CreateFileA(name, GENERIC_WRITE, FILE_SHARE_READ, 0,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+    else
+        file = CreateFileW((LPWSTR)name, GENERIC_WRITE, FILE_SHARE_READ, 0,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+    free(name);
+    if (file != INVALID_HANDLE_VALUE) {
+        WriteFile(file, data, size, &flen, 0);
+        CloseHandle(file);
+        return flen;
+    }
+    return 0;
+}
+
+
+
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                       uint32_t *data, long xdim, long ydim) {
     NOTIFYICONDATAW *nicd = calloc(1, sizeof(*nicd));

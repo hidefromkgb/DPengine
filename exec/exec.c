@@ -217,6 +217,7 @@ struct ENGC {
     PICT    *pcur,  /// the sprite currently picked
            **parr;  /// on-screen sprite pointers array
     char   **tran,  /// localized text array (ASCIIZ; last item is also 0)
+            *lang,  /// name of the loaded language file
             *conf;  /// name of the main configuration file
     uint32_t ccnt,  /// categories count
              pcnt,  /// on-screen sprites count
@@ -1501,11 +1502,14 @@ void Relocalize(ENGC *engc, char *lang) {
 
     FreeLocalization(&engc->tran);
     LoadLocalization(&engc->tran, DefaultLanguage, strlen(DefaultLanguage));
+    data = 0;
     if (lang) {
         data = rLoadFile(lang, &size);
         LoadLocalization(&engc->tran, data, size);
         free(data);
     }
+    free(engc->lang);
+    engc->lang = (data)? strdup(lang) : 0;
 
     MENU *spec = 0, *temp = 0,
 
@@ -1568,25 +1572,27 @@ void Relocalize(ENGC *engc, char *lang) {
 
 
 
-char *Concatenate(char *head, ...) {
+char *Concatenate(char **retn, ...) {
     va_list list;
-    char *temp;
-    long size;
+    char *head, *temp;
+    long size = 1;
 
-    if (!head)
-        return 0;
-    size = strlen(head) + 1;
-
-    va_start(list, head);
+    va_start(list, retn);
     while ((temp = va_arg(list, typeof(temp))))
         size += strlen(temp);
     va_end(list);
 
-    temp = malloc(size);
-    strcpy(temp, head);
-    head = temp;
+    if (!retn)
+        head = calloc(1, size);
+    else {
+        head = *retn;
+        head = realloc(head, size += (head)? strlen(head) : 0);
+        if (!*retn)
+            *head = 0;
+        *retn = head;
+    }
 
-    va_start(list, head);
+    va_start(list, retn);
     while ((temp = va_arg(list, typeof(temp))))
         strcat(head, temp);
     va_end(list);
@@ -1620,7 +1626,7 @@ ENGC *eInitializeEngine(char *fcnf) {
     if (!fcnf)
         tran = 0;
     else {
-        engc->conf = Concatenate(fcnf, tran, 0);
+        engc->conf = Concatenate(0, fcnf, tran, 0);
         tran = 0;
 
         fptr = file = rLoadFile(engc->conf, 0);
@@ -1634,7 +1640,7 @@ ENGC *eInitializeEngine(char *fcnf) {
                     if ((temp = rLoadFile(tran, 0)))
                         free(temp);
                     else {
-                        temp = Concatenate(fcnf, "/", tran, 0);
+                        temp = Concatenate(0, fcnf, "/", tran, 0);
                         free(tran);
                         tran = temp;
                     }
@@ -1671,7 +1677,15 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
                     long xpos, long ypos, ulong xdim, ulong ydim) {
     INCBIN("../core/icon.gif", MainIcon);
 
+    static uint32_t
+        uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
+                  WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW};
+    static char *
+        uSTR[] = {"GPU",    "Show",   "wPBO",
+                  "wBGRA",  "Opaque", "wRegion", "Draw"};
+
     AINF igif = {};
+    char *save = 0;
     intptr_t icon;
 
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc->engd);
@@ -1711,11 +1725,19 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     for (; engc->ccnt; engc->ccnt--)
         free(engc->ctgs[engc->ccnt - 1].name);
     free(engc->ctgs);
+    cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
     cEngineCallback(engc->engd, ECB_QUIT, 0);
 
-    /// [TODO:] here be config file saving
+    Concatenate(&save, "Language,", engc->lang, 0);
+    Concatenate(&save, "\r\nFlags", 0);
+    for (icon = 0; icon < countof(uCOM); icon++)
+        if (engc->ftmp & uCOM[icon])
+            Concatenate(&save, ",", uSTR[icon], 0);
+    Concatenate(&save, "\r\n", 0);
+    rSaveFile(engc->conf, save, strlen(save));
+    free(engc->lang);
     free(engc->conf);
-
+    free(save);
     free(engc);
 }
 
