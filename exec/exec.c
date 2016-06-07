@@ -1495,7 +1495,7 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
 
 
 void Relocalize(ENGC *engc, char *lang) {
-    INCBIN("../core/en.lang", DefaultLanguage);
+    INCBIN("../exec/loc/en.lang", DefaultLanguage);
 
     char *data;
     long size;
@@ -1675,7 +1675,7 @@ ENGC *eInitializeEngine(char *fcnf) {
 
 void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
                     long xpos, long ypos, ulong xdim, ulong ydim) {
-    INCBIN("../core/icon.gif", MainIcon);
+    INCBIN("../exec/icon.gif", MainIcon);
 
     static uint32_t
         uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
