@@ -1,4 +1,5 @@
 #include <stdarg.h>
+#include <limits.h>
 #include "exec.h"
 
 /// a macro to count the capacity of static arrays
@@ -195,16 +196,24 @@ typedef struct _LINF {
 /// actual on-screen sprite, opaque outside the module
 typedef struct _PICT {
     struct
-    _PICT   *next;  /// linked list support for SortByY(), only used there
+    _PICT   *next,  /// linked list support for SortByY(), only used there
+            *boss;  /// the parent sprite (e.g. follow target or effect base)
     LINF    *ulib;  /// unit library which the sprite belongs to
     T2FV     move,  /// movement direction
              offs;  /// position of the unit`s lower-left corner
-    uint32_t indx,  /// behaviour index and direction (lowest bit)
+    uint32_t indx,  /// behaviour index, direction (lowest bit), effect flag
              fram;  /// current frame
-    uint64_t tfrm,  /// timestamp of the next frame in msec
-             tmov,  /// timestamp of the next movement in msec
-             tbhv;  /// timestamp of the next behaviour in msec
+                    /// timestamps; all are given in msec
+    uint64_t tfrm,  /// BHV: next frame
+                    /// EFF: next frame
+             tmov,  /// BHV: next movement
+                    /// EFF: next respawn (-1 if the respawn ability is lost)
+             tbhv;  /// BHV: next behaviour (highest bit = parity flag)
+                    ///      parity is inverted on behaviour change
+                    /// EFF: expected deletion (highest bit = parity flag)
+                    ///      prohibit respawn if parity differs
 } PICT;
+#define TBH_PAIR (1ULL << 63)
 
 /// engine data (client side), opaque outside the module
 struct ENGC {
@@ -220,7 +229,7 @@ struct ENGC {
             *lang,  /// name of the loaded language file
             *conf;  /// name of the main configuration file
     uint32_t ccnt,  /// categories count
-             pcnt,  /// on-screen sprites count
+             pcnt,  /// on-screen sprites count (may differ every frame)
              pmax,  /// max. PARR capacity (realloc on exceed)
              seed,  /// random seed
              ftmp;  /// temporary storage for engine flags
@@ -557,8 +566,8 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **imgp, char **conf) {
     uint32_t elem, *iter;
     char *temp;
 
-    /// defaults
-    *retn = (BINF){{}, {}, {}, 0, 5000, 15000, 0.1 * FRM_WAIT, 0,
+    /// defaults         (neff, ieff, igrp)----v--v--v
+    *retn = (BINF){{}, {}, {}, 0, 5000, 15000, 0, 0, 0, 0.1 * FRM_WAIT, 0,
                    BHV_ALLM | BHV_EXEC | BHV_____ | FLG_LOOP, 0, 0};
 
     /// behaviour name......................................................... !def
@@ -662,8 +671,8 @@ void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
     uint32_t elem, *iter;
     char *temp;
 
-    /// defaults
-    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0,
+    /// defaults     (neff, ieff, igrp)----v--v--v
+    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0,
                    FLG_EFCT | EFF_STAY | (EFF_RNDA * 0x1111), 0, 0};
 
     /// effect name (skipped intentionally).................................... !def
@@ -708,8 +717,9 @@ void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
     if (TRY_TEMP(conf))
         SET_FLAG(retn->flgs, temp, VAL_FALS, FLG_LOOP);
 
-    if (!retn->dmax)
-        retn->flgs &= ~FLG_LOOP;
+/// [TODO:] WTF was this?
+//    if (!retn->dmax)
+//        retn->flgs &= ~FLG_LOOP;
 }
 
 void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
@@ -901,23 +911,26 @@ void SortByY(ENGC *engc) {
     ymin = MAX_YDIM + 1;
     ymax = -1;
 
-    for (iter = 0; iter < engc->pcnt; iter++) {
-        ytmp = engc->parr[iter]->offs.y;
-        if ((ytmp >= 0) && (ytmp < MAX_YDIM)) {
-            if (ytmp > ymax)
-                ymax = ytmp;
-            else if (ytmp < ymin)
-                ymin = ytmp;
+    for (iter = 0; iter < engc->pcnt; iter++)
+        if ((temp = engc->parr[iter])) {
+            ytmp = temp->offs.y;
+            if ((ytmp >= 0) && (ytmp < MAX_YDIM)) {
+                if (ytmp > ymax)
+                    ymax = ytmp;
+                else if (ytmp < ymin)
+                    ymin = ytmp;
+            }
         }
-    }
-    for (iter = engc->pcnt - 1; iter >= 0; iter--) {
-        temp = engc->parr[iter];
-        ytmp = temp->offs.y - ymin + 1;
-        if ((ytmp < 0) || (temp->offs.y >= MAX_YDIM))
-            ytmp = 0;
-        temp->next = elem[ytmp];
-        elem[ytmp] = temp;
-    }
+    for (iter = engc->pcnt - 1; iter >= 0; iter--)
+        if (!(temp = engc->parr[iter]))
+            engc->pcnt--;
+        else {
+            ytmp = temp->offs.y - ymin + 1;
+            if ((ytmp < 0) || (temp->offs.y >= MAX_YDIM))
+                ytmp = 0;
+            temp->next = elem[ytmp];
+            elem[ytmp] = temp;
+        }
     if ((ymax -= ymin - 1) < 0)
         ymax = 1;
     for (iter = 0; ymax >= 0; ymax--)
@@ -926,16 +939,6 @@ void SortByY(ENGC *engc) {
             elem[ymax] = elem[ymax]->next;
         }
     #undef MAX_YDIM
-}
-
-
-
-void PlaceRandomly(ENGC *engc, PICT *pict) {
-    AINF *anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
-
-    pict->offs.x = PRNG(&engc->seed) % (engc->dims.x - anim->xdim);
-    pict->offs.y = PRNG(&engc->seed) % (engc->dims.y - anim->ydim)
-                                                     + anim->ydim;
 }
 
 
@@ -951,6 +954,9 @@ long BoundCrossed(float move, float offs, long bmin, long bmax) {
 
 
 void ChooseDirection(ENGC *engc, PICT *pict) {
+    if (pict->indx & FLG_EFCT)
+        return;
+
     BINF *bhvr = &pict->ulib->barr[pict->indx >> 1];
     float angl;
     long flag;
@@ -1019,9 +1025,15 @@ void ChooseDirection(ENGC *engc, PICT *pict) {
 
 
 
-void ChooseBehaviour(ENGC *engc, PICT *pict) {
-    LINF *ulib = pict->ulib;
+/// [TODO:] do we need to check if there is no previous behaviour?
+void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
     long seed, lbgn, lend;
+    LINF *ulib = pict->ulib;
+    BINF *binf;
+    PICT *retn;
+
+    if (pict->indx & FLG_EFCT)
+        return;
 
     if (ulib->barr[pict->indx >> 1].link)
         pict->indx = (ulib->barr[pict->indx >> 1].link - 1) << 1;
@@ -1040,7 +1052,40 @@ void ChooseBehaviour(ENGC *engc, PICT *pict) {
                 lend = (lend + lbgn + 0) >> 1;
         pict->indx = (ulib->bgrp[lbgn] - ulib->barr) << 1;
     }
+    binf = &pict->ulib->barr[pict->indx >> 1];
+    pict->fram = -1; /// this means:
+    pict->tfrm =  0; /// "update me to 0-th frame ASAP!"
+    pict->tbhv = (time + binf->dmin) | (~pict->tbhv & TBH_PAIR);
+    if (binf->dmax > binf->dmin)
+        pict->tbhv += PRNG(&engc->seed) % (binf->dmax - binf->dmin);
+    if (!time) {
+        /// this is the first time this sprite appears; let`s put it somewhere
+        AINF *anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
+
+        pict->offs.x = PRNG(&engc->seed) % (engc->dims.x - anim->xdim);
+        pict->offs.y = PRNG(&engc->seed) % (engc->dims.y - anim->ydim)
+                                                         + anim->ydim;
+    }
     ChooseDirection(engc, pict);
+    /// now spawning effects for the behaviour, if any
+    lbgn = pict->ulib->barr[pict->indx >> 1].ieff - 1;
+
+    for (lend = pict->ulib->barr[pict->indx >> 1].neff; lend; lend--) {
+        binf = &pict->ulib->earr[lbgn + lend];
+        engc->parr[engc->pcnt++] = retn = calloc(1, sizeof(**engc->parr));
+        retn->ulib = pict->ulib;
+        retn->boss = pict;
+        retn->indx = FLG_EFCT | (pict->indx & 1) | ((lbgn + lend) << 1);
+        retn->offs = pict->offs;
+        retn->fram = -1; /// this means:
+        retn->tfrm =  0; /// "update me to 0-th frame ASAP!"
+        /// effect respawn time; DMAX = 0 means "do not respawn"
+        retn->tmov = (binf->dmax)? time + binf->dmax : ULONG_LONG_MAX;
+        /// effect ending time; DMIN = 0 means "end with the behaviour"
+        retn->tbhv =
+            (binf->dmin)? (time + binf->dmin) | (pict->tbhv & TBH_PAIR)
+                        : pict->tbhv;
+    }
 }
 
 
@@ -1070,7 +1115,7 @@ void FreeSpriteArr(ENGC *engc) {
         free(engc->parr[iter]);
     free(engc->parr);
     engc->parr = 0;
-    engc->pcnt = 0;
+    engc->pcnt = engc->pmax = 0;
 }
 
 
@@ -1170,16 +1215,38 @@ void AppendSpriteArr(LINF *elem, ENGC *engc) {
     if (!elem->icnt)
         return;
 
-    engc->pcnt += elem->icnt;
-    engc->parr = realloc(engc->parr, engc->pcnt * sizeof(*engc->parr));
+    /// now computing Q, the maximum number of effect spawns per behaviour
+    /// (Q = 1 when repeat delay D = 0; otherwise, Q = ceil(((E)? E : B) / D)
+    /// where E is effect duration and B is maximum behaviour duration)
+    /// note that E / D is # of effects created per effect expiration window
+    float qmax = 0.0, qcur = 0.0;
+    for (indx = 0; indx < elem->bcnt; indx++)
+        for (turn = 0; turn < elem->barr[indx].neff; turn++) {
+            iter = &elem->earr[elem->barr[indx].ieff + turn];
+            if (!iter->dmax)
+                continue;    /// this effect does not respawn, so (Q - 1) = 0
+            /// effect DMAX is repeat delay (D), DMIN is duration (E)
+            /// 2.0 coeff is due to the fade period after behaviour change
+            qcur = (float)((iter->dmin)? iter->dmin : elem->barr[indx].dmax)
+                 * 2.0 / (float)iter->dmax;
+            if (qmax < qcur)
+                qmax = qcur;
+        }
+    /// look for the maximum number of effects that
+    /// any of the library`s behaviours might spawn
+    for (turn = indx = 0; indx < elem->bcnt; indx++)
+        if (turn < elem->barr[indx].neff)
+            turn = elem->barr[indx].neff;
+    /// maximum sprite count += (how many) * (1 + effects * ceil(Q + 1))
+    engc->pmax += elem->icnt * (1 + turn * ceilf(qmax + 1));
+    engc->parr = realloc(engc->parr, engc->pmax * sizeof(*engc->parr));
 
-    for (indx = engc->pcnt - elem->icnt; indx < engc->pcnt; indx++) {
-        engc->parr[indx] = calloc(1, sizeof(*engc->parr[indx]));
-        engc->parr[indx]->ulib = elem;
-        ChooseBehaviour(engc, engc->parr[indx]);
-        PlaceRandomly(engc, engc->parr[indx]);
+    for (; elem->icnt > 0; elem->icnt--) {
+        engc->pcnt++;
+        engc->parr[engc->pcnt - 1] = calloc(1, sizeof(**engc->parr));
+        engc->parr[engc->pcnt - 1]->ulib = elem;
+        ChooseBehaviour(engc, engc->parr[engc->pcnt - 1], 0);
     }
-    elem->icnt = 0;
 }
 
 
@@ -1398,6 +1465,17 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
 
 
 
+/** ==== NOTES ====
+ 1. Effects may count on the fact that BOSS is valid, as the only way to
+    invalidate it is to delete the sprite. Behaviour changing occurs at
+    times that are known at the start, so all effects can know when to
+    invalidate themselves.
+ 2. Effects are in charge of respawning themselves, as they have different
+    respawn times but belong to one parent, making it very hard for him to
+    handle them all.
+ 3. Considering [1] and [2], it`s problematic to respawn an effect if its
+    run time is less than its respawn time. [TODO:] resolve this
+ **/
 uint32_t eUpdFrame(ENGD *engd, intptr_t user,
                    T4FV **data, uint64_t *time, uint32_t attr,
                    int32_t xptr, int32_t yptr, int32_t isel) {
@@ -1407,7 +1485,7 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
     AINF *anim;
 
     char *temp;
-    long  indx;
+    long  indx, elem;
     uint64_t curr;
 
 //    cEngineCallback(engd, ECB_LOAD, ~0);
@@ -1441,21 +1519,46 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
         }
         engc->ppos.z = attr;
     }
+    curr = *time;
     for (indx = 0; indx < engc->pcnt; indx++) {
-        curr = *time;
         pict = engc->parr[indx];
-        binf = &pict->ulib->barr[pict->indx >> 1];
+        binf = (~pict->indx & FLG_EFCT)? &pict->ulib->barr[pict->indx >> 1]
+             : &pict->ulib->earr[(pict->indx & ~FLG_EFCT) >> 1];
         anim = &binf->unit[pict->indx & 1];
-        if ((curr >= pict->tbhv)
-        || ((pict->fram >= anim->fcnt) && !(binf->flgs & FLG_LOOP))) {
-            ChooseBehaviour(engc, pict);
+        if (pict->indx & FLG_EFCT) {
+            /// effect
+            if (((pict->tbhv & TBH_PAIR) == (pict->boss->tbhv & TBH_PAIR))
+            && (curr >= pict->tmov)) {
+                if (curr >= (pict->tbhv & ~TBH_PAIR))
+                    elem = indx;
+                else {
+                    pict->tmov = ULONG_LONG_MAX;
+                    elem = engc->pcnt++;
+                    engc->parr[elem] = calloc(1, sizeof(**engc->parr));
+                    *engc->parr[elem] = *pict;
+                }
+                engc->parr[elem]->fram = -1;
+                engc->parr[elem]->tfrm =  0;
+                engc->parr[elem]->tmov =
+                    (binf->dmax)? curr + binf->dmax : ULONG_LONG_MAX;
+                engc->parr[elem]->tbhv =
+                    (binf->dmin)? (curr + binf->dmin)
+                                | (pict->boss->tbhv & TBH_PAIR)
+                                : pict->boss->tbhv;
+                engc->parr[elem]->offs = pict->boss->offs;
+            }
+            else if (curr >= (pict->tbhv & ~TBH_PAIR)) {
+                free(pict);           /// either the run time is up or
+                engc->parr[indx] = 0; /// parent behaviour has changed
+                continue;
+            }
+        }
+        else if ((curr >= (pict->tbhv & ~TBH_PAIR))
+             || ((pict->fram >= anim->fcnt) && !(binf->flgs & FLG_LOOP))) {
+            /// behaviour
+            ChooseBehaviour(engc, pict, curr);
             binf = &pict->ulib->barr[pict->indx >> 1];
             anim = &binf->unit[pict->indx & 1];
-            pict->fram = -1;
-            pict->tfrm = curr;
-            pict->tbhv = curr + binf->dmin;
-            if (binf->dmax > binf->dmin)
-                pict->tbhv += PRNG(&engc->seed) % (binf->dmax - binf->dmin);
         }
         if (curr >= pict->tfrm) {
             pict->fram =
@@ -1463,6 +1566,8 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
                  0 : pict->fram : pict->fram + 1;
             pict->tfrm = curr + anim->time[pict->fram];
         }
+        if (pict->indx & FLG_EFCT)
+            continue;
         if (curr - pict->tmov >= FRM_WAIT) {
             if (BoundCrossed(pict->move.x, pict->offs.x + anim->xdim,
                              anim->xdim, engc->dims.x)) {
@@ -1480,11 +1585,13 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
     }
     SortByY(engc);
 
-    /// ALL EFFECTS GO HERE!!!
-
     for (indx = 0; indx < engc->pcnt; indx++) {
         pict = engc->parr[indx];
-        anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
+        curr = pict->indx & ~FLG_EFCT;
+        if (pict->indx & FLG_EFCT)
+            anim = &pict->ulib->earr[curr >> 1].unit[curr & 1];
+        else
+            anim = &pict->ulib->barr[curr >> 1].unit[curr & 1];
         engc->data[indx] = (T4FV){{pict->offs.x, pict->offs.y,
                                    pict->fram, anim->uuid}};
     }
@@ -1711,7 +1818,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);
 
     TTH_ITER(engc->libs, AppendSpriteArr, engc);
-    engc->data = (engc->pcnt)? calloc(engc->pcnt, sizeof(*engc->data)) : 0;
+    engc->data = (engc->pmax)? calloc(engc->pmax, sizeof(*engc->data)) : 0;
     cEngineRunMainLoop(engc->engd, xpos, ypos, xdim, ydim, engc->ftmp,
                        FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
     FreeSpriteArr(engc);

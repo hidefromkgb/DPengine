@@ -515,17 +515,6 @@ void UnitArrayFromTree(UNIT *uarr, TREE *root) {
 
 
 
-void MakeUnitArray(ENGD *engd) {
-    if (engd->hstr) {
-        FillDest(engd->hstr);
-        free(engd->uarr);
-        engd->uarr = calloc(engd->uniq + 1, sizeof(*engd->uarr));
-        UnitArrayFromTree(engd->uarr, engd->hpix);
-    }
-}
-
-
-
 long SelectUnit(UNIT *uarr, T4FV *data, long size, long xptr, long yptr) {
     long iter, indx, xpos, ypos;
     ASTD *anim;
@@ -931,7 +920,12 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
                     free(engd->thrd[ecba].path);
                     engd->thrd[ecba].path = 0;
                 }
-                MakeUnitArray(engd);
+                if (engd->hstr) {
+                    FillDest(engd->hstr);
+                    free(engd->uarr);
+                    engd->uarr = calloc(engd->uniq + 1, sizeof(*engd->uarr));
+                    UnitArrayFromTree(engd->uarr, engd->hpix);
+                }
                 if (engd->uarr)
                     engd->flgs = data;
             }
