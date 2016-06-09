@@ -134,7 +134,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
     if (!rndr || *rndr)
         return !!rndr;
-    if ((load = LoadOpenGLFunctions(ARB_framebuffer_object
+    if ((load = LoadOpenGLFunctions(EXT_framebuffer_object
                                   | NV_vertex_program3))) {
         printf("%s\n", load);
         return 0;
@@ -366,12 +366,12 @@ FRBO *MakeRBO(long xdim, long ydim) {
                               GL_RENDERBUFFER, retn->rbuf[1]);
     data = retn->xdim * retn->ydim * 4;
 
-    glGenBuffersARB(2, retn->pbuf);
-    glBindBufferARB(GL_PIXEL_PACK_BUFFER, retn->pbuf[0]);
-    glBufferDataARB(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
-    glBindBufferARB(GL_PIXEL_PACK_BUFFER, retn->pbuf[1]);
-    glBufferDataARB(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
-    glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
+    glGenBuffers(2, retn->pbuf);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, retn->pbuf[0]);
+    glBufferData(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, retn->pbuf[1]);
+    glBufferData(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, retn->fbuf);
@@ -394,7 +394,7 @@ void ReadRBO(FRBO *robj, void *pict, ulong flgs) {
     GLvoid *bptr;
 
     if (flgs & WIN_IPBO)
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, robj->fbuf);
     glReadPixels(0, 0, robj->xdim, robj->ydim,
                 (flgs & WIN_IBGR)? GL_BGRA : GL_RGBA,
@@ -403,13 +403,13 @@ void ReadRBO(FRBO *robj, void *pict, ulong flgs) {
 
     if (flgs & WIN_IPBO) {
         robj->swiz ^= 1;
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
-        bptr = glMapBufferARB(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
+        bptr = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
         if (bptr) {
             memcpy(pict, bptr, robj->xdim * robj->ydim * sizeof(BGRA));
-            glUnmapBufferARB(GL_PIXEL_PACK_BUFFER);
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
         }
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 }
 
@@ -417,11 +417,11 @@ void ReadRBO(FRBO *robj, void *pict, ulong flgs) {
 
 void FreeRBO(FRBO **robj) {
     if (robj && *robj) {
-        glBindBufferARB(GL_PIXEL_PACK_BUFFER, 0);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glDeleteRenderbuffers(2, (*robj)->rbuf);
         glDeleteFramebuffers(1, &(*robj)->fbuf);
-        glDeleteBuffersARB(2, (*robj)->pbuf);
+        glDeleteBuffers(2, (*robj)->pbuf);
         free(*robj);
         *robj = 0;
     }

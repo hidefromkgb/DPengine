@@ -29,8 +29,9 @@ GLvoid newerror(GLchar **retn, GLchar *frmt, ...) {
 
 
 GLchar *LoadOpenGLFunctions(GLuint mask) {
-    static GLchar *retn = (typeof(retn))1;
-    GLint iter = -1;
+    GLchar *part[] = {PARTS_OF_OPENGL_FUNCTIONS},
+           *retn = (typeof(retn))1, name[32] = "gl";
+    GLint pind, nind, iter = -1;
 
     if (retn == (typeof(retn))1) {
         retn = 0;
@@ -39,10 +40,22 @@ GLchar *LoadOpenGLFunctions(GLuint mask) {
                (MaskedStringOpenGLFunctions[iter].mask &&
               !(MaskedStringOpenGLFunctions[iter].mask & mask)))
                 continue;
-            if (!(LoadedOpenGLFunctions[iter] =
-                  GL_GET_PROC_ADDR(MaskedStringOpenGLFunctions[iter].name)))
-                newerror(&retn, "[%d]: %s\n",
-                         iter, MaskedStringOpenGLFunctions[iter].name);
+            nind = 2;
+            pind = -1;
+            name[nind] = 0;
+            while (MaskedStringOpenGLFunctions[iter].name[++pind])
+                if (MaskedStringOpenGLFunctions[iter].name[pind] >= ' ') {
+                    name[nind] = MaskedStringOpenGLFunctions[iter].name[pind];
+                    name[++nind] = 0;
+                }
+                else {
+                    strcat(name,
+                           part[MaskedStringOpenGLFunctions[iter].name[pind]
+                                - 1]);
+                    nind = strlen(name);
+                }
+            if (!(LoadedOpenGLFunctions[iter] = GL_GET_PROC_ADDR(name)))
+                newerror(&retn, "[%d]: %s\n", iter, name);
         }
         if (mask & NV_vertex_program3) {
             glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &iter);
@@ -245,7 +258,7 @@ FTEX *BindTex(FVBO *vobj, GLuint bind, GLuint mode) {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                GL_TEXTURE_2D, vtex->ptex[ktex].indx, 0);
     else if (mode == TEX_DFLT) {
-        glActiveTextureARB(GL_TEXTURE0 + bind);
+        glActiveTexture(GL_TEXTURE0 + bind);
         glBindTexture(vtex->ptex[ktex].type, vtex->ptex[ktex].indx);
     }
     return &vtex->ptex[ktex];
@@ -311,27 +324,27 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
         retn->ptex = calloc(retn->ctex, sizeof(*retn->ptex));
     }
 
-    glGenBuffersARB(catr, retn->pvbo = malloc(catr * sizeof(*retn->pvbo)));
+    glGenBuffers(catr, retn->pvbo = malloc(catr * sizeof(*retn->pvbo)));
 
     retn->cind = patr[0].cdat / sizeof(GLuint);
-    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, retn->pvbo[0]);
-    glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER,
-                    patr[0].cdat, patr[0].pdat, patr[0].draw);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, retn->pvbo[0]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 patr[0].cdat, patr[0].pdat, patr[0].draw);
 
     for (iter = 1; iter < catr; iter++) {
-        glBindBufferARB(GL_ARRAY_BUFFER, retn->pvbo[iter]);
-        glBufferDataARB(GL_ARRAY_BUFFER,
-                        patr[iter].cdat, patr[iter].pdat, patr[iter].draw);
+        glBindBuffer(GL_ARRAY_BUFFER, retn->pvbo[iter]);
+        glBufferData(GL_ARRAY_BUFFER,
+                     patr[iter].cdat, patr[iter].pdat, patr[iter].draw);
     }
     for (shdr = 0; shdr < retn->cshd; shdr++) {
         glUseProgram(retn->pshd[shdr].prog);
-        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, retn->pvbo[0]);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, retn->pvbo[0]);
 
         for (iter = 1; iter < catr; iter++) {
             if (patr[iter].name
             && (aloc = glGetAttribLocation(retn->pshd[shdr].prog,
                                            patr[iter].name)) != -1) {
-                glBindBufferARB(GL_ARRAY_BUFFER, retn->pvbo[iter]);
+                glBindBuffer(GL_ARRAY_BUFFER, retn->pvbo[iter]);
                 ecnt = 0;
                 switch (patr[iter].type) {
                     case UNI_T1IV:
@@ -368,8 +381,8 @@ FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
         }
     }
     glUseProgram(0);
-    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBufferARB(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     return retn;
 }
 
@@ -382,9 +395,9 @@ GLvoid DrawVBO(FVBO *vobj, GLuint shad) {
     if (shad < vobj->cshd) {
         glUseProgram(vobj->pshd[shad].prog);
 
-        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, vobj->pvbo[0]);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vobj->pvbo[0]);
         for (iter = 1; iter < vobj->cvbo; iter++)
-            glBindBufferARB(GL_ARRAY_BUFFER, vobj->pvbo[0]);
+            glBindBuffer(GL_ARRAY_BUFFER, vobj->pvbo[0]);
 
         for (iter = 0; iter < vobj->ctex; iter++)
             BindTex(vobj, iter, TEX_DFLT);
@@ -402,8 +415,8 @@ GLvoid DrawVBO(FVBO *vobj, GLuint shad) {
                            (GLvoid*)&unif->pdat : unif->pdat);
         }
         glDrawElements(vobj->elem, vobj->cind, GL_UNSIGNED_INT, 0);
-        glBindBufferARB(GL_ARRAY_BUFFER, 0);
-        glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glUseProgram(0);
     }
 }
@@ -416,7 +429,7 @@ GLvoid FreeVBO(FVBO **vobj) {
             glDeleteProgram((*vobj)->pshd[--(*vobj)->cshd].prog);
             free((*vobj)->pshd[(*vobj)->cshd].puni);
         };
-        glDeleteBuffersARB((*vobj)->cvbo, (*vobj)->pvbo);
+        glDeleteBuffers((*vobj)->cvbo, (*vobj)->pvbo);
         free((*vobj)->pvbo);
         free((*vobj)->pshd);
         if ((*vobj)->ctex) {
