@@ -72,17 +72,17 @@
 /** [yet to be understood]      **/ #define BHV_____ (1 << 28)
 /** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 29)
 
-/** top-left alignment          **/ #define EFF_TNLA 0
-/** top alignment               **/ #define EFF_TOPA 1
-/** top-right alignment         **/ #define EFF_TNRA 2
-/** center-left alignment       **/ #define EFF_CNLA 3
-/** center alignment            **/ #define EFF_CNTA 4
-/** center-right alignment      **/ #define EFF_CNRA 5
-/** bottom-left alignment       **/ #define EFF_BNLA 6
-/** bottom alignment            **/ #define EFF_BTMA 7
-/** bottom-right alignment      **/ #define EFF_BNRA 8
-/** random alignment            **/ #define EFF_RNDA 9
-/** random centerless align     **/ #define EFF_RCLA 10
+/** top-left alignment          **/ #define EFF_TNLA 0x0
+/** top alignment               **/ #define EFF_TOPA 0x1
+/** top-right alignment         **/ #define EFF_TNRA 0x2
+/** center-left alignment       **/ #define EFF_CNLA 0x3
+/** center alignment            **/ #define EFF_CNTA 0x4
+/** center-right alignment      **/ #define EFF_CNRA 0x5
+/** bottom-left alignment       **/ #define EFF_BNLA 0x6
+/** bottom alignment            **/ #define EFF_BTMA 0x7
+/** bottom-right alignment      **/ #define EFF_BNRA 0x8
+/** random alignment            **/ #define EFF_RNDA 0x9
+/** random centerless align     **/ #define EFF_RCLA 0xA
 /** [extractor]                 **/ #define EFF_AAAA 0xF
 
 /** do not follow parent        **/ #define EFF_STAY (1 << 29)
@@ -233,6 +233,7 @@ struct ENGC {
              pmax,  /// max. PARR capacity (realloc on exceed)
              seed,  /// random seed
              ftmp;  /// temporary storage for engine flags
+    float    tdil;  /// time dilation coeff (faster is > 1, slower is < 1)
     T2IV     dims;  /// drawing area dimensions
     T3IV     ppos;  /// mouse pointer position (z = flags)
 };
@@ -271,7 +272,7 @@ uint32_t HashLine(char *line, long size) {
 
 
 
-static inline long ClampToBounds(long what, long bmin, long bmax) {
+static inline float ClampToBounds(float what, float bmin, float bmax) {
     what = (what > bmin)? what : bmin;
     return (what < bmax)? what : bmax;
 }
@@ -575,7 +576,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **imgp, char **conf) {
 
     /// probability of this behaviour..........................................  def = 0
     if (TRY_TEMP(conf))
-        retn->prob = ClampToBounds(StrToFloat(temp) * 1000.0, 0, 1000);
+        retn->prob = ClampToBounds(StrToFloat(temp) * 1000.0, 0.0, 1000.0);
 
     /// maximum duration in sec................................................  def = 15
     if (TRY_TEMP(conf))
@@ -673,7 +674,7 @@ void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
 
     /// defaults     (neff, ieff, igrp)----v--v--v
     *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0,
-                   FLG_EFCT | EFF_STAY | (EFF_RNDA * 0x1111), 0, 0};
+                   FLG_EFCT | FLG_LOOP | EFF_STAY | (EFF_RNDA * 0x1111), 0, 0};
 
     /// effect name (skipped intentionally).................................... !def
     if (TRY_TEMP(conf));
@@ -689,7 +690,7 @@ void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
     if (TRY_TEMP(conf))
         retn->dmin = StrToFloat(temp) * 1000.0;
 
-    /// cooldown in sec........................................................  def = 0 (no repeating)
+    /// respawn in sec.........................................................  def = 0 (no respawn)
     if (TRY_TEMP(conf))
         retn->dmax = StrToFloat(temp) * 1000.0;
 
@@ -709,17 +710,13 @@ void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
     IF_BIN_FIND(elem, uEMT, conf)
         retn->flgs = (uEFF[elem - 1] << 12) | (retn->flgs & ~(EFF_AAAA << 12));
 
-    /// flag to keep animation where it is.....................................  def = False
+    /// flag to follow parent .................................................  def = False
     if (TRY_TEMP(conf))
         SET_FLAG(retn->flgs, temp, VAL_FALS, EFF_STAY);
 
     /// flag to prevent animation looping......................................  def = False
     if (TRY_TEMP(conf))
         SET_FLAG(retn->flgs, temp, VAL_FALS, FLG_LOOP);
-
-/// [TODO:] WTF was this?
-//    if (!retn->dmax)
-//        retn->flgs &= ~FLG_LOOP;
 }
 
 void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
@@ -943,6 +940,13 @@ void SortByY(ENGC *engc) {
 
 
 
+/// KEEP means "keep centering and placement"
+void MoveToParent(PICT *pict, long keep) {
+    pict->offs = pict->boss->offs;
+}
+
+
+
 long BoundCrossed(float move, float offs, long bmin, long bmax) {
     if ((move < 0) && (offs + move <= bmin))
         return -1;
@@ -1076,7 +1080,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
         retn->ulib = pict->ulib;
         retn->boss = pict;
         retn->indx = FLG_EFCT | (pict->indx & 1) | ((lbgn + lend) << 1);
-        retn->offs = pict->offs;
+        MoveToParent(retn, 0);
         retn->fram = -1; /// this means:
         retn->tfrm =  0; /// "update me to 0-th frame ASAP!"
         /// effect respawn time; DMAX = 0 means "do not respawn"
@@ -1519,7 +1523,7 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
         }
         engc->ppos.z = attr;
     }
-    curr = *time;
+    curr = (long double)*time * (long double)engc->tdil;
     for (indx = 0; indx < engc->pcnt; indx++) {
         pict = engc->parr[indx];
         binf = (~pict->indx & FLG_EFCT)? &pict->ulib->barr[pict->indx >> 1]
@@ -1527,6 +1531,8 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
         anim = &binf->unit[pict->indx & 1];
         if (pict->indx & FLG_EFCT) {
             /// effect
+            if (~binf->flgs & EFF_STAY)
+                MoveToParent(pict, 1); /// follow the parent
             if (((pict->tbhv & TBH_PAIR) == (pict->boss->tbhv & TBH_PAIR))
             && (curr >= pict->tmov)) {
                 if (curr >= (pict->tbhv & ~TBH_PAIR))
@@ -1545,7 +1551,7 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
                     (binf->dmin)? (curr + binf->dmin)
                                 | (pict->boss->tbhv & TBH_PAIR)
                                 : pict->boss->tbhv;
-                engc->parr[elem]->offs = pict->boss->offs;
+                MoveToParent(engc->parr[elem], 0);
             }
             else if (curr >= (pict->tbhv & ~TBH_PAIR)) {
                 free(pict);           /// either the run time is up or
@@ -1711,6 +1717,7 @@ char *Concatenate(char **retn, ...) {
 
 ENGC *eInitializeEngine(char *fcnf) {
     /** 'language' **/ #define CNF_LANG 0x1644959C
+    /** 'time'     **/ #define CNF_TIME 0x8487AD87
     /** 'flags'    **/ #define CNF_FLGS 0x8ACE03CE
     /** 'draw'     **/ #define CNF_DRAW 0xE7ABD6EE
     /** 'show'     **/ #define CNF_SHOW 0x27D90DCD
@@ -1730,6 +1737,7 @@ ENGC *eInitializeEngine(char *fcnf) {
 
     /// default options
     engc->ftmp = COM_SHOW | COM_DRAW | COM_RGPU;
+    engc->tdil = 1.0;
     if (!fcnf)
         tran = 0;
     else {
@@ -1753,6 +1761,11 @@ ENGC *eInitializeEngine(char *fcnf) {
                     }
                     break;
 
+                case CNF_TIME:
+                    if (TRY_TEMP(&conf))
+                        engc->tdil = ClampToBounds(StrToFloat(temp), 0.1, 4.0);
+                    break;
+
                 case CNF_FLGS:
                     engc->ftmp = 0;
                     while (conf) {
@@ -1768,6 +1781,7 @@ ENGC *eInitializeEngine(char *fcnf) {
     free(tran);
     return engc;
     #undef CNF_LANG
+    #undef CNF_TIME
     #undef CNF_FLGS
     #undef CNF_RGPU
     #undef CNF_DRAW
@@ -1784,15 +1798,16 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
                     long xpos, long ypos, ulong xdim, ulong ydim) {
     INCBIN("../exec/icon.gif", MainIcon);
 
+    #define DEF_ENDL "\r\n"
     static uint32_t
-        uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
-                  WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW};
+        uCOM[] = {COM_RGPU, COM_SHOW, COM_DRAW, COM_OPAQ,
+                  WIN_IPBO, WIN_IBGR, WIN_IRGN};
     static char *
-        uSTR[] = {"GPU",    "Show",   "wPBO",
-                  "wBGRA",  "Opaque", "wRegion", "Draw"};
+        uSTR[] = {"GPU",    "Show",   "Draw",   "Opaque",
+                  "wPBO",   "wBGRA",  "wRegion"};
 
     AINF igif = {};
-    char *save = 0;
+    char temp[256], *save = 0;
     intptr_t icon;
 
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc->engd);
@@ -1835,17 +1850,20 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
     cEngineCallback(engc->engd, ECB_QUIT, 0);
 
+    sprintf(temp, "%0.3f", engc->tdil);
     Concatenate(&save, "Language,", engc->lang, 0);
-    Concatenate(&save, "\r\nFlags", 0);
+    Concatenate(&save, DEF_ENDL, "Time,", temp, 0);
+    Concatenate(&save, DEF_ENDL, "Flags", 0);
     for (icon = 0; icon < countof(uCOM); icon++)
         if (engc->ftmp & uCOM[icon])
             Concatenate(&save, ",", uSTR[icon], 0);
-    Concatenate(&save, "\r\n", 0);
+    Concatenate(&save, DEF_ENDL, 0);
     rSaveFile(engc->conf, save, strlen(save));
     free(engc->lang);
     free(engc->conf);
     free(save);
     free(engc);
+    #undef DEF_ENDL
 }
 
 

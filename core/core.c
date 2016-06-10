@@ -832,13 +832,13 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
         engd->msec = msec;
 
         mtmp = lTimeFunc() - engd->time;
-        printf(TXL_AEND" %lu threads, %lu objects, %ld ms: %0.3f ms/obj\n%s\n",
+        printf(TXL_AEND" %lu threads, %lu objects, %ld ms: %0.3f ms/obj\n",
                engd->ncpu, engd->uniq, mtmp,
-              (double)mtmp * engd->ncpu / engd->uniq,
-              (engd->flgs & COM_RGPU)? TXL_RGPU : TXL_RSTD);
+              (double)mtmp * engd->ncpu / engd->uniq);
         do {
             if (uflg)
                 engd->flgs = uflg(engd, engd->udat, engd->flgs);
+            printf("%s\n", (engd->flgs & COM_RGPU)? TXL_RGPU : TXL_RSTD);
             lRunMainLoop(engd, engd->dims.xpos, engd->dims.ypos,
                          engd->dims.xdim, engd->dims.ydim,
                         &engd->bptr, &engd->time, engd->user, engd->flgs);
