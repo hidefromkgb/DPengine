@@ -8,4 +8,40 @@ LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+1 VERSIONINFO
+    FILEVERSION     0,0,0,0
+    PRODUCTVERSION  0,0,0,0
+    FILEOS          VOS__WINDOWS32
+    FILETYPE        VFT_APP
+    FILESUBTYPE     VFT2_UNKNOWN
+    FILEFLAGSMASK   0
+    FILEFLAGS       0
+{
+    BLOCK "StringFileInfo"
+    {
+        BLOCK "000004B0"
+        {
+            VALUE "Comments", "Based off the idea of Desktop Ponies by DesktopPonyGuy and RoosterDragon"
+            VALUE "CompanyName", "hidefromkgb"
+            VALUE "FileDescription", "DPE launcher"
+            VALUE "FileVersion", ""
+            VALUE "InternalName", "DPE"
+            VALUE "LegalCopyright", "CC BY-NC-SA 3.0"
+            VALUE "LegalTrademarks", ""
+            VALUE "OriginalFilename", "win32.exe"
+            VALUE "PrivateBuild", ""
+            VALUE "ProductName", "Desktop Ponies Engine"
+            VALUE "ProductVersion", "[still in pre-alpha]"
+            VALUE "SpecialBuild", ""
+        }
+    }
+    BLOCK "VarFileInfo"
+    {
+        VALUE "Translation", 0x0000, 0x04B0
+    }
+}
+
+
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 1                  RT_MANIFEST    "mfst.xml"

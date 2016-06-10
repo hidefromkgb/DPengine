@@ -10,12 +10,12 @@ N.B.: to be able to build on Windows using Code::Blocks, go to Settings → Comp
 
 ## Release notes
 
-MacOS X support! Finally!
+Major refactoring effort is currently underway, along with adding features previously ignored, like sprite effects and categories. The first draft of GUI from the master branch is discarded, however bringing up some very important points that will be considered in a new iteration of GUI architecture.
 
-By now, only tested on a virtualized 10.8, but theoretically the oldest supported version is somewhere near 10.5.
-
-OpenGL renderer is present but mostly untested, due to VM being the only Mac around.
+MacOS X branch is on hiatus till there is access to a machine powerful enough to run a Mac VM faster than 5 FPS on idle. Sad but true.
 
 ## License
 
 The artwork is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported (CC BY-NC-SA 3.0)](http://creativecommons.org/licenses/by-nc-sa/3.0/). This means you are allowed to share and alter the artwork, provided you give credit, do not use it for commercial purposes and release it under this same license.
+
+The same license applies to the source code.
