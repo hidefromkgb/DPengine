@@ -83,7 +83,7 @@
 /** bottom alignment            **/ #define EFF_BTMA 0x7
 /** bottom-right alignment      **/ #define EFF_BNRA 0x8
 /** random alignment            **/ #define EFF_RNDA 0x9
-/** random centerless align     **/ #define EFF_RCLA 0xA
+/** random centerless alignment **/ #define EFF_RCLA 0xA
 /** [extractor]                 **/ #define EFF_AAAA 0xF
 
 /** do not follow parent        **/ #define EFF_STAY (1 << 29)
@@ -153,7 +153,7 @@ typedef struct _BINF {
     T2IV  ptgt;     /// follow target relative coords
     long  prob,     /// probability, 0-1000
           dmin,     /// minimum duration in msec
-          dmax,     /// maximum duration / cooldown in msec
+          dmax,     /// maximum duration / respawn in msec
           neff,     /// number of linked effects
           ieff,     /// effect array index of the first linked effect
           igrp;     /// behaviour group index
@@ -200,7 +200,7 @@ typedef struct _PICT {
     _PICT   *next,  /// linked list support for SortByY(), only used there
             *boss;  /// the parent sprite (e.g. follow target or effect base)
     LINF    *ulib;  /// unit library which the sprite belongs to
-    T2FV     move,  /// movement direction
+    T2FV     move,  /// movement direction (or parent offset for effects)
              offs;  /// position of the unit`s lower-left corner
     uint32_t indx,  /// behaviour index, direction (lowest bit), effect flag
              fram;  /// current frame
@@ -958,9 +958,55 @@ void SortByY(ENGC *engc) {
 
 
 
-/// KEEP means "keep centering and placement"
-void MoveToParent(PICT *pict, long keep) {
-    pict->offs = pict->boss->offs;
+/// SEED = 0 means "keep centering and placement"
+void MoveToParent(PICT *pict, uint32_t *seed) {
+    long iter, desc;
+    AINF *anim[2];
+    T2FV vect[2];
+
+    if (seed) {
+        /// parent behaviour animation
+        anim[0] = &pict->boss->ulib->barr[pict->boss->indx >> 1].
+                                     unit[pict->boss->indx & 1];
+        /// effect animation
+        anim[1] = &pict->ulib->earr[(pict->indx & ~FLG_EFCT) >> 1].
+                               unit[pict->indx & 1];
+
+        /// read centering and placement for the current effect
+        desc = pict->ulib->earr[(pict->indx & ~FLG_EFCT) >> 1].flgs
+             >> ((pict->indx & 1) << 3); /// direction was inherited from BOSS
+        for (iter = 0; iter < 2; iter++, desc >>= 4) {
+            switch (desc & EFF_AAAA) {
+                default:
+                case EFF_BNLA: vect[iter] = (T2FV){{0.0, 0.0}}; break;
+                case EFF_BTMA: vect[iter] = (T2FV){{0.5, 0.0}}; break;
+                case EFF_BNRA: vect[iter] = (T2FV){{1.0, 0.0}}; break;
+
+                case EFF_CNLA: vect[iter] = (T2FV){{0.0, 0.5}}; break;
+                case EFF_CNTA: vect[iter] = (T2FV){{0.5, 0.5}}; break;
+                case EFF_CNRA: vect[iter] = (T2FV){{1.0, 0.5}}; break;
+
+                case EFF_TNLA: vect[iter] = (T2FV){{0.0, 1.0}}; break;
+                case EFF_TOPA: vect[iter] = (T2FV){{0.5, 1.0}}; break;
+                case EFF_TNRA: vect[iter] = (T2FV){{1.0, 1.0}}; break;
+
+                case EFF_RNDA: /// there is actually no difference
+                case EFF_RCLA: /// between 'any' and 'any-not_center'
+                    vect[iter] = (T2FV){{(float)((PRNG(seed) >> 4) & 0xFFF),
+                                         (float)((PRNG(seed) >> 4) & 0xFFF)}};
+                    vect[iter] = (T2FV){{vect[iter].x * 0.000244140625,
+                                         vect[iter].y * 0.000244140625}};
+                    break;     /// this is 1 / 4096 ----^^^^^^^^^^^^^^
+            }
+            /// ANIMs are only needed for dimensions here
+            vect[iter] = (T2FV){{vect[iter].x * (float)anim[iter]->xdim,
+                                 vect[iter].y * (float)anim[iter]->ydim}};
+        }
+        /// now calculate the resulting offset
+        pict->move = (T2FV){{vect[0].x - vect[1].x, vect[0].y - vect[1].y}};
+    }
+    pict->offs = (T2FV){{pict->boss->offs.x + pict->move.x,
+                         pict->boss->offs.y - pict->move.y}};
 }
 
 
@@ -1048,7 +1094,8 @@ void ChooseDirection(ENGC *engc, PICT *pict) {
 
 
 /// INDX is not used if FROM is an effect, as all we need is stored there
-long SpawnEffect(PICT **retn, PICT *from, ulong indx, uint64_t time) {
+long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
+                 ulong indx, uint64_t time) {
     BINF *binf;
 
     if (from->tmov == ULONG_LONG_MAX)
@@ -1077,7 +1124,7 @@ long SpawnEffect(PICT **retn, PICT *from, ulong indx, uint64_t time) {
     (*retn)->tbhv = (binf->dmin)? (time + binf->dmin)
                                 | ((*retn)->boss->tbhv & TBH_PAIR)
                                 : (*retn)->boss->tbhv;
-    MoveToParent(*retn, 0);
+    MoveToParent(*retn, seed);
     return ~0;
 }
 
@@ -1127,7 +1174,8 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
     /// now spawning effects for the behaviour, if any
     lbgn = pict->ulib->barr[pict->indx >> 1].ieff - 1;
     for (lend = pict->ulib->barr[pict->indx >> 1].neff; lend; lend--)
-        SpawnEffect(&engc->parr[engc->pcnt++], pict, lbgn + lend, time);
+        SpawnEffect(&engc->parr[engc->pcnt++], pict,
+                    &engc->seed, lbgn + lend, time);
 }
 
 
@@ -1546,14 +1594,14 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
         if (pict->indx & FLG_EFCT) {
             /// effect
             if (~binf->flgs & EFF_STAY)
-                MoveToParent(pict, 1); /// follow the parent
+                MoveToParent(pict, 0); /// follow the parent
             if (((pict->tbhv & TBH_PAIR) == (pict->boss->tbhv & TBH_PAIR))
             && (curr >= pict->tmov)) {
                 if (curr >= (pict->tbhv & ~TBH_PAIR))
                     elem = indx;       /// PICT expired, let`s edit it inplace
                 else
                     engc->parr[elem = engc->pcnt++] = 0;
-                SpawnEffect(&engc->parr[elem], pict, 0, curr);
+                SpawnEffect(&engc->parr[elem], pict, &engc->seed, 0, curr);
             }
             else if (curr >= (pict->tbhv & ~TBH_PAIR)) {
                 free(pict);            /// either the run time is up or
