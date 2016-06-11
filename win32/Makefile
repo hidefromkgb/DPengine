@@ -6,21 +6,22 @@ RC = windres
 OBJDIR = .obj
 
 RCFLAGS = -J rc -O coff
+CRTLIBS = -lmsvcrt -lkernel32 -luser32 -lshell32 -lgdi32 -lcomctl32
 CRTFUNC = -Dstrdup=_strdup -Dwcsdup=_wcsdup -Dvsnprintf=_vsnprintf
 
-LLIB = -lgdi32 -lopengl32 -lcomctl32 -lwinmm
+LLIB = $(CRTLIBS) -lopengl32 -lwinmm
 LINC =
-LCXFLAGS = -flto
-LCFLAGS = -I..\core -flto -march=i486 -Wall -DLIB_MAKE $(CRTFUNC)
+LCXFLAGS =
+LCFLAGS = -I..\core -mno-stack-arg-probe -Wall -march=i486 -DLIB_MAKE $(CRTFUNC)
 
 LOBJ = $(OBJDIR)\core\core.o $(OBJDIR)\core\gif\common.o $(OBJDIR)\core\gif\gifstd.o $(OBJDIR)\core\ogl\common.o $(OBJDIR)\core\ogl\oglstd.o $(OBJDIR)\lib.o
 LOUT = ..\engine.dll
 
 
-ELIB = -lengine -lgdi32 -lcomctl32
+ELIB = $(CRTLIBS) -lengine
 EINC =
-ECXFLAGS = -L.. -Wl,--subsystem,windows -flto
-ECFLAGS = -I..\core -flto -Wall $(CRTFUNC)
+ECXFLAGS = -L.. -Wl,--subsystem,windows -nostdlib -e_WinMain@16
+ECFLAGS = -I..\core -mno-stack-arg-probe -Wall $(CRTFUNC)
 
 EOBJ = $(OBJDIR)\rsrc\run.o $(OBJDIR)\exec\exec.o $(OBJDIR)\run.o
 EOUT = ..\win32.exe

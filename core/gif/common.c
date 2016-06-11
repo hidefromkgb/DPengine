@@ -65,6 +65,12 @@ long DecodeFrame(uint8_t **buff, long *size, uint8_t *bptr) {
     uint16_t read, mask;
     uint32_t code[DEF_CLEN];
 
+    /// manual stack checking
+    code[3 * DEF_CLEN / 4] = 0;
+    code[2 * DEF_CLEN / 4] = 0;
+    code[1 * DEF_CLEN / 4] = 0;
+    code[0 * DEF_CLEN / 4] = 0;
+
     /// does the size suffice our needs?
     if (--(*size) <= sizeof(read))
         return -5;

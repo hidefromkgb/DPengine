@@ -462,5 +462,6 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                    area.left, area.top, area.right, area.bottom);
     fclose(stdout);
     FreeConsole();
+    ExitProcess(0);
     return 0;
 }
