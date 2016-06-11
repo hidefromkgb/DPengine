@@ -13,6 +13,7 @@
 
 /** default comment character   **/ #define DEF_CMNT '\''
 /** default token separator     **/ #define DEF_TSEP ','
+/** default dir slash (string)  **/ #define DEF_DSEP "/"
 
 /// /// /// /// /// /// /// /// /// truth values
 /** 'true'                      **/ #define VAL_TRUE 0x390A9E10
@@ -299,6 +300,36 @@ float StrToFloat(char *data) {
 
 
 
+char *Concatenate(char **retn, ...) {
+    va_list list;
+    char *head, *temp;
+    long size = 1;
+
+    va_start(list, retn);
+    while ((temp = va_arg(list, typeof(temp))))
+        size += strlen(temp);
+    va_end(list);
+
+    if (!retn)
+        head = calloc(1, size);
+    else {
+        head = *retn;
+        head = realloc(head, size += (head)? strlen(head) : 0);
+        if (!*retn)
+            *head = 0;
+        *retn = head;
+    }
+
+    va_start(list, retn);
+    while ((temp = va_arg(list, typeof(temp))))
+        strcat(head, temp);
+    va_end(list);
+
+    return head;
+}
+
+
+
 /// [TODO:] make this mess UTF8-compliant
 char *ToLower(char *uppr, long size) {
     long iter;
@@ -415,21 +446,6 @@ uint32_t DetermineType(char **tail) {
     if (temp && (*temp != DEF_CMNT))
         return HashLine(ToLower(temp, *tail - temp - 1), *tail - temp - 1);
     return ERR_HASH;
-}
-
-
-
-char *ConcatPath(char *base, char *path) {
-    char *retn;
-    long  iter;
-
-    if (*path == '"')
-        path++;
-    retn = malloc(strlen(base) + strlen(path) + 2);
-    iter = sprintf(retn, "%s/%s", base, path) - 1;
-    if (retn[iter] == '"')
-        retn[iter] = '\0';
-    return retn;
 }
 
 
@@ -555,7 +571,8 @@ void MakeSpritePair(char **dest, char *path, char **conf) {
     long iter;
 
     for (iter = 0; iter <= 1; iter++)
-        dest[iter] = ConcatPath(path, Dequote(SplitLine(conf, DEF_TSEP, 0)));
+        dest[iter] = Concatenate(0, path, DEF_DSEP,
+                                 Dequote(SplitLine(conf, DEF_TSEP, 0)), 0);
 }
 
 void ParseBehaviour(ENGC *engc, BINF *retn, char **imgp, char **conf) {
@@ -726,7 +743,8 @@ void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
     LINF *libs;
     CTGS *ctgs;
 
-    conf = ConcatPath(fptr = ConcatPath(base, path), pcnf);
+    fptr = Concatenate(0, base, DEF_DSEP, path, 0);
+    conf = Concatenate(0, fptr, DEF_DSEP, pcnf, 0);
     if ((file = rLoadFile(conf, 0))) {
         free(conf);
 
@@ -1010,7 +1028,7 @@ void ChooseDirection(ENGC *engc, PICT *pict) {
                 angl = 0.0;
                 break;
         }
-        pict->move = (T2FV){{cosf(angl), sinf(angl)}};
+        pict->move = (T2FV){{cos(angl), sin(angl)}};
     }
     else
         pict->move = (T2FV){{0.0, 0.0}};
@@ -1029,12 +1047,47 @@ void ChooseDirection(ENGC *engc, PICT *pict) {
 
 
 
+/// INDX is not used if FROM is an effect, as all we need is stored there
+long SpawnEffect(PICT **retn, PICT *from, ulong indx, uint64_t time) {
+    BINF *binf;
+
+    if (from->tmov == ULONG_LONG_MAX)
+        return 0;  /// no more self-replicating for this effect; exiting
+
+    if (*retn != from)
+        *retn = calloc(1, sizeof(**retn));
+
+    if (~from->indx & FLG_EFCT) {
+        /// parent = behaviour
+        (*retn)->boss = from;
+        (*retn)->ulib = from->ulib;
+        (*retn)->indx = (indx << 1) | (from->indx & 1) | FLG_EFCT;
+    }
+    else if (*retn != from) {
+        /// parent = effect that needs to be copied to RETN
+        **retn = *from;
+        from->tmov = ULONG_LONG_MAX; /// only one self-replication allowed
+    }
+    binf = &(*retn)->ulib->earr[((*retn)->indx & ~FLG_EFCT) >> 1];
+    (*retn)->fram = -1; /// this means:
+    (*retn)->tfrm =  0; /// "update me to 0-th frame ASAP!"
+    /// effect respawn time; DMAX = 0 means "do not respawn"
+    (*retn)->tmov = (binf->dmax)? time + binf->dmax : ULONG_LONG_MAX;
+    /// effect ending time; DMIN = 0 means "end when the behaviour ends"
+    (*retn)->tbhv = (binf->dmin)? (time + binf->dmin)
+                                | ((*retn)->boss->tbhv & TBH_PAIR)
+                                : (*retn)->boss->tbhv;
+    MoveToParent(*retn, 0);
+    return ~0;
+}
+
+
+
 /// [TODO:] do we need to check if there is no previous behaviour?
 void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
     long seed, lbgn, lend;
     LINF *ulib = pict->ulib;
     BINF *binf;
-    PICT *retn;
 
     if (pict->indx & FLG_EFCT)
         return;
@@ -1073,23 +1126,8 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
     ChooseDirection(engc, pict);
     /// now spawning effects for the behaviour, if any
     lbgn = pict->ulib->barr[pict->indx >> 1].ieff - 1;
-
-    for (lend = pict->ulib->barr[pict->indx >> 1].neff; lend; lend--) {
-        binf = &pict->ulib->earr[lbgn + lend];
-        engc->parr[engc->pcnt++] = retn = calloc(1, sizeof(**engc->parr));
-        retn->ulib = pict->ulib;
-        retn->boss = pict;
-        retn->indx = FLG_EFCT | (pict->indx & 1) | ((lbgn + lend) << 1);
-        MoveToParent(retn, 0);
-        retn->fram = -1; /// this means:
-        retn->tfrm =  0; /// "update me to 0-th frame ASAP!"
-        /// effect respawn time; DMAX = 0 means "do not respawn"
-        retn->tmov = (binf->dmax)? time + binf->dmax : ULONG_LONG_MAX;
-        /// effect ending time; DMIN = 0 means "end with the behaviour"
-        retn->tbhv =
-            (binf->dmin)? (time + binf->dmin) | (pict->tbhv & TBH_PAIR)
-                        : pict->tbhv;
-    }
+    for (lend = pict->ulib->barr[pict->indx >> 1].neff; lend; lend--)
+        SpawnEffect(&engc->parr[engc->pcnt++], pict, lbgn + lend, time);
 }
 
 
@@ -1112,21 +1150,9 @@ long TruncateAndSort(BINF **base, long *rcnt) {
 
 
 
-void FreeSpriteArr(ENGC *engc) {
-    long iter;
-
-    for (iter = 0; iter < engc->pcnt; iter++)
-        free(engc->parr[iter]);
-    free(engc->parr);
-    engc->parr = 0;
-    engc->pcnt = engc->pmax = 0;
-}
-
-
-
 void AppendSpriteArr(LINF *elem, ENGC *engc) {
+    long indx, turn, qmax;
     BINF temp, *iter;
-    long indx, turn;
 
     if (elem->bimp || elem->eimp) {
         turn = 0;
@@ -1223,28 +1249,16 @@ void AppendSpriteArr(LINF *elem, ENGC *engc) {
     /// (Q = 1 when repeat delay D = 0; otherwise, Q = ceil(((E)? E : B) / D)
     /// where E is effect duration and B is maximum behaviour duration)
     /// note that E / D is # of effects created per effect expiration window
-    float qmax = 0.0, qcur = 0.0;
-    for (indx = 0; indx < elem->bcnt; indx++)
-        for (turn = 0; turn < elem->barr[indx].neff; turn++) {
-            iter = &elem->earr[elem->barr[indx].ieff + turn];
-            if (!iter->dmax)
-                continue;    /// this effect does not respawn, so (Q - 1) = 0
-            /// effect DMAX is repeat delay (D), DMIN is duration (E)
-            /// 2.0 coeff is due to the fade period after behaviour change
-            qcur = (float)((iter->dmin)? iter->dmin : elem->barr[indx].dmax)
-                 * 2.0 / (float)iter->dmax;
-            if (qmax < qcur)
-                qmax = qcur;
-        }
-    /// look for the maximum number of effects that
-    /// any of the library`s behaviours might spawn
-    for (turn = indx = 0; indx < elem->bcnt; indx++)
-        if (turn < elem->barr[indx].neff)
-            turn = elem->barr[indx].neff;
-    /// maximum sprite count += (how many) * (1 + effects * ceil(Q + 1))
-    engc->pmax += elem->icnt * (1 + turn * ceilf(qmax + 1));
+    for (qmax = indx = 0; indx < elem->bcnt; indx++)
+        for (turn = 0; turn < elem->barr[indx].neff; turn++)
+            if (!(iter = &elem->earr[elem->barr[indx].ieff + turn])->dmax)
+                qmax++;
+            else
+                qmax += 2 + ((iter->dmin)? iter->dmin : elem->barr[indx].dmax)
+                          / iter->dmax;
+    engc->pmax += elem->icnt * ++qmax;
     engc->parr = realloc(engc->parr, engc->pmax * sizeof(*engc->parr));
-
+    /// now spawning sprites to the screen and emptying ICNT
     for (; elem->icnt > 0; elem->icnt--) {
         engc->pcnt++;
         engc->parr[engc->pcnt - 1] = calloc(1, sizeof(**engc->parr));
@@ -1536,26 +1550,14 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
             if (((pict->tbhv & TBH_PAIR) == (pict->boss->tbhv & TBH_PAIR))
             && (curr >= pict->tmov)) {
                 if (curr >= (pict->tbhv & ~TBH_PAIR))
-                    elem = indx;
-                else {
-                    pict->tmov = ULONG_LONG_MAX;
-                    elem = engc->pcnt++;
-                    engc->parr[elem] = calloc(1, sizeof(**engc->parr));
-                    *engc->parr[elem] = *pict;
-                }
-                engc->parr[elem]->fram = -1;
-                engc->parr[elem]->tfrm =  0;
-                engc->parr[elem]->tmov =
-                    (binf->dmax)? curr + binf->dmax : ULONG_LONG_MAX;
-                engc->parr[elem]->tbhv =
-                    (binf->dmin)? (curr + binf->dmin)
-                                | (pict->boss->tbhv & TBH_PAIR)
-                                : pict->boss->tbhv;
-                MoveToParent(engc->parr[elem], 0);
+                    elem = indx;       /// PICT expired, let`s edit it inplace
+                else
+                    engc->parr[elem = engc->pcnt++] = 0;
+                SpawnEffect(&engc->parr[elem], pict, 0, curr);
             }
             else if (curr >= (pict->tbhv & ~TBH_PAIR)) {
-                free(pict);           /// either the run time is up or
-                engc->parr[indx] = 0; /// parent behaviour has changed
+                free(pict);            /// either the run time is up or
+                engc->parr[indx] = 0;  /// parent behaviour has changed
                 continue;
             }
         }
@@ -1685,36 +1687,6 @@ void Relocalize(ENGC *engc, char *lang) {
 
 
 
-char *Concatenate(char **retn, ...) {
-    va_list list;
-    char *head, *temp;
-    long size = 1;
-
-    va_start(list, retn);
-    while ((temp = va_arg(list, typeof(temp))))
-        size += strlen(temp);
-    va_end(list);
-
-    if (!retn)
-        head = calloc(1, size);
-    else {
-        head = *retn;
-        head = realloc(head, size += (head)? strlen(head) : 0);
-        if (!*retn)
-            *head = 0;
-        *retn = head;
-    }
-
-    va_start(list, retn);
-    while ((temp = va_arg(list, typeof(temp))))
-        strcat(head, temp);
-    va_end(list);
-
-    return head;
-}
-
-
-
 ENGC *eInitializeEngine(char *fcnf) {
     /** 'language' **/ #define CNF_LANG 0x1644959C
     /** 'time'     **/ #define CNF_TIME 0x8487AD87
@@ -1755,7 +1727,7 @@ ENGC *eInitializeEngine(char *fcnf) {
                     if ((temp = rLoadFile(tran, 0)))
                         free(temp);
                     else {
-                        temp = Concatenate(0, fcnf, "/", tran, 0);
+                        temp = Concatenate(0, fcnf, DEF_DSEP, tran, 0);
                         free(tran);
                         tran = temp;
                     }
@@ -1836,13 +1808,16 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     engc->data = (engc->pmax)? calloc(engc->pmax, sizeof(*engc->data)) : 0;
     cEngineRunMainLoop(engc->engd, xpos, ypos, xdim, ydim, engc->ftmp,
                        FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
-    FreeSpriteArr(engc);
-    free(engc->data);
-
+    rFreeTrayIcon(icon);
     FreeMenu(&engc->mspr);
     FreeMenu(&engc->mctx);
     FreeLocalization(&engc->tran);
-    rFreeTrayIcon(icon);
+
+    free(engc->data);
+    for (icon = 0; icon < engc->pcnt; icon++)
+        free(engc->parr[icon]);
+    free(engc->parr);
+
     TTH_ITER(engc->libs, FreeLib, 0);
     for (; engc->ccnt; engc->ccnt--)
         free(engc->ctgs[engc->ccnt - 1].name);
@@ -1850,7 +1825,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
     cEngineCallback(engc->engd, ECB_QUIT, 0);
 
-    sprintf(temp, "%0.3f", engc->tdil);
+    sprintf(temp, "%0.2f", engc->tdil);
     Concatenate(&save, "Language,", engc->lang, 0);
     Concatenate(&save, DEF_ENDL, "Time,", temp, 0);
     Concatenate(&save, DEF_ENDL, "Flags", 0);
