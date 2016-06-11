@@ -1,5 +1,5 @@
 CC = gcc
-CX = g++
+CX = gcc
 RC = windres
 
 
@@ -10,8 +10,8 @@ CRTFUNC = -Dstrdup=_strdup -Dwcsdup=_wcsdup -Dvsnprintf=_vsnprintf
 
 LLIB = -lgdi32 -lopengl32 -lcomctl32 -lwinmm
 LINC =
-LCXFLAGS =
-LCFLAGS = -I..\core -march=i486 -Wall -DLIB_MAKE $(CRTFUNC)
+LCXFLAGS = -flto
+LCFLAGS = -I..\core -flto -march=i486 -Wall -DLIB_MAKE $(CRTFUNC)
 
 LOBJ = $(OBJDIR)\core\core.o $(OBJDIR)\core\gif\common.o $(OBJDIR)\core\gif\gifstd.o $(OBJDIR)\core\ogl\common.o $(OBJDIR)\core\ogl\oglstd.o $(OBJDIR)\lib.o
 LOUT = ..\engine.dll
@@ -19,8 +19,8 @@ LOUT = ..\engine.dll
 
 ELIB = -lengine -lgdi32 -lcomctl32
 EINC =
-ECXFLAGS = -L.. -Wl,--subsystem,windows
-ECFLAGS = -I..\core -Wall $(CRTFUNC)
+ECXFLAGS = -L.. -Wl,--subsystem,windows -flto
+ECFLAGS = -I..\core -flto -Wall $(CRTFUNC)
 
 EOBJ = $(OBJDIR)\rsrc\run.o $(OBJDIR)\exec\exec.o $(OBJDIR)\run.o
 EOUT = ..\win32.exe
