@@ -18,12 +18,8 @@ GLvoid newerror(GLchar **retn, GLchar *frmt, ...) {
     va_start(list, frmt);
     vsnprintf(buff, countof(buff), frmt, list);
     va_end(list);
-    if (*retn) {
-        *retn = realloc(*retn, 1 + strlen(*retn) + strlen(buff));
-        strcat(*retn, buff);
-    }
-    else
-        *retn = strdup(buff);
+    *retn = realloc(*retn, ((*retn)? strlen(*retn) + 1 : 1) + strlen(buff));
+    strcat(*retn, buff);
 }
 
 

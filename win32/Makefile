@@ -6,20 +6,21 @@ RC = windres
 OBJDIR = .obj
 
 RCFLAGS = -J rc -O coff
+CRTFUNC = -Dstrdup=_strdup -Dwcsdup=_wcsdup -Dvsnprintf=_vsnprintf
 
 LLIB = -lgdi32 -lopengl32 -lcomctl32 -lwinmm
 LINC =
 LCXFLAGS =
-LCFLAGS = -I..\core -march=i486 -Wall -DLIB_MAKE
+LCFLAGS = -I..\core -march=i486 -Wall -DLIB_MAKE $(CRTFUNC)
 
 LOBJ = $(OBJDIR)\core\core.o $(OBJDIR)\core\gif\common.o $(OBJDIR)\core\gif\gifstd.o $(OBJDIR)\core\ogl\common.o $(OBJDIR)\core\ogl\oglstd.o $(OBJDIR)\lib.o
 LOUT = ..\engine.dll
 
 
-ELIB = -lengine -lcomctl32
+ELIB = -lengine -lgdi32 -lcomctl32
 EINC =
 ECXFLAGS = -L.. -Wl,--subsystem,windows
-ECFLAGS = -I..\core -Wall
+ECFLAGS = -I..\core -Wall $(CRTFUNC)
 
 EOBJ = $(OBJDIR)\rsrc\run.o $(OBJDIR)\exec\exec.o $(OBJDIR)\run.o
 EOUT = ..\win32.exe
