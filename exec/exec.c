@@ -1172,10 +1172,13 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
     }
     ChooseDirection(engc, pict);
     /// now spawning effects for the behaviour, if any
-    lbgn = pict->ulib->barr[pict->indx >> 1].ieff - 1;
-    for (lend = pict->ulib->barr[pict->indx >> 1].neff; lend; lend--)
-        SpawnEffect(&engc->parr[engc->pcnt++], pict,
-                    &engc->seed, lbgn + lend, time);
+    /// (and only if this is not the first spawn)
+    if (time) {
+        lbgn = pict->ulib->barr[pict->indx >> 1].ieff - 1;
+        for (lend = pict->ulib->barr[pict->indx >> 1].neff; lend; lend--)
+            SpawnEffect(&engc->parr[engc->pcnt++], pict,
+                        &engc->seed, lbgn + lend, time);
+    }
 }
 
 
@@ -1305,7 +1308,10 @@ void AppendSpriteArr(LINF *elem, ENGC *engc) {
                 qmax += 2 + ((iter->dmin)? iter->dmin : elem->barr[indx].dmax)
                           / iter->dmax;
     engc->pmax += elem->icnt * ++qmax;
-    engc->parr = realloc(engc->parr, engc->pmax * sizeof(*engc->parr));
+    /// x2 because every sprite may potentially spawn its effect while
+    /// the previous one is marked for removal but is still present
+    /// (no x2 for DATA as SortByY() handles removal before sprites get there)
+    engc->parr = realloc(engc->parr, engc->pmax * 2 * sizeof(*engc->parr));
     /// now spawning sprites to the screen and emptying ICNT
     for (; elem->icnt > 0; elem->icnt--) {
         engc->pcnt++;
@@ -1561,6 +1567,8 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
     if ((attr & UFR_MOUS) && ((isel >= 0) || pict)) {
         if (!pict && ((engc->ppos.z ^ attr) & UFR_LBTN)) {
             pict = engc->pcur = engc->parr[isel];
+            if (pict->indx & FLG_EFCT)
+                pict = engc->pcur = pict->boss;
             printf("[GRABBED] %s\n", pict->ulib->name);
             engc->ppos.x = xptr - pict->offs.x;
             engc->ppos.y = yptr - pict->offs.y;
@@ -1577,6 +1585,8 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
         if (~attr & engc->ppos.z & UFR_RBTN) {
             if (!pict)
                 pict = engc->parr[isel];
+            if (pict->indx & FLG_EFCT)
+                pict = pict->boss;
             temp = malloc(32 + strlen(pict->ulib->name));
             sprintf(temp, "[ %s ]", pict->ulib->name);
             UpdateMenuItemText(&engc->mspr[0], temp);
