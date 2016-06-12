@@ -1121,9 +1121,10 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
     /// effect respawn time; DMAX = 0 means "do not respawn"
     (*retn)->tmov = (binf->dmax)? time + binf->dmax : ULONG_LONG_MAX;
     /// effect ending time; DMIN = 0 means "end when the behaviour ends"
-    (*retn)->tbhv = (binf->dmin)? (time + binf->dmin)
-                                | ((*retn)->boss->tbhv & TBH_PAIR)
-                                : (*retn)->boss->tbhv;
+    /// if the effect duration is longer than that of the behaviour, trim it
+    (*retn)->tbhv = (*retn)->boss->tbhv;
+    if (binf->dmin && (time + binf->dmin < ((*retn)->tbhv & ~TBH_PAIR)))
+        (*retn)->tbhv = (time + binf->dmin) | ((*retn)->tbhv & TBH_PAIR);
     MoveToParent(*retn, seed);
     return ~0;
 }
@@ -1303,15 +1304,12 @@ void AppendSpriteArr(LINF *elem, ENGC *engc) {
     for (qmax = indx = 0; indx < elem->bcnt; indx++)
         for (turn = 0; turn < elem->barr[indx].neff; turn++)
             if (!(iter = &elem->earr[elem->barr[indx].ieff + turn])->dmax)
-                qmax++;
+                qmax += 2; /// > 1, as ChooseBehaviour() runs before SortByY()
             else
                 qmax += 2 + ((iter->dmin)? iter->dmin : elem->barr[indx].dmax)
                           / iter->dmax;
     engc->pmax += elem->icnt * ++qmax;
-    /// x2 because every sprite may potentially spawn its effect while
-    /// the previous one is marked for removal but is still present
-    /// (no x2 for DATA as SortByY() handles removal before sprites get there)
-    engc->parr = realloc(engc->parr, engc->pmax * 2 * sizeof(*engc->parr));
+    engc->parr = realloc(engc->parr, engc->pmax * sizeof(*engc->parr));
     /// now spawning sprites to the screen and emptying ICNT
     for (; elem->icnt > 0; elem->icnt--) {
         engc->pcnt++;
