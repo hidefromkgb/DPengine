@@ -98,6 +98,8 @@
 /** 'language'                  **/ #define CNF_LANG 0x1644959C
 /** 'time'                      **/ #define CNF_TIME 0x8487AD87
 /** 'flags'                     **/ #define CNF_FLGS 0x8ACE03CE
+/** 'render'                    **/ #define CNF_RNDR 0x3C9F6676
+/** 'effects'                   **/ #define CNF_EFCT 0xAB1F60DF
 /** 'draw'                      **/ #define CNF_DRAW 0xE7ABD6EE
 /** 'show'                      **/ #define CNF_SHOW 0x27D90DCD
 /** 'gpu'                       **/ #define CNF_RGPU 0x11927E83
@@ -105,6 +107,9 @@
 /** 'wbgra'                     **/ #define CNF_IBGR 0xABF3B1E8
 /** 'wpbo'                      **/ #define CNF_IPBO 0x78FE3880
 /** 'wregion'                   **/ #define CNF_IRGN 0xDE0DCCBE
+
+/// /// /// /// /// /// /// /// /// client specific flags
+/** behaviour effects are on    **/ #define CSF_EFCT (1 <<  0)
 
 /// /// /// /// /// /// /// /// /// localized text constants
 /** Remove pony                 **/ #define TXT_CDEL  0
@@ -247,6 +252,7 @@ struct ENGC {
              pcnt,  /// on-screen sprites count (may differ every frame)
              pmax,  /// max. PARR capacity (realloc on exceed)
              seed,  /// random seed
+             flgs,  /// client-specific flags, e.g. effects +/- (CSF_ prefix)
              ftmp;  /// temporary storage for engine flags
     float    tdil;  /// time dilation coeff (faster is > 1, slower is < 1)
     T2IV     dims;  /// drawing area dimensions
@@ -1173,8 +1179,8 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
     }
     ChooseDirection(engc, pict);
     /// now spawning effects for the behaviour, if any
-    /// (and only if this is not the first spawn)
-    if (time) {
+    /// (and only if this is not the first spawn and effects are enabled)
+    if (time && (engc->flgs & CSF_EFCT)) {
         lbgn = pict->ulib->barr[pict->indx >> 1].ieff - 1;
         for (lend = pict->ulib->barr[pict->indx >> 1].neff; lend; lend--)
             SpawnEffect(&engc->parr[engc->pcnt++], pict,
@@ -1633,12 +1639,14 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         }
         /// update the current frame, both for effects and behaviours;
         /// has to be precisely in this place, don`t move it elsewhere
-        if (curr >= pict->tfrm) {
+        while (curr >= pict->tfrm) {
             pict->fram =
                 (pict->fram + 1 >= anim->fcnt)? (binf->flgs & FLG_LOOP)?
                  0 : pict->fram : pict->fram + 1;
             pict->tfrm = ((pict->tfrm)? pict->tfrm : curr)
                        + anim->time[pict->fram];
+            if (!anim->time[pict->fram] || (~binf->flgs & FLG_LOOP))
+                break;
         }
         if (pict->indx & FLG_EFCT)
             continue;
@@ -1761,23 +1769,25 @@ void Relocalize(ENGC *engc, char *lang) {
 
 ENGC *eInitializeEngine(char *fcnf) {
     static uint32_t
-        uCNF[] = {CNF_RGPU, CNF_SHOW, CNF_IPBO,
+        uCNR[] = {CNF_RGPU, CNF_SHOW, CNF_IPBO,
                   CNF_IBGR, CNF_OPAQ, CNF_IRGN, CNF_DRAW},
         uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
-                  WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW};
+                  WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW},
+        uCNF[] = {CNF_EFCT},
+        uCSF[] = {CSF_EFCT};
     ENGC *engc = calloc(1, sizeof(*engc));
     char *file, *fptr, *conf, *temp, *tran = DEF_CORE;
     uint32_t elem, *iter;
 
     /// default options
     engc->ftmp = COM_SHOW | COM_DRAW | COM_RGPU;
+    engc->flgs = CSF_EFCT;
     engc->tdil = 1.0;
     if (!fcnf)
         tran = 0;
     else {
         engc->conf = Concatenate(0, fcnf, tran, 0);
         tran = 0;
-
         fptr = file = rLoadFile(engc->conf, 0);
         while ((conf = GetNextLine(&fptr))) {
             switch (DetermineType(&conf)) {
@@ -1800,11 +1810,19 @@ ENGC *eInitializeEngine(char *fcnf) {
                         engc->tdil = ClampToBounds(StrToFloat(temp), 0.1, 4.0);
                     break;
 
-                case CNF_FLGS:
+                case CNF_RNDR:
                     engc->ftmp = 0;
                     while (conf) {
-                        IF_BIN_FIND(elem, uCNF, &conf)
+                        IF_BIN_FIND(elem, uCNR, &conf)
                             engc->ftmp |= uCOM[elem - 1];
+                    }
+                    break;
+
+                case CNF_FLGS:
+                    engc->flgs = 0;
+                    while (conf) {
+                        IF_BIN_FIND(elem, uCNF, &conf)
+                            engc->flgs |= uCSF[elem - 1];
                     }
                     break;
             }
@@ -1825,11 +1843,12 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     #define DEF_ENDL "\r\n"
     static uint32_t
         uCOM[] = {COM_RGPU, COM_SHOW, COM_DRAW, COM_OPAQ,
-                  WIN_IPBO, WIN_IBGR, WIN_IRGN};
-    static char *
-        uSTR[] = {"GPU",    "Show",   "Draw",   "Opaque",
-                  "wPBO",   "wBGRA",  "wRegion"};
-
+                  WIN_IPBO, WIN_IBGR, WIN_IRGN},
+        uCSF[] = {CSF_EFCT};
+    static char
+       *uSTR[] = {"GPU",    "Show",   "Draw",   "Opaque",
+                  "wPBO",   "wBGRA",  "wRegion"},
+       *uSTF[] = {"Effects"};
     AINF igif = {};
     char temp[256], *save = 0;
     intptr_t icon;
@@ -1880,10 +1899,14 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     sprintf(temp, "%0.2f", engc->tdil);
     Concatenate(&save, "Language,", engc->lang, 0);
     Concatenate(&save, DEF_ENDL, "Time,", temp, 0);
-    Concatenate(&save, DEF_ENDL, "Flags", 0);
+    Concatenate(&save, DEF_ENDL, "Render,", 0);
     for (icon = 0; icon < countof(uCOM); icon++)
         if (engc->ftmp & uCOM[icon])
-            Concatenate(&save, ",", uSTR[icon], 0);
+            Concatenate(&save, uSTR[icon], ",", 0);
+    Concatenate(&save, DEF_ENDL, "Flags,", 0);
+    for (icon = 0; icon < countof(uCSF); icon++)
+        if (engc->flgs & uCSF[icon])
+            Concatenate(&save, uSTF[icon], ",", 0);
     Concatenate(&save, DEF_ENDL, 0);
     rSaveFile(engc->conf, save, strlen(save));
     free(engc->lang);
