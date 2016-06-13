@@ -9,7 +9,6 @@
 /** convert radians to degrees  **/ #define RTD_CONV (1.0 / DTR_CONV)
 
 /** framerate limiter in msec   **/ #define FRM_WAIT 40
-/** invalid hash                **/ #define ERR_HASH 0x00000000
 
 /** default comment character   **/ #define DEF_CMNT '\''
 /** default token separator     **/ #define DEF_TSEP ','
@@ -73,6 +72,7 @@
 /** [yet to be understood]      **/ #define BHV_____ (1 << 28)
 /** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 29)
 
+/// /// /// /// /// /// /// /// /// must stay as-is; these are used as indices
 /** top-left alignment          **/ #define EFF_TNLA 0x0
 /** top alignment               **/ #define EFF_TOPA 0x1
 /** top-right alignment         **/ #define EFF_TNRA 0x2
@@ -93,6 +93,18 @@
 /// /// /// /// /// /// /// /// /// follow offset type values
 /** 'fixed'                     **/ #define FOT_FIXD 0x9A8F97BD
 /** 'mirror'                    **/ #define FOT_MIRR 0x304E7075
+
+/// /// /// /// /// /// /// /// /// config file strings
+/** 'language'                  **/ #define CNF_LANG 0x1644959C
+/** 'time'                      **/ #define CNF_TIME 0x8487AD87
+/** 'flags'                     **/ #define CNF_FLGS 0x8ACE03CE
+/** 'draw'                      **/ #define CNF_DRAW 0xE7ABD6EE
+/** 'show'                      **/ #define CNF_SHOW 0x27D90DCD
+/** 'gpu'                       **/ #define CNF_RGPU 0x11927E83
+/** 'opaque'                    **/ #define CNF_OPAQ 0xD246CFE1
+/** 'wbgra'                     **/ #define CNF_IBGR 0xABF3B1E8
+/** 'wpbo'                      **/ #define CNF_IPBO 0x78FE3880
+/** 'wregion'                   **/ #define CNF_IRGN 0xDE0DCCBE
 
 /// /// /// /// /// /// /// /// /// localized text constants
 /** Remove pony                 **/ #define TXT_CDEL  0
@@ -194,7 +206,8 @@ typedef struct _LINF {
              icnt;  /// number of on-screen bhv. sprites from the library
 } LINF;
 
-/// actual on-screen sprite, opaque outside the module
+/// actual on-screen sprite, opaque outside the module (TMR_PAIR: parity flag)
+#define TMR_PAIR (1ULL << 63)
 typedef struct _PICT {
     struct
     _PICT   *next,  /// linked list support for SortByY(), only used there
@@ -208,13 +221,14 @@ typedef struct _PICT {
     uint64_t tfrm,  /// BHV: next frame
                     /// EFF: next frame
              tmov,  /// BHV: next movement
-                    /// EFF: next respawn (-1 if the respawn ability is lost)
+                    /// EFF: next respawn (LONG_LONG_MAX if already respawned,
+                    ///                    highest bit = parity flag)
+                    ///      parity enabled means "inactive sprite, skip it"
              tbhv;  /// BHV: next behaviour (highest bit = parity flag)
                     ///      parity is inverted on behaviour change
                     /// EFF: expected deletion (highest bit = parity flag)
                     ///      prohibit respawn if parity differs
 } PICT;
-#define TBH_PAIR (1ULL << 63)
 
 /// engine data (client side), opaque outside the module
 struct ENGC {
@@ -445,7 +459,7 @@ uint32_t DetermineType(char **tail) {
 
     if (temp && (*temp != DEF_CMNT))
         return HashLine(ToLower(temp, *tail - temp - 1), *tail - temp - 1);
-    return ERR_HASH;
+    return 0;
 }
 
 
@@ -960,6 +974,9 @@ void SortByY(ENGC *engc) {
 
 /// SEED = 0 means "keep centering and placement"
 void MoveToParent(PICT *pict, uint32_t *seed) {
+    static float
+        xdim[] = {0.0, 0.5, 1.0, 0.0, 0.5, 1.0, 0.0, 0.5, 1.0, -1.0, -1.0},
+        ydim[] = {1.0, 1.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, -1.0, -1.0};
     long iter, desc;
     AINF *anim[2];
     T2FV vect[2];
@@ -971,37 +988,16 @@ void MoveToParent(PICT *pict, uint32_t *seed) {
         /// effect animation
         anim[1] = &pict->ulib->earr[(pict->indx & ~FLG_EFCT) >> 1].
                                unit[pict->indx & 1];
-
         /// read centering and placement for the current effect
         desc = pict->ulib->earr[(pict->indx & ~FLG_EFCT) >> 1].flgs
              >> ((pict->indx & 1) << 3); /// direction was inherited from BOSS
-        for (iter = 0; iter < 2; iter++, desc >>= 4) {
-            switch (desc & EFF_AAAA) {
-                default:
-                case EFF_BNLA: vect[iter] = (T2FV){{0.0, 0.0}}; break;
-                case EFF_BTMA: vect[iter] = (T2FV){{0.5, 0.0}}; break;
-                case EFF_BNRA: vect[iter] = (T2FV){{1.0, 0.0}}; break;
-
-                case EFF_CNLA: vect[iter] = (T2FV){{0.0, 0.5}}; break;
-                case EFF_CNTA: vect[iter] = (T2FV){{0.5, 0.5}}; break;
-                case EFF_CNRA: vect[iter] = (T2FV){{1.0, 0.5}}; break;
-
-                case EFF_TNLA: vect[iter] = (T2FV){{0.0, 1.0}}; break;
-                case EFF_TOPA: vect[iter] = (T2FV){{0.5, 1.0}}; break;
-                case EFF_TNRA: vect[iter] = (T2FV){{1.0, 1.0}}; break;
-
-                case EFF_RNDA: /// there is actually no difference
-                case EFF_RCLA: /// between 'any' and 'any-not_center'
-                    vect[iter] = (T2FV){{(float)((PRNG(seed) >> 4) & 0xFFF),
-                                         (float)((PRNG(seed) >> 4) & 0xFFF)}};
-                    vect[iter] = (T2FV){{vect[iter].x * 0.000244140625,
-                                         vect[iter].y * 0.000244140625}};
-                    break;     /// this is 1 / 4096 ----^^^^^^^^^^^^^^
-            }
-            /// ANIMs are only needed for dimensions here
-            vect[iter] = (T2FV){{vect[iter].x * (float)anim[iter]->xdim,
-                                 vect[iter].y * (float)anim[iter]->ydim}};
-        }
+        #define CALC(d) ((d[desc & EFF_AAAA] >= 0.0)? d[desc & EFF_AAAA]      \
+                       : (float)((PRNG(seed) >> 4) & 0xFFF) * 0.000244140625) \
+                       * (float)anim[iter]->d /* (1 / 4096)---^^^^^^^^^^^^^^ */
+        /// ANIMs are only needed for dimensions
+        for (iter = 0; iter < 2; iter++, desc >>= 4)
+            vect[iter] = (T2FV){{CALC(xdim), CALC(ydim)}};
+        #undef CALC
         /// now calculate the resulting offset
         pict->move = (T2FV){{vect[0].x - vect[1].x, vect[0].y - vect[1].y}};
     }
@@ -1098,7 +1094,7 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
                  ulong indx, uint64_t time) {
     BINF *binf;
 
-    if (from->tmov == ULONG_LONG_MAX)
+    if (from->tmov == LONG_LONG_MAX)
         return 0;  /// no more self-replicating for this effect; exiting
 
     if (*retn != from)
@@ -1113,20 +1109,22 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
     else if (*retn != from) {
         /// parent = effect that needs to be copied to RETN
         **retn = *from;
-        from->tmov = ULONG_LONG_MAX; /// only one self-replication allowed
+        from->tmov = LONG_LONG_MAX; /// only one self-replication allowed
     }
     binf = &(*retn)->ulib->earr[((*retn)->indx & ~FLG_EFCT) >> 1];
     (*retn)->fram = -1; /// this means:
     (*retn)->tfrm =  0; /// "update me to 0-th frame ASAP!"
     /// effect respawn time; DMAX = 0 means "do not respawn"
-    (*retn)->tmov = (binf->dmax)? time + binf->dmax : ULONG_LONG_MAX;
+    (*retn)->tmov = (binf->dmax)? time + binf->dmax : LONG_LONG_MAX;
     /// effect ending time; DMIN = 0 means "end when the behaviour ends"
     /// if the effect duration is longer than that of the behaviour, and
     /// also it doesn`t respawn, then trim it
     (*retn)->tbhv = (*retn)->boss->tbhv;
     if (binf->dmin &&
-       (binf->dmax || (time + binf->dmin < ((*retn)->tbhv & ~TBH_PAIR))))
-        (*retn)->tbhv = (time + binf->dmin) | ((*retn)->tbhv & TBH_PAIR);
+       (binf->dmax || (time + binf->dmin < ((*retn)->tbhv & ~TMR_PAIR))))
+        (*retn)->tbhv = (time + binf->dmin) | ((*retn)->tbhv & TMR_PAIR);
+    /// re-adjusting turn, as it may have changed
+    (*retn)->indx = ((*retn)->indx & ~1) | ((*retn)->boss->indx & 1);
     MoveToParent(*retn, seed);
     return ~0;
 }
@@ -1162,7 +1160,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
     binf = &pict->ulib->barr[pict->indx >> 1];
     pict->fram = -1; /// this means:
     pict->tfrm =  0; /// "update me to 0-th frame ASAP!"
-    pict->tbhv = (time + binf->dmin) | (~pict->tbhv & TBH_PAIR);
+    pict->tbhv = (time + binf->dmin) | (~pict->tbhv & TMR_PAIR);
     if (binf->dmax > binf->dmin)
         pict->tbhv += PRNG(&engc->seed) % (binf->dmax - binf->dmin);
     if (!time) {
@@ -1546,7 +1544,7 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
     respawn times but belong to one parent, making it very hard for him to
     handle them all.
  3. Considering [1] and [2], it`s problematic to respawn an effect if its
-    run time is less than its respawn time. [TODO:] resolve this
+    run time is less than its respawn time. It becomes "reserved" and waits.
  **/
 uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                    uint64_t *time, intptr_t user, uint32_t attr,
@@ -1604,36 +1602,47 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         if (pict->indx & FLG_EFCT) {
             /// effect
             if (~binf->flgs & EFF_STAY)
-                MoveToParent(pict, 0); /// follow the parent
-            if (((pict->tbhv & TBH_PAIR) == (pict->boss->tbhv & TBH_PAIR))
-            && (curr >= pict->tmov)) {
-                if (curr >= (pict->tbhv & ~TBH_PAIR))
-                    elem = indx;       /// PICT expired, let`s edit it inplace
+                MoveToParent(pict, 0);   /// follow the parent
+            if ((~(pict->tbhv ^ pict->boss->tbhv) & TMR_PAIR) /// same bhv.
+            && (curr >= (pict->tmov & ~TMR_PAIR))) {
+                pict->tmov &= ~TMR_PAIR; /// drop the reserved state, if any
+                if (curr >= (pict->tbhv & ~TMR_PAIR))
+                    elem = indx;         /// PICT expired, let`s edit inplace
                 else
                     engc->parr[elem = engc->pcnt++] = 0;
                 SpawnEffect(&engc->parr[elem], pict, &engc->seed, 0, curr);
             }
-            else if (curr >= (pict->tbhv & ~TBH_PAIR)) {
-                free(pict);            /// either the run time is up or
-                engc->parr[indx] = 0;  /// parent behaviour has changed
-                continue;
+            else if (curr >= (pict->tbhv & ~TMR_PAIR)) {
+                /// if (respawn > runtime) and same behaviour
+                if (binf->dmin && binf->dmax && (binf->dmax > binf->dmin)
+                && (~(pict->tbhv ^ pict->boss->tbhv) & TMR_PAIR))
+                    pict->tmov |= TMR_PAIR; /// reserved, waiting for respawn
+                else {
+                    free(pict);             /// either the run time is up or
+                    engc->parr[indx] = 0;   /// parent behaviour has changed
+                    continue;
+                }
             }
         }
-        else if ((curr >= (pict->tbhv & ~TBH_PAIR))
+        else if ((curr >= (pict->tbhv & ~TMR_PAIR))
              || ((pict->fram >= anim->fcnt) && !(binf->flgs & FLG_LOOP))) {
-            /// behaviour
+            /// behaviour that needs being changed
             ChooseBehaviour(engc, pict, curr);
             binf = &pict->ulib->barr[pict->indx >> 1];
             anim = &binf->unit[pict->indx & 1];
         }
+        /// update the current frame, both for effects and behaviours;
+        /// has to be precisely in this place, don`t move it elsewhere
         if (curr >= pict->tfrm) {
             pict->fram =
                 (pict->fram + 1 >= anim->fcnt)? (binf->flgs & FLG_LOOP)?
                  0 : pict->fram : pict->fram + 1;
-            pict->tfrm = curr + anim->time[pict->fram];
+            pict->tfrm = ((pict->tfrm)? pict->tfrm : curr)
+                       + anim->time[pict->fram];
         }
         if (pict->indx & FLG_EFCT)
             continue;
+        /// only behaviours beyond this point!
         if (curr - pict->tmov >= FRM_WAIT) {
             if (BoundCrossed(pict->move.x, pict->offs.x + anim->xdim,
                              anim->xdim, engc->dims.x)) {
@@ -1651,19 +1660,23 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
     }
     SortByY(engc);
 
-    for (indx = 0; indx < engc->pcnt; indx++) {
-        pict = engc->parr[indx];
-        curr = pict->indx & ~FLG_EFCT;
-        if (pict->indx & FLG_EFCT)
-            anim = &pict->ulib->earr[curr >> 1].unit[curr & 1];
-        else
-            anim = &pict->ulib->barr[curr >> 1].unit[curr & 1];
-        engc->data[indx] = (T4FV){{pict->offs.x, pict->offs.y,
-                                   pict->fram, anim->uuid}};
-    }
+    /// ELEM is the number of sprites skipped, multiplied by -1
+    /// (like those with respawn > runtime staying in reserve)
+    for (elem = indx = 0; indx < engc->pcnt; indx++)
+        if ((pict = engc->parr[indx])->tmov & TMR_PAIR)
+            elem--;
+        else {
+            curr = pict->indx & ~FLG_EFCT;
+            if (pict->indx & FLG_EFCT)
+                anim = &pict->ulib->earr[curr >> 1].unit[curr & 1];
+            else
+                anim = &pict->ulib->barr[curr >> 1].unit[curr & 1];
+            engc->data[indx + elem] = (T4FV){{pict->offs.x, pict->offs.y,
+                                              pict->fram, anim->uuid}};
+        }
     *data = engc->data;
     *size = engc->pmax;
-    return engc->pcnt;
+    return engc->pcnt + elem;
 }
 
 
@@ -1747,16 +1760,6 @@ void Relocalize(ENGC *engc, char *lang) {
 
 
 ENGC *eInitializeEngine(char *fcnf) {
-    /** 'language' **/ #define CNF_LANG 0x1644959C
-    /** 'time'     **/ #define CNF_TIME 0x8487AD87
-    /** 'flags'    **/ #define CNF_FLGS 0x8ACE03CE
-    /** 'draw'     **/ #define CNF_DRAW 0xE7ABD6EE
-    /** 'show'     **/ #define CNF_SHOW 0x27D90DCD
-    /** 'gpu'      **/ #define CNF_RGPU 0x11927E83
-    /** 'opaque'   **/ #define CNF_OPAQ 0xD246CFE1
-    /** 'wbgra'    **/ #define CNF_IBGR 0xABF3B1E8
-    /** 'wpbo'     **/ #define CNF_IPBO 0x78FE3880
-    /** 'wregion'  **/ #define CNF_IRGN 0xDE0DCCBE
     static uint32_t
         uCNF[] = {CNF_RGPU, CNF_SHOW, CNF_IPBO,
                   CNF_IBGR, CNF_OPAQ, CNF_IRGN, CNF_DRAW},
@@ -1811,16 +1814,6 @@ ENGC *eInitializeEngine(char *fcnf) {
     Relocalize(engc, tran);
     free(tran);
     return engc;
-    #undef CNF_LANG
-    #undef CNF_TIME
-    #undef CNF_FLGS
-    #undef CNF_RGPU
-    #undef CNF_DRAW
-    #undef CNF_SHOW
-    #undef CNF_OPAQ
-    #undef CNF_IBGR
-    #undef CNF_IPBO
-    #undef CNF_IRGN
 }
 
 
