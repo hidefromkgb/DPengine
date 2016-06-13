@@ -66,7 +66,7 @@
 /** 'mouse-over' state          **/ #define BHV_OVRM (BHV_CTLM | BHV_HORM)
 /** 'dragged' state             **/ #define BHV_DRGM (BHV_CTLM | BHV_DIAM)
 /** 'sleep' state               **/ #define BHV_SLPM (BHV_CTLM | BHV_VERM)
-/** [extractor]                 **/ #define BHV_MMMM (BHV_HORM | BHV_DIAM | BHV_VERM | BHV_CTLM)
+/** [extractor]                 **/ #define BHV_MMMM (BHV_CTLM | BHV_ALLM)
 
 /** can be executed at random   **/ #define BHV_EXEC (1 << 27)
 /** [yet to be understood]      **/ #define BHV_____ (1 << 28)
@@ -168,7 +168,7 @@ typedef struct _BINF {
     AINF  unit[2];  /// image pair
     T2IV  cntr[2];  /// image centers
     T2IV  ptgt;     /// follow target relative coords
-    long  prob,     /// probability, 0-1000
+    long  prob,     /// probability, 0-1000 (may become integral)
           dmin,     /// minimum duration in msec
           dmax,     /// maximum duration / respawn in msec
           neff,     /// number of linked effects
@@ -194,8 +194,8 @@ typedef struct _CTGS {
 typedef struct _LINF {
     HDR_LIST;       /// list header
     CTGS    *ctgs;  /// library categories (hashed and sorted)
-    BINF    *barr,  /// available behaviours ordered by name
-            *earr,  /// available effects ordered by parent bhv. name
+    BINF    *barr,  /// available behaviours ordered by name hash
+            *earr,  /// available effects ordered by parent bhv. name hash
            **bgrp;  /// nonzero-probability BARR elements ordered by bhv. group
     char   **bimp,  /// image paths for behaviours (0 if loaded)
            **eimp,  /// image paths for effects (0 if loaded)
@@ -225,7 +225,7 @@ typedef struct _PICT {
                     /// timestamps; all are given in msec
     uint64_t tfrm,  /// BHV: next frame
                     /// EFF: next frame
-             tmov,  /// BHV: next movement
+             tmov,  /// BHV: next movement (no flags allowed, see SortByY)
                     /// EFF: next respawn (LONG_LONG_MAX if already respawned,
                     ///                    highest bit = parity flag)
                     ///      parity enabled means "inactive sprite, skip it"
@@ -961,7 +961,8 @@ void SortByY(ENGC *engc) {
             engc->pcnt--;
         else {
             ytmp = temp->offs.y - ymin + 1;
-            if ((ytmp < 0) || (temp->offs.y >= MAX_YDIM))
+            if ((ytmp < 0) || (temp->offs.y >= MAX_YDIM)
+            || (temp->tmov & TMR_PAIR)) /// reserved ones go to the very end
                 ytmp = 0;
             temp->next = elem[ytmp];
             elem[ytmp] = temp;
@@ -1137,8 +1138,7 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
 
 
 
-/// [TODO:] do we need to check if there is no previous behaviour?
-void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
+void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t attr) {
     long seed, lbgn, lend;
     LINF *ulib = pict->ulib;
     BINF *binf;
@@ -1146,22 +1146,44 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time) {
     if (pict->indx & FLG_EFCT)
         return;
 
-    if (ulib->barr[pict->indx >> 1].link)
-        pict->indx = (ulib->barr[pict->indx >> 1].link - 1) << 1;
-    else {
-        seed = ulib->barr[pict->indx >> 1].igrp;
-        lbgn = (seed)? ulib->ngrp[seed - 1] : 0;
-        lend = ulib->ngrp[seed];
-        seed = PRNG(&engc->seed) % ulib->bgrp[lend - 1]->prob;
+    if (!attr) {
+        if (ulib->barr[pict->indx >> 1].link)
+            pict->indx = (ulib->barr[pict->indx >> 1].link - 1) << 1;
+        else {
+            seed = ulib->barr[pict->indx >> 1].igrp;
+            lbgn = (seed)? ulib->ngrp[seed - 1] : 0;
+            lend = ulib->ngrp[seed];
+            seed = PRNG(&engc->seed) % ulib->bgrp[lend - 1]->prob;
 
-        /// nonexact binary search: finding the first item greater than SEED;
-        /// bsearch() won`t help here, so let`s reinvent the wheel
-        while (lbgn < lend)
-            if (ulib->bgrp[(lend + lbgn) >> 1]->prob <= seed)
-                lbgn = (lend + lbgn + 2) >> 1;
-            else
-                lend = (lend + lbgn + 0) >> 1;
-        pict->indx = (ulib->bgrp[lbgn] - ulib->barr) << 1;
+            /// nonexact binary search: bsearch() won`t help here
+            ///  0th -----,  1st -,  2nd ----,   <  these are the elements
+            /// [0;       5)[5;   7)[7;     10)  <  this is the very array
+            ///       |      |             `---- SEED = 9: 2nd element
+            ///       |      `---- SEED = 5: 1st element
+            ///       `---- SEED = 3: 0th element
+            while (lbgn < lend)
+                if (ulib->bgrp[(lend + lbgn) >> 1]->prob <= seed)
+                    lbgn = (lend + lbgn + 2) >> 1;
+                else
+                    lend = (lend + lbgn + 0) >> 1;
+            pict->indx = (ulib->bgrp[lbgn] - ulib->barr) << 1;
+        }
+    }
+    else {
+        /// compared to the search above, these are excruciatingly slow;
+        /// however, we can afford it since any of them may be executed
+        /// once per frame at most
+        if (attr & UFR_LBTN) {
+            return; /// [TODO:] del me
+        }
+        if (attr & UFR_MOUS) {
+            /// no point in updating the behaviour if it`s already current
+            if (((ulib->barr[pict->indx >> 1].flgs & BHV_OVRM) == BHV_OVRM)
+            ||  !(ulib->barr[pict->indx >> 1].flgs & BHV_ALLM))
+                return;
+            return; /// [TODO:] del me
+        }
+        return;
     }
     binf = &pict->ulib->barr[pict->indx >> 1];
     pict->fram = -1; /// this means:
@@ -1321,7 +1343,7 @@ void AppendSpriteArr(LINF *elem, ENGC *engc) {
         engc->pcnt++;
         engc->parr[engc->pcnt - 1] = calloc(1, sizeof(**engc->parr));
         engc->parr[engc->pcnt - 1]->ulib = elem;
-        ChooseBehaviour(engc, engc->parr[engc->pcnt - 1], 0);
+        ChooseBehaviour(engc, engc->parr[engc->pcnt - 1], 0, 0);
     }
 }
 
@@ -1568,6 +1590,8 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
 //    /// here you can add new sprites!
 //    cEngineCallback(engd, ECB_LOAD, 0);
 
+    curr = (long double)*time * (long double)engc->tdil;
+    /// watch out for reserved-s (they shouldn`t be in [0; ISEL], though)
     if ((attr & UFR_MOUS) && ((isel >= 0) || pict)) {
         if (!pict && ((engc->ppos.z ^ attr) & UFR_LBTN)) {
             pict = engc->pcur = engc->parr[isel];
@@ -1576,6 +1600,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             printf("[GRABBED] %s\n", pict->ulib->name);
             engc->ppos.x = xptr - pict->offs.x;
             engc->ppos.y = yptr - pict->offs.y;
+            ChooseBehaviour(engc, pict, curr, UFR_LBTN);
         }
         if (pict && (attr & UFR_LBTN)) {
             pict->offs.x = xptr - engc->ppos.x;
@@ -1584,7 +1609,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         else {
             if (pict)
                 printf("[DROPPED] %s\n", pict->ulib->name);
-            engc->pcur = 0;
+            pict = engc->pcur = 0;
         }
         if (~attr & engc->ppos.z & UFR_RBTN) {
             if (!pict)
@@ -1597,9 +1622,15 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             free(temp);
             rOpenContextMenu(engc->mspr);
         }
+        if (!pict && (isel >= 0)) {
+            /// we`ve got a simple mouseover situation here
+            if (~engc->parr[isel]->indx & FLG_EFCT) {
+                /// effects shall not react to mouseover
+                ChooseBehaviour(engc, engc->parr[isel], curr, UFR_MOUS);
+            }
+        }
         engc->ppos.z = attr;
     }
-    curr = (long double)*time * (long double)engc->tdil;
     for (indx = 0; indx < engc->pcnt; indx++) {
         pict = engc->parr[indx];
         binf = (~pict->indx & FLG_EFCT)? &pict->ulib->barr[pict->indx >> 1]
@@ -1633,7 +1664,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         else if ((curr >= (pict->tbhv & ~TMR_PAIR))
              || ((pict->fram >= anim->fcnt) && !(binf->flgs & FLG_LOOP))) {
             /// behaviour that needs being changed
-            ChooseBehaviour(engc, pict, curr);
+            ChooseBehaviour(engc, pict, curr, 0);
             binf = &pict->ulib->barr[pict->indx >> 1];
             anim = &binf->unit[pict->indx & 1];
         }
@@ -1672,7 +1703,8 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
     /// (like those with respawn > runtime staying in reserve)
     for (elem = indx = 0; indx < engc->pcnt; indx++)
         if ((pict = engc->parr[indx])->tmov & TMR_PAIR)
-            elem--;
+            elem--; /// this works only because reserved-s are put among
+                    /// the sprites which cannot be selected with mouse
         else {
             curr = pict->indx & ~FLG_EFCT;
             if (pict->indx & FLG_EFCT)
