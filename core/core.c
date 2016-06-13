@@ -60,16 +60,17 @@ struct THRD {
 
 /// engine data, opaque outside the module
 struct ENGD {
-    uint32_t flgs;    /// options: rendering scheme, restart, etc.
-    uint64_t time,    /// current timestamp
-             tfrm,    /// timestamp for the previous frame
-             tfps;    /// timestamp for the previous FPS count
-    ulong    fram,    /// FPS counter
+    uint32_t flgs,    /// options: rendering scheme, restart, etc.
+             size,    /// current length of the main display list
+             smax,    /// maximum capacity of the main display list
+             fram,    /// FPS counter
              msec,    /// frame delay
              ncpu,    /// number of CPU cores the engine is allowed to occupy
              uniq,    /// number of unique animations
-             size,    /// length of the main display list
              halt;    /// halt flag (must NOT be in external-writable flags)
+    uint64_t time,    /// current timestamp
+             tfrm,    /// timestamp for the previous frame
+             tfps;    /// timestamp for the previous FPS count
     UFRM     ufrm;    /// callback to update the state of a frame
     T4IV     dims;    /// drawing area position and dimensions
     BGRA    *bptr;    /// drawing area bits
@@ -716,8 +717,11 @@ uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t attr) {
     if (~engd->flgs & COM_DRAW)
         return PFR_HALT;
     pick = SelectUnit(engd->uarr, engd->data, engd->size, xptr, yptr);
-    engd->size = engd->ufrm(engd, engd->udat, &engd->data,
-                           &engd->time, attr, xptr, yptr, pick);
+    engd->smax = 0;
+    engd->size = engd->ufrm(engd, &engd->data, &engd->smax, &engd->time,
+                            engd->udat, attr, xptr, yptr, pick);
+    if (!engd->smax)
+        engd->smax = engd->size;
     if (!engd->size) {
         cEngineCallback(engd, ECB_QUIT, ~0);
         return PFR_HALT;
@@ -730,7 +734,7 @@ uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t attr) {
 void cOutputFrame(ENGD *engd, FRBO **surf) {
     if (engd->flgs & COM_RGPU) {
         if (!MakeRendererOGL(&engd->rndr, !!surf && !(engd->flgs & WIN_IBGR),
-                              engd->uarr, engd->uniq, engd->size,
+                              engd->uarr, engd->uniq, engd->smax,
                               engd->dims.xdim - engd->dims.xpos,
                               engd->dims.ydim - engd->dims.ypos)) {
             cEngineCallback(engd, ECB_SFLG, engd->flgs & ~COM_RGPU);
@@ -832,7 +836,7 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
         engd->msec = msec;
 
         mtmp = lTimeFunc() - engd->time;
-        printf(TXL_AEND" %lu threads, %lu objects, %ld ms: %0.3f ms/obj\n",
+        printf(TXL_AEND" %u threads, %u objects, %ld ms: %0.3f ms/obj\n",
                engd->ncpu, engd->uniq, mtmp,
               (double)mtmp * engd->ncpu / engd->uniq);
         do {

@@ -370,6 +370,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     /// when they are DWM + layered, at least on Intel HD 3000 + Vista / Win7
     SetWindowPos(hwnd, 0, mpos.x, mpos.y, dims.cx, dims.cy + ((EBW)? 1 : 0),
                  SWP_NOZORDER | SWP_NOACTIVATE);
+    lShowMainWindow(engd, flgs & COM_SHOW);
     while (data[0]) {
         if (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
             TranslateMessage(&pmsg);

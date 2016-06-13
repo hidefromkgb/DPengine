@@ -171,18 +171,19 @@ typedef struct _AINF {
     each frame, returns new length of the updated list.
     _________________________________________________________________________
     ENGD: handle of the engine object the call refers to
-    USER: user-defined data (may be a pointer)
     DATA: callee-managed display list; shares the format with <DATA> uniform
           (see comments in ./ogl/oglstd.c, look for "main vertex shader" tag)
           except that W is just the element`s UUID
+    SIZE: total allocated length of DATA (i.e. maximum capacity)
     TIME: pointer to the current time value in ms (may update asynchronously)
+    USER: user-defined data (may be a pointer)
     ATTR: control attributes (UFR_ prefix)
     XPTR: cursor X coordinate, relative to the window`s upper left corner
     YPTR: cursor Y coordinate, relative to the window`s upper left corner
     ISEL: index of the element under cursor in the existing list, < 0 if none
  **/
-typedef uint32_t (*UFRM)(ENGD *engd, intptr_t user,
-                         T4FV **data, uint64_t *time, uint32_t attr,
+typedef uint32_t (*UFRM)(ENGD *engd, T4FV **data, uint32_t *size,
+                         uint64_t *time, intptr_t user, uint32_t attr,
                          int32_t xptr, int32_t yptr, int32_t isel);
 
 typedef uint32_t (*UFLG)(ENGD *engd, intptr_t user, uint32_t flgs);

@@ -1121,9 +1121,11 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
     /// effect respawn time; DMAX = 0 means "do not respawn"
     (*retn)->tmov = (binf->dmax)? time + binf->dmax : ULONG_LONG_MAX;
     /// effect ending time; DMIN = 0 means "end when the behaviour ends"
-    /// if the effect duration is longer than that of the behaviour, trim it
+    /// if the effect duration is longer than that of the behaviour, and
+    /// also it doesn`t respawn, then trim it
     (*retn)->tbhv = (*retn)->boss->tbhv;
-    if (binf->dmin && (time + binf->dmin < ((*retn)->tbhv & ~TBH_PAIR)))
+    if (binf->dmin &&
+       (binf->dmax || (time + binf->dmin < ((*retn)->tbhv & ~TBH_PAIR))))
         (*retn)->tbhv = (time + binf->dmin) | ((*retn)->tbhv & TBH_PAIR);
     MoveToParent(*retn, seed);
     return ~0;
@@ -1546,8 +1548,8 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
  3. Considering [1] and [2], it`s problematic to respawn an effect if its
     run time is less than its respawn time. [TODO:] resolve this
  **/
-uint32_t eUpdFrame(ENGD *engd, intptr_t user,
-                   T4FV **data, uint64_t *time, uint32_t attr,
+uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
+                   uint64_t *time, intptr_t user, uint32_t attr,
                    int32_t xptr, int32_t yptr, int32_t isel) {
     ENGC *engc = (ENGC*)user;
     PICT *pict = engc->pcur;
@@ -1660,6 +1662,7 @@ uint32_t eUpdFrame(ENGD *engd, intptr_t user,
                                    pict->fram, anim->uuid}};
     }
     *data = engc->data;
+    *size = engc->pmax;
     return engc->pcnt;
 }
 
