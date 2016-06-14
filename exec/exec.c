@@ -112,11 +112,11 @@
 /** behaviour effects are on    **/ #define CSF_EFCT (1 <<  0)
 
 /// /// /// /// /// /// /// /// /// localized text constants
-/** Remove pony                 **/ #define TXT_CDEL  0
+/** Remove character            **/ #define TXT_CDEL  0
 /** Remove all similar          **/ #define TXT_ADEL  1
 /** Sleep/pause                 **/ #define TXT_CSLP  2
 /** Sleep/pause all similar     **/ #define TXT_ASLP  3
-/** Add pony >>>                **/ #define TXT_PONY  4
+/** Add character >>>           **/ #define TXT_CHAR  4
 /** Add house >>>               **/ #define TXT_HOUS  5
 /** Take control: Player 1      **/ #define TXT_TPL1  6
 /** Take control: Player 2      **/ #define TXT_TPL2  7
@@ -1142,6 +1142,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t attr) {
     long seed, lbgn, lend;
     LINF *ulib = pict->ulib;
     BINF *binf;
+    AINF *anim;
 
     if (pict->indx & FLG_EFCT)
         return;
@@ -1193,8 +1194,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t attr) {
         pict->tbhv += PRNG(&engc->seed) % (binf->dmax - binf->dmin);
     if (!time) {
         /// this is the first time this sprite appears; let`s put it somewhere
-        AINF *anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
-
+        anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
         pict->offs.x = PRNG(&engc->seed) % (engc->dims.x - anim->xdim);
         pict->offs.y = PRNG(&engc->seed) % (engc->dims.y - anim->ydim)
                                                          + anim->ydim;
@@ -1363,7 +1363,7 @@ void MMH(MENU *item) {
         case TXT_ASLP:
             break;
 
-        case TXT_PONY:
+        case TXT_CHAR:
             break;
 
         case TXT_HOUS:
@@ -1749,7 +1749,7 @@ void Relocalize(ENGC *engc, char *lang) {
     {.text = engc->tran[TXT_CSLP], .uuid = TXT_CSLP, .func = MMH},
     {.text = engc->tran[TXT_ASLP], .uuid = TXT_ASLP, .func = MMH},
     {.text = ""},
-    {.text = engc->tran[TXT_PONY], .uuid = TXT_PONY, .func = MMH},
+    {.text = engc->tran[TXT_CHAR], .uuid = TXT_CHAR, .func = MMH},
     {.text = engc->tran[TXT_HOUS], .uuid = TXT_HOUS, .func = MMH},
     {.text = ""},
     {.text = engc->tran[TXT_TPL1], .uuid = TXT_TPL1, .func = MMH},
