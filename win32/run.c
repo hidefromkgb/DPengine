@@ -12,13 +12,6 @@
 
 #define WM_TRAY (WM_USER + 1000)
 
-#define FLG_CONS (1 << 16)
-#define FLG_EOGL (1 << 17)
-#define FLG_IBGR (1 << 18)
-#define FLG_IPBO (1 << 19)
-#define FLG_IOPQ (1 << 20)
-#define FLG_IRGN (1 << 21)
-
 
 
 static inline long OldWin32() {
@@ -413,7 +406,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         if (SHGetFolderPathW(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
                              SHGFP_TYPE_CURRENT, (LPWSTR)path) == S_OK) {
             wcscat((LPWSTR)path, L""DEF_OPTS);
-            wide = wcsdup((LPWSTR)path);
+            wide = _wcsdup((LPWSTR)path);
             retn = CreateDirectoryW((LPWSTR)path, 0);
             if (!retn && (GetLastError() == ERROR_ALREADY_EXISTS))
                 retn = 1;

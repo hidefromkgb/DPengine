@@ -153,16 +153,6 @@
 /** More options...             **/ #define TXT_MORE 35
 /** GO!                         **/ #define TXT_GOGO 36
 
-/// doubly-linked list header
-#define HDR_LIST \
-    struct _LHDR *prev, *next;
-typedef struct _LHDR {
-    HDR_LIST;
-} LHDR;
-
-/// doubly-linked list iterator
-typedef void (*ITER)(LHDR *item, intptr_t data);
-
 /// behaviour/effect unit info (write-once, read-only)
 typedef struct _BINF {
     AINF  unit[2];  /// image pair
@@ -192,7 +182,6 @@ typedef struct _CTGS {
 /// [TODO:] interactions
 /// [TODO:] categories
 typedef struct _LINF {
-    HDR_LIST;       /// list header
     CTGS    *ctgs;  /// library categories (hashed and sorted)
     BINF    *barr,  /// available behaviours ordered by name hash
             *earr,  /// available effects ordered by parent bhv. name hash
@@ -248,7 +237,8 @@ struct ENGC {
     char   **tran,  /// localized text array (ASCIIZ; last item is also 0)
             *lang,  /// name of the loaded language file
             *conf;  /// name of the main configuration file
-    uint32_t ccnt,  /// categories count
+    uint32_t lcnt,  /// libraries count
+             ccnt,  /// categories count
              pcnt,  /// on-screen sprites count (may differ every frame)
              pmax,  /// max. PARR capacity (realloc on exceed)
              seed,  /// random seed
@@ -483,72 +473,6 @@ char *GetNextLine(char **file) {
 
 
 
-void ListAppendHead(LHDR **list, long size) {
-    LHDR *retn = calloc(1, size);
-
-    if (!*list)
-         *list = retn;
-    else {
-        if ((*list)->prev) {
-            retn->prev = (*list)->prev;
-            retn->prev->next = retn;
-        }
-        retn->next = *list;
-        (*list)->prev = retn;
-        *list = retn;
-    }
-}
-
-
-
-void ListAppendTail(LHDR **list, long size) {
-    LHDR *retn = calloc(1, size);
-
-    if (!*list)
-         *list = retn;
-    else {
-        if ((*list)->next) {
-            retn->next = (*list)->next;
-            retn->next->prev = retn;
-        }
-        retn->prev = *list;
-        (*list)->next = retn;
-        *list = retn;
-    }
-}
-
-
-
-LHDR *ListIterateHeadToTail(LHDR *list, ITER iter, intptr_t data) {
-    LHDR *elem;
-
-    if (!list)
-        return 0;
-    do {
-        elem = list;
-        list = list->next;
-        iter(elem, data);
-    } while (list);
-    return elem;
-}
-
-
-
-LHDR *ListIterateTailToHead(LHDR *list, ITER iter, intptr_t data) {
-    LHDR *elem;
-
-    if (!list)
-        return 0;
-    do {
-        elem = list;
-        list = list->prev;
-        iter(elem, data);
-    } while (list);
-    return elem;
-}
-
-
-
 int igrpcmp(const void *a, const void *b) {
     int64_t retn = (int64_t)(*(BINF**)b)->igrp - (int64_t)(*(BINF**)a)->igrp;
     return (retn)? (retn < 0)? -1 : 1 : 0;
@@ -568,12 +492,6 @@ int ctgscmp(const void *a, const void *b) {
     int64_t retn = (int64_t)((CTGS*)a)->hash - (int64_t)((CTGS*)b)->hash;
     return (retn)? (retn < 0)? -1 : 1 : 0;
 }
-
-#define HTT_ITER(list, iter, data) \
-    ListIterateHeadToTail((LHDR*)(list), (ITER)(iter), (intptr_t)(data))
-
-#define TTH_ITER(list, iter, data) \
-    ListIterateTailToHead((LHDR*)(list), (ITER)(iter), (intptr_t)(data))
 
 #define GET_TEMP(conf) (temp = SplitLine(conf, DEF_TSEP, 0))
 
@@ -595,7 +513,7 @@ void MakeSpritePair(char **dest, char *path, char **conf) {
                                  Dequote(SplitLine(conf, DEF_TSEP, 0)), 0);
 }
 
-void ParseBehaviour(ENGC *engc, BINF *retn, char **imgp, char **conf) {
+void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
     static uint32_t
         uBMT[] = {BMT_HORM, BMT_ALLM, BMT_VERM, BMT_DRGM, BMT_HNDM, BMT_SLPM,
                   BMT_HNVM, BMT_DIAM, BMT_OVRM, BMT_DNVM, BMT_NONM},
@@ -629,7 +547,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **imgp, char **conf) {
 
     /// right-sided image...................................................... !def
     /// left-sided image....................................................... !def
-    MakeSpritePair(imgp, engc->libs->path, conf);
+    MakeSpritePair(imgp, path, conf);
 
     /// possible movement directions...........................................  def = All
     IF_BIN_FIND(elem, uBMT, conf)
@@ -700,7 +618,7 @@ void ParseBehaviour(ENGC *engc, BINF *retn, char **imgp, char **conf) {
         SET_FLAG(retn->flgs, temp, FOT_MIRR, BHV_MIRR);
 }
 
-void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
+void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
     static uint32_t
         uEMT[] = {EMT_CNRA, EMT_RNDA, EMT_CNTA, EMT_CNLA, EMT_BTMA, EMT_BNLA,
                   EMT_TOPA, EMT_BNRA, EMT_RCLA, EMT_TNLA, EMT_TNRA},
@@ -721,7 +639,7 @@ void ParseEffect(ENGC *engc, BINF *retn, char **imgp, char **conf) {
 
     /// right-sided image...................................................... !def
     /// left-sided image....................................................... !def
-    MakeSpritePair(imgp, engc->libs->path, conf);
+    MakeSpritePair(imgp, path, conf);
 
     /// duration in sec........................................................  def = 5
     if (TRY_TEMP(conf))
@@ -768,8 +686,9 @@ void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
     if ((file = rLoadFile(conf, 0))) {
         free(conf);
 
-        ListAppendTail((LHDR**)&engc->libs, sizeof(*engc->libs));
-        libs = engc->libs;
+        engc->libs = realloc(engc->libs, ++engc->lcnt * sizeof(*engc->libs));
+        engc->libs[engc->lcnt - 1] = (LINF){};
+        libs = &engc->libs[engc->lcnt - 1];
         libs->path = fptr;
 
         fptr = file;
@@ -789,6 +708,13 @@ void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
             libs->barr = calloc(bcnt,     sizeof(*libs->barr));
             libs->bimp = calloc(bcnt * 2, sizeof(*libs->bimp));
         }
+        else {
+            /// no behaviours found, the library is broken; stopping
+            engc->lcnt--;
+            free(libs->path);
+            free(file);
+            return;
+        }
         if ((ecnt = libs->ecnt)) {
             libs->earr = calloc(ecnt,     sizeof(*libs->earr));
             libs->eimp = calloc(ecnt * 2, sizeof(*libs->eimp));
@@ -802,14 +728,14 @@ void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     break;
 
                 case SVT_EFCT:
-                    ParseEffect(engc, &libs->earr[ecnt],
-                               &libs->eimp[ecnt * 2], &conf);
+                    ParseEffect(&libs->earr[ecnt], libs->path,
+                                &libs->eimp[ecnt * 2], &conf);
                     ecnt++;
                     break;
 
                 case SVT_BHVR:
-                    ParseBehaviour(engc, &libs->barr[bcnt],
-                                  &libs->bimp[bcnt * 2], &conf);
+                    ParseBehaviour(&libs->barr[bcnt], libs->path,
+                                   &libs->bimp[bcnt * 2], &conf);
                     bcnt++;
                     break;
 
@@ -896,7 +822,6 @@ void FreeLib(LINF *elem) {
     free(elem->earr);
     free(elem->bgrp);
     free(elem->ngrp);
-    free(elem);
 }
 
 
@@ -1230,7 +1155,12 @@ long TruncateAndSort(BINF **base, long *rcnt) {
 
 
 
-void AppendSpriteArr(LINF *elem, ENGC *engc) {
+/// return values:
+///  -1: got animations pending upload
+///   0: no behaviours found, library freed
+///   1: all good, 0 sprites on the screen
+///  >1: all good, (return) - 1 sprites on the screen
+long AppendSpriteArr(LINF *elem, ENGC *engc) {
     long indx, turn, qmax;
     BINF temp, *iter;
 
@@ -1245,7 +1175,7 @@ void AppendSpriteArr(LINF *elem, ENGC *engc) {
 
         /// skip the lib if it`s got animations pending upload
         if (turn)
-            return;
+            return -1;
 
         /// string arrays exist, but are empty? we`ve got an unprepared lib!
         free(elem->bimp);
@@ -1256,14 +1186,9 @@ void AppendSpriteArr(LINF *elem, ENGC *engc) {
         TruncateAndSort(&elem->earr, &elem->ecnt);
         if (!TruncateAndSort(&elem->barr, &elem->bcnt)) {
             /// freeing the library in case it`s got no behaviours
-            if (elem->prev)
-                elem->prev->next = elem->next;
-            if (elem->next)
-                elem->next->prev = elem->prev;
-            if (elem == engc->libs)
-                engc->libs = (LINF*)((elem->prev)? elem->prev : elem->next);
             FreeLib(elem);
-            return;
+            *elem = (LINF){};
+            return 0;
         }
         /// determining the effect count and min. index for every behaviour
         /// (note that some behaviours may have no effects)
@@ -1323,7 +1248,7 @@ void AppendSpriteArr(LINF *elem, ENGC *engc) {
     }
 
     if (!elem->icnt)
-        return;
+        return 1;
 
     /// now computing Q, the maximum number of effect spawns per behaviour
     /// (Q = 1 when repeat delay D = 0; otherwise, Q = ceil(((E)? E : B) / D)
@@ -1339,12 +1264,13 @@ void AppendSpriteArr(LINF *elem, ENGC *engc) {
     engc->pmax += elem->icnt * ++qmax;
     engc->parr = realloc(engc->parr, engc->pmax * sizeof(*engc->parr));
     /// now spawning sprites to the screen and emptying ICNT
-    for (; elem->icnt > 0; elem->icnt--) {
+    for (indx = elem->icnt + 1; elem->icnt > 0; elem->icnt--) {
         engc->pcnt++;
         engc->parr[engc->pcnt - 1] = calloc(1, sizeof(**engc->parr));
         engc->parr[engc->pcnt - 1]->ulib = elem;
         ChooseBehaviour(engc, engc->parr[engc->pcnt - 1], 0, 0);
     }
+    return indx;
 }
 
 
@@ -1868,6 +1794,10 @@ ENGC *eInitializeEngine(char *fcnf) {
 
 
 
+int linfcmp(const void *a, const void *b) {
+    return strcmp(((LINF*)a)->name, ((LINF*)b)->name);
+}
+
 void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
                     long xpos, long ypos, ulong xdim, ulong ydim) {
     INCBIN("../exec/icon.gif", MainIcon);
@@ -1881,14 +1811,21 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
        *uSTR[] = {"GPU",    "Show",   "Draw",   "Opaque",
                   "wPBO",   "wBGRA",  "wRegion"},
        *uSTF[] = {"Effects"};
+    LINF *libs;
     AINF igif = {};
     char temp[256], *save = 0;
     intptr_t icon;
+    long iter;
 
+    engc->dims = (T2IV){{xdim - xpos, ydim - ypos}};
+
+    /// sort engine`s libraries by name, initialize the rendering engine
+    qsort(engc->libs, engc->lcnt, sizeof(*engc->libs), linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc->engd);
     cEngineLoadAnimAsync(engc->engd,
                         (uint8_t*)"/Icon/", (uint8_t*)MainIcon, &igif);
-    TTH_ITER(engc->libs, LoadTemplateFromLib, engc->engd);
+    for (iter = 0; iter < engc->lcnt; iter++)
+        LoadTemplateFromLib(&engc->libs[iter], engc->engd);
     cEngineCallback(engc->engd, ECB_LOAD, 0);
     cEngineCallback(engc->engd, ECB_LOAD, ~0);
 
@@ -1897,17 +1834,25 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     igif.ydim = yico;
     igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
     cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
+
     icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
                          igif.time, igif.xdim, igif.ydim);
 
-    engc->dims = (T2IV){{xdim - xpos, ydim - ypos}};
-    TTH_ITER(engc->libs, LoadLib, engc->engd);
+    for (iter = 0; iter < engc->lcnt; iter++)
+        LoadLib(&engc->libs[iter], engc->engd);
     cEngineCallback(engc->engd, ECB_LOAD, 0);
 
     engc->seed = time(0);
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);
 
-    TTH_ITER(engc->libs, AppendSpriteArr, engc);
+    for (libs = engc->libs, iter = 0; iter < engc->lcnt; iter++)
+        if (AppendSpriteArr(&engc->libs[iter], engc)
+        && (++libs - engc->libs <= iter))
+            libs[-1] = engc->libs[iter];
+    if (libs - engc->libs < engc->lcnt) {
+        engc->lcnt = libs - engc->libs;
+        engc->libs = realloc(engc->libs, engc->lcnt * sizeof(*engc->libs));
+    }
     engc->data = (engc->pmax)? calloc(engc->pmax, sizeof(*engc->data)) : 0;
     cEngineRunMainLoop(engc->engd, xpos, ypos, xdim, ydim, engc->ftmp,
                        FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
@@ -1917,14 +1862,18 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     FreeLocalization(&engc->tran);
 
     free(engc->data);
-    for (icon = 0; icon < engc->pcnt; icon++)
-        free(engc->parr[icon]);
+    for (iter = 0; iter < engc->pcnt; iter++)
+        free(engc->parr[iter]);
     free(engc->parr);
 
-    TTH_ITER(engc->libs, FreeLib, 0);
+    for (; engc->lcnt; engc->lcnt--)
+        FreeLib(&engc->libs[engc->lcnt - 1]);
+    free(engc->libs);
+
     for (; engc->ccnt; engc->ccnt--)
         free(engc->ctgs[engc->ccnt - 1].name);
     free(engc->ctgs);
+
     cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
     cEngineCallback(engc->engd, ECB_QUIT, 0);
 
@@ -1932,13 +1881,13 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     Concatenate(&save, "Language,", engc->lang, 0);
     Concatenate(&save, DEF_ENDL, "Time,", temp, 0);
     Concatenate(&save, DEF_ENDL, "Render,", 0);
-    for (icon = 0; icon < countof(uCOM); icon++)
-        if (engc->ftmp & uCOM[icon])
-            Concatenate(&save, uSTR[icon], ",", 0);
+    for (iter = 0; iter < countof(uCOM); iter++)
+        if (engc->ftmp & uCOM[iter])
+            Concatenate(&save, uSTR[iter], ",", 0);
     Concatenate(&save, DEF_ENDL, "Flags,", 0);
-    for (icon = 0; icon < countof(uCSF); icon++)
-        if (engc->flgs & uCSF[icon])
-            Concatenate(&save, uSTF[icon], ",", 0);
+    for (iter = 0; iter < countof(uCSF); iter++)
+        if (engc->flgs & uCSF[iter])
+            Concatenate(&save, uSTF[iter], ",", 0);
     Concatenate(&save, DEF_ENDL, 0);
     rSaveFile(engc->conf, save, strlen(save));
     free(engc->lang);
@@ -1951,9 +1900,8 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
 
 
 void __DEL_ME__SetLibUses(ENGC *engc, int32_t uses) {
-    LINF *libs = engc->libs;
-    while (libs) {
-        libs->icnt = labs(uses);
-        libs = (LINF*)libs->prev;
-    }
+    long iter;
+
+    for (iter = 0; iter < engc->lcnt; iter++)
+        engc->libs[iter].icnt = labs(uses);
 }
