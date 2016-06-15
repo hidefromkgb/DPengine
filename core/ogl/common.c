@@ -25,8 +25,8 @@ GLvoid newerror(GLchar **retn, GLchar *frmt, ...) {
 
 
 GLchar *LoadOpenGLFunctions(GLuint mask) {
-    GLchar *part[] = {PARTS_OF_OPENGL_FUNCTIONS},
-           *retn = (typeof(retn))1, name[32] = "gl";
+    GLchar *part[] = {PARTS_OF_OPENGL_FUNCTIONS}, name[32] = "gl";
+    static GLchar *retn = (typeof(retn))1;
     GLint pind, nind, iter = -1;
 
     if (retn == (typeof(retn))1) {
@@ -230,32 +230,27 @@ GLvoid FreeShaderSrc(GLchar **sver, GLchar **spix) {
 
 
 FTEX *BindTex(FVBO *vobj, GLuint bind, GLuint mode) {
-    GLuint itex, ttex, ktex = bind;
+    GLuint ktex = bind;
     FVBO *vtex = vobj;
+    FTEX *ftex;
 
     if (!vtex) return 0;
     if (vtex->ptex[ktex].orig) {
         do {
-            itex = vtex->ptex[ktex].indx;
-            ttex = vtex->ptex[ktex].type;
-            vtex = vtex->ptex[ktex].orig;
-            ktex = itex;
-            if (vtex == vobj) {
+            ktex = (ftex = &vtex->ptex[ktex])->indx;
+            if ((vtex = ftex->orig) == vobj) {
                 printf("Texture circular cross-ref!\n");
-                vtex = 0;
-                break;
+                return 0;
             }
-        } while (vtex->ptex[ktex].orig);
-        vobj->ptex[bind].orig = vtex;
-        vobj->ptex[bind].type = ttex;
-        vobj->ptex[bind].indx = ktex;
+        } while (vtex);
+        vobj->ptex[ktex = bind] = *ftex;
     }
     if (mode == TEX_FRMB)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                GL_TEXTURE_2D, vtex->ptex[ktex].indx, 0);
     else if (mode == TEX_DFLT) {
         glActiveTexture(GL_TEXTURE0 + bind);
-        glBindTexture(vtex->ptex[ktex].type, vtex->ptex[ktex].indx);
+        glBindTexture(vtex->ptex[ktex].trgt, vtex->ptex[ktex].indx);
     }
     return &vtex->ptex[ktex];
 }
@@ -267,40 +262,57 @@ GLuint MakeTex(FTEX  *retn, GLuint xdim, GLuint ydim, GLuint  zdim,
                GLenum type, GLenum frmt, GLenum mode, GLvoid *data) {
     GLuint iter, iend;
 
-    iter = (GLuint)-1;
+    iter = (GLuint)GL_INVALID_VALUE;
     if (retn) {
-        retn->xdim = xdim;
-        retn->ydim = ydim;
-        retn->zdim = zdim;
-        retn->type = trgt;
+        *retn = (FTEX){trgt, type, mode, xdim, ydim, zdim};
         glGenTextures(1, &retn->indx);
-        glBindTexture(trgt, retn->indx);
+        glBindTexture(retn->trgt, retn->indx);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-        if (trgt == GL_TEXTURE_CUBE_MAP) {
+        if (retn->trgt != GL_TEXTURE_CUBE_MAP)
+            iend = iter = retn->trgt;
+        else {
             iend = 6 + (iter = GL_TEXTURE_CUBE_MAP_POSITIVE_X);
-            glTexParameteri(trgt, GL_TEXTURE_WRAP_R, wrap);
+            glTexParameteri(retn->trgt, GL_TEXTURE_WRAP_R, wrap);
         }
-        else
-            iend = iter = trgt;
-
-        if ((trgt == GL_TEXTURE_2D_ARRAY) || (trgt == GL_TEXTURE_3D)) {
-            glTexParameteri(trgt, GL_TEXTURE_WRAP_R, wrap);
-            glTexImage3D(trgt, 0, frmt, xdim, ydim, zdim, 0, mode, type, data);
-        }
-        else
+        if ((retn->trgt != GL_TEXTURE_3D)
+        &&  (retn->trgt != GL_TEXTURE_2D_ARRAY))
             for (; iter <= iend; iter++)
-                glTexImage2D(iter, 0, frmt, xdim, ydim, 0, mode, type, data);
-
+                glTexImage2D(iter, 0, frmt, retn->xdim, retn->ydim,
+                             0, retn->mode, retn->type, data);
+        else {
+            glTexParameteri(retn->trgt, GL_TEXTURE_WRAP_R, wrap);
+            glTexImage3D(retn->trgt, 0, frmt, retn->xdim, retn->ydim,
+                         retn->zdim, 0, retn->mode, retn->type, data);
+        }
         iter = glGetError();
-
-        glTexParameteri(trgt, GL_TEXTURE_MAG_FILTER, tmag);
-        glTexParameteri(trgt, GL_TEXTURE_MIN_FILTER, tmin);
-        glTexParameteri(trgt, GL_TEXTURE_WRAP_S, wrap);
-        glTexParameteri(trgt, GL_TEXTURE_WRAP_T, wrap);
-        glBindTexture(trgt, 0);
+        glTexParameteri(retn->trgt, GL_TEXTURE_MAG_FILTER, tmag);
+        glTexParameteri(retn->trgt, GL_TEXTURE_MIN_FILTER, tmin);
+        glTexParameteri(retn->trgt, GL_TEXTURE_WRAP_S, wrap);
+        glTexParameteri(retn->trgt, GL_TEXTURE_WRAP_T, wrap);
+        glBindTexture(retn->trgt, 0);
     }
     return iter;
+}
+
+
+
+GLenum LoadTex(FTEX  *retn, GLint  xpos, GLint  ypos, GLint   zpos,
+               GLuint xdim, GLuint ydim, GLuint zdim, GLvoid *data) {
+    glBindTexture(retn->trgt, retn->indx);
+    switch (retn->trgt) {
+        case GL_TEXTURE_2D:
+            glTexSubImage2D(retn->trgt, 0, xpos, ypos, xdim, ydim,
+                            retn->mode, retn->type, data);
+            break;
+
+        case GL_TEXTURE_3D:
+        case GL_TEXTURE_2D_ARRAY:
+            glTexSubImage3D(retn->trgt, 0, xpos, ypos, zpos, xdim, ydim, zdim,
+                            retn->mode, retn->type, data);
+            break;
+    }
+    return glGetError();
 }
 
 

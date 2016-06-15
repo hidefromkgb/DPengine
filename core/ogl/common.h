@@ -72,78 +72,81 @@
 
 
 #define PARTS_OF_OPENGL_FUNCTIONS \
-    "iv",       \
-    "fv",       \
-    "buffer",   \
-    "Buffer",   \
-    "Data",     \
-    "Get",      \
-    "Gen",      \
-    "Bind",     \
-    "Create",   \
-    "Delete",   \
-    "Program",  \
-    "Shader",   \
-    "Attrib",   \
-    "Uniform",  \
-    "Location", \
-    "Vertex",   \
-    "Texture",  \
-    "Frame",    \
-    "Render",   \
-    "InfoLog",  \
-    "EXT"
+    /** \x01 **/ "iv",       \
+    /** \x02 **/ "fv",       \
+    /** \x03 **/ "buffer",   \
+    /** \x04 **/ "Buffer",   \
+    /** \x05 **/ "Data",     \
+    /** \x06 **/ "Get",      \
+    /** \x07 **/ "Gen",      \
+    /** \x08 **/ "Bind",     \
+    /** \x09 **/ "Create",   \
+    /** \x0A **/ "Delete",   \
+    /** \x0B **/ "Program",  \
+    /** \x0C **/ "Shader",   \
+    /** \x0D **/ "Attrib",   \
+    /** \x0E **/ "Uniform",  \
+    /** \x0F **/ "Location", \
+    /** \x10 **/ "Vertex",   \
+    /** \x11 **/ "Tex",      \
+    /** \x12 **/ "ture",     \
+    /** \x13 **/ "Frame",    \
+    /** \x14 **/ "Render",   \
+    /** \x15 **/ "InfoLog",  \
+    /** \x16 **/ "Image3D",  \
+    /** \x17 **/ "EXT"
 
 #define NV_vertex_program3     0x80000000
 #define EXT_framebuffer_object 0x00000001
 
 /// Sorry for this...  (._.)
 #define MASKED_STRING_OPENGL_FUNCTIONS \
-    {/** glUniform1iv                 **/ "\x0E""1\x01",           }, \
-    {/** glUniform1fv                 **/ "\x0E""1\x02",           }, \
-    {/** glUniform2iv                 **/ "\x0E""2\x01",           }, \
-    {/** glUniform2fv                 **/ "\x0E""2\x02",           }, \
-    {/** glUniform3iv                 **/ "\x0E""3\x01",           }, \
-    {/** glUniform3fv                 **/ "\x0E""3\x02",           }, \
-    {/** glUniform4iv                 **/ "\x0E""4\x01",           }, \
-    {/** glUniform4fv                 **/ "\x0E""4\x02",           }, \
-    {/** glUniformMatrix4fv           **/ "\x0E""Matrix4\x02",     }, \
-    {/** glCreateProgram              **/ "\x09\x0B",              }, \
-    {/** glDeleteProgram              **/ "\x0A\x0B",              }, \
-    {/** glValidateProgram            **/ "Validate\x0B",          }, \
-    {/** glLinkProgram                **/ "Link\x0B",              }, \
-    {/** glUseProgram                 **/ "Use\x0B",               }, \
-    {/** glGetProgramInfoLog          **/ "\x06\x0B\x14",          }, \
-    {/** glGetShaderInfoLog           **/ "\x06\x0C\x14",          }, \
-    {/** glGetProgramiv               **/ "\x06\x0B\x01",          }, \
-    {/** glGetShaderiv                **/ "\x06\x0C\x01",          }, \
-    {/** glCreateShader               **/ "\x09\x0C",              }, \
-    {/** glDeleteShader               **/ "\x0A\x0C",              }, \
-    {/** glAttachShader               **/ "Attach\x0C",            }, \
-    {/** glShaderSource               **/ "\x0C""Source",          }, \
-    {/** glCompileShader              **/ "Compile\x0C",           }, \
-    {/** glGetAttribLocation          **/ "\x06\x0D\x0F",          }, \
-    {/** glGetUniformLocation         **/ "\x06\x0E\x0F",          }, \
-    {/** glEnableVertexAttribArray    **/ "Enable\x10\x0D""Array", }, \
-    {/** glVertexAttribPointer        **/ "\x10\x0D""Pointer",     }, \
-    {/** glActiveTexture              **/ "Active\x11",            }, \
-    {/** glTexImage3D                 **/ "TexImage3D",            }, \
-    {/** glGenBuffers                 **/ "\x07\x04""s",           }, \
-    {/** glBindBuffer                 **/ "\x08\x04",              }, \
-    {/** glBufferData                 **/ "\x04\x05",              }, \
-    {/** glBufferSubData              **/ "\x04""Sub\x05",         }, \
-    {/** glDeleteBuffers              **/ "\x0A\x04""s",           }, \
-    {/** glMapBuffer                  **/ "Map\x04",               }, \
-    {/** glUnmapBuffer                **/ "Unmap\x04",             }, \
-    {/** glGenFramebuffersEXT         **/ "\x07\x12\x03""s\x15",   EXT_framebuffer_object}, \
-    {/** glGenRenderbuffersEXT        **/ "\x07\x13\x03""s\x15",   EXT_framebuffer_object}, \
-    {/** glDeleteFramebuffersEXT      **/ "\x0A\x12\x03""s\x15",   EXT_framebuffer_object}, \
-    {/** glDeleteRenderbuffersEXT     **/ "\x0A\x13\x03""s\x15",   EXT_framebuffer_object}, \
-    {/** glBindFramebufferEXT         **/ "\x08\x12\x03\x15",      EXT_framebuffer_object}, \
-    {/** glBindRenderbufferEXT        **/ "\x08\x13\x03\x15",      EXT_framebuffer_object}, \
-    {/** glRenderbufferStorageEXT     **/ "\x13\x03""Storage\x15", EXT_framebuffer_object}, \
-    {/** glFramebufferTexture2DEXT    **/ "\x12\x03\x11""2D\x15",  EXT_framebuffer_object}, \
-    {/** glFramebufferRenderbufferEXT **/ "\x12\x03\x13\x03\x15",  EXT_framebuffer_object}
+    {/** glUniform1iv                 **/ "\x0E""1\x01",              }, \
+    {/** glUniform1fv                 **/ "\x0E""1\x02",              }, \
+    {/** glUniform2iv                 **/ "\x0E""2\x01",              }, \
+    {/** glUniform2fv                 **/ "\x0E""2\x02",              }, \
+    {/** glUniform3iv                 **/ "\x0E""3\x01",              }, \
+    {/** glUniform3fv                 **/ "\x0E""3\x02",              }, \
+    {/** glUniform4iv                 **/ "\x0E""4\x01",              }, \
+    {/** glUniform4fv                 **/ "\x0E""4\x02",              }, \
+    {/** glUniformMatrix4fv           **/ "\x0E""Matrix4\x02",        }, \
+    {/** glCreateProgram              **/ "\x09\x0B",                 }, \
+    {/** glDeleteProgram              **/ "\x0A\x0B",                 }, \
+    {/** glValidateProgram            **/ "Validate\x0B",             }, \
+    {/** glLinkProgram                **/ "Link\x0B",                 }, \
+    {/** glUseProgram                 **/ "Use\x0B",                  }, \
+    {/** glGetProgramInfoLog          **/ "\x06\x0B\x15",             }, \
+    {/** glGetShaderInfoLog           **/ "\x06\x0C\x15",             }, \
+    {/** glGetProgramiv               **/ "\x06\x0B\x01",             }, \
+    {/** glGetShaderiv                **/ "\x06\x0C\x01",             }, \
+    {/** glCreateShader               **/ "\x09\x0C",                 }, \
+    {/** glDeleteShader               **/ "\x0A\x0C",                 }, \
+    {/** glAttachShader               **/ "Attach\x0C",               }, \
+    {/** glShaderSource               **/ "\x0C""Source",             }, \
+    {/** glCompileShader              **/ "Compile\x0C",              }, \
+    {/** glGetAttribLocation          **/ "\x06\x0D\x0F",             }, \
+    {/** glGetUniformLocation         **/ "\x06\x0E\x0F",             }, \
+    {/** glEnableVertexAttribArray    **/ "Enable\x10\x0D""Array",    }, \
+    {/** glVertexAttribPointer        **/ "\x10\x0D""Pointer",        }, \
+    {/** glActiveTexture              **/ "Active\x11\x12",           }, \
+    {/** glTexImage3D                 **/ "\x11\x16",                 }, \
+    {/** glTexSubImage3D              **/ "\x11Sub\x16",              }, \
+    {/** glGenBuffers                 **/ "\x07\x04""s",              }, \
+    {/** glBindBuffer                 **/ "\x08\x04",                 }, \
+    {/** glBufferData                 **/ "\x04\x05",                 }, \
+    {/** glBufferSubData              **/ "\x04""Sub\x05",            }, \
+    {/** glDeleteBuffers              **/ "\x0A\x04""s",              }, \
+    {/** glMapBuffer                  **/ "Map\x04",                  }, \
+    {/** glUnmapBuffer                **/ "Unmap\x04",                }, \
+    {/** glGenFramebuffersEXT         **/ "\x07\x13\x03""s\x17",      EXT_framebuffer_object}, \
+    {/** glGenRenderbuffersEXT        **/ "\x07\x14\x03""s\x17",      EXT_framebuffer_object}, \
+    {/** glDeleteFramebuffersEXT      **/ "\x0A\x13\x03""s\x17",      EXT_framebuffer_object}, \
+    {/** glDeleteRenderbuffersEXT     **/ "\x0A\x14\x03""s\x17",      EXT_framebuffer_object}, \
+    {/** glBindFramebufferEXT         **/ "\x08\x13\x03\x17",         EXT_framebuffer_object}, \
+    {/** glBindRenderbufferEXT        **/ "\x08\x14\x03\x17",         EXT_framebuffer_object}, \
+    {/** glRenderbufferStorageEXT     **/ "\x14\x03""Storage\x17",    EXT_framebuffer_object}, \
+    {/** glFramebufferTexture2DEXT    **/ "\x13\x03\x11\x12""2D\x17", EXT_framebuffer_object}, \
+    {/** glFramebufferRenderbufferEXT **/ "\x13\x03\x14\x03\x17",     EXT_framebuffer_object}
 
 /// uniform type constants have to match the corresponding
 /// uniform loaders in LoadedOpenGLFunctions[] table
@@ -185,52 +188,59 @@
 
 #define GL_UNI_FUNC(type, indx, size, vals) (((GLvoid APIENTRY (*)(GLint, GLsizei, GLvoid*))LoadedOpenGLFunctions[type])(indx, size, vals))
 
-#define glUniform1iv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLint*                                                                       ))LoadedOpenGLFunctions[UNI_T1IV])
-#define glUniform1fv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLfloat*                                                                     ))LoadedOpenGLFunctions[UNI_T1FV])
-#define glUniform2iv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLint*                                                                       ))LoadedOpenGLFunctions[UNI_T2IV])
-#define glUniform2fv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLfloat*                                                                     ))LoadedOpenGLFunctions[UNI_T2FV])
-#define glUniform3iv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLint*                                                                       ))LoadedOpenGLFunctions[UNI_T3IV])
-#define glUniform3fv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLfloat*                                                                     ))LoadedOpenGLFunctions[UNI_T3FV])
-#define glUniform4iv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLint*                                                                       ))LoadedOpenGLFunctions[UNI_T4IV])
-#define glUniform4fv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLfloat*                                                                     ))LoadedOpenGLFunctions[UNI_T4FV])
-#define glUniformMatrix4fv         ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLboolean,  GLfloat*                                                         ))LoadedOpenGLFunctions[UNI_TMFV])
+#define glUniform1iv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLint*               ))LoadedOpenGLFunctions[UNI_T1IV])
+#define glUniform1fv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLfloat*             ))LoadedOpenGLFunctions[UNI_T1FV])
+#define glUniform2iv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLint*               ))LoadedOpenGLFunctions[UNI_T2IV])
+#define glUniform2fv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLfloat*             ))LoadedOpenGLFunctions[UNI_T2FV])
+#define glUniform3iv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLint*               ))LoadedOpenGLFunctions[UNI_T3IV])
+#define glUniform3fv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLfloat*             ))LoadedOpenGLFunctions[UNI_T3FV])
+#define glUniform4iv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLint*               ))LoadedOpenGLFunctions[UNI_T4IV])
+#define glUniform4fv               ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLfloat*             ))LoadedOpenGLFunctions[UNI_T4FV])
+#define glUniformMatrix4fv         ((GLvoid  APIENTRY (*)(GLint  ,  GLsizei,  GLboolean,  GLfloat* ))LoadedOpenGLFunctions[UNI_TMFV])
 /// uniform functions end here
-#define glCreateProgram            ((GLuint  APIENTRY (*)(GLvoid                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX +  1])
-#define glDeleteProgram            ((GLvoid  APIENTRY (*)(GLuint                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX +  2])
-#define glValidateProgram          ((GLvoid  APIENTRY (*)(GLuint                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX +  3])
-#define glLinkProgram              ((GLvoid  APIENTRY (*)(GLuint                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX +  4])
-#define glUseProgram               ((GLvoid  APIENTRY (*)(GLuint                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX +  5])
-#define glGetProgramInfoLog        ((GLvoid  APIENTRY (*)(GLuint ,  GLint  ,  GLint*   ,  GLchar*                                                          ))LoadedOpenGLFunctions[UNI_TMAX +  6])
-#define glGetShaderInfoLog         ((GLvoid  APIENTRY (*)(GLuint ,  GLint  ,  GLint*   ,  GLchar*                                                          ))LoadedOpenGLFunctions[UNI_TMAX +  7])
-#define glGetProgramiv             ((GLvoid  APIENTRY (*)(GLuint ,  GLenum ,  GLint*                                                                       ))LoadedOpenGLFunctions[UNI_TMAX +  8])
-#define glGetShaderiv              ((GLvoid  APIENTRY (*)(GLuint ,  GLenum ,  GLint*                                                                       ))LoadedOpenGLFunctions[UNI_TMAX +  9])
-#define glCreateShader             ((GLuint  APIENTRY (*)(GLenum                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX + 10])
-#define glDeleteShader             ((GLvoid  APIENTRY (*)(GLuint                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX + 11])
-#define glAttachShader             ((GLvoid  APIENTRY (*)(GLuint ,  GLuint                                                                                 ))LoadedOpenGLFunctions[UNI_TMAX + 12])
-#define glShaderSource             ((GLvoid  APIENTRY (*)(GLuint ,  GLuint ,  GLchar** ,  GLuint*                                                          ))LoadedOpenGLFunctions[UNI_TMAX + 13])
-#define glCompileShader            ((GLvoid  APIENTRY (*)(GLuint                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX + 14])
-#define glGetAttribLocation        ((GLint   APIENTRY (*)(GLuint ,  GLchar*                                                                                ))LoadedOpenGLFunctions[UNI_TMAX + 15])
-#define glGetUniformLocation       ((GLint   APIENTRY (*)(GLuint ,  GLchar*                                                                                ))LoadedOpenGLFunctions[UNI_TMAX + 16])
-#define glEnableVertexAttribArray  ((GLvoid  APIENTRY (*)(GLint                                                                                            ))LoadedOpenGLFunctions[UNI_TMAX + 17])
-#define glVertexAttribPointer      ((GLvoid  APIENTRY (*)(GLuint ,  GLint  ,  GLenum   ,  GLboolean,  GLsizei,  GLvoid*                                    ))LoadedOpenGLFunctions[UNI_TMAX + 18])
-#define glActiveTexture            ((GLvoid  APIENTRY (*)(GLenum                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX + 19])
-#define glTexImage3D               ((GLvoid  APIENTRY (*)(GLenum ,  GLint  ,  GLenum   ,  GLsizei  ,  GLsizei,  GLsizei,  GLint,  GLenum,  GLenum,  GLvoid*))LoadedOpenGLFunctions[UNI_TMAX + 20])
-#define glGenBuffers               ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                                                                                ))LoadedOpenGLFunctions[UNI_TMAX + 21])
-#define glBindBuffer               ((GLvoid  APIENTRY (*)(GLenum ,  GLuint                                                                                 ))LoadedOpenGLFunctions[UNI_TMAX + 22])
-#define glBufferData               ((GLvoid  APIENTRY (*)(GLenum ,  GLsizei,  GLvoid*  ,  GLenum                                                           ))LoadedOpenGLFunctions[UNI_TMAX + 23])
-#define glBufferSubData            ((GLvoid  APIENTRY (*)(GLenum ,  GLint  ,  GLsizei  ,  GLvoid*                                                          ))LoadedOpenGLFunctions[UNI_TMAX + 24])
-#define glDeleteBuffers            ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                                                                                ))LoadedOpenGLFunctions[UNI_TMAX + 25])
-#define glMapBuffer                ((GLvoid* APIENTRY (*)(GLenum ,  GLenum                                                                                 ))LoadedOpenGLFunctions[UNI_TMAX + 26])
-#define glUnmapBuffer              ((GLvoid  APIENTRY (*)(GLenum                                                                                           ))LoadedOpenGLFunctions[UNI_TMAX + 27])
-#define glGenFramebuffers          ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                                                                                ))LoadedOpenGLFunctions[UNI_TMAX + 28])
-#define glGenRenderbuffers         ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                                                                                ))LoadedOpenGLFunctions[UNI_TMAX + 29])
-#define glDeleteFramebuffers       ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                                                                                ))LoadedOpenGLFunctions[UNI_TMAX + 30])
-#define glDeleteRenderbuffers      ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                                                                                ))LoadedOpenGLFunctions[UNI_TMAX + 31])
-#define glBindFramebuffer          ((GLvoid  APIENTRY (*)(GLenum ,  GLuint                                                                                 ))LoadedOpenGLFunctions[UNI_TMAX + 32])
-#define glBindRenderbuffer         ((GLvoid  APIENTRY (*)(GLenum ,  GLuint                                                                                 ))LoadedOpenGLFunctions[UNI_TMAX + 33])
-#define glRenderbufferStorage      ((GLvoid  APIENTRY (*)(GLenum ,  GLenum ,  GLsizei  ,  GLsizei                                                          ))LoadedOpenGLFunctions[UNI_TMAX + 34])
-#define glFramebufferTexture2D     ((GLvoid  APIENTRY (*)(GLenum ,  GLenum ,  GLenum   ,  GLuint   ,  GLint                                                ))LoadedOpenGLFunctions[UNI_TMAX + 35])
-#define glFramebufferRenderbuffer  ((GLvoid  APIENTRY (*)(GLenum ,  GLenum ,  GLenum   ,  GLuint                                                           ))LoadedOpenGLFunctions[UNI_TMAX + 36])
+#define glCreateProgram            ((GLuint  APIENTRY (*)(GLvoid                                   ))LoadedOpenGLFunctions[UNI_TMAX +  1])
+#define glDeleteProgram            ((GLvoid  APIENTRY (*)(GLuint                                   ))LoadedOpenGLFunctions[UNI_TMAX +  2])
+#define glValidateProgram          ((GLvoid  APIENTRY (*)(GLuint                                   ))LoadedOpenGLFunctions[UNI_TMAX +  3])
+#define glLinkProgram              ((GLvoid  APIENTRY (*)(GLuint                                   ))LoadedOpenGLFunctions[UNI_TMAX +  4])
+#define glUseProgram               ((GLvoid  APIENTRY (*)(GLuint                                   ))LoadedOpenGLFunctions[UNI_TMAX +  5])
+#define glGetProgramInfoLog        ((GLvoid  APIENTRY (*)(GLuint ,  GLint  ,  GLint*   ,  GLchar*  ))LoadedOpenGLFunctions[UNI_TMAX +  6])
+#define glGetShaderInfoLog         ((GLvoid  APIENTRY (*)(GLuint ,  GLint  ,  GLint*   ,  GLchar*  ))LoadedOpenGLFunctions[UNI_TMAX +  7])
+#define glGetProgramiv             ((GLvoid  APIENTRY (*)(GLuint ,  GLenum ,  GLint*               ))LoadedOpenGLFunctions[UNI_TMAX +  8])
+#define glGetShaderiv              ((GLvoid  APIENTRY (*)(GLuint ,  GLenum ,  GLint*               ))LoadedOpenGLFunctions[UNI_TMAX +  9])
+#define glCreateShader             ((GLuint  APIENTRY (*)(GLenum                                   ))LoadedOpenGLFunctions[UNI_TMAX + 10])
+#define glDeleteShader             ((GLvoid  APIENTRY (*)(GLuint                                   ))LoadedOpenGLFunctions[UNI_TMAX + 11])
+#define glAttachShader             ((GLvoid  APIENTRY (*)(GLuint ,  GLuint                         ))LoadedOpenGLFunctions[UNI_TMAX + 12])
+#define glShaderSource             ((GLvoid  APIENTRY (*)(GLuint ,  GLuint ,  GLchar** ,  GLuint*  ))LoadedOpenGLFunctions[UNI_TMAX + 13])
+#define glCompileShader            ((GLvoid  APIENTRY (*)(GLuint                                   ))LoadedOpenGLFunctions[UNI_TMAX + 14])
+#define glGetAttribLocation        ((GLint   APIENTRY (*)(GLuint ,  GLchar*                        ))LoadedOpenGLFunctions[UNI_TMAX + 15])
+#define glGetUniformLocation       ((GLint   APIENTRY (*)(GLuint ,  GLchar*                        ))LoadedOpenGLFunctions[UNI_TMAX + 16])
+#define glEnableVertexAttribArray  ((GLvoid  APIENTRY (*)(GLint                                    ))LoadedOpenGLFunctions[UNI_TMAX + 17])
+#define glVertexAttribPointer      ((GLvoid  APIENTRY (*)(GLuint ,  GLint  ,  GLenum   ,  GLboolean,\
+                                                          GLsizei,  GLvoid*                        ))LoadedOpenGLFunctions[UNI_TMAX + 18])
+#define glActiveTexture            ((GLvoid  APIENTRY (*)(GLenum                                   ))LoadedOpenGLFunctions[UNI_TMAX + 19])
+#define glTexImage3D               ((GLvoid  APIENTRY (*)(GLenum ,  GLint  ,  GLenum   ,  GLsizei  ,\
+                                                          GLsizei,  GLsizei,  GLint    ,  GLenum   ,\
+                                                          GLenum ,  GLvoid*                        ))LoadedOpenGLFunctions[UNI_TMAX + 20])
+#define glTexSubImage3D            ((GLvoid  APIENTRY (*)(GLenum ,  GLint  ,  GLint    ,  GLint    ,\
+                                                          GLint  ,  GLsizei,  GLsizei  ,  GLsizei  ,\
+                                                          GLenum ,  GLenum ,  GLvoid*              ))LoadedOpenGLFunctions[UNI_TMAX + 21])
+#define glGenBuffers               ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                        ))LoadedOpenGLFunctions[UNI_TMAX + 22])
+#define glBindBuffer               ((GLvoid  APIENTRY (*)(GLenum ,  GLuint                         ))LoadedOpenGLFunctions[UNI_TMAX + 23])
+#define glBufferData               ((GLvoid  APIENTRY (*)(GLenum ,  GLsizei,  GLvoid*  ,  GLenum   ))LoadedOpenGLFunctions[UNI_TMAX + 24])
+#define glBufferSubData            ((GLvoid  APIENTRY (*)(GLenum ,  GLint  ,  GLsizei  ,  GLvoid*  ))LoadedOpenGLFunctions[UNI_TMAX + 25])
+#define glDeleteBuffers            ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                        ))LoadedOpenGLFunctions[UNI_TMAX + 26])
+#define glMapBuffer                ((GLvoid* APIENTRY (*)(GLenum ,  GLenum                         ))LoadedOpenGLFunctions[UNI_TMAX + 27])
+#define glUnmapBuffer              ((GLvoid  APIENTRY (*)(GLenum                                   ))LoadedOpenGLFunctions[UNI_TMAX + 28])
+#define glGenFramebuffers          ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                        ))LoadedOpenGLFunctions[UNI_TMAX + 29])
+#define glGenRenderbuffers         ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                        ))LoadedOpenGLFunctions[UNI_TMAX + 30])
+#define glDeleteFramebuffers       ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                        ))LoadedOpenGLFunctions[UNI_TMAX + 31])
+#define glDeleteRenderbuffers      ((GLvoid  APIENTRY (*)(GLsizei,  GLuint*                        ))LoadedOpenGLFunctions[UNI_TMAX + 32])
+#define glBindFramebuffer          ((GLvoid  APIENTRY (*)(GLenum ,  GLuint                         ))LoadedOpenGLFunctions[UNI_TMAX + 33])
+#define glBindRenderbuffer         ((GLvoid  APIENTRY (*)(GLenum ,  GLuint                         ))LoadedOpenGLFunctions[UNI_TMAX + 34])
+#define glRenderbufferStorage      ((GLvoid  APIENTRY (*)(GLenum ,  GLenum ,  GLsizei  ,  GLsizei  ))LoadedOpenGLFunctions[UNI_TMAX + 35])
+#define glFramebufferTexture2D     ((GLvoid  APIENTRY (*)(GLenum ,  GLenum ,  GLenum   ,  GLuint   ,\
+                                                          GLint                                    ))LoadedOpenGLFunctions[UNI_TMAX + 36])
+#define glFramebufferRenderbuffer  ((GLvoid  APIENTRY (*)(GLenum ,  GLenum ,  GLenum   ,  GLuint   ))LoadedOpenGLFunctions[UNI_TMAX + 37])
 
 #ifndef countof
 #define countof(a) (sizeof(a) / sizeof(*(a)))
@@ -246,8 +256,8 @@
 
 
 typedef struct _FTEX {
-    GLenum type;
-    GLuint indx, xdim, ydim, zdim;
+    GLenum trgt, type, mode;
+    GLuint xdim, ydim, zdim, indx;
     struct _FVBO *orig;
 } FTEX;
 
@@ -284,6 +294,8 @@ FTEX  *BindTex(FVBO  *vobj, GLuint bind, GLuint mode);
 GLuint MakeTex(FTEX  *retn, GLuint xdim, GLuint ydim, GLuint  zdim,
                GLenum trgt, GLenum wrap, GLint  tmag, GLint   tmin,
                GLenum type, GLenum frmt, GLenum mode, GLvoid *data);
+GLenum LoadTex(FTEX  *retn, GLint  xpos, GLint  ypos, GLint   zpos,
+               GLuint xdim, GLuint ydim, GLuint zdim, GLvoid *data);
 
 FVBO  *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[], GLenum elem,
                GLuint catr, UNIF *patr, GLuint cuni, UNIF *puni, GLuint ctex);
