@@ -145,13 +145,29 @@
 /** Exact matching              **/ #define TXT_EXAC 27
 /** [At least one:]             **/ #define TXT_OGRP 28
 /** [All at once:]              **/ #define TXT_AGRP 29
-/** Random selection            **/ #define TXT_SRND 30
-/** Group selection             **/ #define TXT_SGRP 31
+/** Random selection:           **/ #define TXT_SRND 30
+/** Group selection:            **/ #define TXT_SGRP 31
 /** Add                         **/ #define TXT_BADD 32
 /** Copies                      **/ #define TXT_BDUP 33
-/** Total:                      **/ #define TXT_ITTL 34
-/** More options...             **/ #define TXT_MORE 35
+/** Selected:                   **/ #define TXT_SELE 34
+/** Loaded:                     **/ #define TXT_LOAD 35
 /** GO!                         **/ #define TXT_GOGO 36
+
+/// /// /// /// /// /// /// /// /// ENGC.CTLS array indices
+/**                             **/ #define CTL_CAPT ctls[ 0]
+/**                             **/ #define CTL_FLTR ctls[ 1]
+/**                             **/ #define CTL_EXAC ctls[ 2]
+/**                             **/ #define CTL_OGRP ctls[ 3]
+/**                             **/ #define CTL_SGRP ctls[ 4]
+/**                             **/ #define CTL_SPEC ctls[ 5]
+/**                             **/ #define CTL_BADD ctls[ 6]
+/**                             **/ #define CTL_SRND ctls[ 7]
+/**                             **/ #define CTL_RGPU ctls[ 8]
+/**                             **/ #define CTL_BDUP ctls[ 9]
+/**                             **/ #define CTL_SELE ctls[10]
+/**                             **/ #define CTL_OPTS ctls[11]
+/**                             **/ #define CTL_GOGO ctls[12]
+/**                             **/ #define CTL_CHAR ctls[13]
 
 /// behaviour/effect unit info (write-once, read-only)
 typedef struct _BINF {
@@ -228,6 +244,7 @@ typedef struct _PICT {
 struct ENGC {
     MENU    *mspr,  /// per-sprite context menu
             *mctx;  /// engine`s main context menu
+    CTRL    *ctls;  /// GUI controls array
     T4FV    *data;  /// main display sequence passed to the renderer
     ENGD    *engd;  /// rendering engine handle
     LINF    *libs;  /// sprite libraries linked list
@@ -245,8 +262,10 @@ struct ENGC {
              flgs,  /// client-specific flags, e.g. effects +/- (CSF_ prefix)
              ftmp;  /// temporary storage for engine flags
     float    tdil;  /// time dilation coeff (faster is > 1, slower is < 1)
-    T2IV     dims;  /// drawing area dimensions
     T3IV     ppos;  /// mouse pointer position (z = flags)
+    T2IV     dpos,  /// drawing area position
+             dims,  /// drawing area dimensions
+             idim;  /// tray icon dimensions
 };
 
 
@@ -1794,14 +1813,106 @@ ENGC *eInitializeEngine(char *fcnf) {
 
 
 
+intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    INCBIN("../exec/icon.gif", MainIcon);
+
+    switch (ctrl->uuid) {
+        case TXT_FLTR:
+            ctrl->engc->CTL_EXAC.fe2c(&ctrl->engc->CTL_EXAC, MSG__ENB, data);
+            ctrl->engc->CTL_OGRP.fe2c(&ctrl->engc->CTL_OGRP, MSG__ENB, data);
+            break;
+
+        case TXT_EXAC:
+            break;
+
+        case TXT_SRND:
+            ctrl->engc->CTL_RGPU.fe2c(&ctrl->engc->CTL_RGPU, MSG__ENB, data);
+            ctrl->engc->CTL_BDUP.fe2c(&ctrl->engc->CTL_BDUP, MSG__ENB, data);
+            break;
+
+        case TXT_BDUP:
+            break;
+
+        case TXT_GOGO: {
+            LINF *libs;
+            ENGC *engc = ctrl->engc;
+            AINF igif = {};
+            intptr_t icon;
+            char *text;
+
+            /// [TODO:] substitute this by GUI selection
+            for (icon = 0; icon < engc->lcnt; icon++)
+                engc->libs[icon].icnt = 1;
+            /// [TODO:] resize progressbar elsewhere
+            engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PLIM, engc->lcnt);
+
+            text = malloc(32 + strlen(engc->tran[TXT_LOAD]));
+            cEngineCallback(engc->engd, ECB_LOAD, ~0);
+            sprintf(text, "%s %d / %d", engc->tran[TXT_LOAD], 0, engc->lcnt);
+            engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PTXT, (intptr_t)text);
+            engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PPOS, 0);
+            for (data = icon = 0; icon < engc->lcnt; icon++) {
+                LoadLib(&engc->libs[icon], engc->engd);
+                if (engc->libs[icon].icnt) {
+                    sprintf(text, "%s %d / %d",
+                            engc->tran[TXT_LOAD], ++data, engc->lcnt);
+                    engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PTXT,
+                                       (intptr_t)text);
+                    engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PPOS, data);
+                }
+            }
+            free(text);
+            cEngineLoadAnimAsync(engc->engd, (uint8_t*)"/Icon/",
+                                (uint8_t*)MainIcon, &igif);
+            cEngineCallback(engc->engd, ECB_LOAD, 0);
+
+            engc->parr = 0;
+            engc->pmax = engc->pcnt = 0;
+            for (libs = engc->libs, icon = 0; icon < engc->lcnt; icon++)
+                if (AppendSpriteArr(&engc->libs[icon], engc)
+                && (++libs - engc->libs <= icon))
+                    libs[-1] = engc->libs[icon];
+            if (libs - engc->libs < engc->lcnt) {
+                engc->lcnt = libs - engc->libs;
+                engc->libs = realloc(engc->libs,
+                                     engc->lcnt * sizeof(*engc->libs));
+            }
+            igif.fcnt = 0;
+            igif.xdim = engc->idim.x;
+            igif.ydim = engc->idim.y;
+            igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
+            cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
+            icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
+                                 igif.time, igif.xdim, igif.ydim);
+
+            engc->CTL_CAPT.fe2c(&engc->CTL_CAPT, MSG__SHW, 0);
+            engc->data = (engc->pmax)? calloc(engc->pmax,
+                                              sizeof(*engc->data)) : 0;
+            cEngineRunMainLoop(engc->engd, engc->dpos.x, engc->dpos.y,
+                               engc->dims.x + engc->dpos.x,
+                               engc->dims.y + engc->dpos.y, engc->ftmp,
+                               FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
+            free(engc->data);
+
+            rFreeTrayIcon(icon);
+            for (icon = 0; icon < engc->pcnt; icon++)
+                free(engc->parr[icon]);
+            free(engc->parr);
+            engc->CTL_CAPT.fe2c(&engc->CTL_CAPT, MSG__SHW, ~0);
+            break;
+        }
+    }
+    return 0;
+}
+
+
+
 int linfcmp(const void *a, const void *b) {
     return strcmp(((LINF*)a)->name, ((LINF*)b)->name);
 }
 
 void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
                     long xpos, long ypos, ulong xdim, ulong ydim) {
-    INCBIN("../exec/icon.gif", MainIcon);
-
     #define DEF_ENDL "\r\n"
     static uint32_t
         uCOM[] = {COM_RGPU, COM_SHOW, COM_DRAW, COM_OPAQ,
@@ -1811,60 +1922,91 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
        *uSTR[] = {"GPU",    "Show",   "Draw",   "Opaque",
                   "wPBO",   "wBGRA",  "wRegion"},
        *uSTF[] = {"Effects"};
-    LINF *libs;
-    AINF igif = {};
     char temp[256], *save = 0;
-    intptr_t icon;
-    long iter;
+    long iter, indx;
 
-    engc->dims = (T2IV){{xdim - xpos, ydim - ypos}};
+    engc->idim = (T2IV){{xico, yico}};
+    engc->dpos = (T2IV){{xpos, ypos}};
+    engc->dims = (T2IV){{xdim - engc->dpos.x, ydim - engc->dpos.y}};
 
     /// sort engine`s libraries by name, initialize the rendering engine
     qsort(engc->libs, engc->lcnt, sizeof(*engc->libs), linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc->engd);
-    cEngineLoadAnimAsync(engc->engd,
-                        (uint8_t*)"/Icon/", (uint8_t*)MainIcon, &igif);
     for (iter = 0; iter < engc->lcnt; iter++)
         LoadTemplateFromLib(&engc->libs[iter], engc->engd);
     cEngineCallback(engc->engd, ECB_LOAD, 0);
     cEngineCallback(engc->engd, ECB_LOAD, ~0);
 
-    igif.fcnt = 0;
-    igif.xdim = xico;
-    igif.ydim = yico;
-    igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
-    cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
+    /// primary initialization complete, now creating GUI
+    ///  0. [ FIRST AND FOREMOST! ] do not forget to edit
+    ///     the appropriate CTL_ constants after swapping
+    ///     or adding controls
+    ///  1. main window`s "dimensions" are just spaces to
+    ///     leave between window edge and actual controls
+    CTRL ctls[] =
+   {{0, engc, TXT_CAPT,            FCT_WNDW           , 1,  1,  1,  1, 0   },
+    {0, engc, TXT_FLTR,            FCT_CBOX           , 0,  0, 19,  2, FC2E},
+    {0, engc, TXT_EXAC, FCP_VERT | FCT_CBOX           , 0,  0, 19,  2, FC2E},
+    {0, engc, TXT_OGRP, FCP_VERT | FCT_LIST           , 0,  0, 19, 16, FC2E},
+    {0, engc, TXT_SGRP, FCP_VERT | FCT_TEXT           , 0,  1, 19,  2, 0   },
+    {0, engc, TXT_SPEC, FCP_VERT | FCT_SPIN           , 0,  0,  9,  3, 0   },
+    {0, engc, TXT_BADD, FCP_BOTH | FCT_BUTN           , 1, -3,  9,  3, FC2E},
+    {0, engc, TXT_SRND, FCP_VERT | FCT_CBOX | FSX_LEFT, 0,  1, 19,  2, FC2E},
+    {0, engc, TXT_RGPU, FCP_VERT | FCT_SPIN           , 0,  0,  9,  3, FC2E},
+    {0, engc, TXT_BDUP, FCP_BOTH | FCT_CBOX           , 1, -3,  9,  3, FC2E},
+    {0, engc, TXT_SELE, FCP_VERT | FCT_PBAR           , 0,  1, 19,  3, 0   },
+    {0, engc, TXT_OPTS, FCP_VERT | FCT_BUTN           , 0,  1,  9,  6, FC2E},
+    {0, engc, TXT_GOGO, FCP_BOTH | FCT_BUTN | FSB_DFLT, 1, -6,  9,  6, FC2E},
+    {0, engc, TXT_CHAR, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, 0   },
+    {}};
+    long xmax, ymax, xoff, yoff;
 
-    icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
-                         igif.time, igif.xdim, igif.ydim);
+    xmax = ymax = xoff = yoff = 0;
+    engc->ctls = malloc(sizeof(ctls));
+    for (iter = 0; iter < countof(ctls) - 1; iter++) {
+        engc->ctls[iter] = ctls[iter];
+        if (iter)
+            engc->ctls[iter].prev = &engc->ctls[0];
+        rMakeControl(&engc->ctls[iter], &xoff, &yoff,
+                   (((engc->ctls[iter].flgs & FCT_TTTT) == FCT_WNDW) ||
+                    ((engc->ctls[iter].flgs & FCT_TTTT) == FCT_TEXT) ||
+                    ((engc->ctls[iter].flgs & FCT_TTTT) == FCT_BUTN) ||
+                    ((engc->ctls[iter].flgs & FCT_TTTT) == FCT_CBOX) ||
+                    ((engc->ctls[iter].flgs & FCT_TTTT) == FCT_RBOX))?
+                      engc->tran[engc->ctls[iter].uuid] : 0);
+        xmax = (xmax > xoff)? xmax : xoff;
+        ymax = (ymax > yoff)? ymax : yoff;
+    }
+    engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PLIM, engc->lcnt);
+    engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PPOS, 0);
+    engc->CTL_SPEC.fe2c(&engc->CTL_SPEC, MSG_NSET, (100 << 16) | 100);
+    engc->CTL_RGPU.fe2c(&engc->CTL_RGPU, MSG_NSET, 50000 << 16);
+    engc->CTL_OGRP.fe2c(&engc->CTL_OGRP, MSG_LCOL,
+                       (intptr_t)engc->tran[TXT_OGRP]);
+    for (indx = 0; indx < engc->ccnt; indx++)
+        engc->CTL_OGRP.fe2c(&engc->CTL_OGRP, MSG_LADD,
+                           (intptr_t)engc->ctgs[indx].name);
 
-    for (iter = 0; iter < engc->lcnt; iter++)
-        LoadLib(&engc->libs[iter], engc->engd);
-    cEngineCallback(engc->engd, ECB_LOAD, 0);
+    engc->CTL_FLTR.fe2c(&engc->CTL_FLTR, MSG_BCLK, 0);
+    engc->CTL_FLTR.fc2e(&engc->CTL_FLTR, MSG_BCLK, 0);
+    engc->CTL_SRND.fe2c(&engc->CTL_SRND, MSG_BCLK, 0);
+    engc->CTL_SRND.fc2e(&engc->CTL_SRND, MSG_BCLK, 0);
+
+    engc->CTL_CAPT.fe2c(&engc->CTL_CAPT, MSG_WSZC,
+                       (uint16_t)xmax | ((uint32_t)ymax << 16));
 
     engc->seed = time(0);
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);
 
-    for (libs = engc->libs, iter = 0; iter < engc->lcnt; iter++)
-        if (AppendSpriteArr(&engc->libs[iter], engc)
-        && (++libs - engc->libs <= iter))
-            libs[-1] = engc->libs[iter];
-    if (libs - engc->libs < engc->lcnt) {
-        engc->lcnt = libs - engc->libs;
-        engc->libs = realloc(engc->libs, engc->lcnt * sizeof(*engc->libs));
-    }
-    engc->data = (engc->pmax)? calloc(engc->pmax, sizeof(*engc->data)) : 0;
-    cEngineRunMainLoop(engc->engd, xpos, ypos, xdim, ydim, engc->ftmp,
-                       FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
-    rFreeTrayIcon(icon);
+    rInternalMainLoop(&engc->ctls[0]);
+
+    for (iter = countof(ctls) - 2; iter >= 0; iter--)
+        rFreeControl(&engc->ctls[iter]);
+    free(engc->ctls);
+
     FreeMenu(&engc->mspr);
     FreeMenu(&engc->mctx);
     FreeLocalization(&engc->tran);
-
-    free(engc->data);
-    for (iter = 0; iter < engc->pcnt; iter++)
-        free(engc->parr[iter]);
-    free(engc->parr);
 
     for (; engc->lcnt; engc->lcnt--)
         FreeLib(&engc->libs[engc->lcnt - 1]);
@@ -1877,6 +2019,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
     cEngineCallback(engc->engd, ECB_QUIT, 0);
 
+    /// now saving configs and exiting
     sprintf(temp, "%0.2f", engc->tdil);
     Concatenate(&save, "Language,", engc->lang, 0);
     Concatenate(&save, DEF_ENDL, "Time,", temp, 0);
@@ -1895,13 +2038,4 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     free(save);
     free(engc);
     #undef DEF_ENDL
-}
-
-
-
-void __DEL_ME__SetLibUses(ENGC *engc, int32_t uses) {
-    long iter;
-
-    for (iter = 0; iter < engc->lcnt; iter++)
-        engc->libs[iter].icnt = labs(uses);
 }

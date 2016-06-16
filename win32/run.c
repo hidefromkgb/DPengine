@@ -377,6 +377,851 @@ void rFreeTrayIcon(intptr_t icon) {
 
 
 
+void ResizeSpinControl(CTRL *ctrl) {
+    HWND edit, spin;
+    RECT dims;
+
+    edit = (HWND)ctrl->priv[0];
+    spin = (HWND)ctrl->priv[1];
+
+    SendMessage(spin, UDM_SETBUDDY, (WPARAM)edit, 0);
+    /// this is slow! somehow speed it up (e.g. restore from the saved value)
+    SendMessage(spin, UDM_SETPOS32, 0, SendMessage(spin, UDM_GETPOS32, 0, 0));
+    /// also slow! same as above
+    GetClientRect(edit, &dims);
+    dims.top = (dims.bottom - ctrl->priv[4]) >> 1;
+    SendMessage(edit, EM_SETRECT, 0, (LPARAM)&dims);
+}
+
+
+
+void TextInRect(HDC devc, char *text, RECT *rect) {
+    if (text) {
+        if (OldWin32())
+            DrawTextA(devc, text, -1, rect,
+                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        else
+            DrawTextW(devc, (LPWSTR)text, -1, rect,
+                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+}
+
+
+
+/// PRIV:
+///  0:
+///  1:
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+LRESULT APIENTRY IBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
+/*
+    switch (uMsg) {
+        case WM_ERASEBKGND:
+            return ~0;
+
+        case WM_PAINT: {
+            CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+            LINF *linf = (LINF*)ctrl->auxd.x;
+/// TODO: not barr[0], but barr[tmpl]!
+            AINF *anim = &linf->barr[0].unit[0];
+            HANDLE devc, hdib;
+            PAINTSTRUCT pstr;
+            HBRUSH btnf;
+            RECT rect;
+
+            btnf = GetSysColorBrush(COLOR_BTNFACE);
+            if (!ctrl->priv[3] && anim->uuid) {
+                AINF draw = *anim;
+                BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader), 0, 0,
+                                    1, CHAR_BIT * sizeof(*draw.time), BI_RGB}};
+                draw.fcnt = 0;
+                bmpi.bmiHeader.biWidth = draw.xdim;
+                bmpi.bmiHeader.biHeight = -draw.ydim;
+                devc = CreateCompatibleDC(0);
+                hdib = CreateDIBSection(devc, &bmpi, DIB_RGB_COLORS,
+                                       (void*)&draw.time, 0, 0);
+                SelectObject(devc, hdib);
+                rect = (RECT){0, 0, draw.xdim, draw.ydim};
+                FillRect(devc, &rect, btnf);
+                EngineCallback(ctrl->engc->engh, ECB_DRAW, (intptr_t)&draw);
+                ctrl->priv[3] = (intptr_t)devc;
+                ctrl->priv[4] = (intptr_t)hdib;
+            }
+            devc = BeginPaint(hWnd, &pstr);
+
+            GetClientRect(hWnd, &rect);
+            BitBlt(devc, (rect.right - (long)anim->xdim) / 2,
+                   rect.bottom - (long)anim->ydim - 2 * ctrl->priv[2] * linf->spin.ydim,
+                   anim->xdim, anim->ydim, (HDC)ctrl->priv[3], 0, 0, SRCCOPY);
+
+            long down = rect.bottom;
+            rect = (RECT){0, down - 2 * ctrl->priv[2] * linf->spin.ydim, rect.right, down - ctrl->priv[2] * linf->spin.ydim};
+            FillRect(devc, &rect, btnf);
+            SetBkMode(devc, TRANSPARENT);
+            SetTextColor(devc, GetSysColor(COLOR_BTNTEXT));
+            SelectObject(devc, (HFONT)ctrl->priv[1]);
+
+            char *temp = ConvertUTF8(linf->name);
+            TextInRect(devc, temp, &rect);
+            free(temp);
+
+            down -= (long)anim->ydim + 2 * ctrl->priv[2] * linf->spin.ydim;
+            rect = (RECT){0, 0, rect.right, down};
+            FillRect(devc, &rect, btnf);
+            EndPaint(hWnd, &pstr);
+            return 0;
+        }
+    }
+//*/
+    return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
+}
+
+
+
+/// PRIV:
+///  0:
+///  1:
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+#define SCR_PLUS 10
+LRESULT APIENTRY SBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
+/*
+    switch (uMsg) {
+        case WM_SIZE:
+        case WM_VSCROLL:
+        case WM_MOUSEWHEEL: {
+            CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+            SCROLLINFO sinf = {sizeof(SCROLLINFO),
+                               SIF_PAGE | SIF_POS | SIF_RANGE | SIF_TRACKPOS};
+
+            GetScrollInfo(hWnd, SB_VERT, &sinf);
+            if (uMsg == WM_SIZE) {
+                sinf.fMask = SIF_PAGE;
+                sinf.nPage = HIWORD(lPrm);
+                if (ctrl) {
+                    CTRL *root = ctrl;
+                    LINF *libs, *lbgn;
+                    LONG xoff, yoff, xacc, yacc,
+                         xspc, yspc, xmax, ymax;
+
+                    while (root->prev)
+                        root = root->prev;
+
+                    xspc = (uint16_t)(root->priv[2]);
+                    yspc = (uint16_t)(root->priv[2] >> 16);
+                    xoff = xspc * ((root->auxd.x) & 0x0F);
+                    yoff = yspc * ((root->auxd.x >> 4) & 0x0F);
+                    xacc = xoff;
+                    yacc = yoff;
+                    ymax = 0;
+                    xmax = LOWORD(lPrm) - xoff;
+                    lbgn = libs = ctrl->engc->libs;
+                    while (libs || lbgn) {
+                        if (libs)
+                            xacc -= libs->info.xdim - xoff;
+                        if ((xacc > xmax) || !libs) {
+                            xacc = xoff;
+                            if (!ymax && libs)
+                                ymax = 2 * yspc * libs->spin.ydim - libs->info.ydim;
+                            while (lbgn != libs) {
+                                SetWindowPos((HWND)lbgn->info.priv[0],
+                                              HWND_TOP, xacc, yacc - sinf.nPos,
+                                             -lbgn->info.xdim, ymax,
+                                              SWP_SHOWWINDOW);
+                                SetWindowPos((HWND)lbgn->spin.priv[0],
+                                              HWND_TOP, 0, ymax - yspc * lbgn->spin.ydim,
+                                              max(-lbgn->info.xdim, xspc * lbgn->spin.xdim), yspc * lbgn->spin.ydim,
+                                              SWP_SHOWWINDOW);
+                                ResizeSpinControl((HWND)lbgn->spin.priv[0],
+                                                  (HWND)lbgn->spin.priv[1]);
+                                xacc -= lbgn->info.xdim - xoff;
+                                lbgn = (LINF*)lbgn->prev;
+                            }
+                            yacc += ymax + yoff;
+                            if (libs) {
+                                xacc = xoff + max(-libs->info.xdim, xspc * libs->spin.xdim);
+                                ymax = 2 * yspc * libs->spin.ydim - libs->info.ydim;
+                            }
+                        }
+                        if (libs) {
+                            ymax = max(ymax, 2 * yspc * libs->spin.ydim - libs->info.ydim);
+                            libs = (LINF*)libs->prev;
+                        }
+                    }
+                    ctrl->fe2c(ctrl, MSG_SMAX, yacc / yspc);
+                }
+                SetScrollInfo(hWnd, SB_VERT, &sinf, TRUE);
+                if ((sinf.nPos <= sinf.nMin)
+                ||  (sinf.nPos != sinf.nMax - sinf.nPage + SCR_PLUS))
+                    return 0;
+            }
+            else {
+                if (uMsg == WM_MOUSEWHEEL)
+                    sinf.nPos -= (int16_t)HIWORD(wPrm)
+                               * ((wPrm & MK_SHIFT)? 5 : 1);
+                else {
+                    switch (LOWORD(wPrm)) {
+                        case SB_LINEUP:
+                            sinf.nPos -= SCR_PLUS;
+                            break;
+
+                        case SB_LINEDOWN:
+                            sinf.nPos += SCR_PLUS;
+                            break;
+
+                        case SB_PAGEUP:
+                            sinf.nPos -= sinf.nPage;
+                            break;
+
+                        case SB_PAGEDOWN:
+                            sinf.nPos += sinf.nPage;
+                            break;
+
+                        case SB_THUMBTRACK:
+                            sinf.nPos = sinf.nTrackPos;
+                            break;
+
+                        case SB_TOP:
+                            sinf.nPos = sinf.nMin;
+                            break;
+
+                        case SB_BOTTOM:
+                            sinf.nPos = sinf.nMax;
+                            break;
+
+                        case SB_ENDSCROLL:
+                        case SB_THUMBPOSITION:
+                        default:
+                            return 0;
+                    }
+                }
+                sinf.fMask = SIF_POS;
+                sinf.nPos = min(sinf.nMax - sinf.nPage + SCR_PLUS,
+                            max(sinf.nMin, sinf.nPos));
+                SetScrollInfo(hWnd, SB_VERT, &sinf, TRUE);
+            }
+            if ((sinf.nPos -= ctrl->priv[1]))
+                ScrollWindow(hWnd, 0, -sinf.nPos, 0, 0);
+            ctrl->priv[1] += sinf.nPos;
+            return 0;
+        }
+    }
+//*/
+    return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
+}
+#undef SCR_PLUS
+
+
+
+/// PRIV:
+///  0: HWND
+///  1: FONT
+///  2: (fontmul.x) | (fontmul.y << 16)
+///  3: (wndsize.x) | (wndsize.y << 16)
+///  4: spin control text field alignment coeff
+///  5:
+///  6:
+///  7:
+LRESULT APIENTRY OptProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
+    CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+
+    switch (uMsg) {
+        case WM_COMMAND:
+            if (lPrm) {
+                ctrl = (CTRL*)GetWindowLongPtr((HWND)lPrm, GWLP_USERDATA);
+                if (ctrl->fc2e)
+                    ctrl->fc2e(ctrl, MSG_BCLK, BST_CHECKED ==
+                               SendMessage((HWND)lPrm, BM_GETCHECK, 0, 0));
+            }
+            return 0;
+
+        case WM_GETMINMAXINFO:
+            if (ctrl) {
+                ((MINMAXINFO*)lPrm)->ptMinTrackSize.x =
+                    (uint16_t)(ctrl->priv[3]);
+                ((MINMAXINFO*)lPrm)->ptMinTrackSize.y =
+                    (uint16_t)(ctrl->priv[3] >> 16);
+            }
+            return 0;
+
+        case WM_CLOSE:
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            return 0;
+/*
+        case WM_SIZE:
+            if ((uMsg = (ctrl->auxd.x >> 8) & 0xFF)) {
+                RECT rCtl, rWnd;
+                POINT pCtl;
+
+                GetWindowRect(hWnd, &rWnd);
+                GetWindowRect((HWND)ctrl[uMsg].priv[0], &rCtl);
+                pCtl = (POINT){rCtl.left, rCtl.top};
+                ScreenToClient(hWnd, &pCtl);
+                SetWindowPos((HWND)ctrl[uMsg].priv[0],
+                              HWND_TOP, pCtl.x, pCtl.y,
+                              rWnd.right  - GetSystemMetrics(SM_CXFRAME)
+                            - rCtl.left   - (0x0F & (ctrl->auxd.x))
+                                          * (uint16_t)(ctrl->priv[2]),
+                              rWnd.bottom - GetSystemMetrics(SM_CYFRAME)
+                            - rCtl.top    - (0x0F & (ctrl->auxd.x >> 4))
+                                          * (uint16_t)(ctrl->priv[2] >> 16),
+                              SWP_SHOWWINDOW);
+            }
+            return 0;
+
+        case WM_MOUSEWHEEL:
+            if ((uMsg = (ctrl->auxd.x >> 8) & 0xFF)) {
+                POINT cpos = {(int16_t)LOWORD(lPrm), (int16_t)HIWORD(lPrm)};
+                RECT rect;
+
+                GetWindowRect((HWND)ctrl[uMsg].priv[0], &rect);
+                if (PtInRect(&rect, cpos))
+                    return SendMessage((HWND)ctrl[uMsg].priv[0],
+                                        WM_MOUSEWHEEL, wPrm, lPrm);
+            }
+            uMsg = WM_MOUSEWHEEL;
+//*/
+    }
+    return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
+}
+
+
+
+/// PRIV:
+///  0: HWND
+///  1: HWND-spin
+///  2: minimum
+///  3: maximum
+///  4: text field alignment coeff
+///  5:
+///  6:
+///  7: original procedure
+LRESULT APIENTRY SpinProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
+    static char keys[] =
+        {VK_BACK, VK_END, VK_HOME, VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN,
+         VK_DELETE, '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
+
+    CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+    DWORD bcur, ecur;
+    char text[128];
+
+    switch (uMsg) {
+//        case WM_ERASEBKGND:
+//            return ~0;
+
+        case WM_GETDLGCODE:
+            lPrm = DLGC_WANTARROWS | DLGC_WANTCHARS;
+            for (uMsg = 0; uMsg < sizeof(keys) / sizeof(*keys); uMsg++)
+                if (wPrm == keys[uMsg])
+                    return lPrm;
+            if ((ctrl->priv[2] < 0) && (wPrm == '-')) {
+                SendMessage(hWnd, WM_GETTEXT, 128, (LPARAM)text);
+                SendMessage(hWnd, EM_GETSEL, (WPARAM)&bcur, (LPARAM)&ecur);
+                if (!bcur && (ecur || !strchr(text, wPrm)))
+                    return lPrm;
+            }
+            return 0;
+    }
+    return CallWindowProc((WNDPROC)ctrl->priv[7], hWnd, uMsg, wPrm, lPrm);
+}
+
+
+
+/// PRIV:
+///  0: HWND
+///  1: FONT
+///  2: text to draw
+///  3: progress position
+///  4: progress maximum
+///  5:
+///  6:
+///  7: original procedure
+LRESULT APIENTRY PBarProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
+    CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+    LRESULT retn, lcur;
+    HANDLE devc, clip;
+    PAINTSTRUCT pstr;
+    RECT rect;
+
+    switch (uMsg) {
+        case WM_PAINT:
+            GetClientRect(hWnd, &rect);
+            lcur = rect.right * ctrl->priv[3] / ctrl->priv[4];
+
+            devc = BeginPaint(hWnd, &pstr);
+            retn = CallWindowProc((WNDPROC)ctrl->priv[7],
+                                   hWnd, uMsg, (WPARAM)devc, lPrm);
+            SetBkMode(devc, TRANSPARENT);
+            SelectObject(devc, (HFONT)ctrl->priv[1]);
+            for (uMsg = 0; uMsg <= 1; uMsg++) {
+                clip = CreateRectRgn((uMsg)? lcur : 0, 0,
+                                    (!uMsg)? lcur : rect.right, rect.bottom);
+                SetTextColor(devc,  (!uMsg)? GetSysColor(COLOR_HIGHLIGHTTEXT)
+                                           : GetSysColor(COLOR_MENUTEXT));
+                SelectClipRgn(devc, clip);
+                DeleteObject(clip);
+                TextInRect(devc, (char*)ctrl->priv[2], &rect);
+            }
+            SelectClipRgn(devc, 0);
+            EndPaint(hWnd, &pstr);
+            return retn;
+    }
+    return CallWindowProc((WNDPROC)ctrl->priv[7], hWnd, uMsg, wPrm, lPrm);
+}
+
+
+
+intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG__SHW:
+            ShowWindow((HWND)ctrl->priv[0], (data)? SW_SHOW : SW_HIDE);
+            return 0;
+
+        case MSG_WSZC: {
+            RECT rect;
+
+            SystemParametersInfo(SPI_GETWORKAREA, 0, &rect, 0);
+
+            rect.left += rect.right >> 1;
+            rect.top += rect.bottom >> 1;
+
+            rect.right =
+                (((uint16_t)(data)) + ctrl->xdim)
+                * (uint16_t)(ctrl->priv[2]) +
+                   GetSystemMetrics(SM_CXFRAME) * 2;
+            rect.bottom =
+                (((uint16_t)(data >> 16)) + ctrl->ydim)
+                * (uint16_t)(ctrl->priv[2] >> 16) +
+                   GetSystemMetrics(SM_CYFRAME) * 2 +
+                   GetSystemMetrics(SM_CYCAPTION);
+
+            rect.left -= rect.right >> 1;
+            rect.top -= rect.bottom >> 1;
+
+            ctrl->priv[3] =  (uint16_t)rect.right
+                          | ((uint32_t)rect.bottom << 16);
+            SetWindowPos((HWND)ctrl->priv[0], HWND_TOP, rect.left, rect.top,
+                         rect.right, rect.bottom, SWP_SHOWWINDOW);
+            return 0;
+        }
+    }
+    return 0;
+}
+
+
+
+intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG_PLIM:
+            ctrl->priv[4] = data;
+            SendMessage((HWND)ctrl->priv[0], PBM_SETRANGE32, 0, ctrl->priv[4]);
+            InvalidateRect((HWND)ctrl->priv[0], 0, FALSE);
+            return 0;
+
+        case MSG_PPOS:
+            ctrl->priv[3] = data;
+            /// necessary to avoid the annoying time lag on Vista+
+            if (ctrl->priv[3] < ctrl->priv[4])
+                SendMessage((HWND)ctrl->priv[0], PBM_SETPOS,
+                             ctrl->priv[3] + 1, 0);
+            SendMessage((HWND)ctrl->priv[0], PBM_SETPOS, ctrl->priv[3], 0);
+            return 0;
+
+        case MSG_PTXT:
+            free((void*)ctrl->priv[2]);
+            ctrl->priv[2] = (intptr_t)rConvertUTF8((char*)data);
+            return 0;
+    }
+    return 0;
+}
+
+
+
+intptr_t FE2CC(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG__ENB:
+            EnableWindow((HWND)ctrl->priv[0], !!data);
+            return 0;
+
+        case MSG_BCLK:
+            cmsg = SendMessage((HWND)ctrl->priv[0], BM_GETCHECK, 0, 0);
+            SendMessage((HWND)ctrl->priv[0], BM_SETCHECK,
+                        (data)? BST_CHECKED : BST_UNCHECKED, 0);
+            return cmsg == BST_CHECKED;
+    }
+    return 0;
+}
+
+
+
+intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    LRESULT APIENTRY (*SMSG)(HWND, UINT, WPARAM, LPARAM);
+
+    switch (cmsg) {
+        case MSG__ENB:
+            EnableWindow((HWND)ctrl->priv[0], !!data);
+            return 0;
+
+        case MSG_LCOL: {
+            LVCOLUMN vcol = {LVCF_TEXT, 0, 0, rConvertUTF8((char*)data)};
+
+            if (OldWin32()) {
+                SMSG = SendMessageA;
+                cmsg = LVM_SETCOLUMNA;
+            }
+            else {
+                SMSG = SendMessageW;
+                cmsg = LVM_SETCOLUMNW;
+            }
+            SMSG((HWND)ctrl->priv[0], cmsg, 0, (LPARAM)&vcol);
+            free(vcol.pszText);
+            return 0;
+        }
+        case MSG_LADD: {
+            LVITEM item = {LVIF_TEXT, LVS_EX_CHECKBOXES | LVS_EX_GRIDLINES |
+                                      LVS_EX_FULLROWSELECT,
+                          .pszText = rConvertUTF8((char*)data)};
+
+            if (OldWin32()) {
+                SMSG = SendMessageA;
+                cmsg = LVM_INSERTITEMA;
+            }
+            else {
+                SMSG = SendMessageW;
+                cmsg = LVM_INSERTITEMW;
+            }
+            SMSG((HWND)ctrl->priv[0], cmsg, 0, (LPARAM)&item);
+            free(item.pszText);
+            return 0;
+        }
+    }
+    return 0;
+}
+
+
+
+/// note that MSG_NSET shall multiply the lower value by -1
+intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG__ENB:
+            EnableWindow((HWND)ctrl->priv[0], !!data);
+            EnableWindow((HWND)ctrl->priv[1], !!data);
+            return 0;
+
+        case MSG_NGET:
+            return SendMessage((HWND)ctrl->priv[1], UDM_GETPOS32, 0, 0);
+
+        case MSG_NSET:
+            ctrl->priv[2] = -(uint16_t)data;
+            ctrl->priv[3] = (uint16_t)(data >> 16);
+            SendMessage((HWND)ctrl->priv[1], UDM_SETRANGE32,
+                        (WPARAM)ctrl->priv[2], (LPARAM)ctrl->priv[3]);
+            SendMessage((HWND)ctrl->priv[1], UDM_SETPOS32, 0, 0);
+            return 0;
+    }
+    return 0;
+}
+
+
+
+intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG_SMAX:
+            if (ctrl->prev) {
+                CTRL *root = ctrl->prev;
+                RECT rect;
+
+                while (root->prev)
+                    root = root->prev;
+                GetClientRect((HWND)ctrl->priv[0], &rect);
+                data *= (uint16_t)(root->priv[2] >> 16);
+
+                SCROLLINFO sinf =
+                    {sizeof(SCROLLINFO), SIF_PAGE | SIF_POS | SIF_RANGE};
+
+                GetScrollInfo((HWND)ctrl->priv[0], SB_VERT, &sinf);
+                sinf.nPos = ctrl->priv[1] * data
+                          / ((sinf.nMax)? sinf.nMax : data);
+                sinf.nPage = rect.bottom - rect.top;
+                sinf.nMax = data;
+                sinf.nMin = 1;
+                SetScrollInfo((HWND)ctrl->priv[0], SB_VERT, &sinf, TRUE);
+            }
+            return 0;
+    }
+    return 0;
+}
+
+
+
+void rFreeControl(CTRL *ctrl) {
+    switch (ctrl->flgs & FCT_TTTT) {
+        case FCT_WNDW:
+            /// every window has its own font instance
+            DeleteObject((HFONT)ctrl->priv[1]);
+            break;
+
+        case FCT_TEXT:
+            break;
+
+        case FCT_BUTN:
+            break;
+
+        case FCT_CBOX:
+            break;
+
+        case FCT_RBOX:
+            break;
+
+        case FCT_SPIN:
+            DestroyWindow((HWND)ctrl->priv[1]); /// the very spin control
+            break;
+
+        case FCT_LIST:
+            break;
+
+        case FCT_SBOX:
+            break;
+
+//        case FCT_IBOX:
+//            break;
+
+        case FCT_PBAR:
+            /// font (priv[1]) is inherited, so it doesn`t need to be freed
+            free((void*)ctrl->priv[2]); /// freeing the text line, if any
+            break;
+    }
+    DestroyWindow((HWND)ctrl->priv[0]);
+}
+
+
+
+#define WC_MAINWND "W"
+#define WC_SIZEBOX "S"
+#define WC_IMGBOX "I"
+void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
+    static struct {
+        LPSTR name;
+        DWORD wsty;
+    } base[] =
+       {{WC_MAINWND,     0},
+        {WC_STATIC,      SS_CENTERIMAGE},
+        {WC_BUTTON,      BS_FLAT | BS_MULTILINE},
+        {WC_BUTTON,      BS_FLAT | BS_AUTOCHECKBOX},
+        {WC_BUTTON,      BS_FLAT | BS_AUTORADIOBUTTON},
+        {WC_EDIT,        ES_MULTILINE | ES_AUTOHSCROLL},
+        {WC_LISTVIEW,    LVS_REPORT},
+        {PROGRESS_CLASS, PBS_SMOOTH},
+        {WC_SIZEBOX,     WS_CLIPCHILDREN | WS_VSCROLL},
+        {WC_IMGBOX,      WS_CLIPCHILDREN},
+    };
+    WNDCLASSEX test, wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW,
+                             0, 0, 0, GetModuleHandle(0)};
+    LONG xsty, wsty, xpos, ypos, xdim, ydim, xspc, yspc;
+    HANDLE cwnd;
+    LPSTR name;
+    CTRL *root;
+
+    cwnd = 0;
+    root = ctrl->prev;
+    if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
+        TEXTMETRIC tmet;
+
+        ctrl->priv[1] = (typeof(*ctrl->priv))
+            CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                       DEFAULT_CHARSET, 0, 0, 0, 0, "Verdana");
+        cwnd = CreateCompatibleDC(0);
+        SelectObject(cwnd, (HFONT)ctrl->priv[1]);
+        GetTextMetrics(cwnd, &tmet);
+        DeleteDC(cwnd);
+        ctrl->priv[4] = tmet.tmHeight + tmet.tmDescent; /// for spin controls
+        ctrl->priv[2] =  (uint16_t)(tmet.tmAveCharWidth * 1.7)
+                      | ((uint32_t)(tmet.tmHeight * 0.7) << 16);
+        wndc.hIcon = LoadIcon(wndc.hInstance, MAKEINTRESOURCE(1));
+        wndc.hCursor = LoadCursor(0, IDC_ARROW);
+        wndc.lpfnWndProc = OptProc;
+        wndc.lpszClassName = WC_MAINWND;
+        wndc.hbrBackground = (HBRUSH)COLOR_WINDOW;
+        if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
+            RegisterClassEx(&wndc);
+        cwnd = CreateWindowEx(0, WC_MAINWND, 0,
+                              WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+                              0, 0, 0, 0, 0, 0, wndc.hInstance, 0);
+        SetWindowLongPtr(cwnd, GWLP_USERDATA, (LONG_PTR)ctrl);
+        ctrl->fe2c = FE2CW;
+    }
+    else if (root) {
+        while (root->prev)
+            root = root->prev;
+        xspc = (uint16_t)(root->priv[2]);
+        yspc = (uint16_t)(root->priv[2] >> 16);
+
+        xsty = 0;
+        wsty = ctrl->flgs & FCT_TTTT;
+        name = base[wsty].name;
+        wsty = base[wsty].wsty | WS_CHILD | WS_VISIBLE
+                               | (((wsty == FCT_TEXT) ||
+                                   (wsty == FCT_PBAR) ||
+                                   (wsty == FCT_SBOX))? 0 : WS_TABSTOP);
+
+        switch (ctrl->flgs & FCT_TTTT) {
+            case FCT_TEXT:
+                wsty |= (ctrl->flgs & FST_SUNK)? SS_SUNKEN : 0;
+                break;
+
+            case FCT_BUTN:
+                wsty |= (ctrl->flgs & FSB_DFLT)? BS_DEFPUSHBUTTON : 0;
+                break;
+
+            case FCT_CBOX:
+                wsty |= (ctrl->flgs & FSX_LEFT)? BS_LEFTTEXT : 0;
+                ctrl->fe2c = FE2CC;
+                break;
+
+            case FCT_RBOX:
+                wsty |= (ctrl->flgs & FSR_NGRP)? WS_GROUP : 0;
+                break;
+
+            case FCT_SPIN:
+                xsty = WS_EX_CLIENTEDGE;
+                ctrl->priv[4] = root->priv[4]; /// copying alignment
+                ctrl->fe2c = FE2CN;
+                break;
+
+            case FCT_LIST:
+                xsty = WS_EX_CLIENTEDGE;
+                ctrl->fe2c = FE2CL;
+                break;
+
+            case FCT_SBOX:
+                wndc.hCursor = LoadCursor(0, IDC_ARROW);
+                wndc.lpfnWndProc = SBoxProc;
+                wndc.lpszClassName = WC_SIZEBOX;
+                wndc.hbrBackground = (HBRUSH)COLOR_WINDOW;
+                if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
+                    RegisterClassEx(&wndc);
+                ctrl->fe2c = FE2CS;
+                break;
+/*
+            case FCT_IBOX:
+                wndc.hCursor = LoadCursor(0, IDC_HAND);
+                wndc.lpfnWndProc = IBoxProc;
+                wndc.lpszClassName = WC_IMGBOX;
+                wndc.hbrBackground = (HBRUSH)COLOR_WINDOW;
+                if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
+                    RegisterClassEx(&wndc);
+                wsty &= ~WS_VISIBLE;
+                ctrl->priv[1] = root->priv[1];
+                ctrl->priv[2] = yspc;
+                break;
+//*/
+            case FCT_PBAR:
+                ctrl->fe2c = FE2CP;
+                ctrl->priv[1] = root->priv[1]; /// copying font
+                ctrl->priv[4] = 1;
+                break;
+        }
+        xpos = ctrl->xpos + ((xoff && (ctrl->flgs & FCP_HORZ))?
+                             *xoff : root->xpos);
+        ypos = ctrl->ypos + ((yoff && (ctrl->flgs & FCP_VERT))?
+                             *yoff : root->ypos);
+        xdim = (ctrl->xdim < 0)? 1 - ctrl->xdim / xspc : ctrl->xdim;
+        ydim = (ctrl->ydim < 0)? 1 - ctrl->ydim / yspc : ctrl->ydim;
+        cwnd = (HWND)ctrl->prev->priv[0];
+        cwnd = CreateWindowEx(xsty, name, 0, wsty, xpos * xspc, ypos * yspc,
+                              xdim * xspc, ydim * yspc, cwnd,
+                             (HMENU)ctrl->uuid, 0, 0);
+        if (xoff)
+            *xoff = xpos + xdim;
+        if (yoff)
+            *yoff = ypos + ydim;
+        SendMessage(cwnd, WM_SETFONT, (WPARAM)root->priv[1], FALSE);
+        SetWindowLongPtr(cwnd, GWLP_USERDATA, (LONG_PTR)ctrl);
+
+        switch (ctrl->flgs & FCT_TTTT) {
+            case FCT_LIST: {
+                LVCOLUMN vcol = {LVCF_WIDTH | LVCF_TEXT, 0, 0, ""};
+                RECT rect;
+
+                SendMessage(cwnd, LVM_SETEXTENDEDLISTVIEWSTYLE, 0,
+                            LVS_EX_CHECKBOXES | LVS_EX_GRIDLINES |
+                            LVS_EX_FULLROWSELECT);
+                GetClientRect(cwnd, &rect);
+                vcol.cx = rect.right - GetSystemMetrics(SM_CXVSCROLL);
+                if (OldWin32())
+                    SendMessageA(cwnd, LVM_INSERTCOLUMNA, 0, (LPARAM)&vcol);
+                else
+                    SendMessageW(cwnd, LVM_INSERTCOLUMNW, 0, (LPARAM)&vcol);
+                break;
+            }
+            case FCT_SPIN: {
+                HWND spin;
+
+                ctrl->priv[0] = (typeof(*ctrl->priv))cwnd;
+                SendMessage(cwnd, EM_LIMITTEXT, 9, 0);
+                spin = CreateWindowEx(0, UPDOWN_CLASS, 0, UDS_HOTTRACK
+                                    | UDS_NOTHOUSANDS | UDS_ALIGNRIGHT
+                                    | UDS_SETBUDDYINT | UDS_ARROWKEYS
+                                    | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0,
+                                     (HWND)ctrl->prev->priv[0], 0, 0, 0);
+                ctrl->priv[1] = (typeof(*ctrl->priv))spin;
+                ctrl->priv[7] = (typeof(*ctrl->priv))
+                    SetWindowLongPtr(cwnd, GWLP_WNDPROC, (LONG_PTR)SpinProc);
+                ResizeSpinControl(ctrl);
+                break;
+            }
+            case FCT_PBAR:
+                ctrl->priv[7] = (typeof(*ctrl->priv))
+                    SetWindowLongPtr(cwnd, GWLP_WNDPROC, (LONG_PTR)PBarProc);
+                break;
+/*
+            case FCT_SBOX:
+                ctrl->priv[1] = 1;
+                if (ctrl->ydim >= 0)
+                    ctrl->fe2c(ctrl, MSG_SMAX, ctrl->ydim);
+                break;
+//*/
+        }
+    }
+    ctrl->priv[0] = (typeof(*ctrl->priv))cwnd;
+    if (ctrl->priv[0] && text) {
+        name = rConvertUTF8(text);
+        if (OldWin32())
+            SendMessageA((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
+        else
+            SendMessageW((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
+        free(name);
+    }
+}
+
+
+
+void rInternalMainLoop(CTRL *root) {
+    MSG pmsg;
+
+    while (pmsg.message != WM_QUIT) {
+        if (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
+            if (!IsDialogMessage((HWND)root->priv[0], &pmsg)) {
+                TranslateMessage(&pmsg);
+                DispatchMessage(&pmsg);
+            }
+            continue;
+        }
+        Sleep(1);
+    }
+}
+
+
+
 int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
     RECT area = {MAXLONG, MAXLONG, MINLONG, MINLONG};
@@ -387,8 +1232,8 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     BOOL retn;
 
 //    if (flgs & FLG_CONS) {
-        AllocConsole();
-        freopen("CONOUT$", "wb", stdout);
+//        AllocConsole();
+//        freopen("CONOUT$", "wb", stdout);
 //    }
 
     retn = 0;
@@ -442,11 +1287,6 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         }
     }
     FindClose(hdir);
-
-
-    /// [TODO:] substitute this by GUI selection
-    __DEL_ME__SetLibUses(engc, 1);
-
 
     InitCommonControlsEx(&icct);
     EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&area);

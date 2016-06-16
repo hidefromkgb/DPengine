@@ -914,8 +914,10 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
         }
         case ECB_LOAD:
             StopThreads(engd);
-            if (data)
+            if (data) {
                 SwitchThreads(engd, 0);
+                engd->time = lTimeFunc();
+            }
             else {
                 data = engd->flgs;
                 engd->flgs &= ~COM_DRAW;
