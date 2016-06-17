@@ -319,7 +319,7 @@ long rSaveFile(char *name, char *data, long size) {
 
 
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
-                      uint32_t *data, long xdim, long ydim) {
+                       uint32_t *data, long xdim, long ydim) {
     NOTIFYICONDATAW *nicd = calloc(1, sizeof(*nicd));
     char *hint = rConvertUTF8(text);
 
@@ -428,74 +428,43 @@ void TextInRect(HDC devc, char *text, RECT *rect) {
 
 
 /// PRIV:
-///  0:
-///  1:
-///  2:
-///  3:
-///  4:
+///  0: HWND
+///  1: HDC
+///  2: HBITMAP
+///  3: data array
+///  4: (xdim) | (ydim << 16)
 ///  5:
-///  6:
-///  7:
+///  6: current frame
+///  7: animation ID
 LRESULT APIENTRY IBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
-/*
     switch (uMsg) {
         case WM_ERASEBKGND:
             return ~0;
 
         case WM_PAINT: {
             CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-            LINF *linf = (LINF*)ctrl->auxd.x;
-/// TODO: not barr[0], but barr[tmpl]!
-            AINF *anim = &linf->barr[0].unit[0];
-            HANDLE devc, hdib;
+            if (!ctrl || !ctrl->priv[7])
+                break;
+
+            AINF anim = {ctrl->priv[7], (int16_t)ctrl->priv[4],
+                        (int16_t)(ctrl->priv[4] >> 16), ctrl->priv[6],
+                        (uint32_t*)ctrl->priv[3]};
             PAINTSTRUCT pstr;
             HBRUSH btnf;
             RECT rect;
+            HDC devc;
 
             btnf = GetSysColorBrush(COLOR_BTNFACE);
-            if (!ctrl->priv[3] && anim->uuid) {
-                AINF draw = *anim;
-                BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader), 0, 0,
-                                    1, CHAR_BIT * sizeof(*draw.time), BI_RGB}};
-                draw.fcnt = 0;
-                bmpi.bmiHeader.biWidth = draw.xdim;
-                bmpi.bmiHeader.biHeight = -draw.ydim;
-                devc = CreateCompatibleDC(0);
-                hdib = CreateDIBSection(devc, &bmpi, DIB_RGB_COLORS,
-                                       (void*)&draw.time, 0, 0);
-                SelectObject(devc, hdib);
-                rect = (RECT){0, 0, draw.xdim, draw.ydim};
-                FillRect(devc, &rect, btnf);
-                EngineCallback(ctrl->engc->engh, ECB_DRAW, (intptr_t)&draw);
-                ctrl->priv[3] = (intptr_t)devc;
-                ctrl->priv[4] = (intptr_t)hdib;
-            }
             devc = BeginPaint(hWnd, &pstr);
-
-            GetClientRect(hWnd, &rect);
-            BitBlt(devc, (rect.right - (long)anim->xdim) / 2,
-                   rect.bottom - (long)anim->ydim - 2 * ctrl->priv[2] * linf->spin.ydim,
-                   anim->xdim, anim->ydim, (HDC)ctrl->priv[3], 0, 0, SRCCOPY);
-
-            long down = rect.bottom;
-            rect = (RECT){0, down - 2 * ctrl->priv[2] * linf->spin.ydim, rect.right, down - ctrl->priv[2] * linf->spin.ydim};
-            FillRect(devc, &rect, btnf);
-            SetBkMode(devc, TRANSPARENT);
-            SetTextColor(devc, GetSysColor(COLOR_BTNTEXT));
-            SelectObject(devc, (HFONT)ctrl->priv[1]);
-
-            char *temp = ConvertUTF8(linf->name);
-            TextInRect(devc, temp, &rect);
-            free(temp);
-
-            down -= (long)anim->ydim + 2 * ctrl->priv[2] * linf->spin.ydim;
-            rect = (RECT){0, 0, rect.right, down};
-            FillRect(devc, &rect, btnf);
+            rect = (RECT){0, 0, anim.xdim, anim.ydim};
+            FillRect((HDC)ctrl->priv[1], &rect, btnf);
+            ctrl->fc2e(ctrl, MSG_IFRM, (intptr_t)&anim);
+            BitBlt(devc, 0, 0, anim.xdim, anim.ydim,
+                  (HDC)ctrl->priv[1], 0, 0, SRCCOPY);
             EndPaint(hWnd, &pstr);
             return 0;
         }
     }
-//*/
     return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
 }
 
@@ -524,7 +493,7 @@ LRESULT APIENTRY SBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
             SCROLLINFO sinf = {sizeof(SCROLLINFO),
                                SIF_PAGE | SIF_POS | SIF_RANGE | SIF_TRACKPOS};
-            if (!ctrl)
+            if (!ctrl || !ctrl->fc2e)
                 break;
             GetScrollInfo(hWnd, SB_VERT, &sinf);
             sinf.fMask = SIF_PAGE | SIF_POS | SIF_RANGE | SIF_TRACKPOS;
@@ -739,15 +708,13 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             rect.left += rect.right >> 1;
             rect.top += rect.bottom >> 1;
 
-            rect.right =
-                (((uint16_t)(data)) + ctrl->xdim)
-                * (uint16_t)(ctrl->priv[2]) +
-                   GetSystemMetrics(SM_CXFRAME) * 2;
-            rect.bottom =
-                (((uint16_t)(data >> 16)) + ctrl->ydim)
-                * (uint16_t)(ctrl->priv[2] >> 16) +
-                   GetSystemMetrics(SM_CYFRAME) * 2 +
-                   GetSystemMetrics(SM_CYCAPTION);
+            rect.right  = (((uint16_t)(data)) + ctrl->xdim)
+                        *   (uint16_t)(ctrl->priv[2])
+                        +   (GetSystemMetrics(SM_CXFRAME) << 1);
+            rect.bottom = (((uint16_t)(data >> 16)) + ctrl->ydim)
+                        *   (uint16_t)(ctrl->priv[2] >> 16)
+                        +   (GetSystemMetrics(SM_CYFRAME) << 1)
+                        +    GetSystemMetrics(SM_CYCAPTION);
 
             rect.left -= rect.right >> 1;
             rect.top -= rect.bottom >> 1;
@@ -944,12 +911,17 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
-        case MSG__SHW:
-            ShowWindow((HWND)ctrl->priv[0], (data)? SW_SHOW : SW_HIDE);
-            return 0;
-
         case MSG__POS:
             return MoveControl(ctrl, data);
+
+        case MSG_IFRM:
+            ctrl->priv[6] = data;
+            InvalidateRect((HWND)ctrl->priv[0], 0, FALSE);
+            return 0;
+
+        case MSG_IANI:
+            ctrl->priv[7] = data;
+            return 0;
     }
     return 0;
 }
@@ -987,6 +959,8 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_IBOX:
+            DeleteDC((HDC)ctrl->priv[1]);         /// the DIB context
+            DeleteObject((HGDIOBJ)ctrl->priv[2]); /// the associated DIB
             break;
 
         case FCT_PBAR:
@@ -1187,6 +1161,26 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                                              WS_CHILD | WS_VISIBLE, 0, 0,
                                              0, 0, cwnd, 0, 0, 0);
                 break;
+
+            case FCT_IBOX: {
+                BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader),
+                                    0, 0, 1, 32, BI_RGB}};
+                ctrl->priv[4] =
+                    (ctrl->xdim < 0)? -ctrl->xdim : ctrl->xdim * xspc;
+                ctrl->priv[1] =
+                    (ctrl->ydim < 0)? -ctrl->ydim : ctrl->ydim * yspc;
+                bmpi.bmiHeader.biWidth =   ctrl->priv[4];
+                bmpi.bmiHeader.biHeight = -ctrl->priv[1];
+                ctrl->priv[4] = (uint16_t)(ctrl->priv[4]      )
+                              | (uint32_t)(ctrl->priv[1] << 16);
+                ctrl->priv[1] = (intptr_t)CreateCompatibleDC(0);
+                ctrl->priv[2] =
+                    (intptr_t)CreateDIBSection((HDC)ctrl->priv[1],
+                                               &bmpi, DIB_RGB_COLORS,
+                                               (void*)&ctrl->priv[3], 0, 0);
+                SelectObject((HDC)ctrl->priv[1], (HGDIOBJ)ctrl->priv[2]);
+                break;
+            }
         }
     }
     ctrl->priv[0] = (typeof(*ctrl->priv))cwnd;
@@ -1202,9 +1196,13 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 
 
-void rInternalMainLoop(CTRL *root) {
+void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
+                       ENGC *engc, intptr_t data) {
+    uint64_t time, tcur;
+    uint32_t temp;
     MSG pmsg;
 
+    time = tcur = 0;
     while (pmsg.message != WM_QUIT) {
         if (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
             if (!IsDialogMessage((HWND)root->priv[0], &pmsg)) {
@@ -1213,7 +1211,14 @@ void rInternalMainLoop(CTRL *root) {
             }
             continue;
         }
-        Sleep(1);
+        if ((temp = GetTickCount()) < (uint32_t)tcur)
+            tcur += 0x100000000ULL;
+        if ((tcur = temp | (tcur & 0xFFFFFFFF00000000ULL)) - time < fram) {
+            Sleep(1);
+            continue;
+        }
+        time = tcur;
+        upre(engc, data, time);
     }
 }
 

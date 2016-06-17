@@ -214,6 +214,7 @@ typedef struct _LINF {
             *path,  /// the folder from which the library was built
             *name;  /// human-readable name (may differ from PATH!)
     long    *ngrp,  /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
+             prev,  /// preview index in sorted BARR
              flgs,  /// flags
              ccnt,  /// categories count
              gcnt,  /// behaviour groups count
@@ -1208,6 +1209,8 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         free(elem->eimp);
         elem->bimp = elem->eimp = 0;
 
+        /// saving preview name hash
+        temp.name = elem->barr[elem->prev].name;
         /// sorting all behaviours and effects by name hash
         TruncateAndSort(&elem->earr, &elem->ecnt);
         if (!TruncateAndSort(&elem->barr, &elem->bcnt)) {
@@ -1216,6 +1219,10 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             *elem = (LINF){};
             return 0;
         }
+        /// retrieving the new preview position
+        if ((iter = bsearch(&temp, elem->barr, elem->bcnt,
+                            sizeof(*elem->barr), namecmp)))
+            elem->prev = iter - elem->barr;
         /// determining the effect count and min. index for every behaviour
         /// (note that some behaviours may have no effects)
         for (indx = elem->ecnt - 1; indx >= 0; indx--)
@@ -1820,6 +1827,28 @@ ENGC *eInitializeEngine(char *fcnf) {
 
 
 
+void UpdPreview(ENGC *engc, intptr_t data, uint64_t time) {
+    uint64_t *fram = (typeof(fram))data; /// +0: time, +1: frame
+    AINF *anim;
+
+    if (engc->parr)
+        return; /// engine is active, so previews are hidden
+
+    for (data = 0; data < engc->lcnt; data++) {
+        anim = &engc->libs[data].barr[engc->libs[data].prev].unit[0];
+        if (time + anim->time[fram[data * 2 + 1]] > fram[data * 2 + 0]) {
+            if (!fram[data * 2 + 0])
+                fram[data * 2 + 0] = time;
+            if (++fram[data * 2 + 1] >= anim->fcnt)
+                fram[data * 2 + 1] = 0;
+            fram[data * 2 + 0] += anim->time[fram[data * 2 + 1]];
+            RUN_FE2C(engc->libs[data].pict, MSG_IFRM, fram[data * 2 + 1]);
+        }
+    }
+}
+
+
+
 intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     INCBIN("../exec/icon.gif", MainIcon);
 
@@ -1929,8 +1958,6 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                                 (uint8_t*)MainIcon, &igif);
             cEngineCallback(engc->engd, ECB_LOAD, 0);
 
-            engc->parr = 0;
-            engc->pmax = engc->pcnt = 0;
             for (libs = engc->libs, icon = 0; icon < engc->lcnt; icon++)
                 if (AppendSpriteArr(&engc->libs[icon], engc)
                 && (++libs - engc->libs <= icon))
@@ -1962,6 +1989,8 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             for (icon = 0; icon < engc->pcnt; icon++)
                 free(engc->parr[icon]);
             free(engc->parr);
+            engc->parr = 0;
+            engc->pmax = engc->pcnt = 0;
             RUN_FE2C(engc->CTL_CAPT, MSG__SHW, ~0);
             break;
         }
@@ -1971,7 +2000,9 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 
-intptr_t FC2EP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    if (cmsg == MSG_IFRM)
+        cEngineCallback(ctrl->engc->engd, ECB_DRAW, data);
     return 0;
 }
 
@@ -1994,6 +2025,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
        *uSTF[] = {"Effects"};
     char temp[256], *save = 0;
     long iter, indx;
+    uint64_t *fram;
 
     engc->idim = (T2IV){{xico, yico}};
     engc->dpos = (T2IV){{xpos, ypos}};
@@ -2026,7 +2058,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     {0, engc, TXT_SELE, FCP_VERT | FCT_PBAR           , 0,  1, 19,  3, 0   },
     {0, engc, TXT_OPTS, FCP_VERT | FCT_BUTN           , 0,  1,  9,  6, FC2E},
     {0, engc, TXT_GOGO, FCP_BOTH | FCT_BUTN | FSB_DFLT, 1, -6,  9,  6, FC2E},
-    {0, engc, TXT_CHAR, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, FC2E},
+    {0, engc, TXT_CHAR, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, 0},
     {}};
     long xmax, ymax, xoff, yoff;
 
@@ -2062,30 +2094,37 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     /// getting minimal width for a preview from one of the spin controls
     xico = (uint16_t)RUN_FE2C(engc->CTL_SPEC, MSG__GSZ, 0);
     /// constructing previews
+    /// barr[0] should be barr[linf->prev], but barr is still unsorted here
     for (iter = 0; iter < engc->lcnt; iter++) {
         yico = engc->libs[iter].barr[0].unit[0].xdim;
         indx = (xico > yico)? xico : yico;
         engc->libs[iter].pict =
             (CTRL){&engc->CTL_CHAR, engc, iter, FCT_IBOX, -indx * 2, 0,
-                   -indx, -engc->libs[iter].barr[0].unit[0].ydim, FC2EP};
+                   -indx, -engc->libs[iter].barr[0].unit[0].ydim, FC2EI};
         engc->libs[iter].spin =
             (CTRL){&engc->CTL_CHAR, engc, iter, FCT_SPIN,
-                   -indx * 2, 0, -indx, 3, FC2EP};
+                   -indx * 2, 0, -indx, 3, FC2EI};
         engc->libs[iter].capt =
             (CTRL){&engc->CTL_CHAR, engc, iter, FCT_TEXT | FST_CNTR,
-                   -indx * 2, 0, -indx, 2, FC2EP};
+                   -indx * 2, 0, -indx, 2, FC2EI};
         rMakeControl(&engc->libs[iter].pict, 0, 0, 0);
         rMakeControl(&engc->libs[iter].spin, 0, 0, 0);
         rMakeControl(&engc->libs[iter].capt, 0, 0, engc->libs[iter].name);
+        RUN_FE2C(engc->libs[iter].pict, MSG_IANI,
+                 engc->libs[iter].barr[0].unit[0].uuid);
         RUN_FE2C(engc->libs[iter].spin, MSG_NSET, 50000 << 16);
     }
+    engc->CTL_CHAR.fc2e = FC2E;
     RUN_FE2C(engc->CTL_CAPT, MSG_WSZC,
             (uint16_t)xmax | ((uint32_t)ymax << 16));
 
     engc->seed = time(0);
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);
 
-    rInternalMainLoop(&engc->ctls[0]);
+    fram = calloc(sizeof(*fram), engc->lcnt * 2);
+    rInternalMainLoop(&engc->ctls[0], FRM_WAIT, UpdPreview,
+                       engc, (intptr_t)fram);
+    free(fram);
 
     RUN_FE2C(engc->CTL_CHAR, MSG__SHW, 0);
     for (iter = 0; iter < engc->lcnt; iter++) {

@@ -76,9 +76,14 @@
 /** set scrollbox internal dims **/ #define MSG_SMAX 13
 /** rename listbox column       **/ #define MSG_LCOL 14
 /** add item to listbox column  **/ #define MSG_LADD 15
+/** imagebox update frame       **/ #define MSG_IFRM 16
+/** imagebox set animation ID   **/ #define MSG_IANI 17
 
 /// engine data (client side), opaque outside the module
 typedef struct ENGC ENGC;
+
+/// preview updater function
+typedef void (*UPRE)(ENGC *engc, intptr_t data, uint64_t time);
 
 /// control handler function (either control-to-exec or exec-to-control)
 struct _CTRL;
@@ -122,9 +127,10 @@ void  eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
 
 
 /// external functions, have to be implemented or imported
-void  rInternalMainLoop(CTRL *root);
-void  rFreeControl(CTRL *ctrl);
+void  rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
+                        ENGC *engc, intptr_t data);
 void  rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text);
+void  rFreeControl(CTRL *ctrl);
 long  rMessage(char *text, char *head, uint32_t flgs);
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim);
