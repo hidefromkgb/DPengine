@@ -5,6 +5,10 @@
 /// a macro to count the capacity of static arrays
 #define countof(a) (sizeof(a) / sizeof(*(a)))
 
+/// FE2C / FC2E helper macros
+#define RUN_FE2C(trgt, cmsg, data) trgt.fe2c(&trgt, cmsg, data)
+#define RUN_FC2E(trgt, cmsg, data) trgt.fc2e(&trgt, cmsg, data)
+
 /** convert degrees to radians  **/ #define DTR_CONV (M_PI / 180.0)
 /** convert radians to degrees  **/ #define RTD_CONV (1.0 / DTR_CONV)
 
@@ -194,10 +198,13 @@ typedef struct _CTGS {
 } CTGS;
 
 /// unit library info (write-once, read-only), opaque outside the module
-/// [TODO:] speech
-/// [TODO:] interactions
-/// [TODO:] categories
+/// [TODO:] (priority 1) behaviours
+/// [TODO:] (priority 2) interactions
+/// [TODO:] (priority 3) speech
 typedef struct _LINF {
+    CTRL     pict,  /// image box control to preview the sprite
+             capt,  /// character name just below the image box
+             spin;  /// spin control to set ICNT
     CTGS    *ctgs;  /// library categories (hashed and sorted)
     BINF    *barr,  /// available behaviours ordered by name hash
             *earr,  /// available effects ordered by parent bhv. name hash
@@ -868,7 +875,7 @@ void LoadLib(LINF *elem, ENGD *engd) {
 
 
 
-void LoadTemplateFromLib(LINF *elem, ENGD *engd) {
+void LoadLibPreview(LINF *elem, ENGD *engd) {
     if (!elem->bimp || !elem->bimp[0])
         return;
     cEngineLoadAnimAsync(engd, (uint8_t*)elem->bimp[0], 0,
@@ -1817,23 +1824,80 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     INCBIN("../exec/icon.gif", MainIcon);
 
     switch (ctrl->uuid) {
+        case TXT_CAPT:
+            if (cmsg == MSG_WSZC)
+                RUN_FE2C(ctrl->engc->CTL_CHAR, cmsg, data);
+            break;
+
+        case TXT_CHAR: {
+            if (cmsg != MSG_SMAX)
+                break;
+
+            /// rearrange the scroll area and all previews it contains
+            long xdim = (uint16_t)data, ydim = (uint16_t)(data >> 16),
+                 xsep, ysep, xinc, yinc, line, temp, ymax, ycap, yspi;
+            ENGC *engc = ctrl->engc;
+
+            xsep = 8; /// separator width
+            ysep = 8; /// separator height
+            ycap = (uint16_t)(RUN_FE2C(engc->libs[0].capt, MSG__GSZ, 0) >> 16);
+            yspi = (uint16_t)(RUN_FE2C(engc->libs[0].spin, MSG__GSZ, 0) >> 16);
+
+            xinc = xsep;
+            line = yinc = ymax = 0;
+            for (data = 0; data <= engc->lcnt; data++) {
+                if ((data < engc->lcnt)
+                &&  (xinc + xsep - engc->libs[data].pict.xdim <= xdim)) {
+                    xinc += xsep - engc->libs[data].pict.xdim;
+                    ymax = (-engc->libs[data].pict.ydim > ymax)?
+                            -engc->libs[data].pict.ydim : ymax;
+                    continue;
+                }
+                /// if we are here, either the line is full or the array ended
+                for (xinc = xsep; line < data; line++) {
+                    temp = yinc + ymax + engc->libs[line].pict.ydim;
+                    RUN_FE2C(engc->libs[line].pict, MSG__POS,
+                            (uint16_t)-xinc | (uint32_t)(-temp << 16));
+                    temp = yinc + ymax;
+                    RUN_FE2C(engc->libs[line].capt, MSG__POS,
+                            (uint16_t)-xinc | (uint32_t)(-temp << 16));
+                    temp = yinc + ymax + ycap;
+                    RUN_FE2C(engc->libs[line].spin, MSG__POS,
+                            (uint16_t)-xinc | (uint32_t)(-temp << 16));
+                    xinc += xsep - engc->libs[line].pict.xdim;
+                }
+                yinc += ymax + ysep + ycap + yspi;
+                if (data < engc->lcnt) {
+                    xinc = xsep + xsep - engc->libs[data].pict.xdim;
+                    ymax = -engc->libs[data].pict.ydim;
+                }
+            }
+            return (yinc - ysep > ydim)? yinc - ysep - ydim : 0;
+        }
         case TXT_FLTR:
-            ctrl->engc->CTL_EXAC.fe2c(&ctrl->engc->CTL_EXAC, MSG__ENB, data);
-            ctrl->engc->CTL_OGRP.fe2c(&ctrl->engc->CTL_OGRP, MSG__ENB, data);
+            if (cmsg == MSG_BCLK) {
+                RUN_FE2C(ctrl->engc->CTL_EXAC, MSG__ENB, data);
+                RUN_FE2C(ctrl->engc->CTL_OGRP, MSG__ENB, data);
+            }
             break;
 
         case TXT_EXAC:
             break;
 
         case TXT_SRND:
-            ctrl->engc->CTL_RGPU.fe2c(&ctrl->engc->CTL_RGPU, MSG__ENB, data);
-            ctrl->engc->CTL_BDUP.fe2c(&ctrl->engc->CTL_BDUP, MSG__ENB, data);
+            if (cmsg == MSG_BCLK) {
+                RUN_FE2C(ctrl->engc->CTL_RGPU, MSG__ENB, data);
+                RUN_FE2C(ctrl->engc->CTL_BDUP, MSG__ENB, data);
+            }
             break;
 
         case TXT_BDUP:
             break;
 
         case TXT_GOGO: {
+            if (cmsg != MSG_BCLK)
+                break;
+
             LINF *libs;
             ENGC *engc = ctrl->engc;
             AINF igif = {};
@@ -1844,21 +1908,20 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             for (icon = 0; icon < engc->lcnt; icon++)
                 engc->libs[icon].icnt = 1;
             /// [TODO:] resize progressbar elsewhere
-            engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PLIM, engc->lcnt);
+            RUN_FE2C(engc->CTL_SELE, MSG_PLIM, engc->lcnt);
 
             text = malloc(32 + strlen(engc->tran[TXT_LOAD]));
             cEngineCallback(engc->engd, ECB_LOAD, ~0);
             sprintf(text, "%s %d / %d", engc->tran[TXT_LOAD], 0, engc->lcnt);
-            engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PTXT, (intptr_t)text);
-            engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PPOS, 0);
+            RUN_FE2C(engc->CTL_SELE, MSG_PTXT, (intptr_t)text);
+            RUN_FE2C(engc->CTL_SELE, MSG_PPOS, 0);
             for (data = icon = 0; icon < engc->lcnt; icon++) {
                 LoadLib(&engc->libs[icon], engc->engd);
                 if (engc->libs[icon].icnt) {
                     sprintf(text, "%s %d / %d",
                             engc->tran[TXT_LOAD], ++data, engc->lcnt);
-                    engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PTXT,
-                                       (intptr_t)text);
-                    engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PPOS, data);
+                    RUN_FE2C(engc->CTL_SELE, MSG_PTXT, (intptr_t)text);
+                    RUN_FE2C(engc->CTL_SELE, MSG_PPOS, data);
                 }
             }
             free(text);
@@ -1884,24 +1947,31 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
             icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
                                  igif.time, igif.xdim, igif.ydim);
-
-            engc->CTL_CAPT.fe2c(&engc->CTL_CAPT, MSG__SHW, 0);
+            free(igif.time);
+            RUN_FE2C(engc->CTL_CAPT, MSG__SHW, 0);
             engc->data = (engc->pmax)? calloc(engc->pmax,
                                               sizeof(*engc->data)) : 0;
             cEngineRunMainLoop(engc->engd, engc->dpos.x, engc->dpos.y,
                                engc->dims.x + engc->dpos.x,
                                engc->dims.y + engc->dpos.y, engc->ftmp,
                                FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
+            cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
             free(engc->data);
 
             rFreeTrayIcon(icon);
             for (icon = 0; icon < engc->pcnt; icon++)
                 free(engc->parr[icon]);
             free(engc->parr);
-            engc->CTL_CAPT.fe2c(&engc->CTL_CAPT, MSG__SHW, ~0);
+            RUN_FE2C(engc->CTL_CAPT, MSG__SHW, ~0);
             break;
         }
     }
+    return 0;
+}
+
+
+
+intptr_t FC2EP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     return 0;
 }
 
@@ -1933,18 +2003,17 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     qsort(engc->libs, engc->lcnt, sizeof(*engc->libs), linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc->engd);
     for (iter = 0; iter < engc->lcnt; iter++)
-        LoadTemplateFromLib(&engc->libs[iter], engc->engd);
+        LoadLibPreview(&engc->libs[iter], engc->engd);
     cEngineCallback(engc->engd, ECB_LOAD, 0);
     cEngineCallback(engc->engd, ECB_LOAD, ~0);
 
     /// primary initialization complete, now creating GUI
-    ///  0. [ FIRST AND FOREMOST! ] do not forget to edit
-    ///     the appropriate CTL_ constants after swapping
-    ///     or adding controls
-    ///  1. main window`s "dimensions" are just spaces to
-    ///     leave between window edge and actual controls
+    ///  0. [ FIRST AND FOREMOST! ] do not forget to edit the appropriate CTL_
+    ///     constants after swapping or adding controls
+    ///  1. main window`s "dimensions" are just spaces to leave between window
+    ///     edges and actual controls
     CTRL ctls[] =
-   {{0, engc, TXT_CAPT,            FCT_WNDW           , 1,  1,  1,  1, 0   },
+   {{0, engc, TXT_CAPT,            FCT_WNDW           , 1,  1,  1,  1, FC2E},
     {0, engc, TXT_FLTR,            FCT_CBOX           , 0,  0, 19,  2, FC2E},
     {0, engc, TXT_EXAC, FCP_VERT | FCT_CBOX           , 0,  0, 19,  2, FC2E},
     {0, engc, TXT_OGRP, FCP_VERT | FCT_LIST           , 0,  0, 19, 16, FC2E},
@@ -1957,12 +2026,12 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     {0, engc, TXT_SELE, FCP_VERT | FCT_PBAR           , 0,  1, 19,  3, 0   },
     {0, engc, TXT_OPTS, FCP_VERT | FCT_BUTN           , 0,  1,  9,  6, FC2E},
     {0, engc, TXT_GOGO, FCP_BOTH | FCT_BUTN | FSB_DFLT, 1, -6,  9,  6, FC2E},
-    {0, engc, TXT_CHAR, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, 0   },
+    {0, engc, TXT_CHAR, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, FC2E},
     {}};
     long xmax, ymax, xoff, yoff;
 
     xmax = ymax = xoff = yoff = 0;
-    engc->ctls = malloc(sizeof(ctls));
+    engc->ctls = calloc(1, sizeof(ctls));
     for (iter = 0; iter < countof(ctls) - 1; iter++) {
         engc->ctls[iter] = ctls[iter];
         if (iter)
@@ -1977,29 +2046,53 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
         xmax = (xmax > xoff)? xmax : xoff;
         ymax = (ymax > yoff)? ymax : yoff;
     }
-    engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PLIM, engc->lcnt);
-    engc->CTL_SELE.fe2c(&engc->CTL_SELE, MSG_PPOS, 0);
-    engc->CTL_SPEC.fe2c(&engc->CTL_SPEC, MSG_NSET, (100 << 16) | 100);
-    engc->CTL_RGPU.fe2c(&engc->CTL_RGPU, MSG_NSET, 50000 << 16);
-    engc->CTL_OGRP.fe2c(&engc->CTL_OGRP, MSG_LCOL,
-                       (intptr_t)engc->tran[TXT_OGRP]);
+    RUN_FE2C(engc->CTL_SELE, MSG_PLIM, engc->lcnt);
+    RUN_FE2C(engc->CTL_SELE, MSG_PPOS, 0);
+    RUN_FE2C(engc->CTL_SPEC, MSG_NSET, (100 << 16) | 100);
+    RUN_FE2C(engc->CTL_RGPU, MSG_NSET, 50000 << 16);
+    RUN_FE2C(engc->CTL_OGRP, MSG_LCOL, (intptr_t)engc->tran[TXT_OGRP]);
     for (indx = 0; indx < engc->ccnt; indx++)
-        engc->CTL_OGRP.fe2c(&engc->CTL_OGRP, MSG_LADD,
-                           (intptr_t)engc->ctgs[indx].name);
+        RUN_FE2C(engc->CTL_OGRP, MSG_LADD, (intptr_t)engc->ctgs[indx].name);
 
-    engc->CTL_FLTR.fe2c(&engc->CTL_FLTR, MSG_BCLK, 0);
-    engc->CTL_FLTR.fc2e(&engc->CTL_FLTR, MSG_BCLK, 0);
-    engc->CTL_SRND.fe2c(&engc->CTL_SRND, MSG_BCLK, 0);
-    engc->CTL_SRND.fc2e(&engc->CTL_SRND, MSG_BCLK, 0);
+    RUN_FE2C(engc->CTL_FLTR, MSG_BCLK, 0);
+    RUN_FC2E(engc->CTL_FLTR, MSG_BCLK, 0);
+    RUN_FE2C(engc->CTL_SRND, MSG_BCLK, 0);
+    RUN_FC2E(engc->CTL_SRND, MSG_BCLK, 0);
 
-    engc->CTL_CAPT.fe2c(&engc->CTL_CAPT, MSG_WSZC,
-                       (uint16_t)xmax | ((uint32_t)ymax << 16));
+    /// getting minimal width for a preview from one of the spin controls
+    xico = (uint16_t)RUN_FE2C(engc->CTL_SPEC, MSG__GSZ, 0);
+    /// constructing previews
+    for (iter = 0; iter < engc->lcnt; iter++) {
+        yico = engc->libs[iter].barr[0].unit[0].xdim;
+        indx = (xico > yico)? xico : yico;
+        engc->libs[iter].pict =
+            (CTRL){&engc->CTL_CHAR, engc, iter, FCT_IBOX, -indx * 2, 0,
+                   -indx, -engc->libs[iter].barr[0].unit[0].ydim, FC2EP};
+        engc->libs[iter].spin =
+            (CTRL){&engc->CTL_CHAR, engc, iter, FCT_SPIN,
+                   -indx * 2, 0, -indx, 3, FC2EP};
+        engc->libs[iter].capt =
+            (CTRL){&engc->CTL_CHAR, engc, iter, FCT_TEXT | FST_CNTR,
+                   -indx * 2, 0, -indx, 2, FC2EP};
+        rMakeControl(&engc->libs[iter].pict, 0, 0, 0);
+        rMakeControl(&engc->libs[iter].spin, 0, 0, 0);
+        rMakeControl(&engc->libs[iter].capt, 0, 0, engc->libs[iter].name);
+        RUN_FE2C(engc->libs[iter].spin, MSG_NSET, 50000 << 16);
+    }
+    RUN_FE2C(engc->CTL_CAPT, MSG_WSZC,
+            (uint16_t)xmax | ((uint32_t)ymax << 16));
 
     engc->seed = time(0);
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);
 
     rInternalMainLoop(&engc->ctls[0]);
 
+    RUN_FE2C(engc->CTL_CHAR, MSG__SHW, 0);
+    for (iter = 0; iter < engc->lcnt; iter++) {
+        rFreeControl(&engc->libs[iter].pict);
+        rFreeControl(&engc->libs[iter].spin);
+        rFreeControl(&engc->libs[iter].capt);
+    }
     for (iter = countof(ctls) - 2; iter >= 0; iter--)
         rFreeControl(&engc->ctls[iter]);
     free(engc->ctls);
@@ -2016,7 +2109,6 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
         free(engc->ctgs[engc->ccnt - 1].name);
     free(engc->ctgs);
 
-    cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
     cEngineCallback(engc->engd, ECB_QUIT, 0);
 
     /// now saving configs and exiting

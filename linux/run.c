@@ -118,16 +118,18 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                       uint32_t *data, long xdim, long ydim) {
     GtkStatusIcon *icon = 0;
     GdkPixbuf *pbuf;
+    uint32_t *temp;
     long iter;
 
+    temp = malloc(xdim * ydim * sizeof(*temp));
     for (iter = xdim * ydim - 1; iter >= 0; iter--)
-        data[iter] =  (data[iter] & 0xFF00FF00)
+        temp[iter] =  (data[iter] & 0xFF00FF00)
                    | ((data[iter] & 0xFF) << 16)
                    | ((data[iter] >> 16) & 0xFF);
-    pbuf = gdk_pixbuf_new_from_data((guchar*)data, GDK_COLORSPACE_RGB,
+    pbuf = gdk_pixbuf_new_from_data((guchar*)temp, GDK_COLORSPACE_RGB,
                                     TRUE, CHAR_BIT, xdim, ydim,
-                                    xdim * sizeof(*data),
-                                   (GdkPixbufDestroyNotify)free, data);
+                                    xdim * sizeof(*temp),
+                                   (GdkPixbufDestroyNotify)free, temp);
 
     icon = gtk_status_icon_new_from_pixbuf(pbuf);
     gtk_status_icon_set_visible(icon, TRUE);

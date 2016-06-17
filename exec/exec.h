@@ -30,6 +30,7 @@
 /** List box (with checkboxes)  **/ #define FCT_LIST 0x006
 /** Progress bar                **/ #define FCT_PBAR 0x007
 /** Scroll box                  **/ #define FCT_SBOX 0x008
+/** Image box                   **/ #define FCT_IBOX 0x009
 /** [extractor]                 **/ #define FCT_TTTT 0x00F
 
 /// /// /// /// /// /// /// /// /// Flags for Controls` Position inheriting
@@ -41,6 +42,7 @@
 
 /// /// /// /// /// /// /// /// /// Flags for Style of T (FCT_TEXT)
 /** Sunken edge                 **/ #define FST_SUNK 0x040
+/** Center text                 **/ #define FST_CNTR 0x080
 
 /// /// /// /// /// /// /// /// /// Flags for Style of B (FCT_BUTN)
 /** Default button of a window  **/ #define FSB_DFLT 0x040
@@ -62,18 +64,18 @@
 /// /// /// /// /// /// /// /// /// controls` messages
 /** enable or disable anything  **/ #define MSG__ENB  1
 /** show or hide anything       **/ #define MSG__SHW  2
-/** resize and center window    **/ #define MSG_WSZC  3
-/** click button/check/radio    **/ #define MSG_BCLK  4
-/** get spin position           **/ #define MSG_NGET  5
-/** set spin limits & reset pos **/ #define MSG_NSET  6
-/** set progressbar text        **/ #define MSG_PTXT  7
-/** set progressbar upper limit **/ #define MSG_PLIM  8
-/** set progressbar position    **/ #define MSG_PPOS  9
-/** set scrollbox internal dims **/ #define MSG_SMAX 10
-/** rename listbox column       **/ #define MSG_LCOL 11
-/** add item to listbox column  **/ #define MSG_LADD 12
-
-
+/** get pixel size of anything  **/ #define MSG__GSZ  3
+/** set position  of anything   **/ #define MSG__POS  4
+/** resize & center wnd/sizebox **/ #define MSG_WSZC  5
+/** click button/check/radio    **/ #define MSG_BCLK  6
+/** get spin position           **/ #define MSG_NGET  7
+/** set spin limits & reset pos **/ #define MSG_NSET  8
+/** set progressbar text        **/ #define MSG_PTXT  9
+/** set progressbar upper limit **/ #define MSG_PLIM 10
+/** set progressbar position    **/ #define MSG_PPOS 11
+/** set scrollbox internal dims **/ #define MSG_SMAX 13
+/** rename listbox column       **/ #define MSG_LCOL 14
+/** add item to listbox column  **/ #define MSG_LADD 15
 
 /// engine data (client side), opaque outside the module
 typedef struct ENGC ENGC;
