@@ -850,6 +850,12 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             return SendMessage((HWND)ctrl->priv[1], UDM_GETPOS32, 0, 0);
 
         case MSG_NSET:
+            data = (data > ctrl->priv[2])? data : ctrl->priv[2];
+            data = (data < ctrl->priv[3])? data : ctrl->priv[3];
+            SendMessage((HWND)ctrl->priv[1], UDM_SETPOS32, 0, data);
+            return 0;
+
+        case MSG_NDIM:
             ctrl->priv[2] = -(uint16_t)data;
             ctrl->priv[3] = (uint16_t)(data >> 16);
             SendMessage((HWND)ctrl->priv[1], UDM_SETRANGE32,
@@ -904,7 +910,8 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                               rctl.top, size.x, size.y, SWP_SHOWWINDOW);
             else
                 SendMessage((HWND)ctrl->priv[0], WM_SIZE, 0,
-                            (uint16_t)size.x | (uint32_t)(size.y << 16));
+                           ((uint16_t)size.x - GetSystemMetrics(SM_CYHSCROLL))
+                          | (uint32_t)(size.y << 16));
             return 0;
         }
         case MSG__SHW:
@@ -1086,7 +1093,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 break;
 
             case FCT_IBOX:
-                wndc.hCursor = LoadCursor(0, IDC_HAND);
+                wndc.hCursor = LoadCursor(0, IDC_ARROW);
                 wndc.lpfnWndProc = IBoxProc;
                 wndc.lpszClassName = WC_IMGBOX;
                 wndc.hbrBackground = (HBRUSH)COLOR_MENU;

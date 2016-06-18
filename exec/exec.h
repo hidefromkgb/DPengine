@@ -69,14 +69,15 @@
 /** resize & center wnd/sizebox **/ #define MSG_WSZC  5
 /** click button/check/radio    **/ #define MSG_BCLK  6
 /** get spin position           **/ #define MSG_NGET  7
-/** set spin limits & reset pos **/ #define MSG_NSET  8
-/** set progressbar text        **/ #define MSG_PTXT  9
-/** set progressbar upper limit **/ #define MSG_PLIM 10
-/** set progressbar position    **/ #define MSG_PPOS 11
-/** set scrollbox internal dims **/ #define MSG_SMAX 13
-/** rename listbox column       **/ #define MSG_LCOL 14
-/** add item to listbox column  **/ #define MSG_LADD 15
-/** imagebox update frame       **/ #define MSG_IFRM 16
+/** set spin position           **/ #define MSG_NSET  8
+/** set spin limits & reset pos **/ #define MSG_NDIM  9
+/** set progressbar text        **/ #define MSG_PTXT 10
+/** set progressbar upper limit **/ #define MSG_PLIM 11
+/** set progressbar position    **/ #define MSG_PPOS 13
+/** set scrollbox internal dims **/ #define MSG_SMAX 14
+/** rename listbox column       **/ #define MSG_LCOL 15
+/** add item to listbox column  **/ #define MSG_LADD 16
+/** imagebox update frame       **/ #define MSG_IFRM 17
 
 /// engine data (client side), opaque outside the module
 typedef struct ENGC ENGC;
