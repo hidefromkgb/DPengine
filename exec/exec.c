@@ -1842,7 +1842,8 @@ void UpdPreview(ENGC *engc, intptr_t data, uint64_t time) {
             if (++fram[data * 2 + 1] >= anim->fcnt)
                 fram[data * 2 + 1] = 0;
             fram[data * 2 + 0] += anim->time[fram[data * 2 + 1]];
-            RUN_FE2C(engc->libs[data].pict, MSG_IFRM, fram[data * 2 + 1]);
+            RUN_FE2C(engc->libs[data].pict, MSG_IFRM,
+                    (fram[data * 2 + 1] & 0x3FF) | (anim->uuid << 10));
         }
     }
 }
@@ -2023,8 +2024,8 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
        *uSTR[] = {"GPU",    "Show",   "Draw",   "Opaque",
                   "wPBO",   "wBGRA",  "wRegion"},
        *uSTF[] = {"Effects"};
+    long iter, indx, xmax, ymax, xoff, yoff;
     char temp[256], *save = 0;
-    long iter, indx;
     uint64_t *fram;
 
     engc->idim = (T2IV){{xico, yico}};
@@ -2060,7 +2061,6 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     {0, engc, TXT_GOGO, FCP_BOTH | FCT_BUTN | FSB_DFLT, 1, -6,  9,  6, FC2E},
     {0, engc, TXT_CHAR, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, 0},
     {}};
-    long xmax, ymax, xoff, yoff;
 
     xmax = ymax = xoff = yoff = 0;
     engc->ctls = calloc(1, sizeof(ctls));
@@ -2110,8 +2110,6 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
         rMakeControl(&engc->libs[iter].pict, 0, 0, 0);
         rMakeControl(&engc->libs[iter].spin, 0, 0, 0);
         rMakeControl(&engc->libs[iter].capt, 0, 0, engc->libs[iter].name);
-        RUN_FE2C(engc->libs[iter].pict, MSG_IANI,
-                 engc->libs[iter].barr[0].unit[0].uuid);
         RUN_FE2C(engc->libs[iter].spin, MSG_NSET, 50000 << 16);
     }
     engc->CTL_CHAR.fc2e = FC2E;

@@ -893,7 +893,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
         /// [TODO:] change to PTHR()
         case ECB_DRAW: {
             AINF *ainf = (AINF*)data;
-            BGRA *retn = (BGRA*)ainf->time;
+            BGRA *retn = (BGRA*)ainf->time, pixl;
             ASTD *anim = engd->uarr[ainf->uuid >> 2].anim;
             long x, y, xcoe, ycoe, xdim = ainf->xdim, ydim = ainf->ydim;
             uint8_t *bptr;
@@ -903,13 +903,18 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
                 break;
             xcoe = xdim / anim->xdim;
             ycoe = ydim / anim->ydim;
-            retn += ((ydim % anim->ydim) >> 1) * xdim
-                 +  ((xdim % anim->xdim) >> 1);
+            xcoe = ycoe = (xcoe < ycoe)? xcoe : ycoe;
+            retn += ((ydim - ycoe * anim->ydim) >> 1) * xdim
+                 +  ((xdim - xcoe * anim->xdim) >> 1);
             bptr = anim->bptr + anim->xdim * anim->ydim * ainf->fcnt;
             for (y = anim->ydim * ycoe - 1; y >= 0; y--)
-                for (x = anim->xdim * xcoe - 1; x >= 0; x--)
-                    retn[xdim * y + x] =
-                        anim->bpal[bptr[anim->xdim * (y / ycoe) + (x / xcoe)]];
+                for (x = anim->xdim * xcoe - 1; x >= 0; x--) {
+                    /// division, OMFG! [TODO:] get rid of this
+                    pixl = anim->bpal[bptr[anim->xdim * (y / ycoe)
+                                                      + (x / xcoe)]];
+                    if (pixl.A != 0x00)
+                        retn[xdim * y + x] = pixl;
+                }
             break;
         }
         case ECB_LOAD:

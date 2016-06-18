@@ -434,8 +434,8 @@ void TextInRect(HDC devc, char *text, RECT *rect) {
 ///  3: data array
 ///  4: (xdim) | (ydim << 16)
 ///  5:
-///  6: current frame
-///  7: animation ID
+///  6:
+///  7: (animation ID << 10) | (current frame)
 LRESULT APIENTRY IBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
     switch (uMsg) {
         case WM_ERASEBKGND:
@@ -446,9 +446,9 @@ LRESULT APIENTRY IBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             if (!ctrl || !ctrl->priv[7])
                 break;
 
-            AINF anim = {ctrl->priv[7], (int16_t)ctrl->priv[4],
-                        (int16_t)(ctrl->priv[4] >> 16), ctrl->priv[6],
-                        (uint32_t*)ctrl->priv[3]};
+            AINF anim = {(ctrl->priv[7] >> 10) & 0x3FFFFF,
+                         (int16_t)ctrl->priv[4], (int32_t)ctrl->priv[4] >> 16,
+                          ctrl->priv[7] & 0x3FF, (uint32_t*)ctrl->priv[3]};
             PAINTSTRUCT pstr;
             HBRUSH btnf;
             RECT rect;
@@ -886,18 +886,25 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG_WSZC: {
+            POINT size;
             RECT rctl;
 
             if ((ctrl->prev->flgs & FCT_TTTT) != FCT_WNDW)
                 return -1;
             GetWindowRect((HWND)ctrl->priv[0], &rctl);
-            ScreenToClient((HWND)ctrl->prev->priv[0], (POINT*)&rctl);
-            SetWindowPos((HWND)ctrl->priv[0], HWND_TOP, rctl.left, rctl.top,
-                         (uint16_t)(data      ) - rctl.left - ctrl->prev->xdim
-                       * (uint16_t)(ctrl->prev->priv[2]      ),
-                         (uint16_t)(data >> 16) - rctl.top  - ctrl->prev->ydim
-                       * (uint16_t)(ctrl->prev->priv[2] >> 16),
-                          SWP_SHOWWINDOW);
+            rctl.bottom -= rctl.top;
+            rctl.right -= rctl.left;
+            ScreenToClient((HWND)ctrl->prev->priv[0],  (POINT*)&rctl);
+            size.x = (uint16_t)(data      ) - rctl.left - ctrl->prev->xdim
+                   * (uint16_t)(ctrl->prev->priv[2]      );
+            size.y = (uint16_t)(data >> 16) - rctl.top  - ctrl->prev->ydim
+                   * (uint16_t)(ctrl->prev->priv[2] >> 16);
+            if ((size.x ^ rctl.right) | (size.y ^ rctl.bottom))
+                SetWindowPos((HWND)ctrl->priv[0], HWND_TOP, rctl.left,
+                              rctl.top, size.x, size.y, SWP_SHOWWINDOW);
+            else
+                SendMessage((HWND)ctrl->priv[0], WM_SIZE, 0,
+                            (uint16_t)size.x | (uint32_t)(size.y << 16));
             return 0;
         }
         case MSG__SHW:
@@ -915,12 +922,8 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             return MoveControl(ctrl, data);
 
         case MSG_IFRM:
-            ctrl->priv[6] = data;
-            InvalidateRect((HWND)ctrl->priv[0], 0, FALSE);
-            return 0;
-
-        case MSG_IANI:
             ctrl->priv[7] = data;
+            InvalidateRect((HWND)ctrl->priv[0], 0, FALSE);
             return 0;
     }
     return 0;

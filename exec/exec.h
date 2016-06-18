@@ -77,7 +77,6 @@
 /** rename listbox column       **/ #define MSG_LCOL 14
 /** add item to listbox column  **/ #define MSG_LADD 15
 /** imagebox update frame       **/ #define MSG_IFRM 16
-/** imagebox set animation ID   **/ #define MSG_IANI 17
 
 /// engine data (client side), opaque outside the module
 typedef struct ENGC ENGC;
