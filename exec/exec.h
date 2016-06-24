@@ -20,7 +20,7 @@
 /** item has a checkbox         **/ #define MFL_CCHK  (1 << 2)
 /** checkbox is a radiobutton   **/ #define MFL_RCHK ((1 << 3) | MFL_CCHK)
 
-/// /// /// /// /// /// /// /// /// Flags for Control Types
+/// /// /// /// /// /// /// /// /// Flags for Controls` Types
 /** Container window            **/ #define FCT_WNDW 0x000
 /** Simple label                **/ #define FCT_TEXT 0x001
 /** Button (may be checkable)   **/ #define FCT_BUTN 0x002
@@ -37,6 +37,10 @@
 /** Horizontal inheriting       **/ #define FCP_HORZ 0x010
 /** Vertical inheriting         **/ #define FCP_VERT 0x020
 /** Both                        **/ #define FCP_BOTH (FCP_HORZ | FCP_VERT)
+
+/// /// /// /// /// /// /// /// /// Flags for Controls` State
+/** Control is enabled          **/ #define FCS_ENBL 0x01
+/** Control is marked           **/ #define FCS_MARK 0x02
 
 /// /// /// /// /// /// /// /// /// Flags for Style of W (FCT_WNDW)
 
@@ -67,17 +71,20 @@
 /** get pixel size of anything  **/ #define MSG__GSZ  3
 /** set position  of anything   **/ #define MSG__POS  4
 /** resize & center wnd/sizebox **/ #define MSG_WSZC  5
-/** click button/check/radio    **/ #define MSG_BCLK  6
-/** get spin position           **/ #define MSG_NGET  7
-/** set spin position           **/ #define MSG_NSET  8
-/** set spin limits & reset pos **/ #define MSG_NDIM  9
-/** set progressbar text        **/ #define MSG_PTXT 10
-/** set progressbar upper limit **/ #define MSG_PLIM 11
-/** set progressbar position    **/ #define MSG_PPOS 13
-/** set scrollbox internal dims **/ #define MSG_SMAX 14
-/** rename listbox column       **/ #define MSG_LCOL 15
-/** add item to listbox column  **/ #define MSG_LADD 16
-/** imagebox update frame       **/ #define MSG_IFRM 17
+/** click button/checkbox/radio **/ #define MSG_BCLK  6
+/** get b/x/r (see above) state **/ #define MSG_BGST  7
+/** get spin position           **/ #define MSG_NGET  8
+/** set spin position           **/ #define MSG_NSET  9
+/** set spin limits & reset pos **/ #define MSG_NDIM 10
+/** set progressbar text        **/ #define MSG_PTXT 11
+/** set progressbar upper limit **/ #define MSG_PLIM 13
+/** set progressbar position    **/ #define MSG_PPOS 14
+/** set scrollbox internal dims **/ #define MSG_SMAX 15
+/** rename listbox column       **/ #define MSG_LCOL 16
+/** add item to listbox         **/ #define MSG_LADD 17
+/** get listbox item state      **/ #define MSG_LGST 18
+/** set listbox item state      **/ #define MSG_LSST 19
+/** imagebox update frame       **/ #define MSG_IFRM 20
 
 /// engine data (client side), opaque outside the module
 typedef struct ENGC ENGC;

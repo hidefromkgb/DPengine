@@ -193,7 +193,7 @@ typedef struct _BINF {
 
 /// library categories (name string and its hash)
 typedef struct _CTGS {
-    uint32_t hash;
+    uint32_t hash, flgs;
     char    *name;
 } CTGS;
 
@@ -773,13 +773,14 @@ void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     break;
 
                 case SVT_CTGS:
-                    while ((hash = HashLine(ToLower(Dequote(GET_TEMP(&conf)),
-                                                    0), 0))) {
+                    while ((temp = ToLower(Dequote(GET_TEMP(&conf)), 0))) {
+                        *temp = toupper(*temp); /// capitalizing first letter
+                        hash = HashLine(temp, 0);
                         if (++libs->ccnt > ccnt)
                             libs->ctgs = realloc(libs->ctgs,
                                          sizeof(*libs->ctgs) * (ccnt += 32));
                         libs->ctgs[libs->ccnt - 1] =
-                            (CTGS){hash, Dequote(temp)};
+                            (CTGS){hash, 0, Dequote(temp)};
                     }
                     break;
             }
@@ -799,7 +800,7 @@ void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
             for (hash = ccnt = 0; ccnt < libs->ccnt; ccnt++)
                 if ((ctgs = bsearch(&libs->ctgs[ccnt], engc->ctgs, engc->ccnt,
                                     sizeof(*engc->ctgs), ctgscmp)))
-                    libs->ctgs[ccnt] = (CTGS){0, ctgs->name};
+                    libs->ctgs[ccnt] = (CTGS){0, 0, ctgs->name};
                 else
                     hash++;
             /// some categories need to be added to the global category base
@@ -812,7 +813,6 @@ void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     libs->ctgs[ccnt].hash = HashLine(libs->ctgs[ccnt].name, 0);
                 else {
                     libs->ctgs[ccnt].name = strdup(libs->ctgs[ccnt].name);
-                    *libs->ctgs[ccnt].name = toupper(*libs->ctgs[ccnt].name);
                     *ctgs++ = libs->ctgs[ccnt];
                 }
             if (hash)
@@ -1861,6 +1861,37 @@ void UpdPreview(ENGC *engc, intptr_t data, uint64_t time) {
 
 
 
+void CategorizePreviews(ENGC *engc) {
+    long iter, indx, flgs;
+    CTGS temp, *elem;
+
+    flgs = RUN_FE2C(engc->CTL_EXAC, MSG_BGST, 0);
+    flgs = (flgs & FCS_ENBL)? (flgs & FCS_MARK)? 2 : 1 : 0;
+    for (elem = 0, indx = 0; indx < engc->lcnt; indx++) {
+        for (iter = 0; iter < engc->ccnt; iter++)
+            if (engc->ctgs[iter].flgs & flgs) {
+                temp.hash = engc->ctgs[iter].hash;
+                elem = bsearch(&temp, engc->libs[indx].ctgs,
+                                engc->libs[indx].ccnt,
+                                sizeof(*engc->libs->ctgs), ctgscmp);
+                if (!!elem ^ (flgs - 1))
+                    break;
+            }
+        engc->libs[indx].icnt =
+            ((!elem & !!flgs) ^ (engc->libs[indx].icnt < 0))?
+            -engc->libs[indx].icnt - 1 : engc->libs[indx].icnt;
+    }
+    for (iter = flgs = indx = 0; indx < engc->lcnt; indx++)
+        if (engc->libs[indx].icnt > 0)
+            flgs++;
+        else if (!engc->libs[indx].icnt)
+            iter++;
+    RecountLibs(engc, TXT_SELE, flgs, flgs + iter);
+    RUN_FE2C(engc->CTL_CHAR, MSG_WSZC, 0);
+}
+
+
+
 intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     INCBIN("../exec/icon.gif", MainIcon);
 
@@ -1893,6 +1924,12 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 }
                 /// if we are here, either the line is full or the array ended
                 for (xinc = xsep; line < data; line++) {
+                    temp = !(engc->libs[line].icnt < 0);
+                    RUN_FE2C(engc->libs[line].pict, MSG__SHW, temp);
+                    RUN_FE2C(engc->libs[line].capt, MSG__SHW, temp);
+                    RUN_FE2C(engc->libs[line].spin, MSG__SHW, temp);
+                    if (!temp)
+                        continue;
                     temp = yinc + ymax + engc->libs[line].pict.ydim;
                     RUN_FE2C(engc->libs[line].pict, MSG__POS,
                             (uint16_t)-xinc | (uint32_t)(-temp << 16));
@@ -1912,6 +1949,25 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             }
             return (yinc - ysep > ydim)? yinc - ysep - ydim : 0;
         }
+        case TXT_OGRP:
+            if (cmsg == MSG_LGST) {
+                cmsg = RUN_FE2C(ctrl->engc->CTL_EXAC, MSG_BGST, 0);
+                cmsg = (cmsg & FCS_MARK)? 2 : 1;
+                return (ctrl->engc->ctgs[data].flgs & cmsg)? 1 : 0;
+            }
+            else if (cmsg == MSG_LSST) {
+                intptr_t prev;
+
+                cmsg = RUN_FE2C(ctrl->engc->CTL_EXAC, MSG_BGST, 0);
+                cmsg = (cmsg & FCS_MARK)? 2 : 1;
+                prev = (ctrl->engc->ctgs[data >> 1].flgs & cmsg)? 1 : 0;
+                ctrl->engc->ctgs[data >> 1].flgs &= ~cmsg;
+                ctrl->engc->ctgs[data >> 1].flgs |= (data & 1)? cmsg : 0;
+                CategorizePreviews(ctrl->engc);
+                return prev;
+            }
+            break;
+
         case TXT_BADD:
             if (cmsg == MSG_BCLK) {
                 long spin;
@@ -1935,11 +1991,17 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         case TXT_FLTR:
             if (cmsg == MSG_BCLK) {
                 RUN_FE2C(ctrl->engc->CTL_EXAC, MSG__ENB, data);
+                CategorizePreviews(ctrl->engc);
                 RUN_FE2C(ctrl->engc->CTL_OGRP, MSG__ENB, data);
             }
             break;
 
         case TXT_EXAC:
+            if (cmsg != MSG_BCLK)
+                break;
+            CategorizePreviews(ctrl->engc);
+            RUN_FE2C(ctrl->engc->CTL_OGRP, MSG_LCOL,
+                    (intptr_t)ctrl->engc->tran[(data)? TXT_AGRP : TXT_OGRP]);
             break;
 
         case TXT_SRND:
@@ -2157,6 +2219,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     engc->CTL_CHAR.fc2e = FC2E;
     RUN_FE2C(engc->CTL_CAPT, MSG_WSZC,
             (uint16_t)xmax | ((uint32_t)ymax << 16));
+    RUN_FE2C(engc->CTL_CHAR, MSG_WSZC, 0);
 
     engc->seed = time(0);
     printf("[((RNG))] seed = 0x%08X\n", engc->seed);

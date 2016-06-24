@@ -472,6 +472,56 @@ LRESULT APIENTRY IBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
 /// PRIV:
 ///  0: HWND
+///  1: HWND-parent
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+LRESULT APIENTRY ListProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
+    switch (uMsg) {
+        case WM_CREATE:
+            SetWindowLongPtr(hWnd, GWLP_USERDATA,
+                            (LONG_PTR)((CREATESTRUCT*)lPrm)->lpCreateParams);
+            return 0;
+
+        case WM_NOTIFY:
+            switch (((LPNMHDR)lPrm)->code) {
+                case LVN_GETDISPINFO: {
+                    CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+                    NMLVDISPINFO *lvdi = (NMLVDISPINFO*)lPrm;
+
+                    lvdi->item.state =
+                        ((ctrl->fc2e(ctrl, MSG_LGST,
+                                     lvdi->item.iItem))? 2 : 1) << 12;
+                    lvdi->item.stateMask = LVIS_STATEIMAGEMASK;
+                    break;
+                }
+                case LVN_ITEMCHANGING: {
+                    CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+                    NMLISTVIEW *nmlv = (NMLISTVIEW*)lPrm;
+                    UINT flgs;
+
+                    if ((flgs = (nmlv->uNewState & LVIS_STATEIMAGEMASK) >> 12))
+                        ctrl->fc2e(ctrl, MSG_LSST,
+                                  (nmlv->iItem << 1) | ((flgs == 2)? 1 : 0));
+                    InvalidateRect(hWnd, 0, FALSE);
+                    return FALSE;
+                }
+                case HDN_BEGINTRACKA:
+                case HDN_BEGINTRACKW:
+                    return TRUE;
+            }
+            break;
+    }
+    return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
+}
+
+
+
+/// PRIV:
+///  0: HWND
 ///  1: scroll position
 ///  2: total height of the preview list
 ///  3: total width of the preview list
@@ -579,9 +629,8 @@ LRESULT APIENTRY OptProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
         case WM_COMMAND:
             if (lPrm) {
                 ctrl = (CTRL*)GetWindowLongPtr((HWND)lPrm, GWLP_USERDATA);
-                if (ctrl->fc2e)
-                    ctrl->fc2e(ctrl, MSG_BCLK, BST_CHECKED ==
-                               SendMessage((HWND)lPrm, BM_GETCHECK, 0, 0));
+                ctrl->fc2e(ctrl, MSG_BCLK, BST_CHECKED ==
+                           SendMessage((HWND)lPrm, BM_GETCHECK, 0, 0));
             }
             return 0;
 
@@ -667,8 +716,8 @@ LRESULT APIENTRY PBarProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
     switch (uMsg) {
         case WM_PAINT:
             GetClientRect(hWnd, &rect);
-            lcur = rect.right * ctrl->priv[3] / ctrl->priv[4];
-
+            lcur = rect.right * ctrl->priv[3]
+                 / ((ctrl->priv[4] > 0)? ctrl->priv[4] : 1);
             devc = BeginPaint(hWnd, &pstr);
             retn = CallWindowProc((WNDPROC)ctrl->priv[7],
                                    hWnd, uMsg, (WPARAM)devc, lPrm);
@@ -758,11 +807,18 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 
-intptr_t FE2CC(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__ENB:
             EnableWindow((HWND)ctrl->priv[0], !!data);
             return 0;
+
+        case MSG_BGST:
+            return ((IsWindowEnabled((HWND)ctrl->priv[0]))?
+                     FCS_ENBL : 0)
+                 | ((SendMessage((HWND)ctrl->priv[0],
+                                 BM_GETCHECK, 0, 0) == BST_CHECKED)?
+                     FCS_MARK : 0);
 
         case MSG_BCLK:
             cmsg = SendMessage((HWND)ctrl->priv[0], BM_GETCHECK, 0, 0);
@@ -781,7 +837,7 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__ENB:
             EnableWindow((HWND)ctrl->priv[0], !!data);
-            return 0;
+            break;
 
         case MSG_LCOL: {
             LVCOLUMN vcol = {LVCF_TEXT, 0, 0, rConvertUTF8((char*)data)};
@@ -795,12 +851,13 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 cmsg = LVM_SETCOLUMNW;
             }
             SMSG((HWND)ctrl->priv[0], cmsg, 0, (LPARAM)&vcol);
+            SMSG((HWND)ctrl->priv[0], LVM_REDRAWITEMS, 0, MAXWORD);
+            InvalidateRect((HWND)ctrl->priv[0], 0, FALSE);
             free(vcol.pszText);
-            return 0;
+            break;
         }
         case MSG_LADD: {
-            LVITEM item = {LVIF_TEXT, LVS_EX_CHECKBOXES | LVS_EX_GRIDLINES |
-                                      LVS_EX_FULLROWSELECT,
+            LVITEM item = {LVIF_TEXT, MAXWORD,
                           .pszText = rConvertUTF8((char*)data)};
 
             if (OldWin32()) {
@@ -813,7 +870,7 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             }
             SMSG((HWND)ctrl->priv[0], cmsg, 0, (LPARAM)&item);
             free(item.pszText);
-            return 0;
+            break;
         }
     }
     return 0;
@@ -893,25 +950,27 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG_WSZC: {
             POINT size;
-            RECT rctl;
+            RECT dims;
 
             if ((ctrl->prev->flgs & FCT_TTTT) != FCT_WNDW)
                 return -1;
-            GetWindowRect((HWND)ctrl->priv[0], &rctl);
-            rctl.bottom -= rctl.top;
-            rctl.right -= rctl.left;
-            ScreenToClient((HWND)ctrl->prev->priv[0],  (POINT*)&rctl);
-            size.x = (uint16_t)(data      ) - rctl.left - ctrl->prev->xdim
-                   * (uint16_t)(ctrl->prev->priv[2]      );
-            size.y = (uint16_t)(data >> 16) - rctl.top  - ctrl->prev->ydim
-                   * (uint16_t)(ctrl->prev->priv[2] >> 16);
-            if ((size.x ^ rctl.right) | (size.y ^ rctl.bottom))
-                SetWindowPos((HWND)ctrl->priv[0], HWND_TOP, rctl.left,
-                              rctl.top, size.x, size.y, SWP_SHOWWINDOW);
-            else
+            GetWindowRect((HWND)ctrl->priv[0], &dims);
+            if (!data) {
+                dims.bottom -= dims.top;
+                dims.right -= dims.left + GetSystemMetrics(SM_CXVSCROLL);
                 SendMessage((HWND)ctrl->priv[0], WM_SIZE, 0,
-                           ((uint16_t)size.x - GetSystemMetrics(SM_CYHSCROLL))
-                          | (uint32_t)(size.y << 16));
+                            (uint16_t)dims.right
+                          | (uint32_t)(dims.bottom << 16));
+            }
+            else {
+                ScreenToClient((HWND)ctrl->prev->priv[0],  (POINT*)&dims);
+                size.x = (uint16_t)(data      ) - dims.left - ctrl->prev->xdim
+                       * (uint16_t)(ctrl->prev->priv[2]      );
+                size.y = (uint16_t)(data >> 16) - dims.top  - ctrl->prev->ydim
+                       * (uint16_t)(ctrl->prev->priv[2] >> 16);
+                SetWindowPos((HWND)ctrl->priv[0], HWND_TOP, dims.left,
+                              dims.top, size.x, size.y, SWP_SHOWWINDOW);
+            }
             return 0;
         }
         case MSG__SHW:
@@ -927,6 +986,10 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__POS:
             return MoveControl(ctrl, data);
+
+        case MSG__SHW:
+            ShowWindow((HWND)ctrl->priv[0], (data)? SW_SHOW : SW_HIDE);
+            return 0;
 
         case MSG_IFRM:
             ctrl->priv[7] = data;
@@ -962,6 +1025,8 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_LIST:
+            DestroyWindow((HWND)ctrl->priv[0]); /// freeing the listbox...
+            ctrl->priv[0] = ctrl->priv[1];      /// ...and marking the parent
             break;
 
         case FCT_SBOX:
@@ -984,6 +1049,7 @@ void rFreeControl(CTRL *ctrl) {
 
 
 #define WC_MAINWND "W"
+#define WC_LISTROOT "L"
 #define WC_SIZEBOX "S"
 #define WC_IMGBOX "I"
 void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
@@ -1050,6 +1116,18 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                                | (((wsty == FCT_TEXT) ||
                                    (wsty == FCT_PBAR) ||
                                    (wsty == FCT_SBOX))? 0 : WS_TABSTOP);
+        xdim = ((ctrl->prev->flgs & FCT_TTTT) != FCT_SBOX)? 0 : 7;
+        cwnd = (HWND)ctrl->prev->priv[xdim];
+        xpos =  ctrl->xpos + ((xoff && (ctrl->flgs & FCP_HORZ))?
+                              *xoff : root->xpos);
+        ypos =  ctrl->ypos + ((yoff && (ctrl->flgs & FCP_VERT))?
+                              *yoff : root->ypos);
+        xdim = (ctrl->xdim < 0)? 1 - ctrl->xdim / xspc : ctrl->xdim;
+        ydim = (ctrl->ydim < 0)? 1 - ctrl->ydim / yspc : ctrl->ydim;
+        if (xoff)
+            *xoff = xpos + xdim;
+        if (yoff)
+            *yoff = ypos + ydim;
 
         switch (ctrl->flgs & FCT_TTTT) {
             case FCT_TEXT:
@@ -1064,7 +1142,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
             case FCT_CBOX:
                 wsty |= (ctrl->flgs & FSX_LEFT)? BS_LEFTTEXT : 0;
-                ctrl->fe2c = FE2CC;
+                ctrl->fe2c = FE2CX;
                 break;
 
             case FCT_RBOX:
@@ -1078,6 +1156,21 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 break;
 
             case FCT_LIST:
+                wndc.hCursor = LoadCursor(0, IDC_ARROW);
+                wndc.lpfnWndProc = ListProc;
+                wndc.lpszClassName = WC_LISTROOT;
+                wndc.hbrBackground = (HBRUSH)COLOR_WINDOW;
+                if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
+                    RegisterClassEx(&wndc);
+                cwnd = CreateWindowEx(0, WC_LISTROOT, 0, WS_CHILD | WS_VISIBLE,
+                                      xpos * xspc, ypos * yspc,
+                                     (ctrl->xdim < 0)? -ctrl->xdim
+                                                     :  ctrl->xdim * xspc,
+                                     (ctrl->ydim < 0)? -ctrl->ydim
+                                                     :  ctrl->ydim * yspc,
+                                      cwnd, (HMENU)ctrl->uuid, 0, ctrl);
+                xpos = ypos = 0;
+                ctrl->priv[1] = (intptr_t)cwnd;
                 xsty = WS_EX_CLIENTEDGE;
                 ctrl->fe2c = FE2CL;
                 break;
@@ -1108,22 +1201,10 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 ctrl->priv[4] = 1;
                 break;
         }
-        xpos = ctrl->xpos + ((xoff && (ctrl->flgs & FCP_HORZ))?
-                             *xoff : root->xpos);
-        ypos = ctrl->ypos + ((yoff && (ctrl->flgs & FCP_VERT))?
-                             *yoff : root->ypos);
-        xdim = ((ctrl->prev->flgs & FCT_TTTT) != FCT_SBOX)? 0 : 7;
-        cwnd = (HWND)ctrl->prev->priv[xdim];
-        xdim = (ctrl->xdim < 0)? 1 - ctrl->xdim / xspc : ctrl->xdim;
-        ydim = (ctrl->ydim < 0)? 1 - ctrl->ydim / yspc : ctrl->ydim;
         cwnd = CreateWindowEx(xsty, name, 0, wsty, xpos * xspc, ypos * yspc,
                              (ctrl->xdim < 0)? -ctrl->xdim : ctrl->xdim * xspc,
                              (ctrl->ydim < 0)? -ctrl->ydim : ctrl->ydim * yspc,
                               cwnd, (HMENU)ctrl->uuid, 0, ctrl);
-        if (xoff)
-            *xoff = xpos + xdim;
-        if (yoff)
-            *yoff = ypos + ydim;
         SendMessage(cwnd, WM_SETFONT, (WPARAM)root->priv[1], FALSE);
         SetWindowLongPtr(cwnd, GWLP_USERDATA, (LONG_PTR)ctrl);
 
@@ -1132,15 +1213,18 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 LVCOLUMN vcol = {LVCF_WIDTH | LVCF_TEXT, 0, 0, ""};
                 RECT rect;
 
+                GetClientRect(cwnd, &rect);
+                vcol.cx = rect.right - GetSystemMetrics(SM_CXVSCROLL);
+                if (OldWin32()) {
+                    SendMessageA(cwnd, LVM_INSERTCOLUMNA, 0, (LPARAM)&vcol);
+                }
+                else
+                    SendMessageW(cwnd, LVM_INSERTCOLUMNW, 0, (LPARAM)&vcol);
+                SendMessage(cwnd, LVM_SETCALLBACKMASK,
+                            LVIS_STATEIMAGEMASK, 0);
                 SendMessage(cwnd, LVM_SETEXTENDEDLISTVIEWSTYLE, 0,
                             LVS_EX_CHECKBOXES | LVS_EX_GRIDLINES |
                             LVS_EX_FULLROWSELECT);
-                GetClientRect(cwnd, &rect);
-                vcol.cx = rect.right - GetSystemMetrics(SM_CXVSCROLL);
-                if (OldWin32())
-                    SendMessageA(cwnd, LVM_INSERTCOLUMNA, 0, (LPARAM)&vcol);
-                else
-                    SendMessageW(cwnd, LVM_INSERTCOLUMNW, 0, (LPARAM)&vcol);
                 break;
             }
             case FCT_SPIN: {
@@ -1244,8 +1328,8 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     BOOL retn;
 
 //    if (flgs & FLG_CONS) {
-//        AllocConsole();
-//        freopen("CONOUT$", "wb", stdout);
+        AllocConsole();
+        freopen("CONOUT$", "wb", stdout);
 //    }
 
     retn = 0;
@@ -1307,6 +1391,6 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                    area.left, area.top, area.right, area.bottom);
     fclose(stdout);
     FreeConsole();
-    ExitProcess(0);
+    exit(0);
     return 0;
 }
