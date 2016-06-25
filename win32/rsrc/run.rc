@@ -31,7 +31,7 @@ LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
             VALUE "OriginalFilename", "win32.exe"
             VALUE "PrivateBuild", ""
             VALUE "ProductName", "Desktop Ponies Engine"
-            VALUE "ProductVersion", "[still in pre-alpha]"
+            VALUE "ProductVersion", "[early alpha]"
             VALUE "SpecialBuild", ""
         }
     }
