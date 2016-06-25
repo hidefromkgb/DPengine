@@ -205,6 +205,7 @@ typedef struct _LINF {
     CTRL     pict,  /// image box control to preview the sprite
              capt,  /// character name just below the image box
              spin;  /// spin control to set ICNT
+    ENGC    *engc;  /// parent engine
     CTGS    *ctgs;  /// library categories (hashed and sorted)
     BINF    *barr,  /// available behaviours ordered by name hash
             *earr,  /// available effects ordered by parent bhv. name hash
@@ -238,7 +239,7 @@ typedef struct _PICT {
     uint64_t tfrm,  /// BHV: next frame
                     /// EFF: next frame
              tmov,  /// BHV: next movement (no flags allowed, see SortByY)
-                    /// EFF: next respawn (LONG_LONG_MAX if already respawned,
+                    /// EFF: next respawn (LLONG_MAX if already respawned,
                     ///                    highest bit = parity flag)
                     ///      parity enabled means "inactive sprite, skip it"
              tbhv;  /// BHV: next behaviour (highest bit = parity flag)
@@ -715,6 +716,7 @@ void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
         engc->libs = realloc(engc->libs, ++engc->lcnt * sizeof(*engc->libs));
         engc->libs[engc->lcnt - 1] = (LINF){};
         libs = &engc->libs[engc->lcnt - 1];
+        libs->engc = engc;
         libs->path = fptr;
 
         fptr = file;
@@ -888,11 +890,18 @@ void LoadLibPreview(LINF *elem, ENGD *engd) {
 
 void SortByY(ENGC *engc) {
     #define MAX_YDIM 0x1000
-    PICT *temp, *elem[MAX_YDIM + 1] = {};
     long ymin, ymax, ytmp, iter;
+    PICT *temp, *elem[MAX_YDIM + 1];
 
     if (engc->pcnt < 2)
         return;
+
+    /// manual stack checking
+    for (ymax = sizeof(*elem) - 1; ymax >= 0; ymax--) {
+        elem[ymax * MAX_YDIM / sizeof(*elem)] = 0;
+        asm volatile("" ::: "memory");
+    }
+    memset(elem, 0, (MAX_YDIM + 1) * sizeof(*elem));
 
     ymin = MAX_YDIM + 1;
     ymax = -1;
@@ -1052,7 +1061,7 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
                  ulong indx, uint64_t time) {
     BINF *binf;
 
-    if (from->tmov == LONG_LONG_MAX)
+    if (from->tmov == LLONG_MAX)
         return 0;  /// no more self-replicating for this effect; exiting
 
     if (*retn != from)
@@ -1067,13 +1076,13 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
     else if (*retn != from) {
         /// parent = effect that needs to be copied to RETN
         **retn = *from;
-        from->tmov = LONG_LONG_MAX; /// only one self-replication allowed
+        from->tmov = LLONG_MAX; /// only one self-replication allowed
     }
     binf = &(*retn)->ulib->earr[((*retn)->indx & ~FLG_EFCT) >> 1];
     (*retn)->fram = -1; /// this means:
     (*retn)->tfrm =  0; /// "update me to 0-th frame ASAP!"
     /// effect respawn time; DMAX = 0 means "do not respawn"
-    (*retn)->tmov = (binf->dmax)? time + binf->dmax : LONG_LONG_MAX;
+    (*retn)->tmov = (binf->dmax)? time + binf->dmax : LLONG_MAX;
     /// effect ending time; DMIN = 0 means "end when the behaviour ends"
     /// if the effect duration is longer than that of the behaviour, and
     /// also it doesn`t respawn, then trim it
@@ -1764,7 +1773,21 @@ void RecountLibs(ENGC *engc, long tran, long frac, long full) {
     sprintf(text, "%s %ld / %ld", engc->tran[tran], frac, full);
     RUN_FE2C(engc->CTL_SELE, MSG_PTXT, (intptr_t)text);
     RUN_FE2C(engc->CTL_SELE, MSG_PLIM, full);
+    RUN_FE2C(engc->CTL_SELE, MSG_PPOS, frac);
     free(text);
+}
+
+
+
+void RecountLibsSelected(ENGC *engc) {
+    long full, frac, indx;
+
+    for (full = frac = indx = 0; indx < engc->lcnt; indx++)
+        if (engc->libs[indx].icnt > 0)
+            frac++;
+        else if (!engc->libs[indx].icnt)
+            full++;
+    RecountLibs(engc, TXT_SELE, frac, frac + full);
 }
 
 
@@ -1847,6 +1870,8 @@ void UpdPreview(ENGC *engc, intptr_t data, uint64_t time) {
 
     for (data = 0; data < engc->lcnt; data++) {
         anim = &engc->libs[data].barr[engc->libs[data].prev].unit[0];
+        if (!anim->fcnt)
+            continue; /// this preview has been loaded incorrectly, skipping
         if (time > fram[data * 2 + 0]) {
             if (++fram[data * 2 + 1] >= anim->fcnt)
                 fram[data * 2 + 1] = 0;
@@ -1881,12 +1906,7 @@ void CategorizePreviews(ENGC *engc) {
             ((!elem & !!flgs) ^ (engc->libs[indx].icnt < 0))?
             -engc->libs[indx].icnt - 1 : engc->libs[indx].icnt;
     }
-    for (iter = flgs = indx = 0; indx < engc->lcnt; indx++)
-        if (engc->libs[indx].icnt > 0)
-            flgs++;
-        else if (!engc->libs[indx].icnt)
-            iter++;
-    RecountLibs(engc, TXT_SELE, flgs, flgs + iter);
+    RecountLibsSelected(engc);
     RUN_FE2C(engc->CTL_CHAR, MSG_WSZC, 0);
 }
 
@@ -1903,7 +1923,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             /// rearrange the scroll area and all previews it contains
             long xdim = (uint16_t)data, ydim = (uint16_t)(data >> 16),
                  xsep, ysep, xinc, yinc, line, temp, ymax, ycap, yspi;
-            ENGC *engc = ctrl->engc;
+            ENGC *engc = (ENGC*)ctrl->data;
 
             xsep = 8; /// separator width
             ysep = 8; /// separator height
@@ -1947,67 +1967,72 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                     ymax = -engc->libs[data].pict.ydim;
                 }
             }
+            ctrl->fe2c(ctrl, MSG__SHW, 1);
             return (yinc - ysep > ydim)? yinc - ysep - ydim : 0;
         }
         case TXT_OGRP:
             if (cmsg == MSG_LGST) {
-                cmsg = RUN_FE2C(ctrl->engc->CTL_EXAC, MSG_BGST, 0);
+                cmsg = RUN_FE2C(((ENGC*)ctrl->data)->CTL_EXAC, MSG_BGST, 0);
                 cmsg = (cmsg & FCS_MARK)? 2 : 1;
-                return (ctrl->engc->ctgs[data].flgs & cmsg)? 1 : 0;
+                return (((ENGC*)ctrl->data)->ctgs[data].flgs & cmsg)? 1 : 0;
             }
             else if (cmsg == MSG_LSST) {
+                ENGC *engc = (ENGC*)ctrl->data;
                 intptr_t prev;
 
-                cmsg = RUN_FE2C(ctrl->engc->CTL_EXAC, MSG_BGST, 0);
+                cmsg = RUN_FE2C(engc->CTL_EXAC, MSG_BGST, 0);
                 cmsg = (cmsg & FCS_MARK)? 2 : 1;
-                prev = (ctrl->engc->ctgs[data >> 1].flgs & cmsg)? 1 : 0;
-                ctrl->engc->ctgs[data >> 1].flgs &= ~cmsg;
-                ctrl->engc->ctgs[data >> 1].flgs |= (data & 1)? cmsg : 0;
-                CategorizePreviews(ctrl->engc);
+                prev = (engc->ctgs[data >> 1].flgs & cmsg)? 1 : 0;
+                engc->ctgs[data >> 1].flgs &= ~cmsg;
+                engc->ctgs[data >> 1].flgs |= (data & 1)? cmsg : 0;
+                CategorizePreviews(engc);
                 return prev;
             }
             break;
 
         case TXT_BADD:
             if (cmsg == MSG_BCLK) {
+                ENGC *engc = (ENGC*)ctrl->data;
                 long spin;
 
-                data = RUN_FE2C(ctrl->engc->CTL_SPEC, MSG_NGET, 0);
-                for (cmsg = 0; cmsg < ctrl->engc->lcnt; cmsg++)
-                    if (ctrl->engc->libs[cmsg].icnt >= 0) {
-                        spin = RUN_FE2C(ctrl->engc->libs[cmsg].spin,
-                                        MSG_NGET, 0);
+                data = RUN_FE2C(engc->CTL_SPEC, MSG_NGET, 0);
+                for (cmsg = 0; cmsg < engc->lcnt; cmsg++)
+                    if (engc->libs[cmsg].icnt >= 0) {
+                        spin = RUN_FE2C(engc->libs[cmsg].spin, MSG_NGET, 0);
                         spin = (spin + data > 0)? spin + data : 0;
-                        RUN_FE2C(ctrl->engc->libs[cmsg].spin, MSG_NSET, spin);
+                        RUN_FE2C(engc->libs[cmsg].spin, MSG_NSET, spin);
+                        RUN_FC2E(engc->libs[cmsg].spin, MSG_NSET, spin);
                     }
             }
             break;
 
         case TXT_CAPT:
             if (cmsg == MSG_WSZC)
-                RUN_FE2C(ctrl->engc->CTL_CHAR, cmsg, data);
+                RUN_FE2C(((ENGC*)ctrl->data)->CTL_CHAR, cmsg, data);
             break;
 
         case TXT_FLTR:
             if (cmsg == MSG_BCLK) {
-                RUN_FE2C(ctrl->engc->CTL_EXAC, MSG__ENB, data);
-                CategorizePreviews(ctrl->engc);
-                RUN_FE2C(ctrl->engc->CTL_OGRP, MSG__ENB, data);
+                RUN_FE2C(((ENGC*)ctrl->data)->CTL_EXAC, MSG__ENB, data);
+                CategorizePreviews(((ENGC*)ctrl->data));
+                RUN_FE2C(((ENGC*)ctrl->data)->CTL_OGRP, MSG__ENB, data);
             }
             break;
 
         case TXT_EXAC:
-            if (cmsg != MSG_BCLK)
-                break;
-            CategorizePreviews(ctrl->engc);
-            RUN_FE2C(ctrl->engc->CTL_OGRP, MSG_LCOL,
-                    (intptr_t)ctrl->engc->tran[(data)? TXT_AGRP : TXT_OGRP]);
+            if (cmsg == MSG_BCLK) {
+                ENGC *engc = (ENGC*)ctrl->data;
+
+                CategorizePreviews(engc);
+                RUN_FE2C(engc->CTL_OGRP, MSG_LCOL,
+                        (intptr_t)engc->tran[(data)? TXT_AGRP : TXT_OGRP]);
+            }
             break;
 
         case TXT_SRND:
             if (cmsg == MSG_BCLK) {
-                RUN_FE2C(ctrl->engc->CTL_RGPU, MSG__ENB, data);
-                RUN_FE2C(ctrl->engc->CTL_BDUP, MSG__ENB, data);
+                RUN_FE2C(((ENGC*)ctrl->data)->CTL_RGPU, MSG__ENB, data);
+                RUN_FE2C(((ENGC*)ctrl->data)->CTL_BDUP, MSG__ENB, data);
             }
             break;
 
@@ -2019,18 +2044,15 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 break;
 
             LINF *libs;
-            ENGC *engc = ctrl->engc;
+            ENGC *engc = ((ENGC*)ctrl->data);
             AINF igif = {};
             intptr_t icon;
 
-            /// retrieving spin values and putting them into appropriate ICNTs
-            for (cmsg = icon = 0; icon < engc->lcnt; icon++)
-                if (engc->libs[icon].icnt >= 0) {
-                    engc->libs[icon].icnt =
-                        RUN_FE2C(engc->libs[icon].spin, MSG_NGET, 0);
-                    cmsg |= (engc->libs[icon].icnt)? 1 : 0;
-                }
-            if (!cmsg) {
+            /// is there anything selected? let`s find out
+            for (icon = 0; icon < engc->lcnt; icon++)
+                if (engc->libs[icon].icnt > 0)
+                    break;
+            if (icon >= engc->lcnt) {
                 /// [TODO:] do we need to show messages here?
 //                rMessage("Nothing selected!", 0, 0);
                 break;
@@ -2039,10 +2061,9 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             for (cmsg = icon = 0; icon < engc->lcnt; icon++)
                 if (engc->libs[icon].icnt > 0)
                     cmsg++;
+            RecountLibs(engc, TXT_LOAD, 0, cmsg);
 
             cEngineCallback(engc->engd, ECB_LOAD, ~0);
-            RecountLibs(engc, TXT_LOAD, 0, cmsg);
-            RUN_FE2C(engc->CTL_SELE, MSG_PPOS, 0);
             for (data = icon = 0; icon < engc->lcnt; icon++)
                 if (engc->libs[icon].icnt > 0) {
                     LoadLib(&engc->libs[icon], engc->engd);
@@ -2087,15 +2108,8 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             engc->parr = 0;
             engc->pmax = engc->pcnt = 0;
 
-            /// counting the number of enabled and selected libraries
-            for (data = cmsg = icon = 0; icon < engc->lcnt; icon++)
-                if (engc->libs[icon].icnt == 0)
-                    data++;
-                else if (engc->libs[icon].icnt > 0)
-                    cmsg++;
-            RecountLibs(engc, TXT_SELE, cmsg, cmsg + data);
-            RUN_FE2C(engc->CTL_SELE, MSG_PPOS, 0);
             /// finally showing the window
+            RecountLibsSelected(engc);
             RUN_FE2C(engc->CTL_CAPT, MSG__SHW, ~0);
             break;
         }
@@ -2106,8 +2120,30 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
-    if (cmsg == MSG_IFRM)
-        cEngineCallback(ctrl->engc->engd, ECB_DRAW, data);
+    switch (ctrl->flgs & FCT_TTTT) {
+        case FCT_IBOX:
+            if (cmsg == MSG_IFRM)
+                cEngineCallback((ENGD*)ctrl->data, ECB_DRAW, data);
+            break;
+
+        case FCT_SPIN:
+            if (cmsg == MSG_NSET) {
+                LINF *libs = (LINF*)ctrl->data;
+                intptr_t pmax, ppos;
+
+                if (!!libs->icnt ^ !!data) {
+                    pmax = RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 1);
+                    ppos = RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 0);
+                    if (!libs->icnt && data)
+                        ppos++;
+                    else if (libs->icnt && !data)
+                        ppos--;
+                    RecountLibs(libs->engc, TXT_SELE, ppos, pmax);
+                }
+                libs->icnt = data;
+            }
+            break;
+    }
     return 0;
 }
 
@@ -2150,26 +2186,27 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     ///  1. main window`s "dimensions" are just spaces to leave between window
     ///     edges and actual controls
     CTRL ctls[] =
-   {{0, engc, TXT_CAPT,            FCT_WNDW           , 1,  1,  1,  1, FC2E},
-    {0, engc, TXT_FLTR,            FCT_CBOX           , 0,  0, 19,  2, FC2E},
-    {0, engc, TXT_EXAC, FCP_VERT | FCT_CBOX           , 0,  0, 19,  2, FC2E},
-    {0, engc, TXT_OGRP, FCP_VERT | FCT_LIST           , 0,  0, 19, 16, FC2E},
-    {0, engc, TXT_SGRP, FCP_VERT | FCT_TEXT           , 0,  1, 19,  2, 0   },
-    {0, engc, TXT_SPEC, FCP_VERT | FCT_SPIN           , 0,  0,  9,  3, 0   },
-    {0, engc, TXT_BADD, FCP_BOTH | FCT_BUTN           , 1, -3,  9,  3, FC2E},
-    {0, engc, TXT_SRND, FCP_VERT | FCT_CBOX | FSX_LEFT, 0,  1, 19,  2, FC2E},
-    {0, engc, TXT_RGPU, FCP_VERT | FCT_SPIN           , 0,  0,  9,  3, FC2E},
-    {0, engc, TXT_BDUP, FCP_BOTH | FCT_CBOX           , 1, -3,  9,  3, FC2E},
-    {0, engc, TXT_SELE, FCP_VERT | FCT_PBAR           , 0,  1, 19,  3, 0   },
-    {0, engc, TXT_OPTS, FCP_VERT | FCT_BUTN           , 0,  1,  9,  6, FC2E},
-    {0, engc, TXT_GOGO, FCP_BOTH | FCT_BUTN | FSB_DFLT, 1, -6,  9,  6, FC2E},
-    {0, engc, TXT_CHAR, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, 0   },
+   {{0, 0, TXT_CAPT,            FCT_WNDW           , 1,  1,  1,  1, FC2E},
+    {0, 0, TXT_FLTR,            FCT_CBOX           , 0,  0, 19,  2, FC2E},
+    {0, 0, TXT_EXAC, FCP_VERT | FCT_CBOX           , 0,  0, 19,  2, FC2E},
+    {0, 0, TXT_OGRP, FCP_VERT | FCT_LIST           , 0,  0, 19, 16, FC2E},
+    {0, 0, TXT_SGRP, FCP_VERT | FCT_TEXT           , 0,  1, 19,  2, 0   },
+    {0, 0, TXT_SPEC, FCP_VERT | FCT_SPIN           , 0,  0,  9,  3, FC2E},
+    {0, 0, TXT_BADD, FCP_BOTH | FCT_BUTN           , 1, -3,  9,  3, FC2E},
+    {0, 0, TXT_SRND, FCP_VERT | FCT_CBOX | FSX_LEFT, 0,  1, 19,  2, FC2E},
+    {0, 0, TXT_RGPU, FCP_VERT | FCT_SPIN           , 0,  0,  9,  3, FC2E},
+    {0, 0, TXT_BDUP, FCP_BOTH | FCT_CBOX           , 1, -3,  9,  3, FC2E},
+    {0, 0, TXT_SELE, FCP_VERT | FCT_PBAR           , 0,  1, 19,  3, 0   },
+    {0, 0, TXT_OPTS, FCP_VERT | FCT_BUTN           , 0,  1,  9,  6, FC2E},
+    {0, 0, TXT_GOGO, FCP_BOTH | FCT_BUTN | FSB_DFLT, 1, -6,  9,  6, FC2E},
+    {0, 0, TXT_CHAR, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, 0   },
     {}};
 
     xmax = ymax = xoff = yoff = 0;
     engc->ctls = calloc(1, sizeof(ctls));
     for (iter = 0; iter < countof(ctls) - 1; iter++) {
         engc->ctls[iter] = ctls[iter];
+        engc->ctls[iter].data = (intptr_t)engc;
         if (iter)
             engc->ctls[iter].prev = &engc->ctls[0];
         rMakeControl(&engc->ctls[iter], &xoff, &yoff,
@@ -2195,6 +2232,9 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     RUN_FE2C(engc->CTL_SRND, MSG_BCLK, 0);
     RUN_FC2E(engc->CTL_SRND, MSG_BCLK, 0);
 
+    /// hiding the scroll window
+    RUN_FE2C(engc->CTL_CHAR, MSG__SHW, 0);
+
     /// getting minimal width for a preview from one of the spin controls
     xico = (uint16_t)RUN_FE2C(engc->CTL_SPEC, MSG__GSZ, 0);
     /// constructing previews
@@ -2203,14 +2243,15 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
         yico = engc->libs[iter].barr[0].unit[0].xdim;
         indx = (xico > yico)? xico : yico;
         engc->libs[iter].pict =
-            (CTRL){&engc->CTL_CHAR, engc, iter, FCT_IBOX, -indx * 2, 0,
-                   -indx, -engc->libs[iter].barr[0].unit[0].ydim, FC2EI};
+            (CTRL){&engc->CTL_CHAR, (intptr_t)engc->engd, iter,
+                    FCT_IBOX, 0, 0, -indx,
+                   -engc->libs[iter].barr[0].unit[0].ydim, FC2EI};
         engc->libs[iter].spin =
-            (CTRL){&engc->CTL_CHAR, engc, iter, FCT_SPIN,
-                   -indx * 2, 0, -indx, 3, FC2EI};
+            (CTRL){&engc->CTL_CHAR, (intptr_t)&engc->libs[iter], iter,
+                    FCT_SPIN, 0, 0, -indx, 3, FC2EI};
         engc->libs[iter].capt =
-            (CTRL){&engc->CTL_CHAR, engc, iter, FCT_TEXT | FST_CNTR,
-                   -indx * 2, 0, -indx, 2, FC2EI};
+            (CTRL){&engc->CTL_CHAR, (intptr_t)&engc->libs[iter], iter,
+                    FCT_TEXT | FST_CNTR, 0, 0, -indx, 2, FC2EI};
         rMakeControl(&engc->libs[iter].pict, 0, 0, 0);
         rMakeControl(&engc->libs[iter].spin, 0, 0, 0);
         rMakeControl(&engc->libs[iter].capt, 0, 0, engc->libs[iter].name);

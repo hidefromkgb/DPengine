@@ -230,12 +230,22 @@ LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
                       POINT *psrc, COLORREF ckey, BGRA *bptr, DWORD flgs) {
     #define MAX_RECT 2000
+    long x, y, xpos, ypos;
+    HRGN retn, temp;
     struct {
         RGNDATAHEADER head;
         RECT rect[MAX_RECT];
     } rgns;
-    long x, y, xpos, ypos;
-    HRGN retn, temp;
+
+    /// manual stack checking
+    ((DWORD*)rgns.rect)[7 * 1024] = 0; asm volatile("" ::: "memory");
+    ((DWORD*)rgns.rect)[6 * 1024] = 0; asm volatile("" ::: "memory");
+    ((DWORD*)rgns.rect)[5 * 1024] = 0; asm volatile("" ::: "memory");
+    ((DWORD*)rgns.rect)[4 * 1024] = 0; asm volatile("" ::: "memory");
+    ((DWORD*)rgns.rect)[3 * 1024] = 0; asm volatile("" ::: "memory");
+    ((DWORD*)rgns.rect)[2 * 1024] = 0; asm volatile("" ::: "memory");
+    ((DWORD*)rgns.rect)[1 * 1024] = 0; asm volatile("" ::: "memory");
+    ((DWORD*)rgns.rect)[0 * 1024] = 0; asm volatile("" ::: "memory");
 
     if (flgs != ULW_OPAQUE) {
         retn = CreateRectRgn(0, 0, 0, 0);

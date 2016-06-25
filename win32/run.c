@@ -414,6 +414,18 @@ void ResizeSpinControl(CTRL *ctrl) {
 
 
 
+void ProcessSpin(LPARAM lPrm) {
+    NMUPDOWN *nmud = (NMUPDOWN*)lPrm;
+    CTRL *ctrl = (CTRL*)GetWindowLongPtr(nmud->hdr.hwndFrom, GWLP_USERDATA);
+
+    lPrm = nmud->iPos + nmud->iDelta;
+    lPrm = (lPrm >= ctrl->priv[2])? lPrm : ctrl->priv[2];
+    lPrm = (lPrm <= ctrl->priv[3])? lPrm : ctrl->priv[3];
+    ctrl->fc2e(ctrl, MSG_NSET, lPrm);
+}
+
+
+
 void TextInRect(HDC devc, char *text, RECT *rect) {
     if (text) {
         if (OldWin32())
@@ -537,6 +549,16 @@ LRESULT APIENTRY SBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
                             (LONG_PTR)((CREATESTRUCT*)lPrm)->lpCreateParams);
             return 0;
 
+        case WM_MOUSEACTIVATE:
+            if (!GetWindowLongPtr(hWnd, GWLP_USERDATA))
+                SetFocus(GetParent(hWnd));
+            return 0;
+
+        case WM_NOTIFY:
+            if (((NMHDR*)lPrm)->code == UDN_DELTAPOS)
+                ProcessSpin(lPrm);
+            break;
+
         case WM_SIZE:
         case WM_VSCROLL:
         case WM_MOUSEWHEEL: {
@@ -629,8 +651,9 @@ LRESULT APIENTRY OptProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
         case WM_COMMAND:
             if (lPrm) {
                 ctrl = (CTRL*)GetWindowLongPtr((HWND)lPrm, GWLP_USERDATA);
-                ctrl->fc2e(ctrl, MSG_BCLK, BST_CHECKED ==
-                           SendMessage((HWND)lPrm, BM_GETCHECK, 0, 0));
+                if (ctrl->fc2e) /// not everything that comes here is buttons
+                    ctrl->fc2e(ctrl, MSG_BCLK, BST_CHECKED ==
+                               SendMessage((HWND)lPrm, BM_GETCHECK, 0, 0));
             }
             return 0;
 
@@ -651,6 +674,11 @@ LRESULT APIENTRY OptProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
         case WM_SIZE:
             ctrl->fc2e(ctrl, MSG_WSZC, lPrm);
             return 0;
+
+        case WM_NOTIFY:
+            if (((NMHDR*)lPrm)->code == UDN_DELTAPOS)
+                ProcessSpin(lPrm);
+            break;
     }
     return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
 }
@@ -787,6 +815,9 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             SendMessage((HWND)ctrl->priv[0], PBM_SETRANGE32, 0, ctrl->priv[4]);
             InvalidateRect((HWND)ctrl->priv[0], 0, FALSE);
             return 0;
+
+        case MSG_PGET:
+            return (data)? ctrl->priv[4] : ctrl->priv[3];
 
         case MSG_PPOS:
             ctrl->priv[3] = data;
@@ -1238,6 +1269,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                                     | UDS_SETBUDDYINT | UDS_ARROWKEYS
                                     | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0,
                                      (HWND)ctrl->prev->priv[xdim], 0, 0, 0);
+                SetWindowLongPtr(spin, GWLP_USERDATA, (LONG_PTR)ctrl);
                 ctrl->priv[1] = (typeof(*ctrl->priv))spin;
                 ctrl->priv[7] = (typeof(*ctrl->priv))
                     SetWindowLongPtr(cwnd, GWLP_WNDPROC, (LONG_PTR)SpinProc);
@@ -1322,6 +1354,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
     RECT area = {MAXLONG, MAXLONG, MINLONG, MINLONG};
     CHAR *conf, path[4 * (MAX_PATH + 1)] = {};
+    HRESULT APIENTRY (*GFP)(HWND, int, HANDLE, DWORD, LPSTR);
     LPWSTR wide = 0;
     HANDLE hdir;
     ENGC *engc;
@@ -1334,8 +1367,10 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
 
     retn = 0;
     if (OldWin32()) {
-        if (SHGetFolderPathA(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
-                             SHGFP_TYPE_CURRENT, (LPSTR)path) == S_OK) {
+        hdir = LoadLibrary("shfolder");
+        GFP = (typeof(GFP))GetProcAddress(hdir, "SHGetFolderPathA");
+        if (GFP(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
+                SHGFP_TYPE_CURRENT, path) == S_OK) {
             strcat(path, DEF_OPTS);
             wide = UTF16(path);
             retn = CreateDirectoryA((LPSTR)path, 0);
@@ -1344,8 +1379,10 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
         }
     }
     else {
-        if (SHGetFolderPathW(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
-                             SHGFP_TYPE_CURRENT, (LPWSTR)path) == S_OK) {
+        hdir = LoadLibrary("shell32");
+        GFP = (typeof(GFP))GetProcAddress(hdir, "SHGetFolderPathW");
+        if (GFP(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
+                SHGFP_TYPE_CURRENT, path) == S_OK) {
             wcscat((LPWSTR)path, L""DEF_OPTS);
             wide = _wcsdup((LPWSTR)path);
             retn = CreateDirectoryW((LPWSTR)path, 0);
@@ -1353,6 +1390,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
                 retn = 1;
         }
     }
+    FreeLibrary(hdir);
     if (!(conf = (retn && wide)? UTF8(wide) : 0))
         printf("WARNING: cannot create '%s'!", conf);
     free(wide);

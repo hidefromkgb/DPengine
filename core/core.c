@@ -834,6 +834,7 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
         engd->udat = user;
         engd->flgs = flgs;
         engd->msec = msec;
+        engd->size = 0;
 
         mtmp = lTimeFunc() - engd->time;
         printf(TXL_AEND" %u threads, %u objects, %ld ms: %0.3f ms/obj\n",

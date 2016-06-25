@@ -79,12 +79,13 @@
 /** set progressbar text        **/ #define MSG_PTXT 11
 /** set progressbar upper limit **/ #define MSG_PLIM 13
 /** set progressbar position    **/ #define MSG_PPOS 14
-/** set scrollbox internal dims **/ #define MSG_SMAX 15
-/** rename listbox column       **/ #define MSG_LCOL 16
-/** add item to listbox         **/ #define MSG_LADD 17
-/** get listbox item state      **/ #define MSG_LGST 18
-/** set listbox item state      **/ #define MSG_LSST 19
-/** imagebox update frame       **/ #define MSG_IFRM 20
+/** get progressbar properties  **/ #define MSG_PGET 15
+/** set scrollbox internal dims **/ #define MSG_SMAX 16
+/** rename listbox column       **/ #define MSG_LCOL 17
+/** add item to listbox         **/ #define MSG_LADD 18
+/** get listbox item state      **/ #define MSG_LGST 19
+/** set listbox item state      **/ #define MSG_LSST 20
+/** imagebox update frame       **/ #define MSG_IFRM 21
 
 /// engine data (client side), opaque outside the module
 typedef struct ENGC ENGC;
@@ -100,7 +101,7 @@ typedef intptr_t (*FCTL)(struct _CTRL *ctrl, uint32_t cmsg, intptr_t data);
 typedef struct _CTRL {
     struct          /// __
     _CTRL   *prev;  /// r \ parent
-    ENGC    *engc;  /// e | engine
+    intptr_t data;  /// e | control-specific data
     int32_t  uuid,  /// a | unique identifier
              flgs;  /// d | type (lowest nibble) and style flags
     long     xpos,  /// o | X position
