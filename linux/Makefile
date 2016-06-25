@@ -1,22 +1,22 @@
 CC = gcc
-CX = g++
+CX = gcc
 
 
 OBJDIR = .obj
 
-LLIB = -lXrender -lX11 -lGL
+LLIB = -lXrender -lX11 -lGL -lm
 LINC = -I/usr/include/gtkglext-1.0 -I/usr/lib/gtkglext-1.0/include
-LCXFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --libs` -pthread
-LCFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags` -I../core -Wall -fPIC -fvisibility=hidden
+LCXFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --libs` -pthread -flto -Wl,--build-id=none
+LCFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags` -I../core -Wall -fPIC -flto -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
 
 LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/common.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/common.o $(OBJDIR)/core/ogl/oglstd.o $(OBJDIR)/lib.o
 LOUT = ../libengine.so
 
 
-ELIB = -lengine
+ELIB = -lengine -lm
 EINC =
-ECXFLAGS = `pkg-config gtk+-2.0 --libs` -L..
-ECFLAGS = `pkg-config gtk+-2.0 --cflags` -I../core -Wall
+ECXFLAGS = `pkg-config gtk+-2.0 --libs` -L.. -flto -Wl,--build-id=none
+ECFLAGS = `pkg-config gtk+-2.0 --cflags` -I../core -Wall -flto -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
 
 EOBJ = $(OBJDIR)/exec/exec.o $(OBJDIR)/run.o
 EOUT = ../linux-gtk
