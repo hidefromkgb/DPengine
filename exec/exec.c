@@ -1542,7 +1542,7 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
     run time is less than its respawn time. It becomes "reserved" and waits.
  **/
 uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
-                   uint64_t *time, intptr_t user, uint32_t attr,
+                   uint64_t time, intptr_t user, uint32_t attr,
                    int32_t xptr, int32_t yptr, int32_t isel) {
     ENGC *engc = (ENGC*)user;
     PICT *pict = engc->pcur;
@@ -1557,7 +1557,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
 //    /// here you can add new sprites!
 //    cEngineCallback(engd, ECB_LOAD, 0);
 
-    curr = (long double)*time * (long double)engc->tdil;
+    curr = (long double)time * (long double)engc->tdil;
     /// watch out for reserved-s (they shouldn`t be in [0; ISEL], though)
     if ((attr & UFR_MOUS) && ((isel >= 0) || pict)) {
         if (!pict && ((engc->ppos.z ^ attr) & UFR_LBTN)) {

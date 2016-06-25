@@ -2,8 +2,6 @@
 #define _WIN32_WINNT 0x0501
 #define WINVER _WIN32_WINNT
 
-#include <windows.h>
-
 #include <core.h>
 #include <ogl/oglstd.h>
 
@@ -171,13 +169,6 @@ uint64_t lTimeFunc() {
 
 
 
-void APIENTRY TimeFuncWrapper(UINT uTmr, UINT uMsg, DWORD_PTR dUsr,
-                              DWORD_PTR Res1, DWORD_PTR Res2) {
-    *(uint64_t*)dUsr = lTimeFunc();
-}
-
-
-
 LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
     switch (uMsg) {
         case WM_CREATE:
@@ -284,7 +275,7 @@ BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
 
 
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
-                  BGRA **bptr, uint64_t *time, intptr_t *data, uint32_t flgs) {
+                  BGRA **bptr, intptr_t *data, uint32_t flgs) {
     #define EXT_ATTR (WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED)
     BLENDFUNCTION bstr = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
     WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW, WindowProc,
@@ -311,8 +302,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     BOOL APIENTRY (*SLW)(HWND, COLORREF, BYTE, DWORD) = 0;
     HRESULT APIENTRY (*EBW)(HWND, typeof(blur)*) = 0;
     HRESULT APIENTRY (*ICE)(BOOL*) = 0;
-    UINT ttmr, opts, attr;
     HINSTANCE husr, hdwm;
+    UINT opts, attr;
     HDC devc, mwdc;
     HBITMAP hdib;
     HGLRC mwrc;
@@ -358,9 +349,9 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         /// if there`s DWM, there absolutely have to be layered windows
         SLW = (typeof(SLW))GetProcAddress(husr, "SetLayeredWindowAttributes");
         ICE(&comp);
-        ttmr = GetVersion();
+        attr = GetVersion();
         /// major 6 minor 1 is Win7; in newer versions ICE() is lying to us
-        if (!comp && (MAKEWORD(HIBYTE(ttmr), LOBYTE(ttmr)) <= 0x0601))
+        if (!comp && (MAKEWORD(HIBYTE(attr), LOBYTE(attr)) <= 0x0601))
             EBW = 0;
         else {
             /// does nothing visible to the window,
@@ -374,7 +365,6 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         SetPixelFormat(mwdc, ChoosePixelFormat(mwdc, &ppfd), &ppfd);
         wglMakeCurrent(mwdc, mwrc = wglCreateContext(mwdc));
     }
-    ttmr = timeSetEvent(1, 0, TimeFuncWrapper, (DWORD_PTR)time, TIME_PERIODIC);
     /// "+1" is a dirty hack to not let Windows consider us fullscreen if OGL
     /// is active: all sorts of weird things happen to fullscreen OGL windows
     /// when they are DWM + layered, at least on Intel HD 3000 + Vista / Win7
@@ -414,7 +404,6 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                                                WS_EX_TRANSPARENT | EXT_ATTR);
         }
     }
-    timeKillEvent(ttmr);
     cDeallocFrame(engd, (!EBW)? &surf : 0);
     if (flgs & COM_RGPU) {
         wglMakeCurrent(0, 0);

@@ -9,7 +9,7 @@ RCFLAGS = -J rc -O coff
 CRTLIBS = -lmsvcrt -lkernel32 -luser32 -lshell32 -lgdi32 -lcomctl32
 CRTFUNC = -Dstrdup=_strdup -Dvsnprintf=_vsnprintf
 
-LLIB = $(CRTLIBS) -lopengl32 -lwinmm
+LLIB = $(CRTLIBS) -lopengl32
 LINC =
 LCXFLAGS =
 LCFLAGS = -I..\core -mno-stack-arg-probe -Wall -march=i486 -DLIB_MAKE $(CRTFUNC)

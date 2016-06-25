@@ -200,13 +200,6 @@ GdkGLConfig *GetGDKGL(GtkWidget *gwnd) {
 
 
 
-gboolean TimeFuncWrapper(gpointer user) {
-    *(uint64_t*)user = lTimeFunc();
-    return TRUE;
-}
-
-
-
 uint64_t lTimeFunc() {
     struct timespec spec = {};
 
@@ -318,10 +311,10 @@ SEM_TYPE lWaitSemaphore(SEMD *wait, SEM_TYPE mask) {
 
 
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
-                  BGRA **bptr, uint64_t *time, intptr_t *data, uint32_t flgs) {
-    guint tmrf, tmrt, tmrd;
+                  BGRA **bptr, intptr_t *data, uint32_t flgs) {
     GdkGLDrawable *pGLD = 0;
     GtkWidget *gwnd;
+    guint tmrf, tmrd;
 
     xdim -= xpos;
     ydim -= ypos;
@@ -366,7 +359,6 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                           gdk_cursor_new(GDK_HAND1));
     lShowMainWindow(engd, flgs & COM_SHOW);
 
-    tmrt = g_timeout_add(   1, TimeFuncWrapper, time);
     tmrf = g_timeout_add(1000, FPSFunc, engd);
     tmrd = g_idle_add(DrawFunc, engd);
 
@@ -382,6 +374,5 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
 
     g_source_remove(tmrd);
     g_source_remove(tmrf);
-    g_source_remove(tmrt);
     gtk_widget_destroy(gwnd);
 }

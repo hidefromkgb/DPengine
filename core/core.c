@@ -68,8 +68,7 @@ struct ENGD {
              ncpu,    /// number of CPU cores the engine is allowed to occupy
              uniq,    /// number of unique animations
              halt;    /// halt flag (must NOT be in external-writable flags)
-    uint64_t time,    /// current timestamp
-             tfrm,    /// timestamp for the previous frame
+    uint64_t tfrm,    /// timestamp for the previous frame
              tfps;    /// timestamp for the previous FPS count
     UFRM     ufrm;    /// callback to update the state of a frame
     T4IV     dims;    /// drawing area position and dimensions
@@ -89,11 +88,12 @@ struct ENGD {
 
 
 void cOutputFPS(ENGD *engd, char retn[]) {
-    float corr = ((engd->tfps > 0) && (engd->time > engd->tfps))?
-                 1000.0 / (engd->time - engd->tfps) : 1.0;
+    uint64_t time = lTimeFunc();
+    float corr = ((engd->tfps > 0) && (time > engd->tfps))?
+                 1000.0 / (time - engd->tfps) : 1.0;
 
     sprintf(retn, "[%7.3f]", corr * engd->fram);
-    engd->tfps = lTimeFunc();
+    engd->tfps = time;
     engd->fram = 0;
 }
 
@@ -709,16 +709,17 @@ long SwitchThreads(ENGD *engd, long draw) {
 
 
 uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t attr) {
+    uint64_t time = lTimeFunc();
     long pick;
 
-    if (engd->time - engd->tfrm < engd->msec)
+    if (time - engd->tfrm < engd->msec)
         return PFR_HALT | PFR_SKIP;
-    engd->tfrm = engd->time;
+    engd->tfrm = time;
     if (~engd->flgs & COM_DRAW)
         return PFR_HALT;
     pick = SelectUnit(engd->uarr, engd->data, engd->size, xptr, yptr);
     engd->smax = 0;
-    engd->size = engd->ufrm(engd, &engd->data, &engd->smax, &engd->time,
+    engd->size = engd->ufrm(engd, &engd->data, &engd->smax, lTimeFunc(),
                             engd->udat, attr, xptr, yptr, pick);
     if (!engd->smax)
         engd->smax = engd->size;
@@ -836,7 +837,7 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
         engd->msec = msec;
         engd->size = 0;
 
-        mtmp = lTimeFunc() - engd->time;
+        mtmp = lTimeFunc() - engd->tfrm;
         printf(TXL_AEND" %u threads, %u objects, %ld ms: %0.3f ms/obj\n",
                engd->ncpu, engd->uniq, mtmp,
               (double)mtmp * engd->ncpu / engd->uniq);
@@ -846,7 +847,7 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
             printf("%s\n", (engd->flgs & COM_RGPU)? TXL_RGPU : TXL_RSTD);
             lRunMainLoop(engd, engd->dims.xpos, engd->dims.ypos,
                          engd->dims.xdim, engd->dims.ydim,
-                        &engd->bptr, &engd->time, engd->user, engd->flgs);
+                        &engd->bptr, engd->user, engd->flgs);
         } while (!engd->halt);
     }
     else
@@ -866,7 +867,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
             lMakeSemaphore(&engd->isem, engd->ncpu, SEM_NULL);
             lMakeSemaphore(&engd->osem, engd->ncpu, SEM_FULL);
             SwitchThreads(engd, 0);
-            engd->time = lTimeFunc();
+            engd->tfrm = lTimeFunc();
             *(intptr_t*)data = (intptr_t)engd;
             break;
 
@@ -922,7 +923,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
             StopThreads(engd);
             if (data) {
                 SwitchThreads(engd, 0);
-                engd->time = lTimeFunc();
+                engd->tfrm = lTimeFunc();
             }
             else {
                 data = engd->flgs;

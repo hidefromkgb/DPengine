@@ -81,7 +81,7 @@ void lMakeThread(THRD *thrd);
 void lRestartEngine(ENGD *engd);
 void lShowMainWindow(ENGD *engd, long show);
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
-                  BGRA **bptr, uint64_t *time, intptr_t *data, uint32_t flgs);
+                  BGRA **bptr, intptr_t *data, uint32_t flgs);
 void lFreeSemaphore(SEMD **retn, long nthr);
 void lMakeSemaphore(SEMD **retn, long nthr, SEM_TYPE mask);
 long lPickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask);
