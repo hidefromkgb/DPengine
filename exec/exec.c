@@ -2047,7 +2047,28 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             ENGC *engc = ((ENGC*)ctrl->data);
             AINF igif = {};
             intptr_t icon;
+            long ilen, *irnd, *iput;
 
+            irnd = calloc(engc->lcnt, sizeof(*irnd));
+            iput = calloc(engc->lcnt, sizeof(*iput));
+
+            /// checking if random choice is enabled
+            if ((cmsg = RUN_FE2C(engc->CTL_BDUP, MSG_BGST, 0)) & FCS_ENBL) {
+                /// indexing random-capable libraries
+                for (ilen = icon = 0; icon < engc->lcnt; icon++)
+                    if (engc->libs[icon].icnt == 0)
+                        iput[ilen++] = icon;
+                /// iterating over the requested random sprites count
+                for (icon = RUN_FE2C(engc->CTL_RGPU, MSG_NGET, 0);
+                    (icon > 0) && ilen; icon--) {
+                    irnd[iput[data = PRNG(&engc->seed) % ilen]]++;
+                    if ((~cmsg & FCS_MARK) && (data < --ilen))
+                        iput[data] = iput[ilen];
+                }
+                /// finally, adding the computed random values to ICNTs
+                for (icon = 0; icon < engc->lcnt; icon++)
+                    engc->libs[icon].icnt += irnd[icon];
+            }
             /// is there anything selected? let`s find out
             for (icon = 0; icon < engc->lcnt; icon++)
                 if (engc->libs[icon].icnt > 0)
@@ -2055,6 +2076,8 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if (icon >= engc->lcnt) {
                 /// [TODO:] do we need to show messages here?
 //                rMessage("Nothing selected!", 0, 0);
+                free(irnd);
+                free(iput);
                 break;
             }
             /// counting the number of selected libraries
@@ -2075,9 +2098,13 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             cEngineCallback(engc->engd, ECB_LOAD, 0);
 
             for (libs = engc->libs, icon = 0; icon < engc->lcnt; icon++)
-                if (AppendSpriteArr(&engc->libs[icon], engc)
-                && (++libs - engc->libs <= icon))
-                    libs[-1] = engc->libs[icon];
+                if (AppendSpriteArr(&engc->libs[icon], engc)) {
+                    engc->libs[icon].icnt -= irnd[icon]; /// revert random ICNT
+                    if (++libs <= &engc->libs[icon])
+                        libs[-1] = engc->libs[icon];
+                }
+            free(irnd);
+            free(iput);
             if (libs - engc->libs < engc->lcnt) {
                 engc->lcnt = libs - engc->libs;
                 engc->libs = realloc(engc->libs,
@@ -2129,17 +2156,12 @@ intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         case FCT_SPIN:
             if (cmsg == MSG_NSET) {
                 LINF *libs = (LINF*)ctrl->data;
-                intptr_t pmax, ppos;
 
-                if (!!libs->icnt ^ !!data) {
-                    pmax = RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 1);
-                    ppos = RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 0);
-                    if (!libs->icnt && data)
-                        ppos++;
-                    else if (libs->icnt && !data)
-                        ppos--;
-                    RecountLibs(libs->engc, TXT_SELE, ppos, pmax);
-                }
+                if (!!libs->icnt ^ !!data)
+                    RecountLibs(libs->engc, TXT_SELE,
+                                RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 0)
+                             + ((!libs->icnt && data)? 1 : -1),
+                                RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 1));
                 libs->icnt = data;
             }
             break;
@@ -2262,8 +2284,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
             (uint16_t)xmax | ((uint32_t)ymax << 16));
     RUN_FE2C(engc->CTL_CHAR, MSG_WSZC, 0);
 
-    engc->seed = time(0);
-    printf("[((RNG))] seed = 0x%08X\n", engc->seed);
+    printf("[((RNG))] seed = 0x%08X\n", engc->seed = time(0));
 
     fram = calloc(sizeof(*fram), engc->lcnt * 2);
     rInternalMainLoop(&engc->ctls[0], FRM_WAIT, UpdPreview,
