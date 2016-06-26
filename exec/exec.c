@@ -413,30 +413,21 @@ long WhitespaceUTF8(char *line) {
         case '\x20':
             return ~0;
         case '\xC2':
-            if (line[1] == '\xA0') return ~0; break;
+            if (line[1] == '\xA0') return ~0; else break;
         case '\xE1':
-            if (line[1] == '\x9A' && line[2] == '\x80') return ~0; break;
+            if (line[1] == '\x9A' && line[2] == '\x80') return ~0; else break;
         case '\xE3':
-            if (line[1] == '\x80' && line[2] == '\x80') return ~0; break;
+            if (line[1] == '\x80' && line[2] == '\x80') return ~0; else break;
         case '\xEF':
-            if (line[1] == '\xBB' && line[2] == '\xBF') return ~0; break;
+            if (line[1] == '\xBB' && line[2] == '\xBF') return ~0; else break;
         case '\xE2':
             switch (line[1]) {
-                case '\x81': if (line[2] == '\x9F') return ~0; break;
+                case '\x81': if (line[2] == '\x9F') return ~0; else break;
                 case '\x80':
                     switch (line[2]) {
-                        case '\x80':
-                        case '\x81':
-                        case '\x82':
-                        case '\x83':
-                        case '\x84':
-                        case '\x85':
-                        case '\x86':
-                        case '\x87':
-                        case '\x88':
-                        case '\x89':
-                        case '\x8A':
-                        case '\x8B':
+                        case '\x80': case '\x81': case '\x82': case '\x83':
+                        case '\x84': case '\x85': case '\x86': case '\x87':
+                        case '\x88': case '\x89': case '\x8A': case '\x8B':
                         case '\xAF': return ~0;
                     }
             }
