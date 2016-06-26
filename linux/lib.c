@@ -232,10 +232,15 @@ char *lLoadFile(char *name, long *size) {
         flen = lseek(file, 0, SEEK_END);
         lseek(file, 0, SEEK_SET);
         retn = malloc(flen);
-        read(file, retn, flen);
+        if (read(file, retn, flen) == flen) {
+            if (size)
+                *size = flen;
+        }
+        else {
+            free(retn);
+            retn = 0;
+        }
         close(file);
-        if (size)
-            *size = flen;
     }
     return retn;
 }

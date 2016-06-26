@@ -155,11 +155,16 @@ char *rLoadFile(char *name, long *size) {
         flen = lseek(file, 0, SEEK_END);
         lseek(file, 0, SEEK_SET);
         retn = malloc(flen + 1);
-        read(file, retn, flen);
-        retn[flen] = '\0';
+        if (read(file, retn, flen) == flen) {
+            retn[flen] = '\0';
+            if (size)
+                *size = flen;
+        }
+        else {
+            free(retn);
+            retn = 0;
+        }
         close(file);
-        if (size)
-            *size = flen;
     }
     return retn;
 }
