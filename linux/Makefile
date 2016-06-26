@@ -6,8 +6,8 @@ OBJDIR = .obj
 
 LLIB = -lXrender -lX11 -lGL -lm
 LINC = -I/usr/include/gtkglext-1.0 -I/usr/lib/gtkglext-1.0/include
-LCXFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --libs` -pthread -flto -Wl,--build-id=none
-LCFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags` -I../core -Wall -fPIC -flto -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
+LCXFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --libs` -pthread
+LCFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags` -I../core -Wall -fPIC
 
 LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/common.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/common.o $(OBJDIR)/core/ogl/oglstd.o $(OBJDIR)/lib.o
 LOUT = ../libengine.so
@@ -15,8 +15,8 @@ LOUT = ../libengine.so
 
 ELIB = -lengine -lm
 EINC =
-ECXFLAGS = `pkg-config gtk+-2.0 --libs` -L.. -flto -Wl,--build-id=none
-ECFLAGS = `pkg-config gtk+-2.0 --cflags` -I../core -Wall -flto -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
+ECXFLAGS = `pkg-config gtk+-2.0 --libs` -L..
+ECFLAGS = `pkg-config gtk+-2.0 --cflags` -I../core -Wall
 
 EOBJ = $(OBJDIR)/exec/exec.o $(OBJDIR)/run.o
 EOUT = ../linux-gtk
@@ -24,7 +24,7 @@ EOUT = ../linux-gtk
 
 RelJoined: lrelease
 RelJoined: erelease
-RelJoined: LCXFLAGS += -s
+RelJoined: LCXFLAGS += -s -flto -Wl,--build-id=none
 RelJoined: jlink
 RelJoined:
 	if type upx &> /dev/null; then upx -qq $(EOUT); fi
@@ -34,7 +34,7 @@ DbgJoined: edebug
 DbgJoined: jlink
 
 RelLibOnly: lrelease
-RelLibOnly: LCXFLAGS += -s
+RelLibOnly: LCXFLAGS += -s -flto -Wl,--build-id=none
 RelLibOnly: llink
 
 DbgLibOnly: ldebug
@@ -42,7 +42,7 @@ DbgLibOnly: llink
 
 RelSplit: RelLibOnly
 RelSplit: erelease
-RelSplit: ECXFLAGS += -s
+RelSplit: ECXFLAGS += -s -flto -Wl,--build-id=none
 RelSplit: elink
 RelSplit:
 	if type upx &> /dev/null; then upx -qq $(EOUT) $(LOUT); fi
@@ -62,10 +62,10 @@ cleanRelLibOnly: clean
 cleanDbgLibOnly: clean
 
 
-lrelease: LCFLAGS += -fexpensive-optimizations -O2
+lrelease: LCFLAGS += -fexpensive-optimizations -O2 -flto -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
 lrelease: lbuild $(LOBJ)
 
-erelease: ECFLAGS += -fexpensive-optimizations -O2
+erelease: ECFLAGS += -fexpensive-optimizations -O2 -flto -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
 erelease: ebuild $(EOBJ)
 
 ldebug: LCFLAGS += -g

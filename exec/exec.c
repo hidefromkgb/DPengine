@@ -1925,6 +1925,8 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                  xsep, ysep, xinc, yinc, line, temp, ymax, ycap, yspi;
             ENGC *engc = (ENGC*)ctrl->data;
 
+            if (!engc->lcnt)
+                break;
             xsep = 8; /// separator width
             ysep = 8; /// separator height
             ycap = (uint16_t)(RUN_FE2C(engc->libs[0].capt, MSG__GSZ, 0) >> 16);
@@ -2267,7 +2269,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
         engc->libs[iter].pict =
             (CTRL){&engc->CTL_CHAR, (intptr_t)engc->engd, iter,
                     FCT_IBOX, 0, 0, -indx,
-                   -engc->libs[iter].barr[0].unit[0].ydim, FC2EI};
+                   -(long)engc->libs[iter].barr[0].unit[0].ydim, FC2EI};
         engc->libs[iter].spin =
             (CTRL){&engc->CTL_CHAR, (intptr_t)&engc->libs[iter], iter,
                     FCT_SPIN, 0, 0, -indx, 3, FC2EI};

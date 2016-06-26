@@ -50,14 +50,14 @@ gboolean DrawFunc(gpointer user) {
     uint32_t attr;
 
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
-    if (!(hwnd = gtk_widget_get_window((GtkWidget*)data[0])))
+    if (!(hwnd = gtk_widget_get_window(GTK_WIDGET(data[0]))))
         return TRUE;
 
     gdk_window_get_pointer(hwnd, &xptr, &yptr, &gmod);
     attr = ((gmod & GDK_BUTTON1_MASK)? UFR_LBTN : 0)
          | ((gmod & GDK_BUTTON2_MASK)? UFR_MBTN : 0)
          | ((gmod & GDK_BUTTON3_MASK)? UFR_RBTN : 0)
-         | ((gtk_window_is_active((GtkWindow*)data[0]))? UFR_MOUS : 0);
+         | ((gtk_window_is_active(GTK_WINDOW(data[0])))? UFR_MOUS : 0);
     attr = cPrepareFrame(engd, xptr, yptr, attr);
     if (attr & PFR_SKIP)
         usleep(1000);
@@ -73,7 +73,7 @@ gboolean DrawFunc(gpointer user) {
 
     cEngineCallback(engd, ECB_GFLG, (intptr_t)&attr);
     if (attr & COM_RGPU)
-        pGLD = gtk_widget_gl_begin((GtkWidget*)data[0]);
+        pGLD = gtk_widget_gl_begin(GTK_WIDGET(data[0]));
     else {
         /// comment the lines below to enable manual zeroing
         //*
@@ -219,7 +219,7 @@ void lShowMainWindow(ENGD *engd, long show) {
     intptr_t *data;
 
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
-    ((show)? gtk_widget_show : gtk_widget_hide)((GtkWidget*)data[0]);
+    ((show)? gtk_widget_show : gtk_widget_hide)(GTK_WIDGET(data[0]));
 }
 
 

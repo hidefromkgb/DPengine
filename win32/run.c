@@ -376,7 +376,7 @@ void rFreeTrayIcon(intptr_t icon) {
 
 
 
-intptr_t MoveControl(CTRL *ctrl, intptr_t data) {
+void MoveControl(CTRL *ctrl, intptr_t data) {
     long xspc, yspc, xpos = (int16_t)data, ypos = (int32_t)data >> 16;
     CTRL *root = ctrl;
 
@@ -390,7 +390,6 @@ intptr_t MoveControl(CTRL *ctrl, intptr_t data) {
     yspc = (ctrl->ydim < 0)? -ctrl->ydim : ctrl->ydim * yspc;
     SetWindowPos((HWND)ctrl->priv[0], HWND_TOP,
                   xpos, ypos, xspc, yspc, SWP_SHOWWINDOW);
-    return (uint16_t)xspc | (uint32_t)(yspc << 16);
 }
 
 
@@ -775,7 +774,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             ShowWindow((HWND)ctrl->priv[0], (data)? SW_SHOW : SW_HIDE);
             if (data)
                 SetForegroundWindow((HWND)ctrl->priv[0]);
-            return 0;
+            break;
 
         case MSG_WSZC: {
             RECT rect;
@@ -800,7 +799,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                           | ((uint32_t)rect.bottom << 16);
             SetWindowPos((HWND)ctrl->priv[0], HWND_TOP, rect.left, rect.top,
                          rect.right, rect.bottom, SWP_SHOWWINDOW);
-            return 0;
+            break;
         }
     }
     return 0;
@@ -814,7 +813,7 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             ctrl->priv[4] = data;
             SendMessage((HWND)ctrl->priv[0], PBM_SETRANGE32, 0, ctrl->priv[4]);
             InvalidateRect((HWND)ctrl->priv[0], 0, FALSE);
-            return 0;
+            break;
 
         case MSG_PGET:
             return (data)? ctrl->priv[4] : ctrl->priv[3];
@@ -826,12 +825,12 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 SendMessage((HWND)ctrl->priv[0], PBM_SETPOS,
                              ctrl->priv[3] + 1, 0);
             SendMessage((HWND)ctrl->priv[0], PBM_SETPOS, ctrl->priv[3], 0);
-            return 0;
+            break;
 
         case MSG_PTXT:
             free((void*)ctrl->priv[2]);
             ctrl->priv[2] = (intptr_t)rConvertUTF8((char*)data);
-            return 0;
+            break;
     }
     return 0;
 }
@@ -842,7 +841,7 @@ intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__ENB:
             EnableWindow((HWND)ctrl->priv[0], !!data);
-            return 0;
+            break;
 
         case MSG_BGST:
             return ((IsWindowEnabled((HWND)ctrl->priv[0]))?
@@ -919,20 +918,20 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             return (uint16_t)((dims.right - dims.left)      )
                  | (uint32_t)((dims.bottom - dims.top) << 16);
         }
+        case MSG__POS:
+            MoveControl(ctrl, data);
+            ResizeSpinControl(ctrl);
+            break;
+
         case MSG__SHW:
             ShowWindow((HWND)ctrl->priv[0], (data)? SW_SHOW : SW_HIDE);
             ShowWindow((HWND)ctrl->priv[1], (data)? SW_SHOW : SW_HIDE);
-            return 0;
-
-        case MSG__POS:
-            data = MoveControl(ctrl, data);
-            ResizeSpinControl(ctrl);
-            return data;
+            break;
 
         case MSG__ENB:
             EnableWindow((HWND)ctrl->priv[0], !!data);
             EnableWindow((HWND)ctrl->priv[1], !!data);
-            return 0;
+            break;
 
         case MSG_NGET:
             return SendMessage((HWND)ctrl->priv[1], UDM_GETPOS32, 0, 0);
@@ -941,7 +940,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             data = (data > ctrl->priv[2])? data : ctrl->priv[2];
             data = (data < ctrl->priv[3])? data : ctrl->priv[3];
             SendMessage((HWND)ctrl->priv[1], UDM_SETPOS32, 0, data);
-            return 0;
+            break;
 
         case MSG_NDIM:
             ctrl->priv[2] = -(uint16_t)data;
@@ -949,7 +948,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             SendMessage((HWND)ctrl->priv[1], UDM_SETRANGE32,
                         (WPARAM)ctrl->priv[2], (LPARAM)ctrl->priv[3]);
             SendMessage((HWND)ctrl->priv[1], UDM_SETPOS32, 0, 0);
-            return 0;
+            break;
     }
     return 0;
 }
@@ -965,12 +964,13 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             return (uint16_t)((dims.right - dims.left)      )
                  | (uint32_t)((dims.bottom - dims.top) << 16);
         }
+        case MSG__POS:
+            MoveControl(ctrl, data);
+            break;
+
         case MSG__SHW:
             ShowWindow((HWND)ctrl->priv[0], (data)? SW_SHOW : SW_HIDE);
-            return 0;
-
-        case MSG__POS:
-            return MoveControl(ctrl, data);
+            break;
     }
     return 0;
 }
@@ -1002,11 +1002,11 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 SetWindowPos((HWND)ctrl->priv[0], HWND_TOP, dims.left,
                               dims.top, size.x, size.y, SWP_SHOWWINDOW);
             }
-            return 0;
+            break;
         }
         case MSG__SHW:
             ShowWindow((HWND)ctrl->priv[0], (data)? SW_SHOW : SW_HIDE);
-            return 0;
+            break;
     }
     return 0;
 }
@@ -1016,16 +1016,17 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__POS:
-            return MoveControl(ctrl, data);
+            MoveControl(ctrl, data);
+            break;
 
         case MSG__SHW:
             ShowWindow((HWND)ctrl->priv[0], (data)? SW_SHOW : SW_HIDE);
-            return 0;
+            break;
 
         case MSG_IFRM:
             ctrl->priv[7] = data;
             InvalidateRect((HWND)ctrl->priv[0], 0, FALSE);
-            return 0;
+            break;
     }
     return 0;
 }
@@ -1135,11 +1136,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         ctrl->fe2c = FE2CW;
     }
     else if (root) {
-        while (root->prev)
-            root = root->prev;
-        xspc = (uint16_t)(root->priv[2]);
-        yspc = (uint16_t)(root->priv[2] >> 16);
-
         xsty = 0;
         wsty = ctrl->flgs & FCT_TTTT;
         name = base[wsty].name;
@@ -1149,16 +1145,23 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                                    (wsty == FCT_SBOX))? 0 : WS_TABSTOP);
         xdim = ((ctrl->prev->flgs & FCT_TTTT) != FCT_SBOX)? 0 : 7;
         cwnd = (HWND)ctrl->prev->priv[xdim];
+
+        while (root->prev)
+            root = root->prev;
+        xspc = (uint16_t)(root->priv[2]);
+        yspc = (uint16_t)(root->priv[2] >> 16);
         xpos =  ctrl->xpos + ((xoff && (ctrl->flgs & FCP_HORZ))?
                               *xoff : root->xpos);
         ypos =  ctrl->ypos + ((yoff && (ctrl->flgs & FCP_VERT))?
                               *yoff : root->ypos);
-        xdim = (ctrl->xdim < 0)? 1 - ctrl->xdim / xspc : ctrl->xdim;
-        ydim = (ctrl->ydim < 0)? 1 - ctrl->ydim / yspc : ctrl->ydim;
+        xdim = (ctrl->xdim < 0)? -ctrl->xdim : ctrl->xdim * xspc;
+        ydim = (ctrl->ydim < 0)? -ctrl->ydim : ctrl->ydim * yspc;
         if (xoff)
-            *xoff = xpos + xdim;
+            *xoff = xpos
+                  + ((ctrl->xdim < 0)? 1 - ctrl->xdim / xspc : ctrl->xdim);
         if (yoff)
-            *yoff = ypos + ydim;
+            *yoff = ypos
+                  + ((ctrl->ydim < 0)? 1 - ctrl->ydim / yspc : ctrl->ydim);
 
         switch (ctrl->flgs & FCT_TTTT) {
             case FCT_TEXT:
@@ -1194,11 +1197,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
                     RegisterClassEx(&wndc);
                 cwnd = CreateWindowEx(0, WC_LISTROOT, 0, WS_CHILD | WS_VISIBLE,
-                                      xpos * xspc, ypos * yspc,
-                                     (ctrl->xdim < 0)? -ctrl->xdim
-                                                     :  ctrl->xdim * xspc,
-                                     (ctrl->ydim < 0)? -ctrl->ydim
-                                                     :  ctrl->ydim * yspc,
+                                      xpos * xspc, ypos * yspc, xdim, ydim,
                                       cwnd, (HMENU)ctrl->uuid, 0, ctrl);
                 xpos = ypos = 0;
                 ctrl->priv[1] = (intptr_t)cwnd;
@@ -1233,9 +1232,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 break;
         }
         cwnd = CreateWindowEx(xsty, name, 0, wsty, xpos * xspc, ypos * yspc,
-                             (ctrl->xdim < 0)? -ctrl->xdim : ctrl->xdim * xspc,
-                             (ctrl->ydim < 0)? -ctrl->ydim : ctrl->ydim * yspc,
-                              cwnd, (HMENU)ctrl->uuid, 0, ctrl);
+                              xdim, ydim, cwnd, (HMENU)ctrl->uuid, 0, ctrl);
         SendMessage(cwnd, WM_SETFONT, (WPARAM)root->priv[1], FALSE);
         SetWindowLongPtr(cwnd, GWLP_USERDATA, (LONG_PTR)ctrl);
 
@@ -1291,14 +1288,10 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             case FCT_IBOX: {
                 BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader),
                                     0, 0, 1, 32, BI_RGB}};
-                ctrl->priv[4] =
-                    (ctrl->xdim < 0)? -ctrl->xdim : ctrl->xdim * xspc;
-                ctrl->priv[1] =
-                    (ctrl->ydim < 0)? -ctrl->ydim : ctrl->ydim * yspc;
-                bmpi.bmiHeader.biWidth =   ctrl->priv[4];
-                bmpi.bmiHeader.biHeight = -ctrl->priv[1];
-                ctrl->priv[4] = (uint16_t)(ctrl->priv[4]      )
-                              | (uint32_t)(ctrl->priv[1] << 16);
+                bmpi.bmiHeader.biWidth =   xdim;
+                bmpi.bmiHeader.biHeight = -ydim;
+                ctrl->priv[4] = (uint16_t)(xdim      )
+                              | (uint32_t)(ydim << 16);
                 ctrl->priv[1] = (intptr_t)CreateCompatibleDC(0);
                 ctrl->priv[2] =
                     (intptr_t)CreateDIBSection((HDC)ctrl->priv[1],
