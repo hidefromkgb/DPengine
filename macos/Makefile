@@ -1,10 +1,10 @@
-CC = gcc -m32 -mstackrealign
-CX = g++ -m32 -mstackrealign
+CC = gcc
+CX = g++
 
 
 OBJDIR = .obj
 
-LLIB = -framework ApplicationServices -framework Cocoa -framework OpenGL
+LLIB = -framework CoreGraphics -framework Cocoa -framework OpenGL
 LINC =
 LCXFLAGS =
 LCFLAGS = -I../core -Wall -fPIC -fvisibility=hidden

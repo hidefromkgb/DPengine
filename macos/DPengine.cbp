@@ -6,13 +6,14 @@
 		<Option makefile_is_custom="1" />
 		<Option execution_dir="." />
 		<Option compiler="gcc" />
-		<Option virtualFolders="src/;src/run/;src/run/exec/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/shad/;" />
+		<Option virtualFolders="src/;src/run/;src/run/exec/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/shad/;src/run/exec/loc/;" />
 		<Build>
 			<Target title="RelJoined">
 				<Option output="../cocoa-mac" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
-				<Option type="0" />
+				<Option type="1" />
 				<Option compiler="gcc" />
+				<Option use_console_runner="0" />
 			</Target>
 			<Target title="DbgJoined">
 				<Option output="../cocoa-mac" prefix_auto="1" extension_auto="1" />
@@ -101,6 +102,15 @@
 		<Unit filename="../exec/exec.h">
 			<Option virtualFolder="src/run/exec/" />
 		</Unit>
+		<Unit filename="../exec/loc/de.lang">
+			<Option virtualFolder="src/run/exec/loc/" />
+		</Unit>
+		<Unit filename="../exec/loc/en.lang">
+			<Option virtualFolder="src/run/exec/loc/" />
+		</Unit>
+		<Unit filename="../exec/loc/ru.lang">
+			<Option virtualFolder="src/run/exec/loc/" />
+		</Unit>
 		<Unit filename="Makefile">
 			<Option virtualFolder="src/" />
 		</Unit>
@@ -109,7 +119,7 @@
 			<Option virtualFolder="src/lib/" />
 		</Unit>
 		<Unit filename="mac.h">
-			<Option virtualFolder="src/lib/" />
+			<Option virtualFolder="src/" />
 		</Unit>
 		<Unit filename="run.c">
 			<Option compilerVar="CC" />

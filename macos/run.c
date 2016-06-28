@@ -1,14 +1,56 @@
-#include <time.h>
-#include <unistd.h>
+#include <errno.h>
 #include <dirent.h>
+#include <sys/stat.h>
+
 #include "../exec/exec.h"
-
-#include <objc/objc-runtime.h>
-#include <ApplicationServices/ApplicationServices.h>
+#include "mac.h"
 
 
 
-char *LoadFileZ(char *name, long *size) {
+void rOpenContextMenu(MENU *menu) {
+    /// [TODO:]
+}
+
+
+
+inline MENU *rOSSpecificMenu(ENGC *engc) {
+    return 0;
+}
+
+
+
+char *rConvertUTF8(char *utf8) {
+    return strdup(utf8);
+}
+
+
+
+long rMessage(char *text, char *head, uint32_t flgs) {
+    /// [TODO:]
+    return 0;
+}
+
+
+
+intptr_t rMakeTrayIcon(MENU *mctx, char *text,
+                       uint32_t *data, long xdim, long ydim) {
+    id sbar = systemStatusBar(NSStatusBar);
+    id icon = statusItemWithLength_(sbar, NSVariableStatusItemLength);
+
+    setHighlightMode_(icon, true);
+    /// [TODO:]
+    return 0;
+}
+
+
+
+void rFreeTrayIcon(intptr_t icon) {
+    /// [TODO:]
+}
+
+
+
+char *rLoadFile(char *name, long *size) {
     char *retn = 0;
     long file, flen;
 
@@ -27,59 +69,86 @@ char *LoadFileZ(char *name, long *size) {
 
 
 
-int main(int argc, char *argv[]) {
-    struct dirent **dirs;
-    long uses, size;
-    ENGC engc = {};
-    LINF *libs;
+long rSaveFile(char *name, char *data, long size) {
+    long file;
 
-    SEL fram = sel_registerName("visibleFrame");
-    id scrn = objc_msgSend((id)objc_getClass("NSScreen"),
-                            sel_registerName("mainScreen"));
+    if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {
+        size = write(file, data, size);
+        close(file);
+        return size;
+    }
+    return 0;
+}
+
+
+
+void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
+                       ENGC *engc, intptr_t data) {
+    /// [TODO:]
+}
+
+
+
+void rFreeControl(CTRL *ctrl) {
+    /// [TODO:]
+}
+
+
+
+intptr_t FE2C(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    return 0;
+}
+
+
+
+void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
+    /// [TODO:]
+    ctrl->fe2c = FE2C;
+}
+
+
+
+int main(int argc, char *argv[]) {
+    ssize_t sdim;
     CGRect dims;
 
-#ifdef __i386__
-    typeof(dims) (*GetT4DV)(id, SEL) = (typeof(GetT4DV))objc_msgSend_stret;
-    dims = GetT4DV(scrn, fram);
-#else
-    objc_msgSend_stret((void*)&dims, (void*)scrn, fram);
-#endif
-    engc.dims = (T2IV){dims.size.width  - dims.origin.x,
-                       dims.size.height - dims.origin.y};
+    char *home, *conf;
+    struct dirent **dirs;
+    ENGC *engc;
 
-    uses = (argc > 1)? atol(argv[1]) : 0;
-    uses = (uses > 0)? uses : 1;
+    /// very important call; without it, nothing below would ever work
+    LoadObjC();
 
-    if ((engc.engh = EngineInitialize())) {
-        if ((size = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
-            while (size--) {
-                if ((dirs[size]->d_type == DT_DIR)
-                &&  strcmp(dirs[size]->d_name, ".")
-                &&  strcmp(dirs[size]->d_name, "..")) {
-                    AppendLib(&engc, DEF_CONF, DEF_FLDR, dirs[size]->d_name);
-                }
-                free(dirs[size]);
-            }
-            free(dirs);
+/*
+    if (!(home = getenv("HOME")))
+        home = getpwuid(getuid())->pw_dir;
+    conf = calloc(32 + strlen(home), sizeof(*conf));
+    strcat(conf, home);
+    strcat(conf, "/.config");
+    strcat(conf, DEF_OPTS);
+    if (!(home = (mkdir(conf, 0755))? (errno != EEXIST)? 0 : conf : conf))
+        printf("WARNING: cannot create '%s'!", conf);
+//*/
+
+//    NSArray *URLs = [[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask];
+//    NSURL *documentsURL = URLs[0];
+
+    engc = eInitializeEngine(conf);
+    free(conf);
+    if ((sdim = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
+        while (sdim--) {
+            if ((dirs[sdim]->d_type == DT_DIR)
+            &&  strcmp(dirs[sdim]->d_name, ".")
+            &&  strcmp(dirs[sdim]->d_name, ".."))
+                eAppendLib(engc, DEF_CONF, DEF_FLDR, dirs[sdim]->d_name);
+            free(dirs[sdim]);
         }
-        InitMainMenu(&engc);
-        EngineFinishLoading(engc.engh);
-        TTH_ITER(engc.libs, PrepareSpriteArr, &engc.libs);
-
-        /// [TODO] substitute this by GUI selection
-        libs = engc.libs;
-        while (libs) {
-            libs->icnt = labs(uses);
-            libs = (LINF*)libs->prev;
-        }
-        engc.seed = time(0);
-        printf("[((RNG))] seed = 0x%08X\n", engc.seed);
-        MakeSpriteArr(&engc);
-        EngineRunMainLoop(engc.engh, 0, 0, engc.dims.x, engc.dims.y, 0,
-                          FRM_WAIT, (uses < 0)? SCM_RSTD : SCM_ROGL,
-                          0, /// localization goes here
-                         (uintptr_t)&engc, UpdateFrame);
-        FreeEverything(&engc);
+        free(dirs);
     }
+    GetT4DV(dims, mainScreen(NSScreen), VisibleFrame);
+    GetT1DV(sdim, systemStatusBar(NSStatusBar), Thickness);
+    eExecuteEngine(engc, sdim, sdim, 0, 0, dims.size.width  - dims.origin.x,
+                                           dims.size.height - dims.origin.y);
+    usleep(1000000000);
     return 0;
 }
