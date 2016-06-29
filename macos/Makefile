@@ -4,7 +4,7 @@ CX = g++
 
 OBJDIR = .obj
 
-LLIB = -framework CoreGraphics -framework Cocoa -framework OpenGL
+LLIB = -framework ApplicationServices -framework Cocoa -framework OpenGL
 LINC =
 LCXFLAGS =
 LCFLAGS = -I../core -Wall -fPIC -fvisibility=hidden

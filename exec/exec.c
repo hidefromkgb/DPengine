@@ -2278,6 +2278,7 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     RUN_FE2C(engc->CTL_CHAR, MSG_WSZC, 0);
 
     printf("[((RNG))] seed = 0x%08X\n", engc->seed = time(0));
+    printf("[**INI**] %s\n", engc->conf);
 
     fram = calloc(sizeof(*fram), engc->lcnt * 2);
     rInternalMainLoop(&engc->ctls[0], FRM_WAIT, UpdPreview,

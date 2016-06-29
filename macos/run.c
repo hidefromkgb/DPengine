@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #include "../exec/exec.h"
 #include "mac.h"
@@ -82,28 +83,432 @@ long rSaveFile(char *name, char *data, long size) {
 
 
 
+void TmrFunc(CFRunLoopTimerRef tmrp, void *user) {
+    intptr_t *data = (intptr_t*)user;
+    struct timeval spec = {};
+    uint64_t time;
+
+    gettimeofday(&spec, 0);
+    time = spec.tv_sec * 1000 + spec.tv_usec / 1000;
+    ((UPRE)data[0])((ENGC*)data[1], data[2], time);
+}
+
+
+
 void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
                        ENGC *engc, intptr_t data) {
-    /// [TODO:]
+    intptr_t user[3] = {(intptr_t)upre, (intptr_t)engc, data};
+    CFRunLoopTimerContext ctxt = {0, (void*)user};
+    CFRunLoopTimerRef tmrp =
+        CFRunLoopTimerCreate(0, CFAbsoluteTimeGetCurrent(),
+                             0.001 * fram, 0, 0, TmrFunc, &ctxt);
+
+    CFRunLoopAddTimer(CFRunLoopGetCurrent(), tmrp, kCFRunLoopCommonModes);
+    run(sharedApplication(NSApplication));
+    CFRunLoopTimerInvalidate(tmrp);
 }
 
 
 
-void rFreeControl(CTRL *ctrl) {
-    /// [TODO:]
-}
+/// PRIV:
+///  0: NSWindow
+///  1: (wndsize.x) | (wndsize.y << 16)
+///  2: (fontmul.x) | (fontmul.y << 16)
+///  3:
+///  4:
+///  5:
+///  6: subclass delegate
+///  7: NSView subclass (flipped)
+intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG__SHW: {
+            id thrd = sharedApplication(NSApplication);
 
+            if (data)
+                orderFront_((id)ctrl->priv[0], thrd);
+            else
+                orderOut_((id)ctrl->priv[0], thrd);
+            break;
+        }
+        case MSG_WSZC: {
+            id thrd = sharedApplication(NSApplication);
+            CGRect area, scrn;
 
-
-intptr_t FE2C(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+            area.size.width  = (((uint16_t)(data      )) + ctrl->xdim)
+                             *   (uint16_t)(ctrl->priv[2]      );
+            area.size.height = (((uint16_t)(data >> 16)) + ctrl->ydim)
+                             *   (uint16_t)(ctrl->priv[2] >> 16);
+            ctrl->priv[1] =  (uint16_t)area.size.width
+                          | ((uint32_t)area.size.height << 16);
+            GetT4DV2(area, (id)ctrl->priv[0], FrameRectForContentRect_, area);
+            GetT4DV(scrn, mainScreen(NSScreen), VisibleFrame);
+            area.origin.x = 0.5 * (scrn.size.width  - area.size.width )
+                          + scrn.origin.x;
+            area.origin.y = 0.5 * (scrn.size.height - area.size.height)
+                          + scrn.origin.y;
+            setFrame_display_animate_((id)ctrl->priv[0], area, true, false);
+            setMinSize_((id)ctrl->priv[0], area.size);
+            orderFront_((id)ctrl->priv[0], thrd);
+            break;
+        }
+    }
     return 0;
 }
 
 
 
+/// PRIV:
+///  0: NS
+///  1:
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG_PPOS:
+            break;
+
+        case MSG_PTXT:
+            break;
+
+        case MSG_PLIM:
+            break;
+
+        case MSG_PGET:
+            return 0;
+    }
+    return 0;
+}
+
+
+
+/// PRIV:
+///  0: NS
+///  1:
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG__ENB:
+            break;
+
+        case MSG_BGST:
+            return 0;
+
+        case MSG_BCLK:
+            return 0;
+    }
+    return 0;
+}
+
+
+
+/// PRIV:
+///  0: NS
+///  1:
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG__ENB:
+            break;
+
+        case MSG_LCOL:
+            break;
+
+        case MSG_LADD: {
+            break;
+        }
+    }
+    return 0;
+}
+
+
+
+/// PRIV:
+///  0: NS
+///  1:
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG__GSZ:
+            return 0;
+
+        case MSG__POS:
+            break;
+
+        case MSG__SHW:
+            break;
+
+        case MSG__ENB:
+            break;
+
+        case MSG_NGET:
+            return 0;
+
+        case MSG_NSET:
+            break;
+
+        case MSG_NDIM:
+            break;
+    }
+    return 0;
+}
+
+
+
+/// PRIV:
+///  0: NS
+///  1:
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG__GSZ:
+            return 0;
+
+        case MSG__POS:
+            break;
+
+        case MSG__SHW:
+            break;
+    }
+    return 0;
+}
+
+
+
+/// PRIV:
+///  0: NS
+///  1:
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG_WSZC:
+            break;
+
+        case MSG__SHW:
+            break;
+    }
+    return 0;
+}
+
+
+
+/// PRIV:
+///  0: NS
+///  1:
+///  2:
+///  3:
+///  4:
+///  5:
+///  6:
+///  7:
+intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (cmsg) {
+        case MSG__POS:
+            break;
+
+        case MSG__SHW:
+            break;
+
+        case MSG_IFRM:
+            break;
+    }
+    return 0;
+}
+
+
+
+void rFreeControl(CTRL *ctrl) {
+    switch (ctrl->flgs & FCT_TTTT) {
+        case FCT_WNDW:
+            release((id)ctrl->priv[7]);                  /// releasing NSView
+            objc_disposeClassPair((Class)ctrl->priv[6]); /// releasing subclass
+            break;
+
+        case FCT_TEXT:
+            break;
+
+        case FCT_BUTN:
+            break;
+
+        case FCT_CBOX:
+            break;
+
+        case FCT_RBOX:
+            break;
+
+        case FCT_SPIN:
+            break;
+
+        case FCT_LIST:
+            break;
+
+        case FCT_SBOX:
+            break;
+
+        case FCT_IBOX:
+            break;
+
+        case FCT_PBAR:
+            break;
+    }
+if (ctrl->priv[0]) /// [TODO:] DEL ME (this very line)
+    release((id)ctrl->priv[0]);
+}
+
+
+
+bool OnFlip() {
+    return true;
+}
+
+
+
 void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
-    /// [TODO:]
-    ctrl->fe2c = FE2C;
+    CTRL *root;
+    CGRect dims;
+    id gwnd;
+
+    gwnd = 0;
+    root = ctrl->prev;
+    if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
+        CGPoint fadv;
+        CGFloat fasc;
+
+        ctrl->fe2c = FE2CW;
+        gwnd = systemFontOfSize_(NSFont, 0);
+        GetT1DV(fasc, gwnd, Ascender);
+        GetT2DV(fadv, gwnd, MaximumAdvancement);
+        ctrl->priv[2] =  (uint16_t)round(0.45 * fadv.x)
+                      | ((uint32_t)round(0.60 * fasc) << 16);
+
+        dims = (CGRect){};
+        gwnd = initWithContentRect_styleMask_backing_defer_
+                   (alloc(NSWindow), dims, NSTitledWindowMask
+                                         | NSClosableWindowMask
+                                         | NSResizableWindowMask
+                                         | NSMiniaturizableWindowMask,
+                    NSBackingStoreBuffered, false);
+
+        ctrl->priv[6] = (intptr_t)Subclass(NSView, "NSV", (char*[]){0},
+                                          (OMSC[]){{IsFlipped, OnFlip}, {}});
+        ctrl->priv[7] = (intptr_t)init(alloc((id)ctrl->priv[6]));
+        setContentView_(gwnd, (id)ctrl->priv[7]);
+        setTitle_(gwnd, UTF8(text));
+        makeKeyWindow(gwnd);
+    }
+    else if (root) {
+        long xspc, yspc, xpos, ypos, xdim, ydim;
+
+        while (root->prev)
+            root = root->prev;
+        xspc = (uint16_t)(root->priv[2]);
+        yspc = (uint16_t)(root->priv[2] >> 16);
+        xpos =  ctrl->xpos + ((xoff && (ctrl->flgs & FCP_HORZ))?
+                              *xoff : root->xpos);
+        ypos =  ctrl->ypos + ((yoff && (ctrl->flgs & FCP_VERT))?
+                              *yoff : root->ypos);
+        xdim = (ctrl->xdim < 0)? -ctrl->xdim : ctrl->xdim * xspc;
+        ydim = (ctrl->ydim < 0)? -ctrl->ydim : ctrl->ydim * yspc;
+        if (xoff)
+            *xoff = xpos
+                  + ((ctrl->xdim < 0)? 1 - ctrl->xdim / xspc : ctrl->xdim);
+        if (yoff)
+            *yoff = ypos
+                  + ((ctrl->ydim < 0)? 1 - ctrl->ydim / yspc : ctrl->ydim);
+        dims = (CGRect){{xpos * xspc, ypos * yspc}, {xdim, ydim}};
+
+        switch (ctrl->flgs & FCT_TTTT) {
+            case FCT_TEXT:
+                ctrl->fe2c = FE2CT;
+                gwnd = initWithFrame_(alloc(NSTextField), dims);
+                setStringValue_(gwnd, UTF8(text));
+                setDrawsBackground_(gwnd, false);
+                setSelectable_(gwnd, false);
+                setEditable_(gwnd, false);
+                setBordered_(gwnd, false);
+                setBezeled_(gwnd, false);
+                break;
+
+            case FCT_BUTN:
+                gwnd = initWithFrame_(alloc(NSButton), dims);
+                setButtonType_(gwnd, NSMomentaryLightButton);
+                setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
+                setTitle_(gwnd, UTF8(text));
+                break;
+
+            case FCT_CBOX:
+                ctrl->fe2c = FE2CX;
+                gwnd = initWithFrame_(alloc(NSButton), dims);
+                setButtonType_(gwnd, NSSwitchButton);
+                setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
+                setImagePosition_(gwnd, (ctrl->flgs & FSX_LEFT)?
+                                         NSImageRight : NSImageLeft);
+                setTitle_(gwnd, UTF8(text));
+                break;
+
+            case FCT_RBOX:
+                /// [TODO:] do we really need radio boxes?
+                break;
+
+            case FCT_SPIN:
+                ctrl->fe2c = FE2CN;
+                /// NSStepper
+                /// NSTextField
+                break;
+
+            case FCT_LIST:
+                ctrl->fe2c = FE2CL;
+                /// NSTableView
+                break;
+
+            case FCT_SBOX:
+                ctrl->fe2c = FE2CS;
+                /// NSScroller
+                /// NSView?
+                break;
+
+            case FCT_IBOX:
+                ctrl->fe2c = FE2CI;
+                /// NSView?
+                break;
+
+            case FCT_PBAR:
+                ctrl->fe2c = FE2CP;
+                gwnd = initWithFrame_(alloc(NSProgressIndicator), dims);
+                break;
+        }
+    if (gwnd) /// [TODO:] DEL ME (this very line)
+        addSubiew_((id)ctrl->prev->priv[7], gwnd);
+    }
+    ctrl->priv[0] = (intptr_t)gwnd;
 }
 
 
@@ -111,27 +516,27 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 int main(int argc, char *argv[]) {
     ssize_t sdim;
     CGRect dims;
+    id pool;
 
     char *home, *conf;
     struct dirent **dirs;
     ENGC *engc;
 
-    /// very important call; without it, nothing below would ever work
     LoadObjC();
 
-/*
-    if (!(home = getenv("HOME")))
-        home = getpwuid(getuid())->pw_dir;
+    pool = URLsForDirectory_inDomains_(defaultManager(NSFileManager),
+                                       NSApplicationSupportDirectory,
+                                       NSUserDomainMask);
+    home = UTF8String(path(objectAtIndex_(pool, 0)));
     conf = calloc(32 + strlen(home), sizeof(*conf));
     strcat(conf, home);
-    strcat(conf, "/.config");
     strcat(conf, DEF_OPTS);
     if (!(home = (mkdir(conf, 0755))? (errno != EEXIST)? 0 : conf : conf))
         printf("WARNING: cannot create '%s'!", conf);
-//*/
 
-//    NSArray *URLs = [[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask];
-//    NSURL *documentsURL = URLs[0];
+    pool = init(alloc(NSAutoreleasePool));
+    setActivationPolicy_(sharedApplication(NSApplication),
+                         NSApplicationActivationPolicyAccessory);
 
     engc = eInitializeEngine(conf);
     free(conf);
@@ -147,8 +552,9 @@ int main(int argc, char *argv[]) {
     }
     GetT4DV(dims, mainScreen(NSScreen), VisibleFrame);
     GetT1DV(sdim, systemStatusBar(NSStatusBar), Thickness);
-    eExecuteEngine(engc, sdim, sdim, 0, 0, dims.size.width  - dims.origin.x,
-                                           dims.size.height - dims.origin.y);
-    usleep(1000000000);
+    eExecuteEngine(engc, sdim, sdim, dims.origin.x, dims.origin.y,
+                   dims.size.width  + dims.origin.x,
+                   dims.size.height + dims.origin.y);
+    release(pool);
     return 0;
 }

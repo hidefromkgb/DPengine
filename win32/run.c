@@ -1354,8 +1354,8 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     BOOL retn;
 
 //    if (flgs & FLG_CONS) {
-        AllocConsole();
-        freopen("CONOUT$", "wb", stdout);
+//        AllocConsole();
+//        freopen("CONOUT$", "wb", stdout);
 //    }
 
     retn = 0;

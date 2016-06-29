@@ -1,9 +1,7 @@
 #include <sys/time.h>
-#include <core.h>
 
-#define EXT_OBJC
+#include <core.h>
 #include "mac.h"
-#undef EXT_OBJC
 
 
 
@@ -35,26 +33,6 @@ typedef struct _DRAW {
     id hwnd;           /// main window
     CGContextRef hctx; /// output context handle
 } DRAW;
-
-
-
-id Subclass(id base, char *name, char *flds[], OMSC *mths) {
-    Class retn = objc_allocateClassPair((Class)base, name, 0);
-    long iter;
-
-    iter = -1;
-    /// adding fields
-    while (flds[++iter])
-        class_addIvar(retn, flds[iter],
-                      sizeof(id), (sizeof(id) >= 8)? 3 : 2, 0);
-    iter = -1;
-    /// overloading methods
-    while (mths[++iter].func)
-        class_addMethod(retn, mths[iter].name, mths[iter].func, 0);
-
-    objc_registerClassPair(retn);
-    return (id)retn;
-}
 
 
 
@@ -189,7 +167,7 @@ bool OnOpaq() {
 
 
 
-void OnCalc(CFRunLoopTimerRef time, void *user) {
+void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
     CGPoint dptr;
     uint32_t attr;
     intptr_t *data;
@@ -295,6 +273,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     OMSC vmet[] = {{DrawRect_, OnDraw}, {IsOpaque,  OnOpaq}, {}};
     char *vfld[] = {0};
 
+    LoadObjC();
+
     data[0] = (intptr_t)&draw;
     draw.adlg = Subclass(NSObject, SUB_ADLG,
                         (char*[]){VAR_HWND, VAR_ENGD, VAR_VIEW, 0},
@@ -302,7 +282,6 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
 
     draw.pool = init(alloc(NSAutoreleasePool));
     draw.thrd = sharedApplication(NSApplication);
-    setActivationPolicy_(draw.thrd, NSApplicationActivationPolicyAccessory);
     setDelegate_(draw.thrd, (draw.ains = init(alloc(draw.adlg))));
 
     if (~flgs & COM_RGPU) {
@@ -351,11 +330,11 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     SET_IVAR(draw.ains, VAR_VIEW, draw.vins);
 
     activateIgnoringOtherApps_(draw.thrd, true);
-    makeKeyAndOrderFront_(draw.hwnd, draw.thrd);
+    makeKeyWindow(draw.hwnd);
+    orderFront_(draw.hwnd, draw.thrd);
 //    enableCursorRects(draw.hwnd);
 //    objc_msgSend(draw.vins, resetCursorRects);
 
-    /// run loop starts here
     run(draw.thrd);
 
     CFRunLoopTimerInvalidate(tmrd);
