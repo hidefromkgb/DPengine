@@ -492,7 +492,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
             gtk_widget_get_size_request(GTK_WIDGET(ctrl->priv[0]),
                                         &xdim, &ydim);
-            return (uint16_t)xdim | (uint32_t)(ydim << 16);
+            return (uint16_t)xdim | ((uint32_t)ydim << 16);
         }
         case MSG__POS:
             MoveControl(ctrl, data);

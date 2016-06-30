@@ -295,7 +295,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         CGColorSpaceRelease(drgb);
 
         draw.vdlg = Subclass(NSView, SUB_VDLG, vfld, vmet);
-        draw.vins = initWithFrame_(alloc(draw.vdlg), dims);
+        draw.vins = init(alloc(draw.vdlg));
+        setFrame_(draw.vins, dims);
     }
     else {
         int attr[] = {NSOpenGLPFADoubleBuffer, NSOpenGLPFADepthSize, 32, 0},
