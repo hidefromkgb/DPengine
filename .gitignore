@@ -1,7 +1,7 @@
 # Binaries
 win32.exe
-cocoa-mac
 linux-gtk
+macos.app/Contents/MacOS/*
 *.dll
 *.dylib
 *.so

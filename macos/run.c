@@ -462,8 +462,8 @@ bool OnFlip() {
     return true;
 }
 
-bool OnClose(id init) {
-    stop_(sharedApplication(NSApplication), init);
+bool OnClose(id view) {
+    stop_(sharedApplication(NSApplication), view);
     return true;
 }
 
@@ -471,7 +471,7 @@ void OnSize(id view) {
     CTRL *ctrl = 0;
     CGRect rect;
 
-    GET_IVAR(view /** NSView window delegate **/, VAR_CTRL, &ctrl);
+    GET_IVAR(view, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
 
@@ -518,6 +518,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         setTitle_(gwnd, UTF8(text)); /// no need to release NSString!
         SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
         makeKeyWindow(gwnd);
+        setLevel_(gwnd, NSMainMenuWindowLevel + 1);
+        orderFront_(gwnd, sharedApplication(NSApplication));
     }
     else if (root) {
         long xspc, yspc, xpos, ypos, xdim, ydim;
@@ -670,23 +672,32 @@ int main(int argc, char *argv[]) {
     strcat(conf, DEF_OPTS);
     if (!(home = (mkdir(conf, 0755))? (errno != EEXIST)? 0 : conf : conf))
         printf("WARNING: cannot create '%s'!", conf);
+    release(pool);
+
+    engc = eInitializeEngine(conf);
+    free(conf);
+
+    home = UTF8String(pool = bundlePath(mainBundle(NSBundle)));
+    conf = calloc(32 + strlen(home), sizeof(*conf));
+    strcat(conf, home);
+    strcat(conf, "/Contents/MacOS/"DEF_FLDR);
+    release(pool);
 
     pool = init(alloc(NSAutoreleasePool));
     setActivationPolicy_(sharedApplication(NSApplication),
                          NSApplicationActivationPolicyAccessory);
 
-    engc = eInitializeEngine(conf);
-    free(conf);
-    if ((sdim = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
+    if ((sdim = scandir(conf, &dirs, 0, alphasort)) >= 0) {
         while (sdim--) {
             if ((dirs[sdim]->d_type == DT_DIR)
             &&  strcmp(dirs[sdim]->d_name, ".")
             &&  strcmp(dirs[sdim]->d_name, ".."))
-                eAppendLib(engc, DEF_CONF, DEF_FLDR, dirs[sdim]->d_name);
+                eAppendLib(engc, DEF_CONF, conf, dirs[sdim]->d_name);
             free(dirs[sdim]);
         }
         free(dirs);
     }
+    free(conf);
     GetT4DV(dims, mainScreen(NSScreen), VisibleFrame);
     GetT1DV(sdim, systemStatusBar(NSStatusBar), Thickness);
     eExecuteEngine(engc, sdim, sdim, dims.origin.x, dims.origin.y,

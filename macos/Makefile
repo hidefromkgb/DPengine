@@ -3,6 +3,7 @@ CX = g++
 
 
 OBJDIR = .obj
+EXEPATH = ../macos.app/Contents/MacOS
 
 LLIB = -framework ApplicationServices -framework Cocoa -framework OpenGL
 LINC =
@@ -19,7 +20,7 @@ ECXFLAGS = -L..
 ECFLAGS = -I../core -Wall
 
 EOBJ = $(OBJDIR)/exec/exec.o $(OBJDIR)/run.o
-EOUT = ../cocoa-mac
+EOUT = $(EXEPATH)/DPE
 
 
 RelJoined: lrelease
@@ -97,6 +98,7 @@ $(OBJDIR)/run.o: run.c
 
 jlink:
 	$(CX) $(LCXFLAGS) $(LOBJ) $(EOBJ) -o $(EOUT) $(LLIB)
+	if ! [ -h $(EXEPATH)/Ponies ]; then ln -s ../../../Ponies $(EXEPATH)/Ponies; fi
 
 llink: LCXFLAGS += -shared
 llink:

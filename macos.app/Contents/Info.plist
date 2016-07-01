@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleInfoDictionaryVersion</key>
+<string>6.0</string>
+<key>CFBundlePackageType</key>
+<string>APPL</string>
+<key>CFBundleExecutable</key>
+<string>DPE</string>
+<key>CFBundleIdentifier</key>
+<string>hidefromkgb.DesktopPoniesEngine</string>
+<key>CFBundleName</key>
+<string>Desktop Ponies Engine</string>
+<key>CFBundleIconFile</key>
+<string>main</string>
+<key>CFBundleVersion</key>
+<string>[early alpha]</string>
+<key>LSApplicationCategoryType</key>
+<string>public.app-category.entertainment</string>
+<key>LSMinimumSystemVersion</key>
+<string>10.5.0</string>
+<key>LSUIElement</key>
+<string>1</string>
+<key>NSPrincipalClass</key>
+<string>NSApplication</string>
+</dict></plist>
