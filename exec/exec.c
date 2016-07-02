@@ -2260,7 +2260,8 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
         engc->libs[iter].pict =
             (CTRL){&engc->CTL_CHAR, (intptr_t)engc->engd, iter,
                     FCT_IBOX, 0, 0, -indx,
-                   -(long)engc->libs[iter].barr[0].unit[0].ydim, FC2EI};
+                    (engc->libs[iter].barr[0].unit[0].ydim)?
+                   -(long)engc->libs[iter].barr[0].unit[0].ydim : -1, FC2EI};
         engc->libs[iter].spin =
             (CTRL){&engc->CTL_CHAR, (intptr_t)&engc->libs[iter], iter,
                     FCT_SPIN, 0, 0, -indx, 3, FC2EI};

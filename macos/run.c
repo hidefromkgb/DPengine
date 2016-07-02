@@ -9,6 +9,23 @@
 /// name of the instance variable to access the CTRL structure
 #define VAR_CTRL "c"
 
+/// subclass storage
+typedef union {
+    struct {
+        id wndw,
+           text,
+           butn,
+           cbox,
+           rbox,
+           spin,
+           list,
+           pbar,
+           sbox,
+           ibox;
+    };
+    id _sub[10];
+} SCLS;
+
 
 
 void rOpenContextMenu(MENU *menu) {
@@ -135,8 +152,8 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
 ///  3:
 ///  4:
 ///  5:
-///  6: subclass delegate
-///  7: NSView subclass (flipped)
+///  6: SCLS subclass storage
+///  7: window main view delegate
 intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__SHW: {
@@ -387,14 +404,14 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 /// PRIV:
-///  0: NS
-///  1:
-///  2:
-///  3:
+///  0: NSView
+///  1: CGContextRef
+///  2: data array
+///  3: (xdim) | (ydim << 16)
 ///  4:
 ///  5:
 ///  6:
-///  7:
+///  7: (animation ID << 10) | (current frame)
 intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__POS:
@@ -406,6 +423,8 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG_IFRM:
+            ctrl->priv[7] = data;
+            setNeedsDisplay_((id)ctrl->priv[0], true);
             break;
     }
     return 0;
@@ -415,12 +434,18 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 void rFreeControl(CTRL *ctrl) {
     switch (ctrl->flgs & FCT_TTTT) {
-        case FCT_WNDW:
-            objc_disposeClassPair((Class)ctrl->priv[6]); /// releasing subclass
-            /// we shouldn`t release neither the window nor its NSView;
+        case FCT_WNDW: {
+            SCLS *scls = (SCLS*)ctrl->priv[6];
+            long iter;
+
+            /// [TODO:] do not try to free standard classes, if any
+            for (iter = countof(scls->_sub) - 1; iter >= 0; iter--)
+                objc_disposeClassPair((Class)scls->_sub[iter]);
+            free(scls);
+            /// we must release neither the window nor its NSView;
             /// if we do, the program segfaults, don`t know why exactly
             return;
-
+        }
         case FCT_TEXT:
             break;
 
@@ -447,6 +472,8 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_IBOX:
+            CGContextRelease((CGContextRef)ctrl->priv[1]);
+            free((void*)ctrl->priv[2]);
             break;
 
         case FCT_PBAR:
@@ -458,7 +485,50 @@ void rFreeControl(CTRL *ctrl) {
 
 
 
-bool OnFlip() {
+void PBoxDraw(CGRect rect, id this) {
+    struct objc_super prev = {this, class(NSProgressIndicator)};
+    CTRL *ctrl = 0;
+    CGRect area;
+
+    GET_IVAR(this, VAR_CTRL, &ctrl);
+    objc_msgSendSuper(&prev, DrawRect_, rect);
+
+    GetT4DV(area, (id)ctrl->priv[0], Frame);
+    area.origin.x = area.origin.y = 0;
+    drawInRect_withAttributes_(autorelease(UTF8((char*)ctrl->priv[3])),
+                               area, 0);
+}
+
+void IBoxDraw(CGRect rect, id this) {
+    CGContextRef ctxt;
+    CGImageRef pict;
+    CGRect area;
+    AINF anim;
+    CTRL *ctrl = 0;
+
+    GET_IVAR(this, VAR_CTRL, &ctrl);
+    if (!ctrl)
+        return;
+    anim = (AINF){(ctrl->priv[7] >> 10) & 0x3FFFFF,
+                  (int16_t)ctrl->priv[3], (int32_t)ctrl->priv[3] >> 16,
+                   ctrl->priv[7] & 0x3FF, (uint32_t*)ctrl->priv[2]};
+    if (!anim.uuid)
+        return;
+    area = (CGRect){{0, 0}, {anim.xdim, anim.ydim}};
+    CGContextFillRect((CGContextRef)ctrl->priv[1], area);
+    CGContextFlush((CGContextRef)ctrl->priv[1]);
+    ctrl->fc2e(ctrl, MSG_IFRM, (intptr_t)&anim);
+    pict = CGBitmapContextCreateImage((CGContextRef)ctrl->priv[1]);
+    ctxt = (CGContextRef)graphicsPort(currentContext(NSGraphicsContext));
+    CGContextDrawImage(ctxt, area, pict);
+    CGImageRelease(pict);
+}
+
+bool OnFalse() {
+    return false;
+}
+
+bool OnTrue() {
     return true;
 }
 
@@ -484,6 +554,7 @@ void OnSize(id view) {
 
 void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
     CTRL *root;
+    SCLS *scls;
     CGRect dims;
     id gwnd, capt;
 
@@ -491,8 +562,10 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
     root = ctrl->prev;
     if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
         char *vars[] = {VAR_CTRL, 0};
-        OMSC acts[] = {{WindowShouldClose_, OnClose}, {IsFlipped, OnFlip},
-                       {WindowDidResize_, OnSize}, {}};
+        OMSC wact[] = {{WindowShouldClose_, OnClose}, {IsFlipped, OnTrue},
+                       {WindowDidResize_, OnSize}, {}},
+             iact[] = {{DrawRect_, IBoxDraw}, {}},
+             pact[] = {{DrawRect_, PBoxDraw}, {}};
         CGPoint fadv;
         CGFloat fasc;
 
@@ -503,6 +576,18 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         ctrl->priv[2] =  (uint16_t)round(0.45 * fadv.x)
                       | ((uint32_t)round(0.60 * fasc) << 16);
 
+        ctrl->priv[6] = (intptr_t)(scls = calloc(1, sizeof(*scls)));
+        scls->wndw = Subclass(NSView,              "NSW", vars, wact);
+        scls->text = NSTextField;
+        scls->butn = NSButton;
+        scls->cbox = NSButton;
+        scls->rbox = NSButton;
+        scls->spin = NSStepper;
+        scls->list = NSScrollView;
+        scls->pbar = Subclass(NSProgressIndicator, "NSP", vars, pact);
+        scls->sbox = NSScrollView;
+        scls->ibox = Subclass(NSView,              "NSI", vars, iact);
+
         dims = (CGRect){};
         gwnd = initWithContentRect_styleMask_backing_defer_
                    (alloc(NSWindow), dims, NSTitledWindowMask
@@ -511,14 +596,13 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                                          | NSMiniaturizableWindowMask,
                     NSBackingStoreBuffered, false);
 
-        ctrl->priv[6] = (intptr_t)Subclass(NSView, "NSV", vars, acts);
-        ctrl->priv[7] = (intptr_t)init(alloc((id)ctrl->priv[6]));
+        ctrl->priv[7] = (intptr_t)init(alloc(scls->wndw));
         setContentView_(gwnd, (id)ctrl->priv[7]);
         setDelegate_(gwnd, (id)ctrl->priv[7]);
         setTitle_(gwnd, UTF8(text)); /// no need to release NSString!
         SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
         makeKeyWindow(gwnd);
-        setLevel_(gwnd, NSMainMenuWindowLevel + 1);
+        setLevel_(gwnd, NSNormalWindowLevel + 1); /// just a bit above others
         orderFront_(gwnd, sharedApplication(NSApplication));
     }
     else if (root) {
@@ -541,12 +625,16 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             *yoff = ypos
                   + ((ctrl->ydim < 0)? 1 - ctrl->ydim / yspc : ctrl->ydim);
         dims = (CGRect){{xpos * xspc, ypos * yspc}, {xdim, ydim}};
+        scls = (SCLS*)root->priv[6];
 
         switch (ctrl->flgs & FCT_TTTT) {
             case FCT_TEXT:
                 ctrl->fe2c = FE2CT;
-                gwnd = init(alloc(NSTextField));
+                gwnd = init(alloc(scls->text));
                 setStringValue_(gwnd, capt = UTF8(text));
+                setAlignment_(gwnd, (ctrl->flgs & FST_CNTR)?
+                                     NSCenterTextAlignment :
+                                     NSLeftTextAlignment);
                 setDrawsBackground_(gwnd, false);
                 setSelectable_(gwnd, false);
                 setEditable_(gwnd, false);
@@ -555,17 +643,28 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 release(capt);
                 break;
 
-            case FCT_BUTN:
-                gwnd = init(alloc(NSButton));
+            case FCT_BUTN: {
+                char *temp;
+                long size;
+
+                /// a very simple hack to force multiline text wrapping
+                temp = malloc(size = strlen(text) + 3);
+                temp[0] = '\n';
+                temp[1] = '\0';
+                strcat(temp, text);
+                temp[size - 2] = '\n';
+                temp[size - 1] = '\0';
+                gwnd = init(alloc(scls->butn));
                 setButtonType_(gwnd, NSMomentaryLightButton);
                 setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
-                setTitle_(gwnd, capt = UTF8(text));
+                setTitle_(gwnd, capt = UTF8(temp));
                 release(capt);
+                free(temp);
                 break;
-
+            }
             case FCT_CBOX:
                 ctrl->fe2c = FE2CX;
-                gwnd = init(alloc(NSButton));
+                gwnd = init(alloc(scls->cbox));
                 setButtonType_(gwnd, NSSwitchButton);
                 setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
                 setImagePosition_(gwnd, (ctrl->flgs & FSX_LEFT)?
@@ -600,7 +699,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             }
             case FCT_LIST:
                 ctrl->fe2c = FE2CL;
-                gwnd = init(alloc(NSScrollView));
+                gwnd = init(alloc(scls->list));
                 ctrl->priv[7] = (intptr_t)init(alloc(NSTableView));
                 setFrame_((id)ctrl->priv[7], dims);
 
@@ -625,23 +724,39 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                               | ((uint32_t)dims.size.height << 16);
                 ctrl->priv[2] =  (uint16_t)dims.origin.x
                               | ((uint32_t)dims.origin.y << 16);
-                gwnd = init(alloc(NSScrollView));
+                gwnd = init(alloc(scls->sbox));
                 setHasVerticalScroller_(gwnd, true);
                 setBackgroundColor_(gwnd, controlColor(NSColor));
                 ctrl->priv[7] = (intptr_t)gwnd;
                 break;
 
-            case FCT_IBOX:
+            case FCT_IBOX: {
+                CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
+                long line = dims.size.width * 4;
+
                 ctrl->fe2c = FE2CI;
-                gwnd = init(alloc(NSView));
+                gwnd = init(alloc(scls->ibox));
+                SET_IVAR(gwnd, VAR_CTRL, ctrl);
                 ctrl->priv[3] =  (uint16_t)dims.size.width
                               | ((uint32_t)dims.size.height << 16);
+                ctrl->priv[2] = (uintptr_t)malloc(line * dims.size.height);
+                ctrl->priv[1] = (uintptr_t)CGBitmapContextCreate
+                    ((void*)ctrl->priv[2], dims.size.width, dims.size.height,
+                      CHAR_BIT, line, drgb, kCGImageAlphaPremultipliedFirst
+                                          | kCGBitmapByteOrder32Little);
+                CGContextSetRGBFillColor((CGContextRef)ctrl->priv[1],
+                                          0, 0, 0, 0);
+                CGContextSetBlendMode((CGContextRef)ctrl->priv[1],
+                                       kCGBlendModeCopy);
+                CGColorSpaceRelease(drgb);
                 break;
-
+            }
             case FCT_PBAR:
                 ctrl->fe2c = FE2CP;
-                gwnd = init(alloc(NSProgressIndicator));
+                gwnd = init(alloc(scls->pbar));
+                SET_IVAR(gwnd, VAR_CTRL, ctrl);
                 setIndeterminate_(gwnd, false);
+                setWantsLayer_(gwnd, true);
                 break;
         }
         setFrame_(gwnd, dims);

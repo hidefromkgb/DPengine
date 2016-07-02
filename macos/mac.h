@@ -7,6 +7,9 @@
 /// this macro facilitates size calculation for static arrays
 #define countof(s) (sizeof(s) / sizeof(*(s)))
 
+/// useful when including in parallel with ObjC headers
+#ifndef NON_ENUM
+
 /// non-integer precision, so #define instead of enum
 #define NSVariableStatusItemLength (-1.0)
 #define NSSquareStatusItemLength   (-2.0)
@@ -80,6 +83,13 @@ enum {
     NSBlueControlTint     = 1,
     NSGraphiteControlTint = 6,
     NSClearControlTint    = 7,
+};
+enum {
+    NSLeftTextAlignment      = 0,
+    NSRightTextAlignment     = 1,
+    NSCenterTextAlignment    = 2,
+    NSJustifiedTextAlignment = 3,
+    NSNaturalTextAlignment   = 4
 };
 enum {
     NSMomentaryLightButton        = 0,
@@ -212,6 +222,8 @@ enum {
     NSOpenGLCPHasDrawable            = 314,
     NSOpenGLCPMPSwapsInFlight        = 315,
 };
+
+#endif
 
 
 
@@ -396,8 +408,12 @@ enum {
        "setDoubleValue:",                              \
        "setWidth:",                                    \
        "setHidden:",                                   \
+       "setAlignment:",                                \
        "addTableColumn:",                              \
-       "headerCell"
+       "headerCell",                                   \
+       "class",                                        \
+       "setWantsLayer:",                               \
+       "drawInRect:withAttributes:"
 
 #define init(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[  0])
 #define alloc(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[  1])
@@ -517,8 +533,12 @@ enum {
 #define setDoubleValue_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[115], (double)(v))
 #define setWidth_(inst, w)                                             objc_msgSend(inst, LoadedObjCSelectors[116], (int)(w))
 #define setHidden_(inst, h)                                            objc_msgSend(inst, LoadedObjCSelectors[117], h)
-#define addTableColumn_(inst, c)                                       objc_msgSend(inst, LoadedObjCSelectors[118], c)
-#define headerCell(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[119])
+#define setAlignment_(inst, a)                                         objc_msgSend(inst, LoadedObjCSelectors[118], a)
+#define addTableColumn_(inst, c)                                       objc_msgSend(inst, LoadedObjCSelectors[119], c)
+#define headerCell(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[120])
+#define class(inst)                                             (Class)objc_msgSend(inst, LoadedObjCSelectors[121])
+#define setWantsLayer_(inst, w)                                        objc_msgSend(inst, LoadedObjCSelectors[122], w)
+#define drawInRect_withAttributes_(inst, r, a)                         objc_msgSend(inst, LoadedObjCSelectors[123], (CGRect)(r), a)
 
 
 
@@ -530,15 +550,15 @@ enum {
 /// a horrible abomination coming up (but this is generally the way OS X works)
 #ifdef __i386__
     /// never tried these, not sure if they are correct
-    #define GetT1DV(r, i, s) { void *f = objc_msgSend_fpret;  r = ((CGFloat (*)(id, SEL))f)(i, s); }
-    #define GetT2DV(r, i, s) { void *f = objc_msgSend_stret;      ((void (*)(CGPoint*, id, SEL))f)(&r, i, s); }
-    #define GetT4DV(r, i, s) { void *f = objc_msgSend_stret;      ((void (*)(CGRect*, id, SEL))f)(&r, i, s); }
-    #define GetT4DV2(r, i, s, p) { void *f = objc_msgSend_stret;  ((void (*)(CGRect*, id, SEL, CGRect))f)(&r, i, s, p); }
+    #define GetT1DV(r, i, s) { void *f = objc_msgSend_fpret;  r = ((typeof(r) (*)(id, SEL))f)(i, s); }
+    #define GetT2DV(r, i, s) { void *f = objc_msgSend_stret;      ((void (*)(typeof(r)*, id, SEL))f)(&r, i, s); }
+    #define GetT4DV(r, i, s) { void *f = objc_msgSend_stret;      ((void (*)(typeof(r)*, id, SEL))f)(&r, i, s); }
+    #define GetT4DV2(r, i, s, p) { void *f = objc_msgSend_stret;  ((void (*)(typeof(r)*, id, SEL, typeof(p)))f)(&r, i, s, p); }
 #else
-    #define GetT1DV(r, i, s) { void *f = objc_msgSend;        r = ((CGFloat (*)(id, SEL))f)(i, s); }
-    #define GetT2DV(r, i, s) { void *f = objc_msgSend;        r = ((CGPoint (*)(id, SEL))f)(i, s); }
-    #define GetT4DV(r, i, s) { void *f = objc_msgSend_stret;      ((void (*)(CGRect*, id, SEL))f)(&r, i, s); }
-    #define GetT4DV2(r, i, s, p) { void *f = objc_msgSend_stret;  ((void (*)(CGRect*, id, SEL, CGRect))f)(&r, i, s, p); }
+    #define GetT1DV(r, i, s) { void *f = objc_msgSend;        r = ((typeof(r) (*)(id, SEL))f)(i, s); }
+    #define GetT2DV(r, i, s) { void *f = objc_msgSend;        r = ((typeof(r) (*)(id, SEL))f)(i, s); }
+    #define GetT4DV(r, i, s) { void *f = objc_msgSend_stret;      ((void (*)(typeof(r)*, id, SEL))f)(&r, i, s); }
+    #define GetT4DV2(r, i, s, p) { void *f = objc_msgSend_stret;  ((void (*)(typeof(r)*, id, SEL, typeof(p)))f)(&r, i, s, p); }
 #endif
 
 /// NSString creation macro
