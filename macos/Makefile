@@ -5,7 +5,7 @@ CX = g++
 OBJDIR = .obj
 EXEPATH = ../macos.app/Contents/MacOS
 
-LLIB = -framework AppKit -framework Cocoa -framework OpenGL
+LLIB = -framework AppKit -framework OpenGL
 LINC =
 LCXFLAGS =
 LCFLAGS = -I../core -Wall -fPIC -fvisibility=hidden
@@ -14,7 +14,7 @@ LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/common.o $(OBJDIR)/core/gif/gifs
 LOUT = ../libengine.dylib
 
 
-ELIB = -lengine -framework AppKit -framework Cocoa
+ELIB = -lengine -framework AppKit
 EINC =
 ECXFLAGS = -L..
 ECFLAGS = -I../core -Wall

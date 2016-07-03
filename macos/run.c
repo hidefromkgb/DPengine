@@ -14,16 +14,14 @@ typedef union {
     struct {
         id wndw,
            text,
-           butn,
-           cbox,
-           rbox,
+           butn, /// +cbox/rbox
            spin,
            list,
            pbar,
            sbox,
            ibox;
     };
-    id _sub[10];
+    id _sub[8];
 } SCLS;
 
 
@@ -174,7 +172,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                              *   (uint16_t)(ctrl->priv[2] >> 16);
             ctrl->priv[1] =  (uint16_t)area.size.width
                           | ((uint32_t)area.size.height << 16);
-            GetT4DV2(area, (id)ctrl->priv[0], FrameRectForContentRect_, area);
+            GetT4DV(area, (id)ctrl->priv[0], FrameRectForContentRect_, area);
             GetT4DV(scrn, mainScreen(NSScreen), VisibleFrame);
             area.origin.x = 0.5 * (scrn.size.width  - area.size.width )
                           + scrn.origin.x;
@@ -195,9 +193,9 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 ///  0: NSProgressIndicator
 ///  1: progress position
 ///  2: progress maximum
-///  3: UTF-8 text label
-///  4:
-///  5:
+///  3: CFStringRef with label text
+///  4: vertical offset of the label
+///  5: CFDictionaryRef with centering attributes and font
 ///  6:
 ///  7:
 intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
@@ -207,8 +205,9 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG_PTXT:
-            free((void*)ctrl->priv[3]);
-            ctrl->priv[3] = (intptr_t)strdup((char*)data);
+            if (ctrl->priv[3])
+                CFRelease((void*)ctrl->priv[3]);
+            ctrl->priv[3] = (intptr_t)UTF8(data);
             break;
 
         case MSG_PLIM:
@@ -226,7 +225,7 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 /// PRIV:
-///  0: NS
+///  0: NSButton
 ///  1:
 ///  2:
 ///  3:
@@ -237,13 +236,17 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__ENB:
+            setEnabled_((id)ctrl->priv[0], !!data);
             break;
 
         case MSG_BGST:
-            return 0;
+            return ((isEnabled((id)ctrl->priv[0]))? FCS_ENBL : 0)
+                 | ((state((id)ctrl->priv[0]) == NSOnState)? FCS_MARK : 0);
 
         case MSG_BCLK:
-            return 0;
+            cmsg = (state((id)ctrl->priv[0]) == NSOnState);
+            setState_((id)ctrl->priv[0], (data)? NSOnState : NSOffState);
+            return !!cmsg;
     }
     return 0;
 }
@@ -262,14 +265,14 @@ intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__ENB:
+            setEnabled_((id)ctrl->priv[7], !!data);
             break;
 
         case MSG_LCOL: {
-            id estr;
+            CFStringRef head;
 
-            setStringValue_(headerCell((id)ctrl->priv[6]),
-                            estr = UTF8((char*)data));
-            release(estr);
+            setStringValue_(headerCell((id)ctrl->priv[6]), head = UTF8(data));
+            CFRelease(head);
             break;
         }
         case MSG_LADD: {
@@ -308,6 +311,8 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG__ENB:
+            setEnabled_((id)ctrl->priv[6], !!data);
+            setEnabled_((id)ctrl->priv[7], !!data);
             break;
 
         case MSG_NGET:
@@ -363,7 +368,7 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 ///  4:
 ///  5:
 ///  6:
-///  7: NSScrollView (the same as in [0])
+///  7: [0]; needed because [7] is the standard place for containers
 intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG_WSZC: {
@@ -389,8 +394,10 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                               | ((uint32_t)rect.size.height << 16);
             }
             setFrame_((id)ctrl->priv[0], rect);
-            if (ctrl->fc2e)
-                ctrl->fc2e(ctrl, MSG_SMAX, ctrl->priv[1]);
+            if (ctrl->fc2e) {
+                GetT4DV(rect, verticalScroller((id)ctrl->priv[0]), Frame);
+                ctrl->fc2e(ctrl, MSG_SMAX, ctrl->priv[1] - rect.size.width);
+            }
             setNeedsDisplay_((id)ctrl->priv[0], true);
             break;
         }
@@ -472,12 +479,15 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_IBOX:
+            /// releasing the image context and freeing its backbuffer
             CGContextRelease((CGContextRef)ctrl->priv[1]);
             free((void*)ctrl->priv[2]);
             break;
 
         case FCT_PBAR:
-            free((void*)ctrl->priv[3]); /// freeing the text label
+            CFRelease((void*)ctrl->priv[5]);     /// releasing text attributes
+            if (ctrl->priv[3])
+                CFRelease((void*)ctrl->priv[3]); /// freeing the text string
             break;
     }
     release((id)ctrl->priv[0]);
@@ -485,22 +495,39 @@ void rFreeControl(CTRL *ctrl) {
 
 
 
+void ButtonClick(id this) {
+    CTRL *ctrl = 0;
+
+    GET_IVAR(this, VAR_CTRL, &ctrl);
+    ctrl->fc2e(ctrl, MSG_BCLK, ((ctrl->flgs & FCT_TTTT) != FCT_BUTN)?
+                                (state((id)ctrl->priv[0]) == NSOnState) : 0);
+}
+
+void TextChecker(id this) {
+    CTRL *ctrl = 0;
+    long curr;
+
+    GET_IVAR(this, VAR_CTRL, &ctrl);
+    if (!ctrl)
+        return;
+
+    curr = intValue((id)ctrl->priv[7]);
+    setIntValue_((id)ctrl->priv[7], curr);
+}
+
 void PBoxDraw(CGRect rect, id this) {
     struct objc_super prev = {this, class(NSProgressIndicator)};
     CTRL *ctrl = 0;
-    CGRect area;
 
     GET_IVAR(this, VAR_CTRL, &ctrl);
     objc_msgSendSuper(&prev, DrawRect_, rect);
-
-    GetT4DV(area, (id)ctrl->priv[0], Frame);
-    area.origin.x = area.origin.y = 0;
-    drawInRect_withAttributes_(autorelease(UTF8((char*)ctrl->priv[3])),
-                               area, 0);
+    GetT4DV(rect, (id)ctrl->priv[0], Frame);
+    rect.origin.y = ctrl->priv[4];
+    rect.origin.x = 0;
+    drawInRect_withAttributes_((id)ctrl->priv[3], rect, (id)ctrl->priv[5]);
 }
 
 void IBoxDraw(CGRect rect, id this) {
-    CGContextRef ctxt;
     CGImageRef pict;
     CGRect area;
     AINF anim;
@@ -519,8 +546,8 @@ void IBoxDraw(CGRect rect, id this) {
     CGContextFlush((CGContextRef)ctrl->priv[1]);
     ctrl->fc2e(ctrl, MSG_IFRM, (intptr_t)&anim);
     pict = CGBitmapContextCreateImage((CGContextRef)ctrl->priv[1]);
-    ctxt = (CGContextRef)graphicsPort(currentContext(NSGraphicsContext));
-    CGContextDrawImage(ctxt, area, pict);
+    CGContextDrawImage(graphicsPort(currentContext(NSGraphicsContext)),
+                       area, pict);
     CGImageRelease(pict);
 }
 
@@ -546,7 +573,7 @@ void OnSize(id view) {
         return;
 
     GetT4DV(rect, (id)ctrl->priv[0], Frame);
-    GetT4DV2(rect, (id)ctrl->priv[0], ContentRectForFrameRect_, rect);
+    GetT4DV(rect, (id)ctrl->priv[0], ContentRectForFrameRect_, rect);
     ctrl->priv[1] =  (uint16_t)rect.size.width
                   | ((uint32_t)rect.size.height << 16);
     ctrl->fc2e(ctrl, MSG_WSZC, ctrl->priv[1]);
@@ -555,17 +582,20 @@ void OnSize(id view) {
 void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
     CTRL *root;
     SCLS *scls;
+    CFStringRef capt;
     CGRect dims;
-    id gwnd, capt;
+    id gwnd;
 
     gwnd = 0;
     root = ctrl->prev;
     if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
         char *vars[] = {VAR_CTRL, 0};
-        OMSC wact[] = {{WindowShouldClose_, OnClose}, {IsFlipped, OnTrue},
+        OMSC wmet[] = {{WindowShouldClose_, OnClose}, {IsFlipped, OnTrue},
                        {WindowDidResize_, OnSize}, {}},
-             iact[] = {{DrawRect_, IBoxDraw}, {}},
-             pact[] = {{DrawRect_, PBoxDraw}, {}};
+             tmet[] = {{TextDidChange_, TextChecker}, {}},
+             bmet[] = {{ButtonSelector, ButtonClick}, {}},
+             pmet[] = {{DrawRect_, PBoxDraw}, {}},
+             imet[] = {{DrawRect_, IBoxDraw}, {}};
         CGPoint fadv;
         CGFloat fasc;
 
@@ -577,16 +607,14 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                       | ((uint32_t)round(0.60 * fasc) << 16);
 
         ctrl->priv[6] = (intptr_t)(scls = calloc(1, sizeof(*scls)));
-        scls->wndw = Subclass(NSView,              "NSW", vars, wact);
-        scls->text = NSTextField;
-        scls->butn = NSButton;
-        scls->cbox = NSButton;
-        scls->rbox = NSButton;
+        scls->wndw = Subclass(NSView,              "NSW", vars, wmet);
+        scls->text = Subclass(NSTextField,         "NST", vars, tmet);
+        scls->butn = Subclass(NSButton,            "NSB", vars, bmet);
         scls->spin = NSStepper;
         scls->list = NSScrollView;
-        scls->pbar = Subclass(NSProgressIndicator, "NSP", vars, pact);
+        scls->pbar = Subclass(NSProgressIndicator, "NSP", vars, pmet);
         scls->sbox = NSScrollView;
-        scls->ibox = Subclass(NSView,              "NSI", vars, iact);
+        scls->ibox = Subclass(NSView,              "NSI", vars, imet);
 
         dims = (CGRect){};
         gwnd = initWithContentRect_styleMask_backing_defer_
@@ -599,7 +627,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         ctrl->priv[7] = (intptr_t)init(alloc(scls->wndw));
         setContentView_(gwnd, (id)ctrl->priv[7]);
         setDelegate_(gwnd, (id)ctrl->priv[7]);
-        setTitle_(gwnd, UTF8(text)); /// no need to release NSString!
+        setTitle_(gwnd, capt = UTF8(text));
+        CFRelease(capt);
         SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
         makeKeyWindow(gwnd);
         setLevel_(gwnd, NSNormalWindowLevel + 1); /// just a bit above others
@@ -631,6 +660,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             case FCT_TEXT:
                 ctrl->fe2c = FE2CT;
                 gwnd = init(alloc(scls->text));
+                SET_IVAR(gwnd, VAR_CTRL, 0);
                 setStringValue_(gwnd, capt = UTF8(text));
                 setAlignment_(gwnd, (ctrl->flgs & FST_CNTR)?
                                      NSCenterTextAlignment :
@@ -640,7 +670,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 setEditable_(gwnd, false);
                 setBordered_(gwnd, false);
                 setBezeled_(gwnd, false);
-                release(capt);
+                CFRelease(capt);
                 break;
 
             case FCT_BUTN: {
@@ -655,22 +685,28 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 temp[size - 2] = '\n';
                 temp[size - 1] = '\0';
                 gwnd = init(alloc(scls->butn));
+                SET_IVAR(gwnd, VAR_CTRL, ctrl);
+                setTarget_(gwnd, gwnd);
+                setAction_(gwnd, ButtonSelector);
                 setButtonType_(gwnd, NSMomentaryLightButton);
                 setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
                 setTitle_(gwnd, capt = UTF8(temp));
-                release(capt);
+                CFRelease(capt);
                 free(temp);
                 break;
             }
             case FCT_CBOX:
                 ctrl->fe2c = FE2CX;
-                gwnd = init(alloc(scls->cbox));
+                gwnd = init(alloc(scls->butn));
+                SET_IVAR(gwnd, VAR_CTRL, ctrl);
+                setTarget_(gwnd, gwnd);
+                setAction_(gwnd, ButtonSelector);
                 setButtonType_(gwnd, NSSwitchButton);
                 setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
                 setImagePosition_(gwnd, (ctrl->flgs & FSX_LEFT)?
                                          NSImageRight : NSImageLeft);
                 setTitle_(gwnd, capt = UTF8(text));
-                release(capt);
+                CFRelease(capt);
                 break;
 
             case FCT_RBOX:
@@ -684,7 +720,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 ctrl->fe2c = FE2CN;
                 gwnd = init(alloc(NSView));
                 ctrl->priv[6] = (intptr_t)init(alloc(NSStepper));
-                ctrl->priv[7] = (intptr_t)init(alloc(NSTextField));
+                ctrl->priv[7] = (intptr_t)init(alloc(scls->text));
+                SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
                 GetT2DV(spin, (id)ctrl->priv[6], IntrinsicContentSize);
                 temp = dims;
                 temp.origin.x = temp.origin.y = 0;
@@ -704,10 +741,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 setFrame_((id)ctrl->priv[7], dims);
 
                 ctrl->priv[6] = (intptr_t)init(alloc(NSTableColumn));
-                setWidth_((id)ctrl->priv[6], (int)dims.size.width);
-
-                setStringValue_(headerCell((id)ctrl->priv[6]),
-                                capt = UTF8(""));
+                setStringValue_(headerCell((id)ctrl->priv[6]), capt = UTF8(0));
+                CFRelease(capt);
                 addTableColumn_((id)ctrl->priv[7], (id)ctrl->priv[6]);
                 /// [(id)ctrl->priv[7] setDelegate:self];
                 /// [(id)ctrl->priv[7] setDataSource:self];
@@ -715,7 +750,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
                 setDocumentView_(gwnd, (id)ctrl->priv[7]);
                 setHasVerticalScroller_(gwnd, true);
-                release(capt);
                 break;
 
             case FCT_SBOX:
@@ -744,20 +778,32 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                     ((void*)ctrl->priv[2], dims.size.width, dims.size.height,
                       CHAR_BIT, line, drgb, kCGImageAlphaPremultipliedFirst
                                           | kCGBitmapByteOrder32Little);
-                CGContextSetRGBFillColor((CGContextRef)ctrl->priv[1],
-                                          0, 0, 0, 0);
                 CGContextSetBlendMode((CGContextRef)ctrl->priv[1],
-                                       kCGBlendModeCopy);
+                                       kCGBlendModeClear);
                 CGColorSpaceRelease(drgb);
                 break;
             }
-            case FCT_PBAR:
+            case FCT_PBAR: {
+                CGFloat fasc, fdsc;
+                id psty, font;
+
                 ctrl->fe2c = FE2CP;
                 gwnd = init(alloc(scls->pbar));
                 SET_IVAR(gwnd, VAR_CTRL, ctrl);
                 setIndeterminate_(gwnd, false);
                 setWantsLayer_(gwnd, true);
+                psty = init(alloc(NSMutableParagraphStyle));
+                setAlignment_(psty, NSCenterTextAlignment);
+                font = systemFontOfSize_(NSFont, 0);
+                ctrl->priv[5] = (intptr_t)MakeDict
+                    (kCTFontAttributeName,           font,
+                     kCTParagraphStyleAttributeName, psty, 0);
+                release(psty);
+                GetT1DV(fasc, font, Ascender);
+                GetT1DV(fdsc, font, Descender);
+                ctrl->priv[4] = 0.5 * (dims.size.height - fasc) - fabs(fdsc);
                 break;
+            }
         }
         setFrame_(gwnd, dims);
         addSubview_((id)ctrl->prev->priv[7], gwnd);
@@ -769,11 +815,12 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 int main(int argc, char *argv[]) {
     ssize_t sdim;
+    CFStringRef path;
     CGRect dims;
     id pool;
 
-    char *home, *conf;
     struct dirent **dirs;
+    char *home;
     ENGC *engc;
 
     LoadObjC();
@@ -781,38 +828,39 @@ int main(int argc, char *argv[]) {
     pool = URLsForDirectory_inDomains_(defaultManager(NSFileManager),
                                        NSApplicationSupportDirectory,
                                        NSUserDomainMask);
-    home = UTF8String(path(objectAtIndex_(pool, 0)));
-    conf = calloc(32 + strlen(home), sizeof(*conf));
-    strcat(conf, home);
-    strcat(conf, DEF_OPTS);
-    if (!(home = (mkdir(conf, 0755))? (errno != EEXIST)? 0 : conf : conf))
-        printf("WARNING: cannot create '%s'!", conf);
+    home = GetUTF8(path = CFURLCopyFileSystemPath
+                              (CFArrayGetValueAtIndex((CFArrayRef)pool, 0),
+                                                       kCFURLPOSIXPathStyle));
+    CFRelease(path);
+    home = realloc(home, strlen(home) + 32);
+    strcat(home, DEF_OPTS);
+    if (!((mkdir(home, 0755))? (errno != EEXIST)? 0 : 1 : 2))
+        printf("WARNING: cannot create '%s'!", home);
     release(pool);
 
-    engc = eInitializeEngine(conf);
-    free(conf);
+    engc = eInitializeEngine(home);
+    free(home);
 
-    home = UTF8String(pool = bundlePath(mainBundle(NSBundle)));
-    conf = calloc(32 + strlen(home), sizeof(*conf));
-    strcat(conf, home);
-    strcat(conf, "/Contents/MacOS/"DEF_FLDR);
-    release(pool);
+    home = GetUTF8(path = (CFStringRef)bundlePath(mainBundle(NSBundle)));
+    CFRelease(path);
+    home = realloc(home, strlen(home) + 32);
+    strcat(home, "/Contents/MacOS/"DEF_FLDR);
 
     pool = init(alloc(NSAutoreleasePool));
     setActivationPolicy_(sharedApplication(NSApplication),
                          NSApplicationActivationPolicyAccessory);
 
-    if ((sdim = scandir(conf, &dirs, 0, alphasort)) >= 0) {
+    if ((sdim = scandir(home, &dirs, 0, alphasort)) >= 0) {
         while (sdim--) {
             if ((dirs[sdim]->d_type == DT_DIR)
             &&  strcmp(dirs[sdim]->d_name, ".")
             &&  strcmp(dirs[sdim]->d_name, ".."))
-                eAppendLib(engc, DEF_CONF, conf, dirs[sdim]->d_name);
+                eAppendLib(engc, DEF_CONF, home, dirs[sdim]->d_name);
             free(dirs[sdim]);
         }
         free(dirs);
     }
-    free(conf);
+    free(home);
     GetT4DV(dims, mainScreen(NSScreen), VisibleFrame);
     GetT1DV(sdim, systemStatusBar(NSStatusBar), Thickness);
     eExecuteEngine(engc, sdim, sdim, dims.origin.x, dims.origin.y,

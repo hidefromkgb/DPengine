@@ -207,7 +207,7 @@ void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
 
 
 
-void OnDraw(CGRect rect) {
+void OnDraw(CGRect rect, id this) {
     CGContextRef ctxt;
     CGImageRef iref;
 
@@ -216,6 +216,7 @@ void OnDraw(CGRect rect) {
     ENGD *engd;
     DRAW *draw;
 
+    /// [TODO:] un-delegate NSApplication
     GET_IVAR(delegate(sharedApplication(NSApplication)), VAR_ENGD, &engd);
     cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
@@ -225,7 +226,7 @@ void OnDraw(CGRect rect) {
         flushBuffer(openGLContext(draw->vins));
     else {
         iref = CGBitmapContextCreateImage(draw->hctx);
-        ctxt = (CGContextRef)graphicsPort(currentContext(NSGraphicsContext));
+        ctxt = graphicsPort(currentContext(NSGraphicsContext));
         CGContextSetBlendMode(ctxt, kCGBlendModeCopy);
         CGContextDrawImage
             (ctxt, (CGRect){{0, 0}, {draw->xdim, draw->ydim}}, iref);
@@ -276,6 +277,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     LoadObjC();
 
     data[0] = (intptr_t)&draw;
+    /// [TODO:] un-delegate NSApplication
     draw.adlg = Subclass(NSObject, SUB_ADLG,
                         (char*[]){VAR_HWND, VAR_ENGD, VAR_VIEW, 0},
                         (OMSC[]){{}});
