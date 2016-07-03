@@ -10,9 +10,9 @@ N.B.: to be able to build on Windows using Code::Blocks, go to Settings → Comp
 
 ## Release notes
 
-Major refactoring effort is currently underway, along with adding features previously ignored, like sprite effects and categories. The first draft of GUI from the master branch is discarded, however bringing up some very important points that will be considered in a new iteration of GUI architecture.
+Major refactoring effort is currently underway, along with adding features previously ignored, like sprite effects and categories, along with the new GUI architecture.
 
-MacOS X branch is on hiatus till there is access to a machine powerful enough to run a Mac VM faster than 5 FPS on idle. Sad but true.
+Mac OS X branch is in the final stage of GUI addition. Stay tuned.
 
 ## License
 
