@@ -2238,9 +2238,9 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     RUN_FE2C(engc->CTL_SELE, MSG_PPOS, 0);
     RUN_FE2C(engc->CTL_SPEC, MSG_NDIM, (100 << 16) | 100);
     RUN_FE2C(engc->CTL_RGPU, MSG_NDIM, 50000 << 16);
-    RUN_FE2C(engc->CTL_OGRP, MSG_LCOL, (intptr_t)engc->tran[TXT_OGRP]);
     for (indx = 0; indx < engc->ccnt; indx++)
         RUN_FE2C(engc->CTL_OGRP, MSG_LADD, (intptr_t)engc->ctgs[indx].name);
+    RUN_FE2C(engc->CTL_OGRP, MSG_LCOL, (intptr_t)engc->tran[TXT_OGRP]);
 
     RUN_FE2C(engc->CTL_FLTR, MSG_BCLK, 0);
     RUN_FC2E(engc->CTL_FLTR, MSG_BCLK, 0);

@@ -11,8 +11,24 @@
 
 
 
+/// overloaded method for a subclass
+typedef struct _OMSC {
+    SEL name;
+    void *func;
+} OMSC;
+
 /// useful when including in parallel with ObjC headers
 #ifndef NON_ENUM
+
+#if __LP64__ || TARGET_OS_EMBEDDED || TARGET_OS_IPHONE || TARGET_OS_WIN32 || NS_BUILD_32_LIKE_64
+    typedef long NSInteger;
+    typedef unsigned long NSUInteger;
+#else
+    typedef int NSInteger;
+    typedef unsigned int NSUInteger;
+#endif
+
+
 
 /// non-integer precision, so #define instead of enum
 #define NSVariableStatusItemLength (double)-1.0
@@ -259,7 +275,8 @@ enum {
        "NSScrollView",            \
        "NSTableView",             \
        "NSTableColumn",           \
-       "NSMutableParagraphStyle"
+       "NSMutableParagraphStyle", \
+       "NSButtonCell"
 
 #define NSObject                (LoadedObjCClasses[ 0])
 #define NSApplication           (LoadedObjCClasses[ 1])
@@ -289,6 +306,7 @@ enum {
 #define NSTableView             (LoadedObjCClasses[25])
 #define NSTableColumn           (LoadedObjCClasses[26])
 #define NSMutableParagraphStyle (LoadedObjCClasses[27])
+#define NSButtonCell            (LoadedObjCClasses[28])
 
 
 
@@ -425,7 +443,11 @@ enum {
        "setAction:",                                   \
        "state",                                        \
        "isEnabled",                                    \
-       "verticalScroller"
+       "verticalScroller",                             \
+       "reloadData",                                   \
+       "setDataSource:",                               \
+       "numberOfRowsInTableView:",                     \
+       "tableView:objectValueForTableColumn:row:"
 
 #define init(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[  0])
 #define alloc(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[  1])
@@ -559,6 +581,10 @@ enum {
 #define state(inst)                                              (long)objc_msgSend(inst, LoadedObjCSelectors[129])
 #define isEnabled(inst)                                          (bool)objc_msgSend(inst, LoadedObjCSelectors[130])
 #define verticalScroller(inst)                                         objc_msgSend(inst, LoadedObjCSelectors[131])
+#define reloadData(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[132])
+#define setDataSource_(inst, d)                                        objc_msgSend(inst, LoadedObjCSelectors[133], d)
+#define NumberOfRowsInTableView_                                                          LoadedObjCSelectors[134]
+#define TableView_objectValueForTableColumn_row_                                          LoadedObjCSelectors[135]
 
 
 
@@ -594,16 +620,8 @@ static SEL LoadedObjCSelectors[countof(StrObjCSelectors)] = {};
 
 
 
-/// overloaded method for a subclass
-typedef struct _OMSC {
-    SEL name;
-    void *func;
-} OMSC;
-
-
-
 __attribute__((unused)) /// signals that the function might be left unused
-static char *GetUTF8(CFStringRef cfsr) {
+static char *CopyUTF8(CFStringRef cfsr) {
     CFIndex slen, size;
     uint8_t *retn = 0;
 

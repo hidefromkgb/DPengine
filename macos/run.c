@@ -151,7 +151,7 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
 ///  4:
 ///  5:
 ///  6: SCLS subclass storage
-///  7: window main view delegate
+///  7: NSView, the main container and delegate
 intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__SHW: {
@@ -257,10 +257,10 @@ intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 ///  0: NSScrollView
 ///  1:
 ///  2:
-///  3:
-///  4:
-///  5:
-///  6: NSTableColumn
+///  3: array of CFStringRef with string data
+///  4: number of rows
+///  5: NSTableColumn #1 (check marks)        <-- not implemented yet
+///  6: NSTableColumn #2 (string data)
 ///  7: NSTableView
 intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
@@ -273,11 +273,15 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
             setStringValue_(headerCell((id)ctrl->priv[6]), head = UTF8(data));
             CFRelease(head);
+            reloadData((id)ctrl->priv[7]);
             break;
         }
-        case MSG_LADD: {
+        case MSG_LADD:
+            ctrl->priv[3] = (intptr_t)realloc
+                                ((CFStringRef*)ctrl->priv[3],
+                                ++ctrl->priv[4] * sizeof(CFStringRef));
+            ((CFStringRef*)ctrl->priv[3])[ctrl->priv[4] - 1] = UTF8(data);
             break;
-        }
     }
     return 0;
 }
@@ -368,7 +372,7 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 ///  4:
 ///  5:
 ///  6:
-///  7: [0]; needed because [7] is the standard place for containers
+///  7: NSView, the sizeable container
 intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG_WSZC: {
@@ -395,8 +399,12 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             }
             setFrame_((id)ctrl->priv[0], rect);
             if (ctrl->fc2e) {
+                data = rect.size.height;
                 GetT4DV(rect, verticalScroller((id)ctrl->priv[0]), Frame);
-                ctrl->fc2e(ctrl, MSG_SMAX, ctrl->priv[1] - rect.size.width);
+                cmsg = ctrl->priv[1] - rect.size.width;
+                data += ctrl->fc2e(ctrl, MSG_SMAX, cmsg);
+                setFrame_((id)ctrl->priv[7],
+                         ((CGRect){{0, 0}, {(uint16_t)cmsg, data}}));
             }
             setNeedsDisplay_((id)ctrl->priv[0], true);
             break;
@@ -471,11 +479,16 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_LIST:
-            release((id)ctrl->priv[6]); /// releasing NSTableColumn
+            for (--ctrl->priv[4]; ctrl->priv[4] >= 0; ctrl->priv[4]--)
+                CFRelease(((CFStringRef*)ctrl->priv[3])[ctrl->priv[4]]);
+            free((CFStringRef*)ctrl->priv[3]);
+            release((id)ctrl->priv[5]); /// releasing NSTableColumn #1
+            release((id)ctrl->priv[6]); /// releasing NSTableColumn #2
             release((id)ctrl->priv[7]); /// releasing NSTableView
             break;
 
         case FCT_SBOX:
+            release((id)ctrl->priv[7]); /// releasing NSView
             break;
 
         case FCT_IBOX:
@@ -494,6 +507,20 @@ void rFreeControl(CTRL *ctrl) {
 }
 
 
+
+NSInteger OnRows(id this, id prev, id view) {
+    CTRL *ctrl = 0;
+
+    GET_IVAR(view, VAR_CTRL, &ctrl);
+    return ctrl->priv[4];
+}
+
+id OnValue(id this, id prev, id view, id icol, NSInteger irow) {
+    CTRL *ctrl = 0;
+
+    GET_IVAR(view, VAR_CTRL, &ctrl);
+    return (id)(((CFStringRef*)ctrl->priv[3])[irow]);
+}
 
 void ButtonClick(id this) {
     CTRL *ctrl = 0;
@@ -590,11 +617,14 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
     root = ctrl->prev;
     if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
         char *vars[] = {VAR_CTRL, 0};
-        OMSC wmet[] = {{WindowShouldClose_, OnClose}, {IsFlipped, OnTrue},
-                       {WindowDidResize_, OnSize}, {}},
+        OMSC wmet[] = {{WindowShouldClose_, OnClose},
+                       {WindowDidResize_, OnSize}, {IsFlipped, OnTrue}, {}},
              tmet[] = {{TextDidChange_, TextChecker}, {}},
              bmet[] = {{ButtonSelector, ButtonClick}, {}},
+             lmet[] = {{NumberOfRowsInTableView_,                 OnRows},
+                       {TableView_objectValueForTableColumn_row_, OnValue}},
              pmet[] = {{DrawRect_, PBoxDraw}, {}},
+             smet[] = {{IsFlipped, OnTrue}, {}},
              imet[] = {{DrawRect_, IBoxDraw}, {}};
         CGPoint fadv;
         CGFloat fasc;
@@ -611,9 +641,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         scls->text = Subclass(NSTextField,         "NST", vars, tmet);
         scls->butn = Subclass(NSButton,            "NSB", vars, bmet);
         scls->spin = NSStepper;
-        scls->list = NSScrollView;
+        scls->list = Subclass(NSTableView,         "NSL", vars, lmet);
         scls->pbar = Subclass(NSProgressIndicator, "NSP", vars, pmet);
-        scls->sbox = NSScrollView;
+        scls->sbox = Subclass(NSView,              "NSS", vars, smet);
         scls->ibox = Subclass(NSView,              "NSI", vars, imet);
 
         dims = (CGRect){};
@@ -736,17 +766,16 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             }
             case FCT_LIST:
                 ctrl->fe2c = FE2CL;
-                gwnd = init(alloc(scls->list));
-                ctrl->priv[7] = (intptr_t)init(alloc(NSTableView));
+                gwnd = init(alloc(NSScrollView));
+                ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
+                SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
+                setDataSource_((id)ctrl->priv[7], (id)ctrl->priv[7]);
                 setFrame_((id)ctrl->priv[7], dims);
 
                 ctrl->priv[6] = (intptr_t)init(alloc(NSTableColumn));
                 setStringValue_(headerCell((id)ctrl->priv[6]), capt = UTF8(0));
                 CFRelease(capt);
                 addTableColumn_((id)ctrl->priv[7], (id)ctrl->priv[6]);
-                /// [(id)ctrl->priv[7] setDelegate:self];
-                /// [(id)ctrl->priv[7] setDataSource:self];
-                /// [(id)ctrl->priv[7] reloadData];
 
                 setDocumentView_(gwnd, (id)ctrl->priv[7]);
                 setHasVerticalScroller_(gwnd, true);
@@ -758,10 +787,11 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                               | ((uint32_t)dims.size.height << 16);
                 ctrl->priv[2] =  (uint16_t)dims.origin.x
                               | ((uint32_t)dims.origin.y << 16);
-                gwnd = init(alloc(scls->sbox));
+                gwnd = init(alloc(NSScrollView));
                 setHasVerticalScroller_(gwnd, true);
                 setBackgroundColor_(gwnd, controlColor(NSColor));
-                ctrl->priv[7] = (intptr_t)gwnd;
+                ctrl->priv[7] = (intptr_t)init(alloc(scls->sbox));
+                setDocumentView_(gwnd, (id)ctrl->priv[7]);
                 break;
 
             case FCT_IBOX: {
@@ -828,9 +858,10 @@ int main(int argc, char *argv[]) {
     pool = URLsForDirectory_inDomains_(defaultManager(NSFileManager),
                                        NSApplicationSupportDirectory,
                                        NSUserDomainMask);
-    home = GetUTF8(path = CFURLCopyFileSystemPath
-                              (CFArrayGetValueAtIndex((CFArrayRef)pool, 0),
-                                                       kCFURLPOSIXPathStyle));
+    path = CFURLCopyFileSystemPath
+               (CFArrayGetValueAtIndex((CFArrayRef)pool, 0),
+                                        kCFURLPOSIXPathStyle);
+    home = CopyUTF8(path);
     CFRelease(path);
     home = realloc(home, strlen(home) + 32);
     strcat(home, DEF_OPTS);
@@ -841,8 +872,8 @@ int main(int argc, char *argv[]) {
     engc = eInitializeEngine(home);
     free(home);
 
-    home = GetUTF8(path = (CFStringRef)bundlePath(mainBundle(NSBundle)));
-    CFRelease(path);
+    home = CopyUTF8(path = (CFStringRef)bundlePath(mainBundle(NSBundle)));
+    release((id)path);
     home = realloc(home, strlen(home) + 32);
     strcat(home, "/Contents/MacOS/"DEF_FLDR);
 
