@@ -278,7 +278,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
 
     data[0] = (intptr_t)&draw;
     /// [TODO:] un-delegate NSApplication
-    draw.adlg = Subclass(NSObject, SUB_ADLG,
+    draw.adlg = NewClass(NSObject, SUB_ADLG,
                         (char*[]){VAR_HWND, VAR_ENGD, VAR_VIEW, 0},
                         (OMSC[]){{}});
 
@@ -296,7 +296,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                                               | kCGBitmapByteOrder32Little);
         CGColorSpaceRelease(drgb);
 
-        draw.vdlg = Subclass(NSView, SUB_VDLG, vfld, vmet);
+        draw.vdlg = NewClass(NSView, SUB_VDLG, vfld, vmet);
         draw.vins = init(alloc(draw.vdlg));
         setFrame_(draw.vins, dims);
     }
@@ -306,7 +306,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         id pfmt, ctxt;
 
         pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat), attr);
-        draw.vdlg = Subclass(NSOpenGLView, SUB_VDLG, vfld, vmet);
+        draw.vdlg = NewClass(NSOpenGLView, SUB_VDLG, vfld, vmet);
         draw.vins = initWithFrame_pixelFormat_(alloc(draw.vdlg), dims, pfmt);
         makeCurrentContext((ctxt = openGLContext(draw.vins)));
         setValues_forParameter_(ctxt, &opaq, NSOpenGLCPSurfaceOpacity);
@@ -352,8 +352,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     release(draw.hwnd);
     release(draw.ains);
     release(draw.pool);
-    objc_disposeClassPair((Class)draw.vdlg);
-    objc_disposeClassPair((Class)draw.adlg);
+    DelClass((Class)draw.vdlg);
+    DelClass((Class)draw.adlg);
 
 //    printf("END!\n");
 }

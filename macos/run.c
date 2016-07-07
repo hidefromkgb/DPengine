@@ -7,7 +7,9 @@
 #include "mac.h"
 
 /// name of the instance variable to access the CTRL structure
-#define VAR_CTRL "c"
+#define VAR_CTRL "ctrl"
+/// name of the instance variable to access the associated data
+#define VAR_DATA "data"
 
 /// subclass storage
 typedef union {
@@ -147,8 +149,8 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
 ///  0: NSWindow
 ///  1: (wndsize.x) | (wndsize.y << 16)
 ///  2: (fontmul.x) | (fontmul.y << 16)
-///  3:
-///  4:
+///  3: first tab-enabled control
+///  4: last tab-enabled control
 ///  5:
 ///  6: SCLS subclass storage
 ///  7: NSView, the main container and delegate
@@ -255,33 +257,48 @@ intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 /// PRIV:
 ///  0: NSScrollView
-///  1:
+///  1: NSButton subclass
 ///  2:
-///  3: array of CFStringRef with string data
+///  3:
 ///  4: number of rows
-///  5: NSTableColumn #1 (check marks)        <-- not implemented yet
-///  6: NSTableColumn #2 (string data)
+///  5: array of NSButtons with elements
+///  6: NSTableColumn
 ///  7: NSTableView
 intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    CFStringRef capt;
+
     switch (cmsg) {
         case MSG__ENB:
             setEnabled_((id)ctrl->priv[7], !!data);
+            for (cmsg = 0; cmsg < ctrl->priv[4]; cmsg++)
+                setEnabled_(((id*)ctrl->priv[5])[cmsg], !!data);
             break;
 
-        case MSG_LCOL: {
-            CFStringRef head;
-
-            setStringValue_(headerCell((id)ctrl->priv[6]), head = UTF8(data));
-            CFRelease(head);
+        case MSG_LCOL:
+            setStringValue_(headerCell((id)ctrl->priv[6]), capt = UTF8(data));
+            CFRelease(capt);
+            for (cmsg = 0; cmsg < ctrl->priv[4]; cmsg++)
+                setState_(((id*)ctrl->priv[5])[cmsg],
+                         (ctrl->fc2e(ctrl, MSG_LGST, cmsg))? true : false);
             reloadData((id)ctrl->priv[7]);
             break;
-        }
-        case MSG_LADD:
-            ctrl->priv[3] = (intptr_t)realloc
-                                ((CFStringRef*)ctrl->priv[3],
-                                ++ctrl->priv[4] * sizeof(CFStringRef));
-            ((CFStringRef*)ctrl->priv[3])[ctrl->priv[4] - 1] = UTF8(data);
+
+        case MSG_LADD: {
+            id elem;
+
+            elem = init(alloc((id)ctrl->priv[1]));
+            SET_IVAR(elem, VAR_DATA, ctrl->priv[4]);
+            SET_IVAR(elem, VAR_CTRL, ctrl);
+            setTarget_(elem, elem);
+            setAction_(elem, ButtonSelector);
+            setButtonType_(elem, NSSwitchButton);
+            setTitle_(elem, capt = UTF8(data));
+            CFRelease(capt);
+            ctrl->priv[5] = (intptr_t)realloc((id*)ctrl->priv[5],
+                                             ++ctrl->priv[4] * sizeof(id));
+            ((id*)ctrl->priv[5])[ctrl->priv[4] - 1] = elem;
             break;
+        }
     }
     return 0;
 }
@@ -319,13 +336,24 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             setEnabled_((id)ctrl->priv[7], !!data);
             break;
 
-        case MSG_NGET:
-            return 0;
+        case MSG_NGET: {
+            double retn = 0;
 
+            GetT1DV(retn, (id)ctrl->priv[6], DoubleValue);
+            return retn;
+        }
         case MSG_NSET:
+            data = (data > ctrl->priv[1])? data : ctrl->priv[1];
+            data = (data < ctrl->priv[2])? data : ctrl->priv[2];
+            setDoubleValue_((id)ctrl->priv[6], data);
             break;
 
         case MSG_NDIM:
+            ctrl->priv[1] = -(uint16_t)data;
+            ctrl->priv[2] = (uint16_t)(data >> 16);
+            setMinValue_((id)ctrl->priv[6], ctrl->priv[1]);
+            setMaxValue_((id)ctrl->priv[6], ctrl->priv[2]);
+            setDoubleValue_((id)ctrl->priv[6], 0);
             break;
     }
     return 0;
@@ -455,7 +483,7 @@ void rFreeControl(CTRL *ctrl) {
 
             /// [TODO:] do not try to free standard classes, if any
             for (iter = countof(scls->_sub) - 1; iter >= 0; iter--)
-                objc_disposeClassPair((Class)scls->_sub[iter]);
+                DelClass((Class)scls->_sub[iter]);
             free(scls);
             /// we must release neither the window nor its NSView;
             /// if we do, the program segfaults, don`t know why exactly
@@ -479,11 +507,12 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_LIST:
+            /// releasing buttons and deleting their common subclass
             for (--ctrl->priv[4]; ctrl->priv[4] >= 0; ctrl->priv[4]--)
-                CFRelease(((CFStringRef*)ctrl->priv[3])[ctrl->priv[4]]);
-            free((CFStringRef*)ctrl->priv[3]);
-            release((id)ctrl->priv[5]); /// releasing NSTableColumn #1
-            release((id)ctrl->priv[6]); /// releasing NSTableColumn #2
+                release(((id*)ctrl->priv[5])[ctrl->priv[4]]);
+            DelClass((Class)ctrl->priv[1]);
+            free((id*)ctrl->priv[5]);
+            release((id)ctrl->priv[6]); /// releasing NSTableColumn
             release((id)ctrl->priv[7]); /// releasing NSTableView
             break;
 
@@ -515,11 +544,25 @@ NSInteger OnRows(id this, id prev, id view) {
     return ctrl->priv[4];
 }
 
+id OnValueOld(id this, id prev, id view, id icol, NSInteger irow) {
+    return 0;
+}
+
 id OnValue(id this, id prev, id view, id icol, NSInteger irow) {
     CTRL *ctrl = 0;
 
     GET_IVAR(view, VAR_CTRL, &ctrl);
-    return (id)(((CFStringRef*)ctrl->priv[3])[irow]);
+    return ((id*)ctrl->priv[5])[irow];
+}
+
+void ListButtonClick(id this) {
+    CTRL *ctrl = 0;
+    intptr_t irow;
+
+    GET_IVAR(this, VAR_CTRL, &ctrl);
+    GET_IVAR(this, VAR_DATA, &irow);
+    ctrl->fc2e(ctrl, MSG_LSST,
+              (irow << 1) | ((state(this) == NSOnState)? 1 : 0));
 }
 
 void ButtonClick(id this) {
@@ -531,15 +574,18 @@ void ButtonClick(id this) {
 }
 
 void TextChecker(id this) {
+    double spos = 0;
     CTRL *ctrl = 0;
-    long curr;
 
     GET_IVAR(this, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
 
-    curr = intValue((id)ctrl->priv[7]);
-    setIntValue_((id)ctrl->priv[7], curr);
+    GetT1DV(spos, (id)ctrl->priv[6], DoubleValue);
+    spos = (spos >= ctrl->priv[1])? spos : ctrl->priv[1];
+    spos = (spos <= ctrl->priv[2])? spos : ctrl->priv[2];
+    setDoubleValue_((id)ctrl->priv[7], spos);
+    ctrl->fc2e(ctrl, MSG_NSET, spos);
 }
 
 void PBoxDraw(CGRect rect, id this) {
@@ -621,13 +667,17 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                        {WindowDidResize_, OnSize}, {IsFlipped, OnTrue}, {}},
              tmet[] = {{TextDidChange_, TextChecker}, {}},
              bmet[] = {{ButtonSelector, ButtonClick}, {}},
+             nmet[] = {{}},
              lmet[] = {{NumberOfRowsInTableView_,                 OnRows},
-                       {TableView_objectValueForTableColumn_row_, OnValue}},
+                       {TableView_objectValueForTableColumn_row_, OnValueOld},
+                       {TableView_viewForTableColumn_row_,        OnValue},
+                       {}},
              pmet[] = {{DrawRect_, PBoxDraw}, {}},
              smet[] = {{IsFlipped, OnTrue}, {}},
              imet[] = {{DrawRect_, IBoxDraw}, {}};
         CGPoint fadv;
         CGFloat fasc;
+        id thrd;
 
         ctrl->fe2c = FE2CW;
         gwnd = systemFontOfSize_(NSFont, 0);
@@ -637,14 +687,14 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                       | ((uint32_t)round(0.60 * fasc) << 16);
 
         ctrl->priv[6] = (intptr_t)(scls = calloc(1, sizeof(*scls)));
-        scls->wndw = Subclass(NSView,              "NSW", vars, wmet);
-        scls->text = Subclass(NSTextField,         "NST", vars, tmet);
-        scls->butn = Subclass(NSButton,            "NSB", vars, bmet);
-        scls->spin = NSStepper;
-        scls->list = Subclass(NSTableView,         "NSL", vars, lmet);
-        scls->pbar = Subclass(NSProgressIndicator, "NSP", vars, pmet);
-        scls->sbox = Subclass(NSView,              "NSS", vars, smet);
-        scls->ibox = Subclass(NSView,              "NSI", vars, imet);
+        scls->wndw = NewClass(NSView,              "rNSW", vars, wmet);
+        scls->text = NewClass(NSTextField,         "rNST", vars, tmet);
+        scls->butn = NewClass(NSButton,            "rNSB", vars, bmet);
+        scls->spin = NewClass(NSStepper,           "rNSN", vars, nmet);
+        scls->list = NewClass(NSTableView,         "rNSL", vars, lmet);
+        scls->pbar = NewClass(NSProgressIndicator, "rNSP", vars, pmet);
+        scls->sbox = NewClass(NSView,              "rNSS", vars, smet);
+        scls->ibox = NewClass(NSView,              "rNSI", vars, imet);
 
         dims = (CGRect){};
         gwnd = initWithContentRect_styleMask_backing_defer_
@@ -661,8 +711,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         CFRelease(capt);
         SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
         makeKeyWindow(gwnd);
-        setLevel_(gwnd, NSNormalWindowLevel + 1); /// just a bit above others
-        orderFront_(gwnd, sharedApplication(NSApplication));
+        thrd = sharedApplication(NSApplication);
+        activateIgnoringOtherApps_(thrd, true);
+        orderFront_(gwnd, thrd);
     }
     else if (root) {
         long xspc, yspc, xpos, ypos, xdim, ydim;
@@ -714,12 +765,17 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 strcat(temp, text);
                 temp[size - 2] = '\n';
                 temp[size - 1] = '\0';
+
                 gwnd = init(alloc(scls->butn));
                 SET_IVAR(gwnd, VAR_CTRL, ctrl);
+                SET_IVAR(gwnd, VAR_DATA, nil);
                 setTarget_(gwnd, gwnd);
                 setAction_(gwnd, ButtonSelector);
                 setButtonType_(gwnd, NSMomentaryLightButton);
                 setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
+                if ((ctrl->flgs & FSB_DFLT) && ctrl->prev
+                && ((ctrl->prev->flgs & FCT_TTTT) == FCT_WNDW))
+                    setDefaultButtonCell_((id)ctrl->prev->priv[0], cell(gwnd));
                 setTitle_(gwnd, capt = UTF8(temp));
                 CFRelease(capt);
                 free(temp);
@@ -732,7 +788,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 setTarget_(gwnd, gwnd);
                 setAction_(gwnd, ButtonSelector);
                 setButtonType_(gwnd, NSSwitchButton);
-                setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
                 setImagePosition_(gwnd, (ctrl->flgs & FSX_LEFT)?
                                          NSImageRight : NSImageLeft);
                 setTitle_(gwnd, capt = UTF8(text));
@@ -744,17 +799,16 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 break;
 
             case FCT_SPIN: {
+                CGRect temp = {};
                 CGPoint spin;
-                CGRect temp;
 
                 ctrl->fe2c = FE2CN;
                 gwnd = init(alloc(NSView));
-                ctrl->priv[6] = (intptr_t)init(alloc(NSStepper));
+                ctrl->priv[6] = (intptr_t)init(alloc(scls->spin));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->text));
                 SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
                 GetT2DV(spin, (id)ctrl->priv[6], IntrinsicContentSize);
-                temp = dims;
-                temp.origin.x = temp.origin.y = 0;
+                temp.size = dims.size;
                 temp.size.width -= spin.x;
                 setFrame_((id)ctrl->priv[7], temp);
                 temp.origin.x = temp.size.width;
@@ -764,13 +818,21 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 addSubview_(gwnd, (id)ctrl->priv[7]);
                 break;
             }
-            case FCT_LIST:
+            case FCT_LIST: {
+                CGRect temp = {};
+
                 ctrl->fe2c = FE2CL;
+                temp.size = dims.size;
+                ctrl->priv[1] = (intptr_t)NewClass
+                    (NSButton, "rNSX", (char*[]){VAR_CTRL, VAR_DATA, 0},
+                    (OMSC[]){{ButtonSelector, ListButtonClick}, {}});
+
                 gwnd = init(alloc(NSScrollView));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
                 SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
                 setDataSource_((id)ctrl->priv[7], (id)ctrl->priv[7]);
-                setFrame_((id)ctrl->priv[7], dims);
+                setDelegate_((id)ctrl->priv[7], (id)ctrl->priv[7]);
+                setFrame_((id)ctrl->priv[7], temp);
 
                 ctrl->priv[6] = (intptr_t)init(alloc(NSTableColumn));
                 setStringValue_(headerCell((id)ctrl->priv[6]), capt = UTF8(0));
@@ -780,7 +842,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 setDocumentView_(gwnd, (id)ctrl->priv[7]);
                 setHasVerticalScroller_(gwnd, true);
                 break;
-
+            }
             case FCT_SBOX:
                 ctrl->fe2c = FE2CS;
                 ctrl->priv[1] =  (uint16_t)dims.size.width
@@ -837,6 +899,18 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         }
         setFrame_(gwnd, dims);
         addSubview_((id)ctrl->prev->priv[7], gwnd);
+        xspc = ctrl->flgs & FCT_TTTT;
+        if (ctrl->prev && ((ctrl->prev->flgs & FCT_TTTT) == FCT_WNDW)
+        && (xspc != FCT_TEXT) && (xspc != FCT_PBAR) && (xspc != FCT_SBOX)) {
+            /// [TODO:] why the fsck does this not work?!
+            if (!ctrl->prev->priv[4])
+                ctrl->prev->priv[3] = ctrl->prev->priv[4] = (intptr_t)gwnd;
+            else {
+                setNextKeyView_((id)ctrl->prev->priv[4], gwnd);
+                setNextKeyView_(gwnd, (id)ctrl->prev->priv[3]);
+                ctrl->prev->priv[4] = (intptr_t)gwnd;
+            }
+        }
     }
     ctrl->priv[0] = (intptr_t)gwnd;
 }

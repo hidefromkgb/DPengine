@@ -69,6 +69,12 @@ enum {
     NSAllLibrariesDirectory         = 101,
 };
 enum {
+    NSKeyValueObservingOptionNew     = 0x01,
+    NSKeyValueObservingOptionOld     = 0x02,
+    NSKeyValueObservingOptionInitial = 0x04,
+    NSKeyValueObservingOptionPrior   = 0x08,
+};
+enum {
     NSBorderlessWindowMask         = (0     ),
     NSTitledWindowMask             = (1 << 0),
     NSClosableWindowMask           = (1 << 1),
@@ -275,8 +281,7 @@ enum {
        "NSScrollView",            \
        "NSTableView",             \
        "NSTableColumn",           \
-       "NSMutableParagraphStyle", \
-       "NSButtonCell"
+       "NSMutableParagraphStyle"
 
 #define NSObject                (LoadedObjCClasses[ 0])
 #define NSApplication           (LoadedObjCClasses[ 1])
@@ -306,7 +311,6 @@ enum {
 #define NSTableView             (LoadedObjCClasses[25])
 #define NSTableColumn           (LoadedObjCClasses[26])
 #define NSMutableParagraphStyle (LoadedObjCClasses[27])
-#define NSButtonCell            (LoadedObjCClasses[28])
 
 
 
@@ -436,8 +440,8 @@ enum {
        "drawInRect:withAttributes:",                   \
        "textDidChange:",                               \
        "stringValue",                                  \
-       "intValue",                                     \
-       "setIntValue:",                                 \
+       "doubleValue",                                  \
+       "setMinValue:",                                 \
        "initWithObjectsAndKeys:",                      \
        "_B",                                           \
        "setAction:",                                   \
@@ -447,7 +451,11 @@ enum {
        "reloadData",                                   \
        "setDataSource:",                               \
        "numberOfRowsInTableView:",                     \
-       "tableView:objectValueForTableColumn:row:"
+       "tableView:objectValueForTableColumn:row:",     \
+       "tableView:viewForTableColumn:row:",            \
+       "setNextKeyView:",                              \
+       "setDefaultButtonCell:",                        \
+       "cell"
 
 #define init(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[  0])
 #define alloc(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[  1])
@@ -573,8 +581,8 @@ enum {
 #define drawInRect_withAttributes_(inst, r, a)                         objc_msgSend(inst, LoadedObjCSelectors[121], (CGRect)(r), (id)(a))
 #define TextDidChange_                                                                    LoadedObjCSelectors[122]
 #define stringValue(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[123])
-#define intValue(inst)                                           (long)objc_msgSend(inst, LoadedObjCSelectors[124])
-#define setIntValue_(inst, i)                                          objc_msgSend(inst, LoadedObjCSelectors[125], (int)(i))
+#define DoubleValue                                                                       LoadedObjCSelectors[124]
+#define setMinValue_(inst, v)                                          objc_msgSend(inst, LoadedObjCSelectors[125], (double)(v))
 #define initWithObjectsAndKeys_(inst, ...)                             objc_msgSend(inst, LoadedObjCSelectors[126], __VA_ARGS__, nil)
 #define ButtonSelector                                                                    LoadedObjCSelectors[127]
 #define setAction_(inst, a)                                            objc_msgSend(inst, LoadedObjCSelectors[128], a)
@@ -585,6 +593,10 @@ enum {
 #define setDataSource_(inst, d)                                        objc_msgSend(inst, LoadedObjCSelectors[133], d)
 #define NumberOfRowsInTableView_                                                          LoadedObjCSelectors[134]
 #define TableView_objectValueForTableColumn_row_                                          LoadedObjCSelectors[135]
+#define TableView_viewForTableColumn_row_                                                 LoadedObjCSelectors[136]
+#define setNextKeyView_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[137], v)
+#define setDefaultButtonCell_(inst, c)                                 objc_msgSend(inst, LoadedObjCSelectors[138], c)
+#define cell(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[139])
 
 
 
@@ -617,6 +629,15 @@ static id LoadedObjCClasses[countof(StrObjCClasses)] = {};
 static const char *StrObjCSelectors[] = {STR_OBJC_SELECTORS};
 static SEL LoadedObjCSelectors[countof(StrObjCSelectors)] = {};
 #undef STR_OBJC_SELECTORS
+
+/// subclassed entries reference tracker
+static struct {
+    Class uuid;
+    char *name;
+    long icnt;
+} *SubclassedObjCClasses;
+
+static long SubclassedObjCClassesCount = 0;
 
 
 
@@ -680,22 +701,60 @@ static CFDictionaryRef MakeDict(CFStringRef key1, ...) {
 
 
 __attribute__((unused))
-static id Subclass(id base, char *name, char *flds[], OMSC *mths) {
-    Class retn = objc_allocateClassPair((Class)base, name, 0);
+static id NewClass(id base, char *name, char *flds[], OMSC *mths) {
+    Class retn;
     long iter;
 
-    iter = -1;
-    /// adding fields
-    while (flds[++iter])
-        class_addIvar(retn, flds[iter],
-                      sizeof(id), (sizeof(id) >= 8)? 3 : 2, 0);
-    iter = -1;
-    /// overloading methods
-    while (mths[++iter].func)
-        class_addMethod(retn, mths[iter].name, mths[iter].func, 0);
+    for (retn = 0, iter = 0; iter < SubclassedObjCClassesCount; iter++)
+        if (!strcmp(name, SubclassedObjCClasses[iter].name)) {
+            retn = SubclassedObjCClasses[iter].uuid;
+            SubclassedObjCClasses[iter].icnt++;
+            break;
+        }
+    if (!retn) {
+        retn = objc_allocateClassPair((Class)base, name, 0);
+        SubclassedObjCClasses = realloc((SubclassedObjCClassesCount)?
+                                         SubclassedObjCClasses : 0,
+                                        (SubclassedObjCClassesCount + 1)
+                                       * sizeof(*SubclassedObjCClasses));
+        SubclassedObjCClasses[SubclassedObjCClassesCount++] =
+            (typeof(*SubclassedObjCClasses)){retn, strdup(name), 1};
 
-    objc_registerClassPair(retn);
+        iter = -1;
+        /// adding fields
+        while (flds[++iter])
+            class_addIvar(retn, flds[iter],
+                          sizeof(id), (sizeof(id) >= 8)? 3 : 2, 0);
+        iter = -1;
+        /// overloading methods
+        while (mths[++iter].func)
+            class_addMethod(retn, mths[iter].name, mths[iter].func, 0);
+
+        objc_registerClassPair(retn);
+    }
     return (id)retn;
+}
+
+
+
+__attribute__((unused))
+static void DelClass(Class uuid) {
+    long iter;
+
+    for (iter = 0; iter < SubclassedObjCClassesCount; iter++)
+        if (uuid == SubclassedObjCClasses[iter].uuid) {
+            SubclassedObjCClasses[iter].icnt--;
+            if (!SubclassedObjCClasses[iter].icnt) {
+                objc_disposeClassPair(SubclassedObjCClasses[iter].uuid);
+                free(SubclassedObjCClasses[iter].name);
+                if (iter < --SubclassedObjCClassesCount)
+                    SubclassedObjCClasses[iter] =
+                    SubclassedObjCClasses[SubclassedObjCClassesCount];
+            }
+            break;
+        }
+    if (!SubclassedObjCClassesCount)
+        free(SubclassedObjCClasses);
 }
 
 
