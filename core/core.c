@@ -60,7 +60,8 @@ struct THRD {
 
 /// engine data, opaque outside the module
 struct ENGD {
-    uint32_t flgs,    /// options: rendering scheme, restart, etc.
+    uint32_t flgs,    /// options
+             dflg,    /// deferred options (those which are set upon restart)
              size,    /// current length of the main display list
              smax,    /// maximum capacity of the main display list
              fram,    /// FPS counter
@@ -831,9 +832,9 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
 
     if (engd->uarr) {
         engd->dims = (T4IV){{xpos, ypos, xdim, ydim}};
+        engd->dflg = engd->flgs = flgs;
         engd->ufrm = ufrm;
         engd->udat = user;
-        engd->flgs = flgs;
         engd->msec = msec;
         engd->size = 0;
 
@@ -842,6 +843,8 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
                engd->ncpu, engd->uniq, mtmp,
               (double)mtmp * engd->ncpu / engd->uniq);
         do {
+            engd->flgs = (engd->flgs & ~COM_DDDD) | (engd->dflg & COM_DDDD);
+            /// done setting deferred flags (e.g., ones like rendering scheme)
             if (uflg)
                 engd->flgs = uflg(engd, engd->udat, engd->flgs);
             printf("%s\n", (engd->flgs & COM_RGPU)? TXL_RGPU : TXL_RSTD);
@@ -884,12 +887,15 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
         case ECB_SFLG: {
             uint32_t temp = engd->flgs;
 
-            engd->flgs = data;
-            lShowMainWindow(engd, engd->flgs & COM_SHOW);
-            if ((data ^ temp) & COM_RGPU) {
+            if ((data ^ temp) & COM_DDDD) {
+                /// we have received a deferred flag, restart needed!
+                engd->dflg = data;
                 engd->halt = 0;
                 lRestartEngine(engd);
             }
+            /// deferred flags are not to be set until restart!
+            engd->flgs = (engd->flgs & COM_DDDD) | (data & ~COM_DDDD);
+            lShowMainWindow(engd, engd->flgs & COM_SHOW);
             break;
         }
         /// [TODO:] change to PTHR()

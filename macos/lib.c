@@ -5,17 +5,8 @@
 
 
 
-/// name for NSApplication delegate subclass
-#define SUB_ADLG "a"
-/// name for NSView or NSOpenGLView delegate subclass
-#define SUB_VDLG "v"
-
 /// name of the instance variable to access the engine structure
 #define VAR_ENGD "e"
-/// name of the instance variable to access the window
-#define VAR_HWND "w"
-/// name of the instance variable to access the view
-#define VAR_VIEW "i"
 
 
 
@@ -27,8 +18,6 @@ struct SEMD {
 
 typedef struct _DRAW {
     long xdim, ydim;   /// drawing area dimensions
-    id pool, thrd;     /// autorelease pool, main NSApplication instance
-    id adlg, ains;     /// app delegate class, app delegate instance
     id vdlg, vins;     /// view delegate class, view delegate instance
     id hwnd;           /// main window
     CGContextRef hctx; /// output context handle
@@ -61,11 +50,13 @@ void lRestartEngine(ENGD *engd) {
 
 void lShowMainWindow(ENGD *engd, long show) {
     id thrd = sharedApplication(NSApplication);
+    intptr_t *data;
 
+    cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
     if (show)
-        unhide_(thrd, 0);
+        orderFront_(((DRAW*)data[0])->hwnd, thrd);
     else
-        hide_(thrd, 0);
+        orderOut_(((DRAW*)data[0])->hwnd, thrd);
 }
 
 
@@ -167,6 +158,15 @@ bool OnOpaq() {
 
 
 
+void OnFPS(CFRunLoopTimerRef tmrp, void *user) {
+    char fout[128];
+
+    cOutputFPS((ENGD*)user, fout);
+    printf("%s\n", fout);
+}
+
+
+
 void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
     CGPoint dptr;
     uint32_t attr;
@@ -176,7 +176,7 @@ void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
     cEngineCallback((ENGD*)user, ECB_GUSR, (intptr_t)&data);
     draw = (DRAW*)data[0];
 
-    GetT2DV(dptr, draw->hwnd, MouseLocationOutsideOfEventStream);
+    GetT2DV(dptr, NSEvent, MouseLocation);
     attr = pressedMouseButtons(NSEvent);
 
     /// [TODO] properly determine if the window is active
@@ -216,8 +216,7 @@ void OnDraw(CGRect rect, id this) {
     ENGD *engd;
     DRAW *draw;
 
-    /// [TODO:] un-delegate NSApplication
-    GET_IVAR(delegate(sharedApplication(NSApplication)), VAR_ENGD, &engd);
+    GET_IVAR(this, VAR_ENGD, &engd);
     cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
     draw = (DRAW*)data[0];
@@ -264,28 +263,26 @@ CFRunLoopTimerRef AddTimer(ulong time, void *func, void *data) {
 
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                   BGRA **bptr, intptr_t *data, uint32_t flgs) {
+    #define SUB_VDLG "lNSV"
 
-//    printf("BEGIN\n");
-
+    LoadObjC(); /// has to be on the very first line: even VMET (see
+                /// below) is filled with the values it retrieves
     DRAW draw;
+    id pool, thrd;
+    CFRunLoopTimerRef tmrf, tmrd;
+    CGRect dims;
 
-    CGRect dims = {{0, 0}, {draw.xdim = xdim - xpos, draw.ydim = ydim - ypos}};
     /// view delegate`s methods (line 1) and custom fields (line 2)
-    OMSC vmet[] = {{DrawRect_, OnDraw}, {IsOpaque,  OnOpaq}, {}};
-    char *vfld[] = {0};
-
-    LoadObjC();
+    OMSC vmet[] = {{DrawRect_, OnDraw}, {IsOpaque, OnOpaq}, {}};
+    char *vfld[] = {VAR_ENGD, 0};
 
     data[0] = (intptr_t)&draw;
-    /// [TODO:] un-delegate NSApplication
-    draw.adlg = NewClass(NSObject, SUB_ADLG,
-                        (char*[]){VAR_HWND, VAR_ENGD, VAR_VIEW, 0},
-                        (OMSC[]){{}});
+    draw.xdim = xdim - xpos;
+    draw.ydim = ydim - ypos;
+    dims = (CGRect){{0, 0}, {draw.xdim, draw.ydim}};
 
-    draw.pool = init(alloc(NSAutoreleasePool));
-    draw.thrd = sharedApplication(NSApplication);
-    setDelegate_(draw.thrd, (draw.ains = init(alloc(draw.adlg))));
-
+    pool = init(alloc(NSAutoreleasePool));
+    thrd = sharedApplication(NSApplication);
     if (~flgs & COM_RGPU) {
         long line = draw.xdim * sizeof(**bptr);
         CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
@@ -325,23 +322,18 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     setHasShadow_(draw.hwnd, false);
     setOpaque_(draw.hwnd, false);
 
-    CFRunLoopTimerRef ///tmrf = AddTimer(1000, OnFPS,  engd),
-                      tmrd = AddTimer(   1, OnCalc, engd);
-
-    SET_IVAR(draw.ains, VAR_ENGD, engd);
-    SET_IVAR(draw.ains, VAR_HWND, draw.hwnd);
-    SET_IVAR(draw.ains, VAR_VIEW, draw.vins);
-
-    activateIgnoringOtherApps_(draw.thrd, true);
+    tmrf = AddTimer(1000, OnFPS,  engd),
+    tmrd = AddTimer(   1, OnCalc, engd);
+    activateIgnoringOtherApps_(thrd, true);
     makeKeyWindow(draw.hwnd);
-    orderFront_(draw.hwnd, draw.thrd);
+    orderFront_(draw.hwnd, thrd);
 //    enableCursorRects(draw.hwnd);
 //    objc_msgSend(draw.vins, resetCursorRects);
 
-    run(draw.thrd);
+    run(thrd);
 
     CFRunLoopTimerInvalidate(tmrd);
-///    CFRunLoopTimerInvalidate(tmrf);
+    CFRunLoopTimerInvalidate(tmrf);
 
     cDeallocFrame(engd, 0);
     if (~flgs & COM_RGPU) {
@@ -350,10 +342,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     }
     release(draw.vins);
     release(draw.hwnd);
-    release(draw.ains);
-    release(draw.pool);
+    release(pool);
     DelClass((Class)draw.vdlg);
-    DelClass((Class)draw.adlg);
 
-//    printf("END!\n");
+    #undef SUB_VDLG
 }

@@ -6,6 +6,8 @@
 #include "../exec/exec.h"
 #include "mac.h"
 
+/// name of the menu responder class
+#define CLS_MENU "lNSM"
 /// name of the instance variable to access the CTRL structure
 #define VAR_CTRL "ctrl"
 /// name of the instance variable to access the associated data
@@ -28,8 +30,78 @@ typedef union {
 
 
 
-void rOpenContextMenu(MENU *menu) {
-    /// [TODO:]
+/// NAME holds the selector associated with this function
+void OnMenu(id this, SEL name, id menu) {
+    MENU *item = (MENU*)tag(menu);
+
+    eProcessMenuItem(item);
+}
+
+
+
+id Submenu(MENU *menu, id base) {
+    if (!menu)
+        return 0;
+
+    id cbtn, rbtn, item, retn = init(alloc(NSMenu));
+    CFStringRef tstr, null = UTF8(0);
+
+    cbtn = imageNamed_(NSImage, tstr = UTF8("NSMenuCheckmark"));
+    CFRelease(tstr);
+    rbtn = imageNamed_(NSImage, tstr = UTF8("NSMenuRadio"));
+    CFRelease(tstr);
+    setAutoenablesItems_(retn, false);
+    while (menu->text) {
+        if (!*menu->text) {
+            item = separatorItem(NSMenuItem);
+            addItem_(retn, item);
+        }
+        else {
+            item = initWithTitle_action_keyEquivalent_
+                       (alloc(NSMenuItem),
+                        tstr = UTF8(menu->text), MenuSelector, null);
+            CFRelease(tstr);
+            if (menu->flgs & MFL_CCHK) {
+                setOnStateImage_(item, (menu->flgs & MFL_RCHK & ~MFL_CCHK)?
+                                        rbtn : cbtn);
+                setState_(item, (menu->flgs & MFL_VCHK)?
+                                 NSOnState : NSOffState);
+            }
+            if (menu->chld) {
+                id next = Submenu(menu->chld, base);
+                setSubmenu_(item, next);
+                release(next);
+            }
+            /// might be dangerous if sizeof(long) is less than sizeof(MENU*)
+            setTag_(item, menu);
+
+            setEnabled_(item, (menu->flgs & MFL_GRAY)? false : true);
+            setTarget_(item, base);
+            addItem_(retn, item);
+            release(item);
+        }
+        menu++;
+    }
+    CFRelease(null);
+    return retn;
+}
+
+
+
+void rOpenContextMenu(MENU *tmpl) {
+    id menu, base;
+    CGPoint dptr;
+
+    /// getting the pre-allocated menu responder class
+    menu = NewClass(0, CLS_MENU, 0, 0);
+    base = init(alloc(menu));
+    DelClass((Class)menu);
+
+    menu = Submenu(tmpl, base);
+    GetT2DV(dptr, NSEvent, MouseLocation);
+    popUpMenuPositioningItem_atLocation_inView_(menu, nil, dptr, nil);
+    release(menu);
+    release(base);
 }
 
 
@@ -53,20 +125,61 @@ long rMessage(char *text, char *head, uint32_t flgs) {
 
 
 
+void OnTray(id this) {
+    MENU *mctx;
+
+    GET_IVAR(this, VAR_DATA, &mctx);
+    rOpenContextMenu(mctx);
+}
+
+
+
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim) {
-    id sbar = systemStatusBar(NSStatusBar);
-    id icon = statusItemWithLength_(sbar, NSVariableStatusItemLength);
+    CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
+    CGContextRef ctxt = CGBitmapContextCreate
+        (data, xdim, ydim, CHAR_BIT, xdim * sizeof(*data), drgb,
+         kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+    CGImageRef iref = CGBitmapContextCreateImage(ctxt);
+    CFStringRef capt;
 
-    setHighlightMode_(icon, true);
-    /// [TODO:]
-    return 0;
+    id ibtn, pict, *retn = malloc(3 * sizeof(*retn));
+
+    pict = initWithCGImage_size_(alloc(NSImage), iref, ((CGPoint){}));
+    retn[0] = statusItemWithLength_(systemStatusBar(NSStatusBar),
+                                    NSVariableStatusItemLength),
+    retn[1] = NewClass(NSObject, "lNST", (char*[]){VAR_CTRL, VAR_DATA, 0},
+                      (OMSC[]){{ButtonSelector, OnTray}, {}});
+    retn[2] = init(alloc(retn[1]));
+    SET_IVAR(retn[2], VAR_CTRL, retn);
+    SET_IVAR(retn[2], VAR_DATA, mctx);
+
+    /// kCFCoreFoundationVersionNumber10_10 == 1151.16
+    if (kCFCoreFoundationVersionNumber >= 1151.0)
+        ibtn = button(retn[0]); /// Yosemite or newer, so we are using buttons
+    else
+        setHighlightMode_(ibtn = retn[0], true);
+    setImage_(ibtn, pict);
+    setTarget_(ibtn, retn[2]);
+    setAction_(ibtn, ButtonSelector);
+    setToolTip_(retn[0], capt = UTF8(text));
+    CFRelease(capt);
+    release(pict);
+    CGImageRelease(iref);
+    CGContextRelease(ctxt);
+    CGColorSpaceRelease(drgb);
+    return (intptr_t)retn;
 }
 
 
 
 void rFreeTrayIcon(intptr_t icon) {
-    /// [TODO:]
+    id *retn = (id*)icon;
+
+    removeStatusItem_(systemStatusBar(NSStatusBar), retn[0]);
+    release(retn[2]);
+    DelClass((Class)retn[1]);
+    free(retn);
 }
 
 
@@ -124,7 +237,8 @@ void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
                              0.001 * fram, 0, 0, TmrFunc, &ctxt);
 
     CFRunLoopAddTimer(CFRunLoopGetCurrent(), tmrp, kCFRunLoopCommonModes);
-    run(sharedApplication(NSApplication));
+    while (root->priv[2])
+        run(sharedApplication(NSApplication));
     CFRunLoopTimerInvalidate(tmrp);
 }
 
@@ -143,12 +257,37 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
     setFrame_((id)ctrl->priv[0], rect);
 }
 
+void OnSpin(id this) {
+    CGFloat spos = 0.0;
+    CTRL *ctrl = 0;
+
+    GET_IVAR(this, VAR_CTRL, &ctrl);
+    if (!ctrl)
+        return;
+
+    GetT1DV(spos, (id)ctrl->priv[6], DoubleValue);
+    setIntValue_((id)ctrl->priv[7], spos);
+    ctrl->fc2e(ctrl, MSG_NSET, spos);
+}
+
+void TextChecker(id this) {
+    CGFloat spos = 0.0;
+    CTRL *ctrl = 0;
+
+    GET_IVAR(this, VAR_CTRL, &ctrl);
+    if (!ctrl)
+        return;
+
+    GetT1DV(spos, (id)ctrl->priv[6], DoubleValue);
+    setIntValue_((id)ctrl->priv[7], spos);
+}
+
 
 
 /// PRIV:
 ///  0: NSWindow
 ///  1: (wndsize.x) | (wndsize.y << 16)
-///  2: (fontmul.x) | (fontmul.y << 16)
+///  2: (fontmul.x) | (fontmul.y << 16), and also a halt flag if 0
 ///  3: first tab-enabled control
 ///  4: last tab-enabled control
 ///  5:
@@ -159,10 +298,13 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         case MSG__SHW: {
             id thrd = sharedApplication(NSApplication);
 
-            if (data)
-                orderFront_((id)ctrl->priv[0], thrd);
-            else
+            if (!data)
                 orderOut_((id)ctrl->priv[0], thrd);
+            else {
+                setLevel_((id)ctrl->priv[0], NSMainMenuWindowLevel + 1);
+                orderFront_((id)ctrl->priv[0], thrd);
+                setLevel_((id)ctrl->priv[0], NSNormalWindowLevel);
+            }
             break;
         }
         case MSG_WSZC: {
@@ -337,7 +479,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG_NGET: {
-            double retn = 0;
+            CGFloat retn = 0;
 
             GetT1DV(retn, (id)ctrl->priv[6], DoubleValue);
             return retn;
@@ -346,6 +488,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             data = (data > ctrl->priv[1])? data : ctrl->priv[1];
             data = (data < ctrl->priv[2])? data : ctrl->priv[2];
             setDoubleValue_((id)ctrl->priv[6], data);
+            OnSpin((id)ctrl->priv[6]);
             break;
 
         case MSG_NDIM:
@@ -354,6 +497,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             setMinValue_((id)ctrl->priv[6], ctrl->priv[1]);
             setMaxValue_((id)ctrl->priv[6], ctrl->priv[2]);
             setDoubleValue_((id)ctrl->priv[6], 0);
+            OnSpin((id)ctrl->priv[6]);
             break;
     }
     return 0;
@@ -536,19 +680,18 @@ void rFreeControl(CTRL *ctrl) {
 }
 
 
-
-NSInteger OnRows(id this, id prev, id view) {
+NSInteger OnRows(id this, SEL name, id view) {
     CTRL *ctrl = 0;
 
     GET_IVAR(view, VAR_CTRL, &ctrl);
     return ctrl->priv[4];
 }
 
-id OnValueOld(id this, id prev, id view, id icol, NSInteger irow) {
+id OnValueOld(id this, SEL name, id view, id icol, NSInteger irow) {
     return 0;
 }
 
-id OnValue(id this, id prev, id view, id icol, NSInteger irow) {
+id OnValue(id this, SEL name, id view, id icol, NSInteger irow) {
     CTRL *ctrl = 0;
 
     GET_IVAR(view, VAR_CTRL, &ctrl);
@@ -571,21 +714,6 @@ void ButtonClick(id this) {
     GET_IVAR(this, VAR_CTRL, &ctrl);
     ctrl->fc2e(ctrl, MSG_BCLK, ((ctrl->flgs & FCT_TTTT) != FCT_BUTN)?
                                 (state((id)ctrl->priv[0]) == NSOnState) : 0);
-}
-
-void TextChecker(id this) {
-    double spos = 0;
-    CTRL *ctrl = 0;
-
-    GET_IVAR(this, VAR_CTRL, &ctrl);
-    if (!ctrl)
-        return;
-
-    GetT1DV(spos, (id)ctrl->priv[6], DoubleValue);
-    spos = (spos >= ctrl->priv[1])? spos : ctrl->priv[1];
-    spos = (spos <= ctrl->priv[2])? spos : ctrl->priv[2];
-    setDoubleValue_((id)ctrl->priv[7], spos);
-    ctrl->fc2e(ctrl, MSG_NSET, spos);
 }
 
 void PBoxDraw(CGRect rect, id this) {
@@ -632,16 +760,21 @@ bool OnTrue() {
     return true;
 }
 
-bool OnClose(id view) {
-    stop_(sharedApplication(NSApplication), view);
+bool OnClose(id this) {
+    CTRL *ctrl = 0;
+
+    GET_IVAR(this, VAR_CTRL, &ctrl);
+    ctrl->priv[2] = 0; /// requesting a halt, or just crashing if CTRL is 0
+                       /// (the program is stopping anyway)
+    stop_(sharedApplication(NSApplication), this);
     return true;
 }
 
-void OnSize(id view) {
+void OnSize(id this) {
     CTRL *ctrl = 0;
     CGRect rect;
 
-    GET_IVAR(view, VAR_CTRL, &ctrl);
+    GET_IVAR(this, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
 
@@ -667,7 +800,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                        {WindowDidResize_, OnSize}, {IsFlipped, OnTrue}, {}},
              tmet[] = {{TextDidChange_, TextChecker}, {}},
              bmet[] = {{ButtonSelector, ButtonClick}, {}},
-             nmet[] = {{}},
+             nmet[] = {{ButtonSelector, OnSpin}, {}},
              lmet[] = {{NumberOfRowsInTableView_,                 OnRows},
                        {TableView_objectValueForTableColumn_row_, OnValueOld},
                        {TableView_viewForTableColumn_row_,        OnValue},
@@ -806,6 +939,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 gwnd = init(alloc(NSView));
                 ctrl->priv[6] = (intptr_t)init(alloc(scls->spin));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->text));
+                SET_IVAR((id)ctrl->priv[6], VAR_CTRL, ctrl);
                 SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
                 GetT2DV(spin, (id)ctrl->priv[6], IntrinsicContentSize);
                 temp.size = dims.size;
@@ -814,6 +948,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 temp.origin.x = temp.size.width;
                 temp.size.width = spin.x;
                 setFrame_((id)ctrl->priv[6], temp);
+                setValueWraps_((id)ctrl->priv[6], false);
+                setTarget_((id)ctrl->priv[6], (id)ctrl->priv[6]);
+                setAction_((id)ctrl->priv[6], ButtonSelector);
                 addSubview_(gwnd, (id)ctrl->priv[6]);
                 addSubview_(gwnd, (id)ctrl->priv[7]);
                 break;
@@ -918,14 +1055,15 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 
 int main(int argc, char *argv[]) {
-    ssize_t sdim;
     CFStringRef path;
+    CGFloat icon;
     CGRect dims;
-    id pool;
+    id pool, menu;
 
     struct dirent **dirs;
-    char *home;
     ENGC *engc;
+    char *home;
+    long  iter;
 
     LoadObjC();
 
@@ -955,22 +1093,25 @@ int main(int argc, char *argv[]) {
     setActivationPolicy_(sharedApplication(NSApplication),
                          NSApplicationActivationPolicyAccessory);
 
-    if ((sdim = scandir(home, &dirs, 0, alphasort)) >= 0) {
-        while (sdim--) {
-            if ((dirs[sdim]->d_type == DT_DIR)
-            &&  strcmp(dirs[sdim]->d_name, ".")
-            &&  strcmp(dirs[sdim]->d_name, ".."))
-                eAppendLib(engc, DEF_CONF, home, dirs[sdim]->d_name);
-            free(dirs[sdim]);
+    if ((iter = scandir(home, &dirs, 0, alphasort)) >= 0) {
+        while (iter--) {
+            if ((dirs[iter]->d_type == DT_DIR)
+            &&  strcmp(dirs[iter]->d_name, ".")
+            &&  strcmp(dirs[iter]->d_name, ".."))
+                eAppendLib(engc, DEF_CONF, home, dirs[iter]->d_name);
+            free(dirs[iter]);
         }
         free(dirs);
     }
     free(home);
     GetT4DV(dims, mainScreen(NSScreen), VisibleFrame);
-    GetT1DV(sdim, systemStatusBar(NSStatusBar), Thickness);
-    eExecuteEngine(engc, sdim, sdim, dims.origin.x, dims.origin.y,
+    GetT1DV(icon, systemStatusBar(NSStatusBar), Thickness);
+    menu = NewClass(NSObject, CLS_MENU, (char*[]){0},
+                   (OMSC[]){{MenuSelector, OnMenu}, {}});
+    eExecuteEngine(engc, icon, icon, dims.origin.x, dims.origin.y,
                    dims.size.width  + dims.origin.x,
                    dims.size.height + dims.origin.y);
+    DelClass((Class)menu);
     release(pool);
     return 0;
 }

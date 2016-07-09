@@ -11,6 +11,7 @@ macos.app/Contents/MacOS/*
 Ponies*
 
 # Code::Blocks service files
+*.cscope_file_list
 *.layout
 *.depend
 .obj

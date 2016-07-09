@@ -70,6 +70,7 @@
 #define COM_DRAW  (1 << 30)
 #define COM_SHOW  (1 << 29)
 #define COM_OPAQ  (1 << 28)
+#define COM_DDDD  COM_RGPU  /** deferred flags mask **/
 
 #define WIN_IBGR  (1 << 0)
 #define WIN_IPBO  (1 << 1)

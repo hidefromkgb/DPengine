@@ -405,13 +405,13 @@ enum {
        "isOpaque",                                     \
        "drawRect:",                                    \
        "_M",                                           \
-       "mouseLocationOutsideOfEventStream",            \
+       "mouseLocation",                                \
        "pressedMouseButtons",                          \
        "openGLContext",                                \
        "flushBuffer",                                  \
        "makeCurrentContext",                           \
        "setValues:forParameter:",                      \
-       "popUpContextMenu:withEvent:forView:",          \
+       "popUpMenuPositioningItem:atLocation:inView:",  \
        "windowNumber",                                 \
        "objectAtIndex:",                               \
        "defaultManager",                               \
@@ -442,6 +442,7 @@ enum {
        "stringValue",                                  \
        "doubleValue",                                  \
        "setMinValue:",                                 \
+       "setIntValue:",                                 \
        "initWithObjectsAndKeys:",                      \
        "_B",                                           \
        "setAction:",                                   \
@@ -455,7 +456,11 @@ enum {
        "tableView:viewForTableColumn:row:",            \
        "setNextKeyView:",                              \
        "setDefaultButtonCell:",                        \
-       "cell"
+       "cell",                                         \
+       "button",                                       \
+       "setToolTip:",                                  \
+       "setValueWraps:",                               \
+       "removeStatusItem:"
 
 #define init(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[  0])
 #define alloc(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[  1])
@@ -547,13 +552,13 @@ enum {
 #define IsOpaque                                                                          LoadedObjCSelectors[ 87]
 #define DrawRect_                                                                         LoadedObjCSelectors[ 88]
 #define MenuSelector                                                                      LoadedObjCSelectors[ 89]
-#define MouseLocationOutsideOfEventStream                                                 LoadedObjCSelectors[ 90]
+#define MouseLocation                                                                     LoadedObjCSelectors[ 90]
 #define pressedMouseButtons(inst)                                (long)objc_msgSend(inst, LoadedObjCSelectors[ 91])
 #define openGLContext(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[ 92])
 #define flushBuffer(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[ 93])
 #define makeCurrentContext(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[ 94])
 #define setValues_forParameter_(inst, v, p)                            objc_msgSend(inst, LoadedObjCSelectors[ 95], (int*)(v), (int)(p))
-#define popUpContextMenu_withEvent_forView_(inst, m, e, v)             objc_msgSend(inst, LoadedObjCSelectors[ 96], m, e, v)
+#define popUpMenuPositioningItem_atLocation_inView_(inst, m, l, v)     objc_msgSend(inst, LoadedObjCSelectors[ 96], m, (CGPoint)(l), v)
 #define windowNumber(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[ 97])
 #define objectAtIndex_(inst, i)                                        objc_msgSend(inst, LoadedObjCSelectors[ 98], i)
 #define defaultManager(inst)                                           objc_msgSend(inst, LoadedObjCSelectors[ 99])
@@ -567,7 +572,7 @@ enum {
 #define enableCursorRects(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[107])
 #define ResetCursorRects                                                                  LoadedObjCSelectors[108]
 #define addCursorRect_cursor_(inst, r, c)                              objc_msgSend(inst, LoadedObjCSelectors[109], (CGRect)(r), (id)(c))
-#define MakeEvent(t, l, m, s, w, c)                                 objc_msgSend(NSEvent, LoadedObjCSelectors[110], (id)(t), (CGPoint)(l), (id)(m), (id)(s), (id)(w), (id)(c), nil, nil, nil)
+#define MakeEvent(t, l, m, s, w, c)                                 objc_msgSend(NSEvent, LoadedObjCSelectors[110], t, (CGPoint)(l), m, (CGFloat)(s), (id)(w), (id)(c), nil, nil, nil)
 #define setIndeterminate_(inst, i)                                     objc_msgSend(inst, LoadedObjCSelectors[111], (bool)(i))
 #define setMaxValue_(inst, v)                                          objc_msgSend(inst, LoadedObjCSelectors[112], (double)(v))
 #define setDoubleValue_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[113], (double)(v))
@@ -583,20 +588,25 @@ enum {
 #define stringValue(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[123])
 #define DoubleValue                                                                       LoadedObjCSelectors[124]
 #define setMinValue_(inst, v)                                          objc_msgSend(inst, LoadedObjCSelectors[125], (double)(v))
-#define initWithObjectsAndKeys_(inst, ...)                             objc_msgSend(inst, LoadedObjCSelectors[126], __VA_ARGS__, nil)
-#define ButtonSelector                                                                    LoadedObjCSelectors[127]
-#define setAction_(inst, a)                                            objc_msgSend(inst, LoadedObjCSelectors[128], a)
-#define state(inst)                                              (long)objc_msgSend(inst, LoadedObjCSelectors[129])
-#define isEnabled(inst)                                          (bool)objc_msgSend(inst, LoadedObjCSelectors[130])
-#define verticalScroller(inst)                                         objc_msgSend(inst, LoadedObjCSelectors[131])
-#define reloadData(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[132])
-#define setDataSource_(inst, d)                                        objc_msgSend(inst, LoadedObjCSelectors[133], d)
-#define NumberOfRowsInTableView_                                                          LoadedObjCSelectors[134]
-#define TableView_objectValueForTableColumn_row_                                          LoadedObjCSelectors[135]
-#define TableView_viewForTableColumn_row_                                                 LoadedObjCSelectors[136]
-#define setNextKeyView_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[137], v)
-#define setDefaultButtonCell_(inst, c)                                 objc_msgSend(inst, LoadedObjCSelectors[138], c)
-#define cell(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[139])
+#define setIntValue_(inst, v)                                          objc_msgSend(inst, LoadedObjCSelectors[126], (NSInteger)(v))
+#define initWithObjectsAndKeys_(inst, ...)                             objc_msgSend(inst, LoadedObjCSelectors[127], __VA_ARGS__, nil)
+#define ButtonSelector                                                                    LoadedObjCSelectors[128]
+#define setAction_(inst, a)                                            objc_msgSend(inst, LoadedObjCSelectors[129], a)
+#define state(inst)                                              (long)objc_msgSend(inst, LoadedObjCSelectors[130])
+#define isEnabled(inst)                                          (bool)objc_msgSend(inst, LoadedObjCSelectors[131])
+#define verticalScroller(inst)                                         objc_msgSend(inst, LoadedObjCSelectors[132])
+#define reloadData(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[133])
+#define setDataSource_(inst, d)                                        objc_msgSend(inst, LoadedObjCSelectors[134], d)
+#define NumberOfRowsInTableView_                                                          LoadedObjCSelectors[135]
+#define TableView_objectValueForTableColumn_row_                                          LoadedObjCSelectors[136]
+#define TableView_viewForTableColumn_row_                                                 LoadedObjCSelectors[137]
+#define setNextKeyView_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[138], v)
+#define setDefaultButtonCell_(inst, c)                                 objc_msgSend(inst, LoadedObjCSelectors[139], c)
+#define cell(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[140])
+#define button(inst)                                                   objc_msgSend(inst, LoadedObjCSelectors[141])
+#define setToolTip_(inst, t)                                           objc_msgSend(inst, LoadedObjCSelectors[142], t)
+#define setValueWraps_(inst, w)                                        objc_msgSend(inst, LoadedObjCSelectors[143], w)
+#define removeStatusItem_(inst, i)                                     objc_msgSend(inst, LoadedObjCSelectors[144], i)
 
 
 
