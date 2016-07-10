@@ -44,12 +44,12 @@ id Submenu(MENU *menu, id base) {
         return 0;
 
     id cbtn, rbtn, item, retn = init(alloc(NSMenu));
-    CFStringRef tstr, null = UTF8(0);
+    CFStringRef text, null = UTF8(0);
 
-    cbtn = imageNamed_(NSImage, tstr = UTF8("NSMenuCheckmark"));
-    CFRelease(tstr);
-    rbtn = imageNamed_(NSImage, tstr = UTF8("NSMenuRadio"));
-    CFRelease(tstr);
+    cbtn = imageNamed_(NSImage, text = UTF8("NSMenuCheckmark"));
+    CFRelease(text);
+    rbtn = imageNamed_(NSImage, text = UTF8("NSMenuRadio"));
+    CFRelease(text);
     setAutoenablesItems_(retn, false);
     while (menu->text) {
         if (!*menu->text) {
@@ -59,8 +59,8 @@ id Submenu(MENU *menu, id base) {
         else {
             item = initWithTitle_action_keyEquivalent_
                        (alloc(NSMenuItem),
-                        tstr = UTF8(menu->text), MenuSelector, null);
-            CFRelease(tstr);
+                        text = UTF8(menu->text), ActionSelector, null);
+            CFRelease(text);
             if (menu->flgs & MFL_CCHK) {
                 setOnStateImage_(item, (menu->flgs & MFL_RCHK & ~MFL_CCHK)?
                                         rbtn : cbtn);
@@ -149,7 +149,7 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
     retn[0] = statusItemWithLength_(systemStatusBar(NSStatusBar),
                                     NSVariableStatusItemLength),
     retn[1] = NewClass(NSObject, "lNST", (char*[]){VAR_CTRL, VAR_DATA, 0},
-                      (OMSC[]){{ButtonSelector, OnTray}, {}});
+                      (OMSC[]){{ActionSelector, OnTray}, {}});
     retn[2] = init(alloc(retn[1]));
     SET_IVAR(retn[2], VAR_CTRL, retn);
     SET_IVAR(retn[2], VAR_DATA, mctx);
@@ -161,7 +161,7 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
         setHighlightMode_(ibtn = retn[0], true);
     setImage_(ibtn, pict);
     setTarget_(ibtn, retn[2]);
-    setAction_(ibtn, ButtonSelector);
+    setAction_(ibtn, ActionSelector);
     setToolTip_(retn[0], capt = UTF8(text));
     CFRelease(capt);
     release(pict);
@@ -432,7 +432,7 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             SET_IVAR(elem, VAR_DATA, ctrl->priv[4]);
             SET_IVAR(elem, VAR_CTRL, ctrl);
             setTarget_(elem, elem);
-            setAction_(elem, ButtonSelector);
+            setAction_(elem, ActionSelector);
             setButtonType_(elem, NSSwitchButton);
             setTitle_(elem, capt = UTF8(data));
             CFRelease(capt);
@@ -680,6 +680,7 @@ void rFreeControl(CTRL *ctrl) {
 }
 
 
+
 NSInteger OnRows(id this, SEL name, id view) {
     CTRL *ctrl = 0;
 
@@ -799,8 +800,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         OMSC wmet[] = {{WindowShouldClose_, OnClose},
                        {WindowDidResize_, OnSize}, {IsFlipped, OnTrue}, {}},
              tmet[] = {{TextDidChange_, TextChecker}, {}},
-             bmet[] = {{ButtonSelector, ButtonClick}, {}},
-             nmet[] = {{ButtonSelector, OnSpin}, {}},
+             bmet[] = {{ActionSelector, ButtonClick}, {}},
+             nmet[] = {{ActionSelector, OnSpin}, {}},
              lmet[] = {{NumberOfRowsInTableView_,                 OnRows},
                        {TableView_objectValueForTableColumn_row_, OnValueOld},
                        {TableView_viewForTableColumn_row_,        OnValue},
@@ -903,12 +904,14 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 SET_IVAR(gwnd, VAR_CTRL, ctrl);
                 SET_IVAR(gwnd, VAR_DATA, nil);
                 setTarget_(gwnd, gwnd);
-                setAction_(gwnd, ButtonSelector);
+                setAction_(gwnd, ActionSelector);
                 setButtonType_(gwnd, NSMomentaryLightButton);
                 setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
                 if ((ctrl->flgs & FSB_DFLT) && ctrl->prev
-                && ((ctrl->prev->flgs & FCT_TTTT) == FCT_WNDW))
+                && ((ctrl->prev->flgs & FCT_TTTT) == FCT_WNDW)) {
+                    setInitialFirstResponder_((id)ctrl->prev->priv[0], gwnd);
                     setDefaultButtonCell_((id)ctrl->prev->priv[0], cell(gwnd));
+                }
                 setTitle_(gwnd, capt = UTF8(temp));
                 CFRelease(capt);
                 free(temp);
@@ -919,7 +922,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 gwnd = init(alloc(scls->butn));
                 SET_IVAR(gwnd, VAR_CTRL, ctrl);
                 setTarget_(gwnd, gwnd);
-                setAction_(gwnd, ButtonSelector);
+                setAction_(gwnd, ActionSelector);
                 setButtonType_(gwnd, NSSwitchButton);
                 setImagePosition_(gwnd, (ctrl->flgs & FSX_LEFT)?
                                          NSImageRight : NSImageLeft);
@@ -950,7 +953,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 setFrame_((id)ctrl->priv[6], temp);
                 setValueWraps_((id)ctrl->priv[6], false);
                 setTarget_((id)ctrl->priv[6], (id)ctrl->priv[6]);
-                setAction_((id)ctrl->priv[6], ButtonSelector);
+                setAction_((id)ctrl->priv[6], ActionSelector);
                 addSubview_(gwnd, (id)ctrl->priv[6]);
                 addSubview_(gwnd, (id)ctrl->priv[7]);
                 break;
@@ -962,7 +965,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 temp.size = dims.size;
                 ctrl->priv[1] = (intptr_t)NewClass
                     (NSButton, "rNSX", (char*[]){VAR_CTRL, VAR_DATA, 0},
-                    (OMSC[]){{ButtonSelector, ListButtonClick}, {}});
+                    (OMSC[]){{ActionSelector, ListButtonClick}, {}});
 
                 gwnd = init(alloc(NSScrollView));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
@@ -1036,16 +1039,28 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         }
         setFrame_(gwnd, dims);
         addSubview_((id)ctrl->prev->priv[7], gwnd);
-        xspc = ctrl->flgs & FCT_TTTT;
-        if (ctrl->prev && ((ctrl->prev->flgs & FCT_TTTT) == FCT_WNDW)
-        && (xspc != FCT_TEXT) && (xspc != FCT_PBAR) && (xspc != FCT_SBOX)) {
-            /// [TODO:] why the fsck does this not work?!
-            if (!ctrl->prev->priv[4])
-                ctrl->prev->priv[3] = ctrl->prev->priv[4] = (intptr_t)gwnd;
-            else {
-                setNextKeyView_((id)ctrl->prev->priv[4], gwnd);
-                setNextKeyView_(gwnd, (id)ctrl->prev->priv[3]);
-                ctrl->prev->priv[4] = (intptr_t)gwnd;
+        if (ctrl->prev && ((ctrl->prev->flgs & FCT_TTTT) == FCT_WNDW)) {
+            id resp; /// tab-stop responder
+
+            switch (ctrl->flgs & FCT_TTTT) {
+                case FCT_TEXT:
+                case FCT_PBAR:
+                case FCT_SBOX: resp = 0; break;
+                case FCT_LIST:
+                case FCT_SPIN: resp = (id)ctrl->priv[7]; break;
+                default:       resp = gwnd; break;
+            }
+            if (resp) {
+                if (ctrl->prev->priv[4]) {
+                    setNextKeyView_((id)ctrl->prev->priv[4], resp);
+                    setNextKeyView_(resp, (id)ctrl->prev->priv[3]);
+                    ctrl->prev->priv[4] = (intptr_t)resp;
+                }
+                else {
+                    ctrl->prev->priv[3] = ctrl->prev->priv[4] = (intptr_t)resp;
+                    /// shall do nothing if there already is a first responder
+                    setInitialFirstResponder_((id)ctrl->prev->priv[0], resp);
+                }
             }
         }
     }
@@ -1107,7 +1122,7 @@ int main(int argc, char *argv[]) {
     GetT4DV(dims, mainScreen(NSScreen), VisibleFrame);
     GetT1DV(icon, systemStatusBar(NSStatusBar), Thickness);
     menu = NewClass(NSObject, CLS_MENU, (char*[]){0},
-                   (OMSC[]){{MenuSelector, OnMenu}, {}});
+                   (OMSC[]){{ActionSelector, OnMenu}, {}});
     eExecuteEngine(engc, icon, icon, dims.origin.x, dims.origin.y,
                    dims.size.width  + dims.origin.x,
                    dims.size.height + dims.origin.y);

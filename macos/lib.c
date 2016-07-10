@@ -6,7 +6,7 @@
 
 
 /// name of the instance variable to access the engine structure
-#define VAR_ENGD "e"
+#define VAR_ENGD "engd"
 
 
 
@@ -17,10 +17,10 @@ struct SEMD {
 };
 
 typedef struct _DRAW {
-    long xdim, ydim;   /// drawing area dimensions
-    id vdlg, vins;     /// view delegate class, view delegate instance
-    id hwnd;           /// main window
-    CGContextRef hctx; /// output context handle
+    uint32_t attr;       /// last known mouse attributes
+    long xdim, ydim;     /// drawing area dimensions
+    id hwnd, view, hand; /// main window with its view and the cursor
+    CGContextRef hctx;   /// output context handle
 } DRAW;
 
 
@@ -179,22 +179,26 @@ void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
     GetT2DV(dptr, NSEvent, MouseLocation);
     attr = pressedMouseButtons(NSEvent);
 
-    /// [TODO] properly determine if the window is active
-    attr = ((attr & 1)? UFR_LBTN : 0)
-         | ((attr & 2)? UFR_RBTN : 0)
-         | ((attr & 4)? UFR_MBTN : 0)
-         | UFR_MOUS;
-
+    /// [TODO:] properly determine if the window is active
+    attr = ((attr & 1)? UFR_LBTN : 0) | ((attr & 2)? UFR_RBTN : 0)
+         | ((attr & 4)? UFR_MBTN : 0) | UFR_MOUS;
     attr = cPrepareFrame((ENGD*)user, dptr.x, draw->ydim - dptr.y, attr);
     if (attr & PFR_SKIP)
         usleep(1000);
     if (attr & PFR_HALT)
         return;
 
-    /// [TODO] manual mouse transparency does not work, commented out for now
-//    setIgnoresMouseEvents_((id)engd->user[2],
-//                           (pick >= 0) || (engd->flgs & COM_IOPQ));
-
+    if ((attr ^ draw->attr) & PFR_PICK) {
+        if (attr & PFR_PICK) {
+            setIgnoresMouseEvents_(draw->hwnd, false);
+            push(draw->hand);
+        }
+        else {
+            setIgnoresMouseEvents_(draw->hwnd, true);
+            pop(draw->hand);
+        }
+    }
+    draw->attr = attr;
     cEngineCallback((ENGD*)user, ECB_GFLG, (intptr_t)&attr);
     if (~attr & COM_RGPU) {
         CGContextSetBlendMode(draw->hctx, kCGBlendModeClear);
@@ -202,7 +206,7 @@ void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
                          (CGRect){{0, 0}, {draw->xdim, draw->ydim}});
     }
     cOutputFrame((ENGD*)user, 0);
-    setNeedsDisplay_(draw->vins, true);
+    setNeedsDisplay_(draw->view, true);
 }
 
 
@@ -222,7 +226,7 @@ void OnDraw(CGRect rect, id this) {
     draw = (DRAW*)data[0];
 
     if (flgs & COM_RGPU)
-        flushBuffer(openGLContext(draw->vins));
+        flushBuffer(openGLContext(draw->view));
     else {
         iref = CGBitmapContextCreateImage(draw->hctx);
         ctxt = graphicsPort(currentContext(NSGraphicsContext));
@@ -233,20 +237,6 @@ void OnDraw(CGRect rect, id this) {
     }
 }
 
-
-/*
-void OnRect(id this) {
-    id curs;
-    CGRect dims;
-    ENGD *engd;
-
-    GET_IVAR(this, VAR_ENGD, &engd);
-    dims = (CGRect){{0, 0}, {engd->pict.xdim, engd->pict.ydim}};
-    curs = pointingHandCursor(NSCursor);
-    addCursorRect_cursor_(this, dims, curs);
-    objc_msgSend(curs, sel_registerName("setOnMouseEntered:"), true);
-}
-//*/
 
 
 CFRunLoopTimerRef AddTimer(ulong time, void *func, void *data) {
@@ -265,10 +255,20 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                   BGRA **bptr, intptr_t *data, uint32_t flgs) {
     #define SUB_VDLG "lNSV"
 
+    extern void CGSSetConnectionProperty(int, int, CFStringRef, CFBooleanRef);
+    extern int _CGSDefaultConnection();
+    CFStringRef scib;
+
+    /// a dirty hack to become capable of changing cursors at will
+    CGSSetConnectionProperty
+        (_CGSDefaultConnection(), _CGSDefaultConnection(),
+         scib = UTF8("SetsCursorInBackground"), kCFBooleanTrue);
+    CFRelease(scib);
+
     LoadObjC(); /// has to be on the very first line: even VMET (see
                 /// below) is filled with the values it retrieves
     DRAW draw;
-    id pool, thrd;
+    id pool, thrd, view;
     CFRunLoopTimerRef tmrf, tmrd;
     CGRect dims;
 
@@ -277,6 +277,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     char *vfld[] = {VAR_ENGD, 0};
 
     data[0] = (intptr_t)&draw;
+    draw.hand = pointingHandCursor(NSCursor);
+    draw.attr = 0;
     draw.xdim = xdim - xpos;
     draw.ydim = ydim - ypos;
     dims = (CGRect){{0, 0}, {draw.xdim, draw.ydim}};
@@ -293,9 +295,9 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                                               | kCGBitmapByteOrder32Little);
         CGColorSpaceRelease(drgb);
 
-        draw.vdlg = NewClass(NSView, SUB_VDLG, vfld, vmet);
-        draw.vins = init(alloc(draw.vdlg));
-        setFrame_(draw.vins, dims);
+        view = NewClass(NSView, SUB_VDLG, vfld, vmet);
+        draw.view = init(alloc(view));
+        setFrame_(draw.view, dims);
     }
     else {
         int attr[] = {NSOpenGLPFADoubleBuffer, NSOpenGLPFADepthSize, 32, 0},
@@ -303,20 +305,23 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         id pfmt, ctxt;
 
         pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat), attr);
-        draw.vdlg = NewClass(NSOpenGLView, SUB_VDLG, vfld, vmet);
-        draw.vins = initWithFrame_pixelFormat_(alloc(draw.vdlg), dims, pfmt);
-        makeCurrentContext((ctxt = openGLContext(draw.vins)));
+        view = NewClass(NSOpenGLView, SUB_VDLG, vfld, vmet);
+        draw.view = initWithFrame_pixelFormat_(alloc(view), dims, pfmt);
+        makeCurrentContext((ctxt = openGLContext(draw.view)));
         setValues_forParameter_(ctxt, &opaq, NSOpenGLCPSurfaceOpacity);
         release(pfmt);
     }
-    SET_IVAR(draw.vins, VAR_ENGD, engd);
+    SET_IVAR(draw.view, VAR_ENGD, engd);
 
+    /// [TODO:] NSNonactivatingPanelMask is flagged for deprecation in 10.12
+    ///         so a suitable alternative has to be found
     draw.hwnd = initWithContentRect_styleMask_backing_defer_
-                    (alloc(NSWindow), dims, NSBorderlessWindowMask,
+                    (alloc(NSPanel), dims, NSBorderlessWindowMask
+                                         | NSNonactivatingPanelMask,
                      NSBackingStoreBuffered, false);
 
-    setContentView_(draw.hwnd, draw.vins);
-    setDelegate_(draw.hwnd, draw.vins);
+    setContentView_(draw.hwnd, draw.view);
+    setDelegate_(draw.hwnd, draw.view);
     setLevel_(draw.hwnd, NSMainMenuWindowLevel + 1);
     setBackgroundColor_(draw.hwnd, clearColor(NSColor));
     setHasShadow_(draw.hwnd, false);
@@ -324,11 +329,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
 
     tmrf = AddTimer(1000, OnFPS,  engd),
     tmrd = AddTimer(   1, OnCalc, engd);
-    activateIgnoringOtherApps_(thrd, true);
-    makeKeyWindow(draw.hwnd);
     orderFront_(draw.hwnd, thrd);
-//    enableCursorRects(draw.hwnd);
-//    objc_msgSend(draw.vins, resetCursorRects);
 
     run(thrd);
 
@@ -340,10 +341,12 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         CGContextRelease(draw.hctx);
         free(*bptr);
     }
-    release(draw.vins);
+    if (draw.attr & PFR_PICK)
+        pop(draw.hand);
+    release(draw.view);
     release(draw.hwnd);
     release(pool);
-    DelClass((Class)draw.vdlg);
+    DelClass((Class)view);
 
     #undef SUB_VDLG
 }
