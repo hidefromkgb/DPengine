@@ -1055,20 +1055,22 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
     if (from->tmov == LLONG_MAX)
         return 0;  /// no more self-replicating for this effect; exiting
 
-    if (*retn != from)
-        *retn = calloc(1, sizeof(**retn));
-
     if (~from->indx & FLG_EFCT) {
         /// parent = behaviour
+        *retn = calloc(1, sizeof(**retn));
         (*retn)->boss = from;
         (*retn)->ulib = from->ulib;
         (*retn)->indx = (indx << 1) | (from->indx & 1) | FLG_EFCT;
     }
     else if (*retn != from) {
         /// parent = effect that needs to be copied to RETN
+        *retn = calloc(1, sizeof(**retn));
         **retn = *from;
         from->tmov = LLONG_MAX; /// only one self-replication allowed
     }
+    /// ^^^^ along these there is a third way, when an effect gets reused,
+    /// and no new effects are created; this keeps sprite count in bounds
+
     binf = &(*retn)->ulib->earr[((*retn)->indx & ~FLG_EFCT) >> 1];
     (*retn)->fram = -1; /// this means:
     (*retn)->tfrm =  0; /// "update me to 0-th frame ASAP!"
