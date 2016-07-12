@@ -23,9 +23,10 @@ typedef union {
            list,
            pbar,
            sbox,
-           ibox;
+           ibox,
+           frmt; /// number formatter
     };
-    id _sub[8];
+    id _sub[9];
 } SCLS;
 
 
@@ -257,29 +258,55 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
     setFrame_((id)ctrl->priv[0], rect);
 }
 
-void OnSpin(id this) {
-    CGFloat spos = 0.0;
-    CTRL *ctrl = 0;
+bool OnValidate(id this, SEL name, id part, id retn, id desc) {
+    extern void NSBeep();
+    id temp;
 
-    GET_IVAR(this, VAR_CTRL, &ctrl);
-    if (!ctrl)
-        return;
-
-    GetT1DV(spos, (id)ctrl->priv[6], DoubleValue);
-    setIntValue_((id)ctrl->priv[7], spos);
-    ctrl->fc2e(ctrl, MSG_NSET, spos);
+    if (getObjectValue_forString_errorDescription_(this, &temp, part, desc))
+        return true;
+    NSBeep();
+    return false;
 }
 
-void TextChecker(id this) {
-    CGFloat spos = 0.0;
+void OnSpin(id this) {
+    double retn = 0.0;
     CTRL *ctrl = 0;
 
     GET_IVAR(this, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
 
-    GetT1DV(spos, (id)ctrl->priv[6], DoubleValue);
-    setIntValue_((id)ctrl->priv[7], spos);
+    GetT1DV(retn, (id)ctrl->priv[6], DoubleValue);
+    setIntValue_((id)ctrl->priv[7], retn);
+    ctrl->fc2e(ctrl, MSG_NSET, retn);
+}
+
+void OnEdit(id this) {
+    CTRL *ctrl = 0;
+    double retn;
+
+    GET_IVAR(this, VAR_CTRL, &ctrl);
+    if (!ctrl)
+        return;
+
+    GetT1DV(retn, (id)ctrl->priv[7], DoubleValue);
+    ctrl->fe2c(ctrl, MSG_NSET, retn);
+}
+
+bool OnKeys(id this, SEL name, id ctrl, id view, SEL what) {
+    if ((what == MoveDown_) || (what == MoveUp_)) {
+        CTRL *ctrl = 0;
+        double retn;
+
+        GET_IVAR(this, VAR_CTRL, &ctrl);
+        if (!ctrl)
+            return false;
+
+        GetT1DV(retn, (id)ctrl->priv[7], DoubleValue);
+        ctrl->fe2c(ctrl, MSG_NSET, retn + ((what == MoveUp_)? 1.0 : -1.0));
+        return true;
+    }
+    return false;
 }
 
 
@@ -290,7 +317,7 @@ void TextChecker(id this) {
 ///  2: (fontmul.x) | (fontmul.y << 16), and also a halt flag if 0
 ///  3: first tab-enabled control
 ///  4: last tab-enabled control
-///  5:
+///  5: NSNumberFormatter for spin controls
 ///  6: SCLS subclass storage
 ///  7: NSView, the main container and delegate
 intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
@@ -301,9 +328,9 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if (!data)
                 orderOut_((id)ctrl->priv[0], thrd);
             else {
-                setLevel_((id)ctrl->priv[0], NSMainMenuWindowLevel + 1);
+                activateIgnoringOtherApps_
+                    (sharedApplication(NSApplication), true);
                 orderFront_((id)ctrl->priv[0], thrd);
-                setLevel_((id)ctrl->priv[0], NSNormalWindowLevel);
             }
             break;
         }
@@ -449,9 +476,9 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 /// PRIV:
 ///  0: NSView
-///  1:
-///  2:
-///  3:
+///  1: minimum value
+///  2: maximum value
+///  3: common NSNumberFormatter
 ///  4:
 ///  5:
 ///  6: NSStepper
@@ -625,7 +652,9 @@ void rFreeControl(CTRL *ctrl) {
             SCLS *scls = (SCLS*)ctrl->priv[6];
             long iter;
 
-            /// [TODO:] do not try to free standard classes, if any
+            /// releasing the formatter
+            release((id)ctrl->priv[5]);
+            /// releasing classes
             for (iter = countof(scls->_sub) - 1; iter >= 0; iter--)
                 DelClass((Class)scls->_sub[iter]);
             free(scls);
@@ -648,6 +677,7 @@ void rFreeControl(CTRL *ctrl) {
         case FCT_SPIN:
             release((id)ctrl->priv[6]); /// releasing NSStepper
             release((id)ctrl->priv[7]); /// releasing NSTextField
+            /// do not release the formatter, it is common between all spins
             break;
 
         case FCT_LIST:
@@ -699,7 +729,7 @@ id OnValue(id this, SEL name, id view, id icol, NSInteger irow) {
     return ((id*)ctrl->priv[5])[irow];
 }
 
-void ListButtonClick(id this) {
+void OnListButton(id this) {
     CTRL *ctrl = 0;
     intptr_t irow;
 
@@ -709,7 +739,7 @@ void ListButtonClick(id this) {
               (irow << 1) | ((state(this) == NSOnState)? 1 : 0));
 }
 
-void ButtonClick(id this) {
+void OnButton(id this) {
     CTRL *ctrl = 0;
 
     GET_IVAR(this, VAR_CTRL, &ctrl);
@@ -799,8 +829,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         char *vars[] = {VAR_CTRL, 0};
         OMSC wmet[] = {{WindowShouldClose_, OnClose},
                        {WindowDidResize_, OnSize}, {IsFlipped, OnTrue}, {}},
-             tmet[] = {{TextDidChange_, TextChecker}, {}},
-             bmet[] = {{ActionSelector, ButtonClick}, {}},
+             tmet[] = {{ActionSelector, OnEdit},
+                       {Control_textView_doCommandBySelector_, OnKeys}, {}},
+             bmet[] = {{ActionSelector, OnButton}, {}},
              nmet[] = {{ActionSelector, OnSpin}, {}},
              lmet[] = {{NumberOfRowsInTableView_,                 OnRows},
                        {TableView_objectValueForTableColumn_row_, OnValueOld},
@@ -808,7 +839,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                        {}},
              pmet[] = {{DrawRect_, PBoxDraw}, {}},
              smet[] = {{IsFlipped, OnTrue}, {}},
-             imet[] = {{DrawRect_, IBoxDraw}, {}};
+             imet[] = {{DrawRect_, IBoxDraw}, {}},
+             fmet[] = {{IsPartialStringValid_newEditingString_errorDescription_,
+                        OnValidate}, {}};
         CGPoint fadv;
         CGFloat fasc;
         id thrd;
@@ -829,6 +862,13 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         scls->pbar = NewClass(NSProgressIndicator, "rNSP", vars, pmet);
         scls->sbox = NewClass(NSView,              "rNSS", vars, smet);
         scls->ibox = NewClass(NSView,              "rNSI", vars, imet);
+        scls->frmt = NewClass(NSNumberFormatter,   "rNSF", vars, fmet);
+
+        ctrl->priv[5] = (intptr_t)init(alloc(scls->frmt));
+        setFormatterBehavior_((id)ctrl->priv[5],
+                               NSNumberFormatterBehavior10_4);
+        setNumberStyle_((id)ctrl->priv[5], kCFNumberFormatterNoStyle);
+        setPartialStringValidationEnabled((id)ctrl->priv[5], true);
 
         dims = (CGRect){};
         gwnd = initWithContentRect_styleMask_backing_defer_
@@ -940,6 +980,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
                 ctrl->fe2c = FE2CN;
                 gwnd = init(alloc(NSView));
+                ctrl->priv[3] = root->priv[5];
                 ctrl->priv[6] = (intptr_t)init(alloc(scls->spin));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->text));
                 SET_IVAR((id)ctrl->priv[6], VAR_CTRL, ctrl);
@@ -948,6 +989,10 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 temp.size = dims.size;
                 temp.size.width -= spin.x;
                 setFrame_((id)ctrl->priv[7], temp);
+                setFormatter_((id)ctrl->priv[7], (id)ctrl->priv[3]);
+                setDelegate_((id)ctrl->priv[7], (id)ctrl->priv[7]);
+                setTarget_((id)ctrl->priv[7], (id)ctrl->priv[7]);
+                setAction_((id)ctrl->priv[7], ActionSelector);
                 temp.origin.x = temp.size.width;
                 temp.size.width = spin.x;
                 setFrame_((id)ctrl->priv[6], temp);
@@ -965,7 +1010,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 temp.size = dims.size;
                 ctrl->priv[1] = (intptr_t)NewClass
                     (NSButton, "rNSX", (char*[]){VAR_CTRL, VAR_DATA, 0},
-                    (OMSC[]){{ActionSelector, ListButtonClick}, {}});
+                    (OMSC[]){{ActionSelector, OnListButton}, {}});
 
                 gwnd = init(alloc(NSScrollView));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
@@ -978,6 +1023,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 setStringValue_(headerCell((id)ctrl->priv[6]), capt = UTF8(0));
                 CFRelease(capt);
                 addTableColumn_((id)ctrl->priv[7], (id)ctrl->priv[6]);
+                setResizingMask_((id)ctrl->priv[6],
+                                  NSTableColumnAutoresizingMask);
 
                 setDocumentView_(gwnd, (id)ctrl->priv[7]);
                 setHasVerticalScroller_(gwnd, true);
@@ -1029,7 +1076,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 font = systemFontOfSize_(NSFont, 0);
                 ctrl->priv[5] = (intptr_t)MakeDict
                     (kCTFontAttributeName,           font,
-                     kCTParagraphStyleAttributeName, psty, 0);
+                     kCTParagraphStyleAttributeName, psty);
                 release(psty);
                 GetT1DV(fasc, font, Ascender);
                 GetT1DV(fdsc, font, Descender);
