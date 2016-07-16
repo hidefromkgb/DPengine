@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <dirent.h>
+#include <pthread.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 
@@ -119,8 +120,28 @@ char *rConvertUTF8(char *utf8) {
 
 
 
+void *MsgFunc(void *data) {
+    intptr_t *user = (intptr_t*)data;
+    CFOptionFlags retn = 0;
+
+    CFUserNotificationDisplayAlert
+        (0, kCFUserNotificationNoteAlertLevel, 0, 0, 0,
+        (CFStringRef)user[1], (CFStringRef)user[2], 0, 0, 0, &retn);
+    CFRelease((CFStringRef)user[1]);
+    CFRelease((CFStringRef)user[2]);
+    free(user);
+    return 0;
+}
+
 long rMessage(char *text, char *head, uint32_t flgs) {
-    /// [TODO:]
+    pthread_t pthr;
+    intptr_t *user;
+
+    user = calloc(3, sizeof(*user));
+    user[0] = flgs;
+    user[1] = (intptr_t)UTF8(head);
+    user[2] = (intptr_t)UTF8(text);
+    pthread_create(&pthr, 0, MsgFunc, user);
     return 0;
 }
 
@@ -286,7 +307,7 @@ void OnEdit(id this) {
     double retn;
 
     GET_IVAR(this, VAR_CTRL, &ctrl);
-    if (!ctrl)
+    if (!ctrl || ((ctrl->flgs & FCT_TTTT) != FCT_SPIN))
         return;
 
     GetT1DV(retn, (id)ctrl->priv[7], DoubleValue);
@@ -299,7 +320,7 @@ bool OnKeys(id this, SEL name, id ctrl, id view, SEL what) {
         double retn;
 
         GET_IVAR(this, VAR_CTRL, &ctrl);
-        if (!ctrl)
+        if (!ctrl || ((ctrl->flgs & FCT_TTTT) != FCT_SPIN))
             return false;
 
         GetT1DV(retn, (id)ctrl->priv[7], DoubleValue);
@@ -989,6 +1010,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 temp.size = dims.size;
                 temp.size.width -= spin.x;
                 setFrame_((id)ctrl->priv[7], temp);
+                setSendsActionOnEndEditing_(cell((id)ctrl->priv[7]), true);
                 setFormatter_((id)ctrl->priv[7], (id)ctrl->priv[3]);
                 setDelegate_((id)ctrl->priv[7], (id)ctrl->priv[7]);
                 setTarget_((id)ctrl->priv[7], (id)ctrl->priv[7]);
@@ -1069,6 +1091,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 ctrl->fe2c = FE2CP;
                 gwnd = init(alloc(scls->pbar));
                 SET_IVAR(gwnd, VAR_CTRL, ctrl);
+                setControlSize_(gwnd, NSRegularControlSize);
                 setIndeterminate_(gwnd, false);
                 setWantsLayer_(gwnd, true);
                 psty = init(alloc(NSMutableParagraphStyle));

@@ -1,5 +1,5 @@
 CC = gcc
-CX = g++
+CX = gcc
 
 
 OBJDIR = .obj

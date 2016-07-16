@@ -10,9 +10,7 @@ N.B.: to be able to build on Windows using Code::Blocks, go to Settings → Comp
 
 ## Release notes
 
-Major refactoring effort is currently underway, along with adding features previously ignored, like sprite effects and categories, along with the new GUI architecture.
-
-Mac OS X branch is in the final stage of GUI addition. Stay tuned.
+All three major desktop operating systems (Windows, Linux and OS X) finally got their native GUI frameworks, and now it\`s high time to add the remaining DP functionality missing from DPE!
 
 ## License
 

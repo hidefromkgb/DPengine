@@ -1312,33 +1312,43 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
 void MMH(MENU *item) {
     switch (item->uuid) {
         case TXT_CDEL:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_ADEL:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_CSLP:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_ASLP:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_CHAR:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_HOUS:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_TPL1:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_TPL2:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_OPTS:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_RETN:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_RGPU: {
@@ -2032,6 +2042,11 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case TXT_BDUP:
+            /// nothing goes here
+            break;
+
+        case TXT_OPTS:
+            rMessage("Not implemented yet!", "WIP", 0);
             break;
 
         case TXT_GOGO: {
@@ -2280,8 +2295,8 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
             (uint16_t)xmax | ((uint32_t)ymax << 16));
     RUN_FE2C(engc->CTL_CHAR, MSG_WSZC, 0);
 
-    printf("[((RNG))] seed = 0x%08X\n", engc->seed = time(0));
-    printf("[**INI**] %s\n", engc->conf);
+    printf("[((RNG))] seed = 0x%08X\n[**INI**] %s\n",
+           engc->seed = time(0), engc->conf);
 
     fram = calloc(sizeof(*fram), engc->lcnt * 2);
     rInternalMainLoop(&engc->ctls[0], FRM_WAIT, UpdPreview,

@@ -576,7 +576,9 @@ LRESULT APIENTRY SBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
                        (double)ctrl->priv[1] / (double)ctrl->priv[2] : 0.0;
                 ctrl->priv[4] = (uint16_t)(lPrm >> 16);
                 ctrl->priv[3] = (uint16_t)(lPrm      );
+                LockWindowUpdate((HWND)ctrl->priv[7]);
                 ctrl->priv[2] = ctrl->fc2e(ctrl, MSG_SMAX, lPrm);
+                LockWindowUpdate(0);
                 ctrl->priv[1] = temp * ctrl->priv[2];
             }
             else if (uMsg == WM_MOUSEWHEEL)
@@ -703,10 +705,20 @@ LRESULT APIENTRY SpinProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
     char text[128];
 
     switch (uMsg) {
-//        case WM_ERASEBKGND:
-//            return ~0;
-
+        case WM_KILLFOCUS:
+            wPrm = VK_RETURN;
+            /// falling through
         case WM_GETDLGCODE:
+            if (wPrm == VK_RETURN) {
+                SendMessage(hWnd, WM_GETTEXT, 128, (LPARAM)text);
+                sprintf(text, "%d", wPrm = strtol(text, 0, 10));
+                SendMessage(hWnd, WM_SETTEXT, 128, (LPARAM)text);
+                ctrl->fe2c(ctrl, MSG_NSET, wPrm);
+                ctrl->fc2e(ctrl, MSG_NSET, wPrm);
+                if (uMsg == WM_KILLFOCUS)
+                    break;
+                return 0;
+            }
             lPrm = DLGC_WANTARROWS | DLGC_WANTCHARS;
             for (uMsg = 0; uMsg < sizeof(keys) / sizeof(*keys); uMsg++)
                 if (wPrm == keys[uMsg])
@@ -1094,7 +1106,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         {WC_BUTTON,      BS_FLAT | BS_MULTILINE},
         {WC_BUTTON,      BS_FLAT | BS_AUTOCHECKBOX},
         {WC_BUTTON,      BS_FLAT | BS_AUTORADIOBUTTON},
-        {WC_EDIT,        ES_MULTILINE | ES_AUTOHSCROLL},
+        {WC_EDIT,        ES_MULTILINE | ES_WANTRETURN | ES_AUTOHSCROLL},
         {WC_LISTVIEW,    LVS_REPORT},
         {PROGRESS_CLASS, PBS_SMOOTH},
         {WC_SIZEBOX,     WS_CLIPCHILDREN | WS_VSCROLL},

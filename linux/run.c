@@ -706,10 +706,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                                          gtk_widget_get_style(gwnd)->font_desc,
         /** [TODO:] set language? -> **/ 0);
         xfon = pango_font_metrics_get_approximate_char_width(fmet);
-        yfon = pango_font_metrics_get_descent(fmet)
-             + pango_font_metrics_get_ascent(fmet);
-        ctrl->priv[2] =  (uint16_t)round(1.3 * xfon / PANGO_SCALE)
-                      | ((uint32_t)round(0.5 * yfon / PANGO_SCALE) << 16);
+        yfon = pango_font_metrics_get_ascent(fmet);
+        ctrl->priv[2] =  (uint16_t)round(1.500 * xfon / PANGO_SCALE)
+                      | ((uint32_t)round(0.675 * yfon / PANGO_SCALE) << 16);
 
         g_signal_connect(G_OBJECT(gwnd), "configure-event",
                          G_CALLBACK(OptResize), ctrl);
