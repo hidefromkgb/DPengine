@@ -274,27 +274,20 @@ gboolean IBoxDraw(GtkWidget *gwnd, GdkEventExpose *eexp, gpointer data) {
     CTRL *ctrl = (CTRL*)data;
     cairo_surface_t *surf;
     cairo_t *temp;
-    GtkStyle *gsty;
 
-    double insh = 1.0 / 65536.0;
     AINF anim = {(ctrl->priv[7] >> 10) & 0x3FFFFF,
                  (int16_t)ctrl->priv[3], (int32_t)ctrl->priv[3] >> 16,
                   ctrl->priv[7] & 0x3FF, (uint32_t*)ctrl->priv[2]};
 
     if (anim.uuid) {
-        gsty = gtk_widget_get_style(gwnd);
         temp = cairo_create(surf = (cairo_surface_t*)ctrl->priv[1]);
-        cairo_set_operator(temp, CAIRO_OPERATOR_SOURCE);
-        cairo_set_source_rgba(temp, insh * gsty->bg[GTK_STATE_NORMAL].red,
-                                    insh * gsty->bg[GTK_STATE_NORMAL].green,
-                                    insh * gsty->bg[GTK_STATE_NORMAL].blue,
-                                    1.0);
+        cairo_set_operator(temp, CAIRO_OPERATOR_CLEAR);
         cairo_paint(temp);
         cairo_destroy(temp);
         ctrl->fc2e(ctrl, MSG_IFRM, (intptr_t)&anim);
         cairo_surface_mark_dirty(surf);
         temp = gdk_cairo_create(gtk_widget_get_window(gwnd));
-        cairo_set_operator(temp, CAIRO_OPERATOR_SOURCE);
+        cairo_set_operator(temp, CAIRO_OPERATOR_OVER);
         cairo_set_source_surface(temp, surf, 0, 0);
         cairo_paint(temp);
         cairo_destroy(temp);
