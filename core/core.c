@@ -722,9 +722,7 @@ uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t attr) {
     engd->smax = 0;
     engd->size = engd->ufrm(engd, &engd->data, &engd->smax, lTimeFunc(),
                             engd->udat, attr, xptr, yptr, pick);
-    if (!engd->smax)
-        engd->smax = engd->size;
-    if (!engd->size) {
+    if (!engd->smax) {
         cEngineCallback(engd, ECB_QUIT, ~0);
         return PFR_HALT;
     }

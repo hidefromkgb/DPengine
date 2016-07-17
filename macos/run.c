@@ -169,15 +169,15 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
 
     pict = initWithCGImage_size_(alloc(NSImage), iref, ((CGPoint){}));
     retn[0] = statusItemWithLength_(systemStatusBar(NSStatusBar),
-                                    NSVariableStatusItemLength),
+                                    NSVariableStatusItemLength);
+    retain(retn[0]);
     retn[1] = NewClass(NSObject, "lNST", (char*[]){VAR_CTRL, VAR_DATA, 0},
                       (OMSC[]){{ActionSelector, OnTray}, {}});
     retn[2] = init(alloc(retn[1]));
     SET_IVAR(retn[2], VAR_CTRL, retn);
     SET_IVAR(retn[2], VAR_DATA, mctx);
 
-    /// kCFCoreFoundationVersionNumber10_10 == 1151.16
-    if (kCFCoreFoundationVersionNumber >= 1151.0)
+    if (OSX_10_10_PLUS)
         ibtn = button(retn[0]); /// Yosemite or newer, so we are using buttons
     else
         setHighlightMode_(ibtn = retn[0], true);
@@ -199,6 +199,7 @@ void rFreeTrayIcon(intptr_t icon) {
     id *retn = (id*)icon;
 
     removeStatusItem_(systemStatusBar(NSStatusBar), retn[0]);
+    release(retn[0]);
     release(retn[2]);
     DelClass((Class)retn[1]);
     free(retn);
@@ -358,13 +359,13 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         case MSG_WSZC: {
             CGRect area, scrn;
 
-            area.size.width  = (((uint16_t)(data      )) + ctrl->xdim)
+            scrn.size.width  = (((uint16_t)(data      )) + ctrl->xdim)
                              *   (uint16_t)(ctrl->priv[2]      );
-            area.size.height = (((uint16_t)(data >> 16)) + ctrl->ydim)
+            scrn.size.height = (((uint16_t)(data >> 16)) + ctrl->ydim)
                              *   (uint16_t)(ctrl->priv[2] >> 16);
-            ctrl->priv[1] =  (uint16_t)area.size.width
-                          | ((uint32_t)area.size.height << 16);
-            GetT4DV(area, (id)ctrl->priv[0], FrameRectForContentRect_, area);
+            ctrl->priv[1] =  (uint16_t)scrn.size.width
+                          | ((uint32_t)scrn.size.height << 16);
+            GetT4DV(area, (id)ctrl->priv[0], FrameRectForContentRect_, scrn);
             GetT4DV(scrn, mainScreen(NSScreen), VisibleFrame);
             area.origin.x = 0.5 * (scrn.size.width  - area.size.width )
                           + scrn.origin.x;
@@ -394,6 +395,8 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG_PPOS:
             setDoubleValue_((id)ctrl->priv[0], ctrl->priv[1] = data);
+            setNeedsDisplay_((id)ctrl->priv[0], true);
+            displayIfNeeded((id)ctrl->priv[0]);
             break;
 
         case MSG_PTXT:
@@ -448,10 +451,10 @@ intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 /// PRIV:
 ///  0: NSScrollView
 ///  1: NSButton subclass
-///  2:
+///  2: either a data cell (< 10.7) or an array of NSButtons (>= 10.7)
 ///  3:
 ///  4: number of rows
-///  5: array of NSButtons with elements
+///  5: array of CFStringRefs (item captions)
 ///  6: NSTableColumn
 ///  7: NSTableView
 intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
@@ -460,35 +463,45 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__ENB:
             setEnabled_((id)ctrl->priv[7], !!data);
-            for (cmsg = 0; cmsg < ctrl->priv[4]; cmsg++)
-                setEnabled_(((id*)ctrl->priv[5])[cmsg], !!data);
+            if (OSX_10_07_PLUS)
+                for (cmsg = 0; cmsg < ctrl->priv[4]; cmsg++)
+                    setEnabled_(((id*)ctrl->priv[2])[cmsg], !!data);
             break;
 
         case MSG_LCOL:
             setStringValue_(headerCell((id)ctrl->priv[6]), capt = UTF8(data));
             CFRelease(capt);
-            for (cmsg = 0; cmsg < ctrl->priv[4]; cmsg++)
-                setState_(((id*)ctrl->priv[5])[cmsg],
-                         (ctrl->fc2e(ctrl, MSG_LGST, cmsg))? true : false);
+            if (OSX_10_07_PLUS)
+                for (cmsg = 0; cmsg < ctrl->priv[4]; cmsg++)
+                    setState_(((id*)ctrl->priv[2])[cmsg],
+                             (ctrl->fc2e(ctrl, MSG_LGST, cmsg))?
+                              NSOnState : NSOffState);
             reloadData((id)ctrl->priv[7]);
             break;
 
-        case MSG_LADD: {
-            id elem;
+        case MSG_LADD:
+            ctrl->priv[5] = (intptr_t)realloc((CFStringRef*)ctrl->priv[5],
+                                             ++ctrl->priv[4] * sizeof(id*));
+            ((CFStringRef*)ctrl->priv[5])[ctrl->priv[4] - 1] = UTF8(data);
+            if (OSX_10_07_PLUS) {
+                id elem;
 
-            elem = init(alloc((id)ctrl->priv[1]));
-            SET_IVAR(elem, VAR_DATA, ctrl->priv[4]);
-            SET_IVAR(elem, VAR_CTRL, ctrl);
-            setTarget_(elem, elem);
-            setAction_(elem, ActionSelector);
-            setButtonType_(elem, NSSwitchButton);
-            setTitle_(elem, capt = UTF8(data));
-            CFRelease(capt);
-            ctrl->priv[5] = (intptr_t)realloc((id*)ctrl->priv[5],
-                                             ++ctrl->priv[4] * sizeof(id));
-            ((id*)ctrl->priv[5])[ctrl->priv[4] - 1] = elem;
+                ctrl->priv[2] = (intptr_t)realloc((id*)ctrl->priv[2],
+                                                  ctrl->priv[4] * sizeof(id*));
+                elem = init(alloc((id)ctrl->priv[1]));
+                SET_IVAR(elem, VAR_CTRL, ctrl);
+                SET_IVAR(elem, VAR_DATA, ctrl->priv[4] - 1);
+                setTarget_(elem, elem);
+                setAction_(elem, ActionSelector);
+                setButtonType_(elem, NSSwitchButton);
+                ((id*)ctrl->priv[2])[ctrl->priv[4] - 1] = elem;
+            }
+            else if (!ctrl->priv[2]) {
+                ctrl->priv[2] = (intptr_t)init(alloc((id)ctrl->priv[1]));
+                setButtonType_((id)ctrl->priv[2], NSSwitchButton);
+                setDataCell_((id)ctrl->priv[6], (id)ctrl->priv[2]);
+            }
             break;
-        }
     }
     return 0;
 }
@@ -702,11 +715,21 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_LIST:
-            /// releasing buttons and deleting their common subclass
-            for (--ctrl->priv[4]; ctrl->priv[4] >= 0; ctrl->priv[4]--)
-                release(((id*)ctrl->priv[5])[ctrl->priv[4]]);
+            /// releasing cells/strings and deleting their common subclass
+            if (!OSX_10_07_PLUS) {
+                for (--ctrl->priv[4]; ctrl->priv[4] >= 0; ctrl->priv[4]--)
+                    CFRelease(((CFStringRef*)ctrl->priv[5])[ctrl->priv[4]]);
+                release((id)ctrl->priv[2]);
+            }
+            else {
+                for (--ctrl->priv[4]; ctrl->priv[4] >= 0; ctrl->priv[4]--) {
+                    release(((id*)ctrl->priv[2])[ctrl->priv[4]]);
+                    CFRelease(((CFStringRef*)ctrl->priv[5])[ctrl->priv[4]]);
+                }
+                free((id*)ctrl->priv[2]);
+            }
             DelClass((Class)ctrl->priv[1]);
-            free((id*)ctrl->priv[5]);
+            free((CFStringRef*)ctrl->priv[5]);
             release((id)ctrl->priv[6]); /// releasing NSTableColumn
             release((id)ctrl->priv[7]); /// releasing NSTableView
             break;
@@ -739,15 +762,28 @@ NSInteger OnRows(id this, SEL name, id view) {
     return ctrl->priv[4];
 }
 
-id OnValueOld(id this, SEL name, id view, id icol, NSInteger irow) {
-    return 0;
+id OnValueO(id this, SEL name, id view, id icol, NSInteger irow) {
+    return (OSX_10_07_PLUS)? 0 : dataCell(icol);
 }
 
 id OnValue(id this, SEL name, id view, id icol, NSInteger irow) {
     CTRL *ctrl = 0;
+    id cell;
 
     GET_IVAR(view, VAR_CTRL, &ctrl);
-    return ((id*)ctrl->priv[5])[irow];
+    cell = (OSX_10_07_PLUS)? ((id*)ctrl->priv[2])[irow] : dataCell(icol);
+    setTitle_(cell, ((CFStringRef*)ctrl->priv[5])[irow]);
+    setState_(cell, (ctrl->fc2e(ctrl, MSG_LGST, irow))?
+                     NSOnState : NSOffState);
+    return cell;
+}
+
+void OnReset(id this, SEL name, id view, id what, id icol, NSInteger irow) {
+    CTRL *ctrl = 0;
+
+    GET_IVAR(view, VAR_CTRL, &ctrl);
+    ctrl->fc2e(ctrl, MSG_LSST,
+              (irow << 1) | (ctrl->fc2e(ctrl, MSG_LGST, irow) ^ 1));
 }
 
 void OnListButton(id this) {
@@ -756,8 +792,7 @@ void OnListButton(id this) {
 
     GET_IVAR(this, VAR_CTRL, &ctrl);
     GET_IVAR(this, VAR_DATA, &irow);
-    ctrl->fc2e(ctrl, MSG_LSST,
-              (irow << 1) | ((state(this) == NSOnState)? 1 : 0));
+    OnReset(0, 0, this, 0, 0, irow);
 }
 
 void OnButton(id this) {
@@ -768,7 +803,7 @@ void OnButton(id this) {
                                 (state((id)ctrl->priv[0]) == NSOnState) : 0);
 }
 
-void PBoxDraw(CGRect rect, id this) {
+void PBoxDraw(id this, SEL name, CGRect rect) {
     struct objc_super prev = {this, class(NSProgressIndicator)};
     CTRL *ctrl = 0;
 
@@ -780,7 +815,7 @@ void PBoxDraw(CGRect rect, id this) {
     drawInRect_withAttributes_((id)ctrl->priv[3], rect, (id)ctrl->priv[5]);
 }
 
-void IBoxDraw(CGRect rect, id this) {
+void IBoxDraw(id this, SEL name, CGRect rect) {
     CGImageRef pict;
     CGRect area;
     AINF anim;
@@ -848,21 +883,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
     root = ctrl->prev;
     if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
         char *vars[] = {VAR_CTRL, 0};
-        OMSC wmet[] = {{WindowShouldClose_, OnClose},
-                       {WindowDidResize_, OnSize}, {IsFlipped, OnTrue}, {}},
-             tmet[] = {{ActionSelector, OnEdit},
-                       {Control_textView_doCommandBySelector_, OnKeys}, {}},
-             bmet[] = {{ActionSelector, OnButton}, {}},
-             nmet[] = {{ActionSelector, OnSpin}, {}},
-             lmet[] = {{NumberOfRowsInTableView_,                 OnRows},
-                       {TableView_objectValueForTableColumn_row_, OnValueOld},
-                       {TableView_viewForTableColumn_row_,        OnValue},
-                       {}},
-             pmet[] = {{DrawRect_, PBoxDraw}, {}},
-             smet[] = {{IsFlipped, OnTrue}, {}},
-             imet[] = {{DrawRect_, IBoxDraw}, {}},
-             fmet[] = {{IsPartialStringValid_newEditingString_errorDescription_,
-                        OnValidate}, {}};
         CGPoint fadv;
         CGFloat fasc;
         id thrd;
@@ -875,15 +895,32 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                       | ((uint32_t)round(0.60 * fasc) << 16);
 
         ctrl->priv[6] = (intptr_t)(scls = calloc(1, sizeof(*scls)));
-        scls->wndw = NewClass(NSView,              "rNSW", vars, wmet);
-        scls->text = NewClass(NSTextField,         "rNST", vars, tmet);
-        scls->butn = NewClass(NSButton,            "rNSB", vars, bmet);
-        scls->spin = NewClass(NSStepper,           "rNSN", vars, nmet);
-        scls->list = NewClass(NSTableView,         "rNSL", vars, lmet);
-        scls->pbar = NewClass(NSProgressIndicator, "rNSP", vars, pmet);
-        scls->sbox = NewClass(NSView,              "rNSS", vars, smet);
-        scls->ibox = NewClass(NSView,              "rNSI", vars, imet);
-        scls->frmt = NewClass(NSNumberFormatter,   "rNSF", vars, fmet);
+        scls->wndw = NewClass(NSView,              "rNSW", vars,
+            (OMSC[]){{WindowShouldClose_, OnClose},
+                     {WindowDidResize_, OnSize}, {IsFlipped, OnTrue}, {}});
+        scls->text = NewClass(NSTextField,         "rNST", vars,
+            (OMSC[]){{ActionSelector, OnEdit},
+                     {Control_textView_doCommandBySelector_, OnKeys}, {}});
+        scls->butn = NewClass(NSButton,            "rNSB", vars,
+            (OMSC[]){{ActionSelector, OnButton}, {}});
+        scls->spin = NewClass(NSStepper,           "rNSN", vars,
+            (OMSC[]){{ActionSelector, OnSpin}, {}});
+        scls->list = NewClass(NSTableView,         "rNSL", vars,
+            (OMSC[]){{(OSX_10_07_PLUS)? TableView_viewForTableColumn_row_
+                     : TableView_dataCellForTableColumn_row_,        OnValue},
+                      {TableView_objectValueForTableColumn_row_,     OnValueO},
+                      {TableView_setObjectValue_forTableColumn_row_, OnReset},
+                      {NumberOfRowsInTableView_,                     OnRows},
+                      {}});
+        scls->pbar = NewClass(NSProgressIndicator, "rNSP", vars,
+            (OMSC[]){{DrawRect_, PBoxDraw}, {}});
+        scls->sbox = NewClass(NSView,              "rNSS", vars,
+            (OMSC[]){{IsFlipped, OnTrue}, {}});
+        scls->ibox = NewClass(NSView,              "rNSI", vars,
+            (OMSC[]){{DrawRect_, IBoxDraw}, {}});
+        scls->frmt = NewClass(NSNumberFormatter,   "rNSF", vars,
+            (OMSC[]){{IsPartialStringValid_newEditingString_errorDescription_,
+                      OnValidate}, {}});
 
         ctrl->priv[5] = (intptr_t)init(alloc(scls->frmt));
         setFormatterBehavior_((id)ctrl->priv[5],
@@ -1006,7 +1043,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->text));
                 SET_IVAR((id)ctrl->priv[6], VAR_CTRL, ctrl);
                 SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
-                GetT2DV(spin, (id)ctrl->priv[6], IntrinsicContentSize);
+                GetT2DV(spin, cell((id)ctrl->priv[6]), CellSize);
                 temp.size = dims.size;
                 temp.size.width -= spin.x;
                 setFrame_((id)ctrl->priv[7], temp);
@@ -1031,8 +1068,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 ctrl->fe2c = FE2CL;
                 temp.size = dims.size;
                 ctrl->priv[1] = (intptr_t)NewClass
-                    (NSButton, "rNSX", (char*[]){VAR_CTRL, VAR_DATA, 0},
-                    (OMSC[]){{ActionSelector, OnListButton}, {}});
+                    ((OSX_10_07_PLUS)? NSButton : NSButtonCell,
+                      "rNSX", (char*[]){VAR_CTRL, VAR_DATA, 0},
+                     (OMSC[]){{ActionSelector, OnListButton}, {}});
 
                 gwnd = init(alloc(NSScrollView));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
@@ -1143,7 +1181,7 @@ int main(int argc, char *argv[]) {
     CFStringRef path;
     CGFloat icon;
     CGRect dims;
-    id pool, menu;
+    id pool, urls, menu;
 
     struct dirent **dirs;
     ENGC *engc;
@@ -1152,11 +1190,12 @@ int main(int argc, char *argv[]) {
 
     LoadObjC();
 
-    pool = URLsForDirectory_inDomains_(defaultManager(NSFileManager),
+    pool = init(alloc(NSAutoreleasePool));
+    urls = URLsForDirectory_inDomains_(defaultManager(NSFileManager),
                                        NSApplicationSupportDirectory,
                                        NSUserDomainMask);
     path = CFURLCopyFileSystemPath
-               (CFArrayGetValueAtIndex((CFArrayRef)pool, 0),
+               (CFArrayGetValueAtIndex((CFArrayRef)urls, 0),
                                         kCFURLPOSIXPathStyle);
     home = CopyUTF8(path);
     CFRelease(path);
@@ -1164,17 +1203,14 @@ int main(int argc, char *argv[]) {
     strcat(home, DEF_OPTS);
     if (!((mkdir(home, 0755))? (errno != EEXIST)? 0 : 1 : 2))
         printf("WARNING: cannot create '%s'!", home);
-    release(pool);
 
     engc = eInitializeEngine(home);
     free(home);
 
     home = CopyUTF8(path = (CFStringRef)bundlePath(mainBundle(NSBundle)));
-    release((id)path);
     home = realloc(home, strlen(home) + 32);
     strcat(home, "/Contents/MacOS/"DEF_FLDR);
 
-    pool = init(alloc(NSAutoreleasePool));
     setActivationPolicy_(sharedApplication(NSApplication),
                          NSApplicationActivationPolicyAccessory);
 

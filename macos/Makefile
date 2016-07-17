@@ -22,6 +22,11 @@ ECFLAGS = -I../core -Wall
 EOBJ = $(OBJDIR)/exec/exec.o $(OBJDIR)/run.o
 EOUT = $(EXEPATH)/DPE
 
+ifeq ($(shell uname -m), i386)
+    LCFLAGS += -mstackrealign
+    ECFLAGS += -mstackrealign
+endif
+
 
 RelJoined: lrelease
 RelJoined: erelease

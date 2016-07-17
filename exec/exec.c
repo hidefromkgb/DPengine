@@ -1685,7 +1685,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                                               pict->fram, anim->uuid}};
         }
     *data = engc->data;
-    *size = engc->pmax;
+    *size = (engc->pcnt | elem)? engc->pmax : 0;
     return engc->pcnt + elem;
 }
 

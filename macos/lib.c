@@ -29,7 +29,7 @@ uint64_t lTimeFunc() {
     struct timeval spec = {};
 
     gettimeofday(&spec, 0);
-    return spec.tv_sec * 1000 + spec.tv_usec / 1000;
+    return (uint64_t)spec.tv_sec * 1000 + (uint64_t)spec.tv_usec / 1000;
 }
 
 
@@ -211,7 +211,7 @@ void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
 
 
 
-void OnDraw(CGRect rect, id this) {
+void OnDraw(id this, SEL name, CGRect rect) {
     CGContextRef ctxt;
     CGImageRef iref;
 
