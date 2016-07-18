@@ -7,12 +7,322 @@
 #include "../exec/exec.h"
 #include "mac.h"
 
+
+
+#define STR_OBJC_CLAS             \
+       "NSObject",                \
+       "NSApplication",           \
+       "NSAutoreleasePool",       \
+       "NSBundle",                \
+       "NSEvent",                 \
+       "NSFont",                  \
+       "NSMutableParagraphStyle", \
+       "NSFileManager",           \
+       "NSNumberFormatter",       \
+       "NSGraphicsContext",       \
+       "NSColor",                 \
+       "NSImage",                 \
+       "NSMenu",                  \
+       "NSMenuItem",              \
+       "NSStatusBar",             \
+       "NSScreen",                \
+       "NSWindow",                \
+       "NSTextField",             \
+       "NSButtonCell",            \
+       "NSButton",                \
+       "NSProgressIndicator",     \
+       "NSStepper",               \
+       "NSView",                  \
+       "NSScrollView",            \
+       "NSTableView",             \
+       "NSTableColumn"
+
+#define NSObject                (LoadedObjCClasses[ 0])
+#define NSApplication           (LoadedObjCClasses[ 1])
+#define NSAutoreleasePool       (LoadedObjCClasses[ 2])
+#define NSBundle                (LoadedObjCClasses[ 3])
+#define NSEvent                 (LoadedObjCClasses[ 4])
+#define NSFont                  (LoadedObjCClasses[ 5])
+#define NSMutableParagraphStyle (LoadedObjCClasses[ 6])
+#define NSFileManager           (LoadedObjCClasses[ 7])
+#define NSNumberFormatter       (LoadedObjCClasses[ 8])
+#define NSGraphicsContext       (LoadedObjCClasses[ 9])
+#define NSColor                 (LoadedObjCClasses[10])
+#define NSImage                 (LoadedObjCClasses[11])
+#define NSMenu                  (LoadedObjCClasses[12])
+#define NSMenuItem              (LoadedObjCClasses[13])
+#define NSStatusBar             (LoadedObjCClasses[14])
+#define NSScreen                (LoadedObjCClasses[15])
+#define NSWindow                (LoadedObjCClasses[16])
+#define NSTextField             (LoadedObjCClasses[17])
+#define NSButtonCell            (LoadedObjCClasses[18])
+#define NSButton                (LoadedObjCClasses[19])
+#define NSProgressIndicator     (LoadedObjCClasses[20])
+#define NSStepper               (LoadedObjCClasses[21])
+#define NSView                  (LoadedObjCClasses[22])
+#define NSScrollView            (LoadedObjCClasses[23])
+#define NSTableView             (LoadedObjCClasses[24])
+#define NSTableColumn           (LoadedObjCClasses[25])
+
+#define STR_OBJC_SELE                                            \
+       "init",                                                   \
+       "alloc",                                                  \
+       "release",                                                \
+       "retain",                                                 \
+       "class",                                                  \
+       "cell",                                                   \
+       "button",                                                 \
+       "_A",                                                     \
+       "setAction:",                                             \
+       "setTarget:",                                             \
+       "setActivationPolicy:",                                   \
+       "activateIgnoringOtherApps:",                             \
+       "sharedApplication",                                      \
+       "run",                                                    \
+       "stop:",                                                  \
+       "mainBundle",                                             \
+       "bundlePath",                                             \
+       "URLsForDirectory:inDomains:",                            \
+       "separatorItem",                                          \
+       "addItem:",                                               \
+       "setAutoenablesItems:",                                   \
+       "imageNamed:",                                            \
+       "setImage:",                                              \
+       "setOnStateImage:",                                       \
+       "setSubmenu:",                                            \
+       "popUpMenuPositioningItem:atLocation:inView:",            \
+       "controlColor",                                           \
+       "setBackgroundColor:",                                    \
+       "initWithCGImage:size:",                                  \
+       "initWithContentRect:styleMask:backing:defer:",           \
+       "initWithTitle:action:keyEquivalent:",                    \
+       "contentRectForFrameRect:",                               \
+       "frameRectForContentRect:",                               \
+       "visibleFrame",                                           \
+       "frame",                                                  \
+       "setFrame:",                                              \
+       "setFrame:display:animate:",                              \
+       "setInitialFirstResponder:",                              \
+       "setMinSize:",                                            \
+       "setTitle:",                                              \
+       "setStringValue:",                                        \
+       "windowShouldClose:",                                     \
+       "windowDidResize:",                                       \
+       "makeKeyWindow",                                          \
+       "orderFront:",                                            \
+       "orderOut:",                                              \
+       "setNeedsDisplay:",                                       \
+       "setDelegate:",                                           \
+       "setEnabled:",                                            \
+       "setNextKeyView:",                                        \
+       "setDefaultButtonCell:",                                  \
+       "verticalScroller",                                       \
+       "setHasVerticalScroller:",                                \
+       "isEnabled",                                              \
+       "state",                                                  \
+       "setState:",                                              \
+       "setToolTip:",                                            \
+       "setButtonType:",                                         \
+       "setBezelStyle:",                                         \
+       "setImagePosition:",                                      \
+       "setSendsActionOnEndEditing:",                            \
+       "control:textView:doCommandBySelector:",                  \
+       "moveDown:",                                              \
+       "moveUp:",                                                \
+       "setEditable:",                                           \
+       "setSelectable:",                                         \
+       "setBezeled:",                                            \
+       "setBordered:",                                           \
+       "setDrawsBackground:",                                    \
+       "statusItemWithLength:",                                  \
+       "removeStatusItem:",                                      \
+       "systemStatusBar",                                        \
+       "mainScreen",                                             \
+       "thickness",                                              \
+       "cellSize",                                               \
+       "tag",                                                    \
+       "setTag:",                                                \
+       "setHighlightMode:",                                      \
+       "setHidden:",                                             \
+       "setContentView:",                                        \
+       "setDocumentView:",                                       \
+       "addSubview:",                                            \
+       "isFlipped",                                              \
+       "drawRect:",                                              \
+       "mouseLocation",                                          \
+       "graphicsPort",                                           \
+       "currentContext",                                         \
+       "defaultManager",                                         \
+       "systemFontOfSize:",                                      \
+       "ascender",                                               \
+       "descender",                                              \
+       "maximumAdvancement",                                     \
+       "setIndeterminate:",                                      \
+       "setAlignment:",                                          \
+       "addTableColumn:",                                        \
+       "headerCell",                                             \
+       "setWantsLayer:",                                         \
+       "setControlSize:",                                        \
+       "drawInRect:withAttributes:",                             \
+       "textDidChange:",                                         \
+       "stringValue",                                            \
+       "doubleValue",                                            \
+       "setDoubleValue:",                                        \
+       "setIntValue:",                                           \
+       "displayIfNeeded",                                        \
+       "setMinValue:",                                           \
+       "setMaxValue:",                                           \
+       "setValueWraps:",                                         \
+       "setFormatter:",                                          \
+       "setFormatterBehavior:",                                  \
+       "setNumberStyle:",                                        \
+       "setPartialStringValidationEnabled:",                     \
+       "isPartialStringValid:newEditingString:errorDescription:",\
+       "getObjectValue:forString:errorDescription:",             \
+       "reloadData",                                             \
+       "dataCell",                                               \
+       "setDataCell:",                                           \
+       "setDataSource:",                                         \
+       "setResizingMask:",                                       \
+       "numberOfRowsInTableView:",                               \
+       "tableView:objectValueForTableColumn:row:",               \
+       "tableView:setObjectValue:forTableColumn:row:",           \
+       "tableView:dataCellForTableColumn:row:",                  \
+       "tableView:viewForTableColumn:row:"
+
+#define init(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[  0])
+#define alloc(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[  1])
+#define release(inst)                                                   objc_msgSend(inst, LoadedObjCSelectors[  2])
+#define retain(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[  3])
+#define class(inst)                                              (Class)objc_msgSend(inst, LoadedObjCSelectors[  4])
+#define cell(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[  5])
+#define button(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[  6])
+#define ActionSelector                                                                     LoadedObjCSelectors[  7]
+#define setAction_(inst, a)                                             objc_msgSend(inst, LoadedObjCSelectors[  8], a)
+#define setTarget_(inst, t)                                             objc_msgSend(inst, LoadedObjCSelectors[  9], t)
+#define setActivationPolicy_(inst, p)                                   objc_msgSend(inst, LoadedObjCSelectors[ 10], (unsigned)(p))
+#define activateIgnoringOtherApps_(inst, b)                             objc_msgSend(inst, LoadedObjCSelectors[ 11], (bool)(b))
+#define sharedApplication(inst)                                         objc_msgSend(inst, LoadedObjCSelectors[ 12])
+#define run(inst)                                                       objc_msgSend(inst, LoadedObjCSelectors[ 13])
+#define stop_(inst, s)                                                  objc_msgSend(inst, LoadedObjCSelectors[ 14], s)
+#define mainBundle(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[ 15])
+#define bundlePath(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[ 16])
+#define URLsForDirectory_inDomains_(inst, u, d)                         objc_msgSend(inst, LoadedObjCSelectors[ 17], u, d)
+#define separatorItem(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[ 18])
+#define addItem_(inst, i)                                               objc_msgSend(inst, LoadedObjCSelectors[ 19], i)
+#define setAutoenablesItems_(inst, b)                                   objc_msgSend(inst, LoadedObjCSelectors[ 20], (bool)(b))
+#define imageNamed_(inst, s)                                            objc_msgSend(inst, LoadedObjCSelectors[ 21], s)
+#define setImage_(inst, i)                                              objc_msgSend(inst, LoadedObjCSelectors[ 22], i)
+#define setOnStateImage_(inst, i)                                       objc_msgSend(inst, LoadedObjCSelectors[ 23], i)
+#define setSubmenu_(inst, m)                                            objc_msgSend(inst, LoadedObjCSelectors[ 24], m)
+#define popUpMenuPositioningItem_atLocation_inView_(inst, m, l, v)      objc_msgSend(inst, LoadedObjCSelectors[ 25], m, (CGPoint)(l), v)
+#define controlColor(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[ 26])
+#define setBackgroundColor_(inst, c)                                    objc_msgSend(inst, LoadedObjCSelectors[ 27], c)
+#define initWithCGImage_size_(inst, i, s)                               objc_msgSend(inst, LoadedObjCSelectors[ 28], i, s)
+#define initWithContentRect_styleMask_backing_defer_(inst, r, m, b, d)  objc_msgSend(inst, LoadedObjCSelectors[ 29], r, (unsigned)(m), (unsigned)(b), (bool)(d))
+#define initWithTitle_action_keyEquivalent_(inst, t, a, k)              objc_msgSend(inst, LoadedObjCSelectors[ 30], t, a, k)
+#define ContentRectForFrameRect_                                                           LoadedObjCSelectors[ 31]
+#define FrameRectForContentRect_                                                           LoadedObjCSelectors[ 32]
+#define VisibleFrame                                                                       LoadedObjCSelectors[ 33]
+#define Frame                                                                              LoadedObjCSelectors[ 34]
+#define setFrame_(inst, f)                                              objc_msgSend(inst, LoadedObjCSelectors[ 35], f)
+#define setFrame_display_animate_(inst, f, d, a)                        objc_msgSend(inst, LoadedObjCSelectors[ 36], f, d, a)
+#define setInitialFirstResponder_(inst, r)                              objc_msgSend(inst, LoadedObjCSelectors[ 37], r)
+#define setMinSize_(inst, s)                                            objc_msgSend(inst, LoadedObjCSelectors[ 38], s)
+#define setTitle_(inst, t)                                              objc_msgSend(inst, LoadedObjCSelectors[ 39], t)
+#define setStringValue_(inst, s)                                        objc_msgSend(inst, LoadedObjCSelectors[ 40], s)
+#define WindowShouldClose_                                                                 LoadedObjCSelectors[ 41]
+#define WindowDidResize_                                                                   LoadedObjCSelectors[ 42]
+#define makeKeyWindow(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[ 43])
+#define orderFront_(inst, w)                                            objc_msgSend(inst, LoadedObjCSelectors[ 44], w)
+#define orderOut_(inst, w)                                              objc_msgSend(inst, LoadedObjCSelectors[ 45], w)
+#define setNeedsDisplay_(inst, d)                                       objc_msgSend(inst, LoadedObjCSelectors[ 46], (bool)(d))
+#define setDelegate_(inst, d)                                           objc_msgSend(inst, LoadedObjCSelectors[ 47], d)
+#define setEnabled_(inst, b)                                            objc_msgSend(inst, LoadedObjCSelectors[ 48], (bool)(b))
+#define setNextKeyView_(inst, v)                                        objc_msgSend(inst, LoadedObjCSelectors[ 49], v)
+#define setDefaultButtonCell_(inst, c)                                  objc_msgSend(inst, LoadedObjCSelectors[ 50], c)
+#define verticalScroller(inst)                                          objc_msgSend(inst, LoadedObjCSelectors[ 51])
+#define setHasVerticalScroller_(inst, s)                                objc_msgSend(inst, LoadedObjCSelectors[ 52], s)
+#define isEnabled(inst)                                           (bool)objc_msgSend(inst, LoadedObjCSelectors[ 53])
+#define state(inst)                                               (long)objc_msgSend(inst, LoadedObjCSelectors[ 54])
+#define setState_(inst, s)                                              objc_msgSend(inst, LoadedObjCSelectors[ 55], (int)(s))
+#define setToolTip_(inst, t)                                            objc_msgSend(inst, LoadedObjCSelectors[ 56], t)
+#define setButtonType_(inst, t)                                         objc_msgSend(inst, LoadedObjCSelectors[ 57], t)
+#define setBezelStyle_(inst, s)                                         objc_msgSend(inst, LoadedObjCSelectors[ 58], s)
+#define setImagePosition_(inst, p)                                      objc_msgSend(inst, LoadedObjCSelectors[ 59], p)
+#define setSendsActionOnEndEditing_(inst, b)                            objc_msgSend(inst, LoadedObjCSelectors[ 60], (bool)(b))
+#define Control_textView_doCommandBySelector_                                              LoadedObjCSelectors[ 61]
+#define MoveDown_                                                                          LoadedObjCSelectors[ 62]
+#define MoveUp_                                                                            LoadedObjCSelectors[ 63]
+#define setEditable_(inst, e)                                           objc_msgSend(inst, LoadedObjCSelectors[ 64], e)
+#define setSelectable_(inst, s)                                         objc_msgSend(inst, LoadedObjCSelectors[ 65], s)
+#define setBezeled_(inst, b)                                            objc_msgSend(inst, LoadedObjCSelectors[ 66], b)
+#define setBordered_(inst, b)                                           objc_msgSend(inst, LoadedObjCSelectors[ 67], b)
+#define setDrawsBackground_(inst, d)                                    objc_msgSend(inst, LoadedObjCSelectors[ 68], d)
+#define statusItemWithLength_(inst, l)                                  objc_msgSend(inst, LoadedObjCSelectors[ 69], l) /** do NOT "correct" L to CGFloat! **/
+#define removeStatusItem_(inst, i)                                      objc_msgSend(inst, LoadedObjCSelectors[ 70], i)
+#define systemStatusBar(inst)                                           objc_msgSend(inst, LoadedObjCSelectors[ 71])
+#define mainScreen(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[ 72])
+#define Thickness                                                                          LoadedObjCSelectors[ 73]
+#define CellSize                                                                           LoadedObjCSelectors[ 74]
+#define tag(inst)                                                       objc_msgSend(inst, LoadedObjCSelectors[ 75])
+#define setTag_(inst, t)                                                objc_msgSend(inst, LoadedObjCSelectors[ 76], t)
+#define setHighlightMode_(inst, b)                                      objc_msgSend(inst, LoadedObjCSelectors[ 77], (bool)(b))
+#define setHidden_(inst, h)                                             objc_msgSend(inst, LoadedObjCSelectors[ 78], (bool)(h))
+#define setContentView_(inst, v)                                        objc_msgSend(inst, LoadedObjCSelectors[ 79], v)
+#define setDocumentView_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[ 80], v)
+#define addSubview_(inst, v)                                            objc_msgSend(inst, LoadedObjCSelectors[ 81], v)
+#define IsFlipped                                                                          LoadedObjCSelectors[ 82]
+#define DrawRect_                                                                          LoadedObjCSelectors[ 83]
+#define MouseLocation                                                                      LoadedObjCSelectors[ 84]
+#define graphicsPort(inst)                                (CGContextRef)objc_msgSend(inst, LoadedObjCSelectors[ 85])
+#define currentContext(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[ 86])
+#define defaultManager(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[ 87])
+#define systemFontOfSize_(inst, s)                                      objc_msgSend(inst, LoadedObjCSelectors[ 88], s)
+#define Ascender                                                                           LoadedObjCSelectors[ 89]
+#define Descender                                                                          LoadedObjCSelectors[ 90]
+#define MaximumAdvancement                                                                 LoadedObjCSelectors[ 91]
+#define setIndeterminate_(inst, i)                                      objc_msgSend(inst, LoadedObjCSelectors[ 92], (bool)(i))
+#define setAlignment_(inst, a)                                          objc_msgSend(inst, LoadedObjCSelectors[ 93], (int)(a))
+#define addTableColumn_(inst, c)                                        objc_msgSend(inst, LoadedObjCSelectors[ 94], (id)(c))
+#define headerCell(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[ 95])
+#define setWantsLayer_(inst, w)                                         objc_msgSend(inst, LoadedObjCSelectors[ 96], (bool)(w))
+#define setControlSize_(inst, s)                                        objc_msgSend(inst, LoadedObjCSelectors[ 97], (NSUInteger)(s))
+#define drawInRect_withAttributes_(inst, r, a)                          objc_msgSend(inst, LoadedObjCSelectors[ 98], (CGRect)(r), (id)(a))
+#define TextDidChange_                                                                     LoadedObjCSelectors[ 99]
+#define stringValue(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[100])
+#define DoubleValue                                                                        LoadedObjCSelectors[101]
+#define setDoubleValue_(inst, v)                                        objc_msgSend(inst, LoadedObjCSelectors[102], (double)(v))
+#define setIntValue_(inst, v)                                           objc_msgSend(inst, LoadedObjCSelectors[103], (NSInteger)(v))
+#define displayIfNeeded(inst)                                           objc_msgSend(inst, LoadedObjCSelectors[104])
+#define setMinValue_(inst, v)                                           objc_msgSend(inst, LoadedObjCSelectors[105], (double)(v))
+#define setMaxValue_(inst, v)                                           objc_msgSend(inst, LoadedObjCSelectors[106], (double)(v))
+#define setValueWraps_(inst, w)                                         objc_msgSend(inst, LoadedObjCSelectors[107], w)
+#define setFormatter_(inst, f)                                          objc_msgSend(inst, LoadedObjCSelectors[108], f)
+#define setFormatterBehavior_(inst, b)                                  objc_msgSend(inst, LoadedObjCSelectors[109], b)
+#define setNumberStyle_(inst, s)                                        objc_msgSend(inst, LoadedObjCSelectors[110], s)
+#define setPartialStringValidationEnabled(inst, b)                      objc_msgSend(inst, LoadedObjCSelectors[111], b)
+#define IsPartialStringValid_newEditingString_errorDescription_                            LoadedObjCSelectors[112]
+#define getObjectValue_forString_errorDescription_(inst, v, s, e) (bool)objc_msgSend(inst, LoadedObjCSelectors[113], v, s, e)
+#define reloadData(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[114])
+#define dataCell(inst)                                                  objc_msgSend(inst, LoadedObjCSelectors[115])
+#define setDataCell_(inst, c)                                           objc_msgSend(inst, LoadedObjCSelectors[116], c)
+#define setDataSource_(inst, d)                                         objc_msgSend(inst, LoadedObjCSelectors[117], d)
+#define setResizingMask_(inst, m)                                       objc_msgSend(inst, LoadedObjCSelectors[118], m)
+#define NumberOfRowsInTableView_                                                           LoadedObjCSelectors[119]
+#define TableView_objectValueForTableColumn_row_                                           LoadedObjCSelectors[120]
+#define TableView_setObjectValue_forTableColumn_row_                                       LoadedObjCSelectors[121]
+#define TableView_dataCellForTableColumn_row_                                              LoadedObjCSelectors[122]
+#define TableView_viewForTableColumn_row_                                                  LoadedObjCSelectors[123]
+
 /// name of the menu responder class
 #define CLS_MENU "lNSM"
 /// name of the instance variable to access the CTRL structure
 #define VAR_CTRL "ctrl"
 /// name of the instance variable to access the associated data
 #define VAR_DATA "data"
+
+
 
 /// subclass storage
 typedef union {
@@ -689,7 +999,8 @@ void rFreeControl(CTRL *ctrl) {
             /// releasing the formatter
             release((id)ctrl->priv[5]);
             /// releasing classes
-            for (iter = countof(scls->_sub) - 1; iter >= 0; iter--)
+            for (iter = sizeof(scls->_sub) / sizeof(*scls->_sub) - 1;
+                 iter >= 0; iter--)
                 DelClass((Class)scls->_sub[iter]);
             free(scls);
             /// we must release neither the window nor its NSView;
@@ -1188,7 +1499,7 @@ int main(int argc, char *argv[]) {
     char *home;
     long  iter;
 
-    LoadObjC();
+    LoadObjC((char*[]){STR_OBJC_CLAS, 0}, (char*[]){STR_OBJC_SELE, 0});
 
     pool = init(alloc(NSAutoreleasePool));
     urls = URLsForDirectory_inDomains_(defaultManager(NSFileManager),

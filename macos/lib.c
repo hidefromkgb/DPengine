@@ -5,6 +5,105 @@
 
 
 
+#define STR_OBJC_CLAS       \
+       "NSApplication",     \
+       "NSAutoreleasePool", \
+       "NSEvent",           \
+       "NSGraphicsContext", \
+       "NSColor",           \
+       "NSCursor",          \
+       "NSPanel",           \
+       "NSView",            \
+       "NSOpenGLView",      \
+       "NSOpenGLPixelFormat"
+
+#define NSApplication       (LoadedObjCClasses[0])
+#define NSAutoreleasePool   (LoadedObjCClasses[1])
+#define NSEvent             (LoadedObjCClasses[2])
+#define NSGraphicsContext   (LoadedObjCClasses[3])
+#define NSColor             (LoadedObjCClasses[4])
+#define NSCursor            (LoadedObjCClasses[5])
+#define NSPanel             (LoadedObjCClasses[6])
+#define NSView              (LoadedObjCClasses[7])
+#define NSOpenGLView        (LoadedObjCClasses[8])
+#define NSOpenGLPixelFormat (LoadedObjCClasses[9])
+
+#define STR_OBJC_SELE                                  \
+       "init",                                         \
+       "alloc",                                        \
+       "release",                                      \
+       "sharedApplication",                            \
+       "run",                                          \
+       "stop:",                                        \
+       "clearColor",                                   \
+       "setBackgroundColor:",                          \
+       "initWithContentRect:styleMask:backing:defer:", \
+       "initWithFrame:pixelFormat:",                   \
+       "initWithAttributes:",                          \
+       "setFrame:",                                    \
+       "orderFront:",                                  \
+       "orderOut:",                                    \
+       "setNeedsDisplay:",                             \
+       "setLevel:",                                    \
+       "setDelegate:",                                 \
+       "setHasShadow:",                                \
+       "setIgnoresMouseEvents:",                       \
+       "setContentView:",                              \
+       "setOpaque:",                                   \
+       "isOpaque",                                     \
+       "drawRect:",                                    \
+       "mouseLocation",                                \
+       "pressedMouseButtons",                          \
+       "pointingHandCursor",                           \
+       "push",                                         \
+       "pop",                                          \
+       "graphicsPort",                                 \
+       "currentContext",                               \
+       "openGLContext",                                \
+       "makeCurrentContext",                           \
+       "setValues:forParameter:",                      \
+       "flushBuffer",                                  \
+       "postEvent:atStart:",                           \
+       /** srsly, next line is just batshit insane **/ \
+       "otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:"
+
+#define init(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[ 0])
+#define alloc(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[ 1])
+#define release(inst)                                                  objc_msgSend(inst, LoadedObjCSelectors[ 2])
+#define sharedApplication(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[ 3])
+#define run(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[ 4])
+#define stop_(inst, s)                                                 objc_msgSend(inst, LoadedObjCSelectors[ 5], s)
+#define clearColor(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[ 6])
+#define setBackgroundColor_(inst, c)                                   objc_msgSend(inst, LoadedObjCSelectors[ 7], c)
+#define initWithContentRect_styleMask_backing_defer_(inst, r, m, b, d) objc_msgSend(inst, LoadedObjCSelectors[ 8], r, (unsigned)(m), (unsigned)(b), (bool)(d))
+#define initWithFrame_pixelFormat_(inst, f, p)                         objc_msgSend(inst, LoadedObjCSelectors[ 9], f, p)
+#define initWithAttributes_(inst, a)                                   objc_msgSend(inst, LoadedObjCSelectors[10], (uint32_t*)(a))
+#define setFrame_(inst, f)                                             objc_msgSend(inst, LoadedObjCSelectors[11], f)
+#define orderFront_(inst, w)                                           objc_msgSend(inst, LoadedObjCSelectors[12], w)
+#define orderOut_(inst, w)                                             objc_msgSend(inst, LoadedObjCSelectors[13], w)
+#define setNeedsDisplay_(inst, d)                                      objc_msgSend(inst, LoadedObjCSelectors[14], (bool)(d))
+#define setLevel_(inst, l)                                             objc_msgSend(inst, LoadedObjCSelectors[15], (long)(l))
+#define setDelegate_(inst, d)                                          objc_msgSend(inst, LoadedObjCSelectors[16], d)
+#define setHasShadow_(inst, b)                                         objc_msgSend(inst, LoadedObjCSelectors[17], (bool)(b))
+#define setIgnoresMouseEvents_(inst, i)                                objc_msgSend(inst, LoadedObjCSelectors[18], (bool)(i))
+#define setContentView_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[19], v)
+#define setOpaque_(inst, b)                                            objc_msgSend(inst, LoadedObjCSelectors[20], (bool)(b))
+#define IsOpaque                                                                          LoadedObjCSelectors[21]
+#define DrawRect_                                                                         LoadedObjCSelectors[22]
+#define MouseLocation                                                                     LoadedObjCSelectors[23]
+#define pressedMouseButtons(inst)                                (long)objc_msgSend(inst, LoadedObjCSelectors[24])
+#define pointingHandCursor(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[25])
+#define push(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[26])
+#define pop(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[27])
+#define graphicsPort(inst)                               (CGContextRef)objc_msgSend(inst, LoadedObjCSelectors[28])
+#define currentContext(inst)                                           objc_msgSend(inst, LoadedObjCSelectors[29])
+#define openGLContext(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[30])
+#define makeCurrentContext(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[31])
+#define setValues_forParameter_(inst, v, p)                            objc_msgSend(inst, LoadedObjCSelectors[32], (int*)(v), (int)(p))
+#define flushBuffer(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[33])
+#define postEvent_atStart_(inst, e, s)                                 objc_msgSend(inst, LoadedObjCSelectors[34], e, (bool)(s))
+#define MakeEvent(t, l, m, s, w, c)                                 objc_msgSend(NSEvent, LoadedObjCSelectors[35], t, (CGPoint)(l), m, (CGFloat)(s), (id)(w), (id)(c), nil, nil, nil)
+
 /// name of the instance variable to access the engine structure
 #define VAR_ENGD "engd"
 
@@ -35,6 +134,9 @@ uint64_t lTimeFunc() {
 
 
 void lRestartEngine(ENGD *engd) {
+    if (!LoadedObjCClasses)
+        return;
+
     id thrd = sharedApplication(NSApplication);
     CGPoint dptr = {};
 
@@ -265,8 +367,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
          scib = UTF8("SetsCursorInBackground"), kCFBooleanTrue);
     CFRelease(scib);
 
-    LoadObjC(); /// has to be on the very first line: even VMET (see
-                /// below) is filled with the values it retrieves
+    LoadObjC((char*[]){STR_OBJC_CLAS, 0}, (char*[]){STR_OBJC_SELE, 0});
+
     DRAW draw;
     id pool, thrd, view;
     CFRunLoopTimerRef tmrf, tmrd;
