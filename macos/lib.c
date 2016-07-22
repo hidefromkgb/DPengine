@@ -414,6 +414,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         release(pfmt);
     }
     SET_IVAR(draw.view, VAR_ENGD, engd);
+    dims.origin.x = xpos;
+    dims.origin.y = ypos;
 
     /// [TODO:] NSNonactivatingPanelMask is flagged for deprecation in 10.12
     ///         so a suitable alternative has to be found

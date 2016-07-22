@@ -1489,10 +1489,10 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 
 int main(int argc, char *argv[]) {
+    id pool, urls, menu;
     CFStringRef path;
     CGFloat icon;
     CGRect dims;
-    id pool, urls, menu;
 
     struct dirent **dirs;
     ENGC *engc;
