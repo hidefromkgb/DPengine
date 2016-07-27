@@ -359,7 +359,13 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
 
     extern void CGSSetConnectionProperty(int, int, CFStringRef, CFBooleanRef);
     extern int _CGSDefaultConnection();
+    id pool, thrd, view, *vmet, *vfld;
+    CFRunLoopTimerRef tmrf, tmrd;
     CFStringRef scib;
+    CGRect dims;
+    DRAW draw;
+
+    LoadObjC((char*[]){STR_OBJC_CLAS, 0}, (char*[]){STR_OBJC_SELE, 0});
 
     /// a dirty hack to become capable of changing cursors at will
     CGSSetConnectionProperty
@@ -367,23 +373,16 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
          scib = UTF8("SetsCursorInBackground"), kCFBooleanTrue);
     CFRelease(scib);
 
-    LoadObjC((char*[]){STR_OBJC_CLAS, 0}, (char*[]){STR_OBJC_SELE, 0});
-
-    DRAW draw;
-    id pool, thrd, view;
-    CFRunLoopTimerRef tmrf, tmrd;
-    CGRect dims;
-
-    /// view delegate`s methods (line 1) and custom fields (line 2)
-    OMSC vmet[] = {{DrawRect_, OnDraw}, {IsOpaque, OnOpaq}, {}};
-    char *vfld[] = {VAR_ENGD, 0};
-
     data[0] = (intptr_t)&draw;
     draw.hand = pointingHandCursor(NSCursor);
     draw.attr = 0;
     draw.xdim = xdim - xpos;
     draw.ydim = ydim - ypos;
     dims = (CGRect){{0, 0}, {draw.xdim, draw.ydim}};
+
+    /// view delegate`s methods and custom fields
+    vmet = PutToArr(DrawRect_, OnDraw, IsOpaque, OnOpaq);
+    vfld = PutToArr(VAR_ENGD);
 
     pool = init(alloc(NSAutoreleasePool));
     thrd = sharedApplication(NSApplication);
@@ -413,6 +412,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         setValues_forParameter_(ctxt, &opaq, NSOpenGLCPSurfaceOpacity);
         release(pfmt);
     }
+    free(vfld);
+    free(vmet);
     SET_IVAR(draw.view, VAR_ENGD, engd);
     dims.origin.x = xpos;
     dims.origin.y = ypos;

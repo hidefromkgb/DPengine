@@ -125,37 +125,36 @@
 /** Take control: Player 1      **/ #define TXT_TPL1  6
 /** Take control: Player 2      **/ #define TXT_TPL2  7
 /** Show options...             **/ #define TXT_OPTS  8
-/** Return to menu...           **/ #define TXT_RETN  9
 
-/** [ Desktop Ponies Engine ]   **/ #define TXT_HEAD 10
-/** OS specific options         **/ #define TXT_SPEC 11
-/** Disable transparency        **/ #define TXT_OPAQ 12
-/** Play animation              **/ #define TXT_DRAW 13
-/** Show window                 **/ #define TXT_SHOW 14
-/** Exit                        **/ #define TXT_EXIT 15
-/** Use GPU for drawing         **/ #define TXT_RGPU 16
-/** [ none ]                    **/ #define TXT_NONE 17
+/** [ Desktop Ponies Engine ]   **/ #define TXT_HEAD  9
+/** OS specific options         **/ #define TXT_SPEC 10
+/** Disable transparency        **/ #define TXT_OPAQ 11
+/** Play animation              **/ #define TXT_DRAW 12
+/** Show window                 **/ #define TXT_SHOW 13
+/** Exit                        **/ #define TXT_EXIT 14
+/** Use GPU for drawing         **/ #define TXT_RGPU 15
+/** [ none ]                    **/ #define TXT_NONE 16
 
-/** Show console                **/ #define TXT_CONS 18
-/** Use regions                 **/ #define TXT_IRGN 19
-/** Enable BGRA                 **/ #define TXT_IBGR 20
-/** Enable pixel buffers        **/ #define TXT_IPBO 21
-/** Useless on full opacity!    **/ #define TXT_UOFO 22
-/** Useless without GPU!        **/ #define TXT_UWGL 23
-/** Cannot initialize GPU!      **/ #define TXT_CIGL 24
+/** Show console                **/ #define TXT_CONS 17
+/** Use regions                 **/ #define TXT_IRGN 18
+/** Enable BGRA                 **/ #define TXT_IBGR 19
+/** Enable pixel buffers        **/ #define TXT_IPBO 20
+/** Useless on full opacity!    **/ #define TXT_UOFO 21
+/** Useless without GPU!        **/ #define TXT_UWGL 22
+/** Cannot initialize GPU!      **/ #define TXT_CIGL 23
 
-/** Desktop Ponies              **/ #define TXT_CAPT 25
-/** Enable filters              **/ #define TXT_FLTR 26
-/** Exact matching              **/ #define TXT_EXAC 27
-/** [At least one:]             **/ #define TXT_OGRP 28
-/** [All at once:]              **/ #define TXT_AGRP 29
-/** Random selection:           **/ #define TXT_SRND 30
-/** Group selection:            **/ #define TXT_SGRP 31
-/** Add                         **/ #define TXT_BADD 32
-/** Copies                      **/ #define TXT_BDUP 33
-/** Selected:                   **/ #define TXT_SELE 34
-/** Loaded:                     **/ #define TXT_LOAD 35
-/** GO!                         **/ #define TXT_GOGO 36
+/** Desktop Ponies              **/ #define TXT_CAPT 24
+/** Enable filters              **/ #define TXT_FLTR 25
+/** Exact matching              **/ #define TXT_EXAC 26
+/** [At least one:]             **/ #define TXT_OGRP 27
+/** [All at once:]              **/ #define TXT_AGRP 28
+/** Random selection:           **/ #define TXT_SRND 29
+/** Group selection:            **/ #define TXT_SGRP 30
+/** Add                         **/ #define TXT_BADD 31
+/** Copies                      **/ #define TXT_BDUP 32
+/** Selected:                   **/ #define TXT_SELE 33
+/** Loaded:                     **/ #define TXT_LOAD 34
+/** GO!                         **/ #define TXT_GOGO 35
 
 /// /// /// /// /// /// /// /// /// ENGC.CTLS array indices
 /**                             **/ #define CTL_CAPT ctls[ 0]
@@ -1347,10 +1346,6 @@ void MMH(MENU *item) {
             rMessage("Not implemented yet!", "WIP", 0);
             break;
 
-        case TXT_RETN:
-            rMessage("Not implemented yet!", "WIP", 0);
-            break;
-
         case TXT_RGPU: {
             ENGC *engc = (ENGC*)item->data;
             uint32_t flgs;
@@ -1726,7 +1721,6 @@ void Relocalize(ENGC *engc, char *lang) {
     {.text = engc->tran[TXT_TPL2], .uuid = TXT_TPL2, .func = MMH},
     {.text = ""},
     {.text = engc->tran[TXT_OPTS], .uuid = TXT_OPTS, .func = MMH},
-    {.text = engc->tran[TXT_RETN], .uuid = TXT_RETN, .func = MMH},
     {.text = engc->tran[TXT_EXIT], .uuid = TXT_EXIT, .func = MMH,
      .data = (intptr_t)engc},
     {}},

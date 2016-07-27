@@ -21,12 +21,6 @@ static SEL *LoadedObjCSelectors = 0;
 
 
 
-/// overloaded method for a subclass
-typedef struct _OMSC {
-    SEL name;
-    void *func;
-} OMSC;
-
 /// useful when including in parallel with ObjC headers
 #ifndef NON_ENUM
 
@@ -353,8 +347,28 @@ static CFDictionaryRef __MakeDict(CFStringRef key1, ...) {
 
 
 
+#define PutToArr(...) __PutToArr(nil, ##__VA_ARGS__, nil)
 __attribute__((unused))
-static id NewClass(id base, char *name, char *flds[], OMSC *mths) {
+static id *__PutToArr(id head, ...) {
+    va_list list;
+    long size;
+    id *retn;
+
+    retn = 0;
+    va_start(list, head);
+    for (size = 0; va_arg(list, typeof(*retn)); size++);
+    va_end(list);
+    if (size) {
+        retn = malloc((size + 1) * sizeof(*retn));
+        va_start(list, head);
+        for (size = 0; (retn[size] = va_arg(list, typeof(*retn))); size++);
+        va_end(list);
+    }
+    return retn;
+}
+
+__attribute__((unused))
+static id NewClass(id base, char *name, id *flds, id *mths) {
     Class retn;
     long iter;
 
@@ -375,13 +389,13 @@ static id NewClass(id base, char *name, char *flds[], OMSC *mths) {
 
         iter = -1;
         /// adding fields
-        while (flds[++iter])
-            class_addIvar(retn, flds[iter],
+        while (flds && flds[++iter])
+            class_addIvar(retn, (char*)flds[iter],
                           sizeof(id), (sizeof(id) >= 8)? 3 : 2, 0);
-        iter = -1;
+        iter = -2;
         /// overloading methods
-        while (mths[++iter].func)
-            class_addMethod(retn, mths[iter].name, mths[iter].func, 0);
+        while (mths && mths[iter += 2])
+            class_addMethod(retn, (SEL)mths[iter], (IMP)mths[iter + 1], 0);
 
         objc_registerClassPair(retn);
     }
