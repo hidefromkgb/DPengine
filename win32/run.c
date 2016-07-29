@@ -755,14 +755,14 @@ LRESULT APIENTRY PBarProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
     switch (uMsg) {
         case WM_PAINT:
             GetClientRect(hWnd, &rect);
-            lcur = rect.right * ctrl->priv[3]
-                 / ((ctrl->priv[4] > 0)? ctrl->priv[4] : 1);
+            lcur = (OldWin32())? rect.right * ctrl->priv[3]
+                               / ((ctrl->priv[4] > 0)? ctrl->priv[4] : 1) : 0;
             devc = BeginPaint(hWnd, &pstr);
             retn = CallWindowProc((WNDPROC)ctrl->priv[7],
                                    hWnd, uMsg, (WPARAM)devc, lPrm);
             SetBkMode(devc, TRANSPARENT);
             SelectObject(devc, (HFONT)ctrl->priv[1]);
-            for (uMsg = 0; uMsg <= 1; uMsg++) {
+            for (uMsg = (OldWin32())? 0 : 1; uMsg <= 1; uMsg++) {
                 clip = CreateRectRgn((uMsg)? lcur : 0, 0,
                                     (!uMsg)? lcur : rect.right, rect.bottom);
                 SetTextColor(devc,  (!uMsg)? GetSysColor(COLOR_HIGHLIGHTTEXT)
@@ -1138,7 +1138,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         wndc.hCursor = LoadCursor(0, IDC_ARROW);
         wndc.lpfnWndProc = OptProc;
         wndc.lpszClassName = WC_MAINWND;
-        wndc.hbrBackground = (HBRUSH)COLOR_WINDOW;
+        wndc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
         if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
             RegisterClassEx(&wndc);
         cwnd = CreateWindowEx(0, WC_MAINWND, 0,
@@ -1205,7 +1205,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 wndc.hCursor = LoadCursor(0, IDC_ARROW);
                 wndc.lpfnWndProc = ListProc;
                 wndc.lpszClassName = WC_LISTROOT;
-                wndc.hbrBackground = (HBRUSH)COLOR_WINDOW;
+                wndc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
                 if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
                     RegisterClassEx(&wndc);
                 cwnd = CreateWindowEx(0, WC_LISTROOT, 0, WS_CHILD | WS_VISIBLE,
@@ -1221,7 +1221,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 wndc.hCursor = LoadCursor(0, IDC_ARROW);
                 wndc.lpfnWndProc = SBoxProc;
                 wndc.lpszClassName = WC_SIZEBOX;
-                wndc.hbrBackground = (HBRUSH)COLOR_WINDOW;
+                wndc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
                 if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
                     RegisterClassEx(&wndc);
                 ctrl->fe2c = FE2CS;
