@@ -1,5 +1,5 @@
-CC = gcc
-CX = gcc
+CC = gcc -m32 -mstackrealign
+CX = gcc -m32 -mstackrealign
 
 
 OBJDIR = .obj
@@ -21,11 +21,6 @@ ECFLAGS = -I../core -Wall
 
 EOBJ = $(OBJDIR)/exec/exec.o $(OBJDIR)/run.o
 EOUT = $(EXEPATH)/DPE
-
-ifeq ($(shell uname -m), i386)
-    LCFLAGS += -mstackrealign
-    ECFLAGS += -mstackrealign
-endif
 
 
 RelJoined: lrelease

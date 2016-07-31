@@ -109,6 +109,103 @@
 
 
 
+enum {
+    NSBorderlessWindowMask         = (0     ),
+    NSTitledWindowMask             = (1 << 0),
+    NSClosableWindowMask           = (1 << 1),
+    NSMiniaturizableWindowMask     = (1 << 2),
+    NSResizableWindowMask          = (1 << 3),
+    NSNonactivatingPanelMask       = (1 << 7),
+    NSTexturedBackgroundWindowMask = (1 << 8),
+};
+enum {
+    NSNormalWindowLevel   =  0,
+    NSFloatingWindowLevel =  3,
+    NSDockWindowLevel     =  5,
+    NSSubmenuWindowLevel  = 10,
+    NSMainMenuWindowLevel = 20,
+};
+enum {
+    NSLeftMouseDown      =  1,
+    NSLeftMouseUp        =  2,
+    NSRightMouseDown     =  3,
+    NSRightMouseUp       =  4,
+    NSMouseMoved         =  5,
+    NSLeftMouseDragged   =  6,
+    NSRightMouseDragged  =  7,
+    NSMouseEntered       =  8,
+    NSMouseExited        =  9,
+    NSKeyDown            = 10,
+    NSKeyUp              = 11,
+    NSFlagsChanged       = 12,
+    NSAppKitDefined      = 13,
+    NSSystemDefined      = 14,
+    NSApplicationDefined = 15,
+    NSPeriodic           = 16,
+    NSCursorUpdate       = 17,
+    NSScrollWheel        = 22,
+    NSTabletPoint        = 23,
+    NSTabletProximity    = 24,
+    NSOtherMouseDown     = 25,
+    NSOtherMouseUp       = 26,
+    NSOtherMouseDragged  = 27,
+};
+enum {
+    NSOpenGLPFAAllRenderers          =   1,
+    NSOpenGLPFATripleBuffer          =   3,
+    NSOpenGLPFADoubleBuffer          =   5,
+    NSOpenGLPFAStereo                =   6,
+    NSOpenGLPFAAuxBuffers            =   7,
+    NSOpenGLPFAColorSize             =   8,
+    NSOpenGLPFAAlphaSize             =  11,
+    NSOpenGLPFADepthSize             =  12,
+    NSOpenGLPFAStencilSize           =  13,
+    NSOpenGLPFAAccumSize             =  14,
+    NSOpenGLPFAMinimumPolicy         =  51,
+    NSOpenGLPFAMaximumPolicy         =  52,
+    NSOpenGLPFAOffScreen             =  53,
+    NSOpenGLPFAFullScreen            =  54,
+    NSOpenGLPFASampleBuffers         =  55,
+    NSOpenGLPFASamples               =  56,
+    NSOpenGLPFAAuxDepthStencil       =  57,
+    NSOpenGLPFAColorFloat            =  58,
+    NSOpenGLPFAMultisample           =  59,
+    NSOpenGLPFASupersample           =  60,
+    NSOpenGLPFASampleAlpha           =  61,
+    NSOpenGLPFARendererID            =  70,
+    NSOpenGLPFASingleRenderer        =  71,
+    NSOpenGLPFANoRecovery            =  72,
+    NSOpenGLPFAAccelerated           =  73,
+    NSOpenGLPFAClosestPolicy         =  74,
+    NSOpenGLPFARobust                =  75,
+    NSOpenGLPFABackingStore          =  76,
+    NSOpenGLPFAMPSafe                =  78,
+    NSOpenGLPFAWindow                =  80,
+    NSOpenGLPFAMultiScreen           =  81,
+    NSOpenGLPFACompliant             =  83,
+    NSOpenGLPFAScreenMask            =  84,
+    NSOpenGLPFAPixelBuffer           =  90,
+    NSOpenGLPFARemotePixelBuffer     =  91,
+    NSOpenGLPFAAllowOfflineRenderers =  96,
+    NSOpenGLPFAAcceleratedCompute    =  97,
+    NSOpenGLPFAOpenGLProfile         =  99,
+    NSOpenGLPFAVirtualScreenCount    = 128,
+};
+enum {
+    NSOpenGLCPSwapInterval           = 222,
+    NSOpenGLCPSurfaceOrder           = 235,
+    NSOpenGLCPSurfaceOpacity         = 236,
+    NSOpenGLCPSurfaceBackingSize     = 304,
+    NSOpenGLCPReclaimResources       = 308,
+    NSOpenGLCPCurrentRendererID      = 309,
+    NSOpenGLCPGPUVertexProcessing    = 310,
+    NSOpenGLCPGPUFragmentProcessing  = 311,
+    NSOpenGLCPHasDrawable            = 314,
+    NSOpenGLCPMPSwapsInFlight        = 315,
+};
+
+
+
 struct SEMD {
     pthread_mutex_t cmtx;
     pthread_cond_t cvar;
@@ -423,7 +520,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     draw.hwnd = initWithContentRect_styleMask_backing_defer_
                     (alloc(NSPanel), dims, NSBorderlessWindowMask
                                          | NSNonactivatingPanelMask,
-                     NSBackingStoreBuffered, false);
+                     kCGBackingStoreBuffered, false);
 
     setContentView_(draw.hwnd, draw.view);
     setDelegate_(draw.hwnd, draw.view);

@@ -11,19 +11,6 @@
 
 
 
-static struct {
-    Class uuid;
-    char *name;
-    long icnt;
-} *SubclassedObjCClasses = 0;
-static id *LoadedObjCClasses = 0;
-static SEL *LoadedObjCSelectors = 0;
-
-
-
-/// useful when including in parallel with ObjC headers
-#ifndef NON_ENUM
-
 #if __LP64__ || TARGET_OS_EMBEDDED || TARGET_OS_IPHONE || TARGET_OS_WIN32 || NS_BUILD_32_LIKE_64
     typedef long NSInteger;
     typedef unsigned long NSUInteger;
@@ -34,6 +21,16 @@ static SEL *LoadedObjCSelectors = 0;
 
 
 
+static struct {
+    Class uuid;
+    char *name;
+    long icnt;
+} *SubclassedObjCClasses = 0;
+static id *LoadedObjCClasses = 0;
+static SEL *LoadedObjCSelectors = 0;
+
+
+
 /// OSX versions
 #define OSX_10_05_PLUS (kCFCoreFoundationVersionNumber >=  476.00)
 #define OSX_10_06_PLUS (kCFCoreFoundationVersionNumber >=  550.00)
@@ -41,236 +38,6 @@ static SEL *LoadedObjCSelectors = 0;
 #define OSX_10_08_PLUS (kCFCoreFoundationVersionNumber >=  744.00)
 #define OSX_10_09_PLUS (kCFCoreFoundationVersionNumber >=  855.11)
 #define OSX_10_10_PLUS (kCFCoreFoundationVersionNumber >= 1151.16)
-
-#ifdef __i386__
-    #define NSVariableStatusItemLength 0xBF800000 /** -1.0f **/
-    #define NSSquareStatusItemLength   0xC0000000 /** -2.0f **/
-#else
-    #define NSVariableStatusItemLength ((double)-1.0)
-    #define NSSquareStatusItemLength   ((double)-2.0)
-#endif
-enum {
-    NSUserDomainMask    = 0x0001,
-    NSLocalDomainMask   = 0x0002,
-    NSNetworkDomainMask = 0x0004,
-    NSSystemDomainMask  = 0x0008,
-    NSAllDomainsMask    = 0xFFFF,
-};
-enum {
-    NSApplicationDirectory          =   1,
-    NSDemoApplicationDirectory      =   2,
-    NSDeveloperApplicationDirectory =   3,
-    NSAdminApplicationDirectory     =   4,
-    NSLibraryDirectory              =   5,
-    NSDeveloperDirectory            =   6,
-    NSUserDirectory                 =   7,
-    NSDocumentationDirectory        =   8,
-    NSDocumentDirectory             =   9,
-    NSCoreServiceDirectory          =  10,
-    NSAutosavedInformationDirectory =  11,
-    NSDesktopDirectory              =  12,
-    NSCachesDirectory               =  13,
-    NSApplicationSupportDirectory   =  14,
-    NSDownloadsDirectory            =  15,
-    NSInputMethodsDirectory         =  16,
-    NSMoviesDirectory               =  17,
-    NSMusicDirectory                =  18,
-    NSPicturesDirectory             =  19,
-    NSPrinterDescriptionDirectory   =  20,
-    NSSharedPublicDirectory         =  21,
-    NSPreferencePanesDirectory      =  22,
-    NSItemReplacementDirectory      =  99,
-    NSAllApplicationsDirectory      = 100,
-    NSAllLibrariesDirectory         = 101,
-};
-enum {
-    NSNumberFormatterBehaviorDefault =    0,
-    NSNumberFormatterBehavior10_0    = 1000,
-    NSNumberFormatterBehavior10_4    = 1040,
-};
-enum {
-    NSTableColumnNoResizing        = (0     ),
-    NSTableColumnAutoresizingMask  = (1 << 0),
-    NSTableColumnUserResizingMask  = (1 << 1),
-};
-enum {
-    NSBorderlessWindowMask         = (0     ),
-    NSTitledWindowMask             = (1 << 0),
-    NSClosableWindowMask           = (1 << 1),
-    NSMiniaturizableWindowMask     = (1 << 2),
-    NSResizableWindowMask          = (1 << 3),
-    NSNonactivatingPanelMask       = (1 << 7),
-    NSTexturedBackgroundWindowMask = (1 << 8),
-};
-enum {
-    NSBackingStoreRetained    = 0,
-    NSBackingStoreNonretained = 1,
-    NSBackingStoreBuffered    = 2,
-};
-enum {
-    NSApplicationActivationPolicyRegular    = 0,
-    NSApplicationActivationPolicyAccessory  = 1,
-    NSApplicationActivationPolicyProhibited = 2,
-};
-enum {
-    NSMixedState = -1,
-    NSOffState   =  0,
-    NSOnState    =  1,
-};
-enum {
-    NSNormalWindowLevel   =  0,
-    NSFloatingWindowLevel =  3,
-    NSDockWindowLevel     =  5,
-    NSSubmenuWindowLevel  = 10,
-    NSMainMenuWindowLevel = 20,
-};
-enum {
-    NSRegularControlSize  = 0,
-    NSSmallControlSize    = 1,
-    NSMiniControlSize     = 2,
-};
-enum {
-    NSLeftTextAlignment      = 0,
-    NSRightTextAlignment     = 1,
-    NSCenterTextAlignment    = 2,
-    NSJustifiedTextAlignment = 3,
-    NSNaturalTextAlignment   = 4
-};
-enum {
-    NSMomentaryLightButton        = 0,
-    NSMomentaryPushButton         = 0,
-    NSPushOnPushOffButton         = 1,
-    NSToggleButton                = 2,
-    NSSwitchButton                = 3,
-    NSRadioButton                 = 4,
-    NSMomentaryChangeButton       = 5,
-    NSOnOffButton                 = 6,
-    NSMomentaryLight              = 7,
-    NSMomentaryPushInButton       = 7,
-    NSAcceleratorButton           = 8,
-    NSMultiLevelAcceleratorButton = 9,
-};
-enum {
-    NSRoundedBezelStyle           =  1,
-    NSRegularSquareBezelStyle     =  2,
-    NSSmallIconButtonBezelStyle   =  2,
-    NSThickSquareBezelStyle       =  3,
-    NSThickerSquareBezelStyle     =  4,
-    NSDisclosureBezelStyle        =  5,
-    NSShadowlessSquareBezelStyle  =  6,
-    NSCircularBezelStyle          =  7,
-    NSTexturedSquareBezelStyle    =  8,
-    NSHelpButtonBezelStyle        =  9,
-    NSSmallSquareBezelStyle       = 10,
-    NSTexturedRoundedBezelStyle   = 11,
-    NSRoundRectBezelStyle         = 12,
-    NSRecessedBezelStyle          = 13,
-    NSRoundedDisclosureBezelStyle = 14,
-    NSInlineBezelStyle            = 15,
-};
-enum {
-    NSNoImage       = 0,
-    NSImageOnly     = 1,
-    NSImageLeft     = 2,
-    NSImageRight    = 3,
-    NSImageBelow    = 4,
-    NSImageAbove    = 5,
-    NSImageOverlaps = 6,
-};
-enum {
-    NSTrackingMouseEnteredAndExited    = (1 << 0),
-    NSTrackingMouseMoved               = (1 << 1),
-    NSTrackingCursorUpdate             = (1 << 2),
-    NSTrackingActiveWhenFirstResponder = (1 << 3),
-    NSTrackingActiveInKeyWindow        = (1 << 4),
-    NSTrackingActiveInActiveApp        = (1 << 5),
-    NSTrackingActiveAlways             = (1 << 6),
-    NSTrackingAssumeInside             = (1 << 7),
-    NSTrackingInVisibleRect            = (1 << 8),
-    NSTrackingEnabledDuringMouseDrag   = (1 << 9),
-};
-enum {
-    NSLeftMouseDown      =  1,
-    NSLeftMouseUp        =  2,
-    NSRightMouseDown     =  3,
-    NSRightMouseUp       =  4,
-    NSMouseMoved         =  5,
-    NSLeftMouseDragged   =  6,
-    NSRightMouseDragged  =  7,
-    NSMouseEntered       =  8,
-    NSMouseExited        =  9,
-    NSKeyDown            = 10,
-    NSKeyUp              = 11,
-    NSFlagsChanged       = 12,
-    NSAppKitDefined      = 13,
-    NSSystemDefined      = 14,
-    NSApplicationDefined = 15,
-    NSPeriodic           = 16,
-    NSCursorUpdate       = 17,
-    NSScrollWheel        = 22,
-    NSTabletPoint        = 23,
-    NSTabletProximity    = 24,
-    NSOtherMouseDown     = 25,
-    NSOtherMouseUp       = 26,
-    NSOtherMouseDragged  = 27,
-};
-enum {
-    NSOpenGLPFAAllRenderers          =   1,
-    NSOpenGLPFATripleBuffer          =   3,
-    NSOpenGLPFADoubleBuffer          =   5,
-    NSOpenGLPFAStereo                =   6,
-    NSOpenGLPFAAuxBuffers            =   7,
-    NSOpenGLPFAColorSize             =   8,
-    NSOpenGLPFAAlphaSize             =  11,
-    NSOpenGLPFADepthSize             =  12,
-    NSOpenGLPFAStencilSize           =  13,
-    NSOpenGLPFAAccumSize             =  14,
-    NSOpenGLPFAMinimumPolicy         =  51,
-    NSOpenGLPFAMaximumPolicy         =  52,
-    NSOpenGLPFAOffScreen             =  53,
-    NSOpenGLPFAFullScreen            =  54,
-    NSOpenGLPFASampleBuffers         =  55,
-    NSOpenGLPFASamples               =  56,
-    NSOpenGLPFAAuxDepthStencil       =  57,
-    NSOpenGLPFAColorFloat            =  58,
-    NSOpenGLPFAMultisample           =  59,
-    NSOpenGLPFASupersample           =  60,
-    NSOpenGLPFASampleAlpha           =  61,
-    NSOpenGLPFARendererID            =  70,
-    NSOpenGLPFASingleRenderer        =  71,
-    NSOpenGLPFANoRecovery            =  72,
-    NSOpenGLPFAAccelerated           =  73,
-    NSOpenGLPFAClosestPolicy         =  74,
-    NSOpenGLPFARobust                =  75,
-    NSOpenGLPFABackingStore          =  76,
-    NSOpenGLPFAMPSafe                =  78,
-    NSOpenGLPFAWindow                =  80,
-    NSOpenGLPFAMultiScreen           =  81,
-    NSOpenGLPFACompliant             =  83,
-    NSOpenGLPFAScreenMask            =  84,
-    NSOpenGLPFAPixelBuffer           =  90,
-    NSOpenGLPFARemotePixelBuffer     =  91,
-    NSOpenGLPFAAllowOfflineRenderers =  96,
-    NSOpenGLPFAAcceleratedCompute    =  97,
-    NSOpenGLPFAOpenGLProfile         =  99,
-    NSOpenGLPFAVirtualScreenCount    = 128,
-};
-enum {
-    NSOpenGLCPSwapInterval           = 222,
-    NSOpenGLCPSurfaceOrder           = 235,
-    NSOpenGLCPSurfaceOpacity         = 236,
-    NSOpenGLCPSurfaceBackingSize     = 304,
-    NSOpenGLCPReclaimResources       = 308,
-    NSOpenGLCPCurrentRendererID      = 309,
-    NSOpenGLCPGPUVertexProcessing    = 310,
-    NSOpenGLCPGPUFragmentProcessing  = 311,
-    NSOpenGLCPHasDrawable            = 314,
-    NSOpenGLCPMPSwapsInFlight        = 315,
-};
-
-#endif
-
-
 
 /// NSString creation macro
 #define UTF8(s) CFStringCreateWithBytes(0, (s)? (uint8_t*)(s) : (uint8_t*)"", strlen((s)? (char*)(s) : (char*)""), kCFStringEncodingUTF8, false)
@@ -284,9 +51,26 @@ enum {
 #define GetT2DV(r, i, ...) { void *GetT2DV = objc_msgSend;       r = ((typeof(r) (*)(id, ...))GetT2DV)(i, __VA_ARGS__); }
 #define GetT4DV(r, i, ...) { void *GetT4DV = objc_msgSend_stret; r = ((typeof(r) (*)(id, ...))GetT4DV)(i, __VA_ARGS__); }
 
-
-
+/// helper function for a tricky task of passing floats to objc_msgSend()
+/// (as it is a vararg, all passed floats are promoted to doubles, which
+/// is not the right behaviour in the case of IA-32 architecture)
+#ifdef __i386__
+    #define ___F uint32_t
+    #define __PassT1FV(f) *(___F*)&(f)
+#else
+    #define ___F double
+    #define __PassT1FV
+#endif
 __attribute__((unused)) /// signals that the function might be left unused
+static inline ___F PassT1FV(float what) {
+    return __PassT1FV(what);
+}
+#undef ___F
+#undef __PassT1FV
+
+
+
+__attribute__((unused))
 static char *CopyUTF8(CFStringRef cfsr) {
     CFIndex slen, size;
     uint8_t *retn = 0;
@@ -441,7 +225,7 @@ static void LoadObjC(char *clas[], char *sele[]) {
         for (iter = 0; sele[iter]; iter++);
         LoadedObjCSelectors = malloc(iter * sizeof(*LoadedObjCSelectors));
         for (iter = 0; clas[iter]; iter++)
-            LoadedObjCClasses[iter] = objc_getClass(clas[iter]);
+            LoadedObjCClasses[iter] = (id)objc_getClass(clas[iter]);
         for (iter = 0; sele[iter]; iter++)
             LoadedObjCSelectors[iter] = sel_registerName(sele[iter]);
     }

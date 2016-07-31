@@ -576,11 +576,11 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
 
 /// [TODO:]
     /// speech said on behaviour start.........................................  def = ""
-    if (TRY_TEMP(conf));
+    if (TRY_TEMP(conf)) {};
 
 /// [TODO:]
     /// speech said on behaviour end...........................................  def = ""
-    if (TRY_TEMP(conf));
+    if (TRY_TEMP(conf)) {};
 
     /// flag to never exec this behaviour at random............................  def = False
     if (TRY_TEMP(conf))
@@ -605,11 +605,11 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
 
 /// [TODO:]
     /// [something unintelligible].............................................  def = ""
-    if (TRY_TEMP(conf));
+    if (TRY_TEMP(conf)) {};
 
 /// [TODO:]
     /// [something unintelligible].............................................  def = ""
-    if (TRY_TEMP(conf));
+    if (TRY_TEMP(conf)) {};
 
     /// right image center (natural center if "0,0")...........................  def = "0,0"
     if (TRY_TEMP(conf)) {
@@ -649,7 +649,7 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
                    FLG_EFCT | FLG_LOOP | EFF_STAY | (EFF_RNDA * 0x1111), 0, 0};
 
     /// effect name (skipped intentionally).................................... !def
-    if (TRY_TEMP(conf));
+    if (TRY_TEMP(conf)) {};
 
     /// behaviour name......................................................... !def
     retn->name = HashLine(Dequote(GET_TEMP(conf)), 0);
