@@ -14,6 +14,13 @@
 
 
 
+typedef struct {
+    HANDLE hdir;
+    WIN32_FIND_DATA dirf;
+} FIND;
+
+
+
 static inline long OldWin32() {
     static long retn = 2;
 
@@ -136,7 +143,7 @@ void OSSpecific(MENU *item) {
 
 
 
-MENU *rOSSpecificMenu(ENGC *engc) {
+MENU *rOSSpecificMenu(void *engc) {
 /*
     char buff[1024];
     buff[countof(buff) - 1] = 0;
@@ -1327,8 +1334,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 
 
-void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
-                       ENGC *engc, intptr_t data) {
+void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
     uint64_t time, tcur;
     uint32_t temp;
     MSG pmsg;
@@ -1349,8 +1355,38 @@ void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
             continue;
         }
         time = tcur;
-        upre(engc, data, time);
+        upre(data, time);
     }
+}
+
+
+
+char *rFindFile(intptr_t data) {
+    FIND *find = (FIND*)data;
+    char *retn;
+
+    if (!OldWin32()) {
+        if (find->hdir == INVALID_HANDLE_VALUE)
+            find->hdir = FindFirstFileW(L""DEF_FLDR"/*",
+                                       (LPWIN32_FIND_DATAW)&find->dirf);
+        else if (!FindNextFileW(find->hdir, (LPWIN32_FIND_DATAW)&find->dirf)) {
+            FindClose(find->hdir);
+            find->hdir = INVALID_HANDLE_VALUE;
+        }
+        retn = (find->hdir != INVALID_HANDLE_VALUE)?
+                UTF8((LPWSTR)find->dirf.cFileName) : 0;
+    }
+    else {
+        if (find->hdir == INVALID_HANDLE_VALUE)
+            find->hdir = FindFirstFileA(DEF_FLDR"/*", &find->dirf);
+        else if (!FindNextFileA(find->hdir, &find->dirf)) {
+            FindClose(find->hdir);
+            find->hdir = INVALID_HANDLE_VALUE;
+        }
+        retn = (find->hdir != INVALID_HANDLE_VALUE)?
+                strdup(find->dirf.cFileName) : 0;
+    }
+    return retn;
 }
 
 
@@ -1359,79 +1395,48 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
     RECT area = {MAXLONG, MAXLONG, MINLONG, MINLONG};
     CHAR *conf, path[4 * (MAX_PATH + 1)] = {};
+    FIND find = {INVALID_HANDLE_VALUE};
     HRESULT APIENTRY (*GFP)(HWND, int, HANDLE, DWORD, LPSTR);
     LPWSTR wide = 0;
-    HANDLE hdir;
-    ENGC *engc;
-    BOOL retn;
+    HMODULE hlib;
+    long retn;
 
 //    if (flgs & FLG_CONS) {
 //        AllocConsole();
 //        freopen("CONOUT$", "wb", stdout);
 //    }
 
+    InitCommonControlsEx(&icct);
+    EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&area);
+
     retn = 0;
-    if (OldWin32()) {
-        hdir = LoadLibrary("shfolder");
-        GFP = (typeof(GFP))GetProcAddress(hdir, "SHGetFolderPathA");
-        if (GFP(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
-                SHGFP_TYPE_CURRENT, path) == S_OK) {
+    hlib = LoadLibrary((OldWin32())? "shfolder" : "shell32");
+    GFP = (typeof(GFP))GetProcAddress(hlib, (OldWin32())? "SHGetFolderPathA"
+                                                        : "SHGetFolderPathW");
+    if (GFP(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
+            SHGFP_TYPE_CURRENT, path) == S_OK) {
+        if (OldWin32()) {
             strcat(path, DEF_OPTS);
             wide = UTF16(path);
             retn = CreateDirectoryA((LPSTR)path, 0);
-            if (!retn && (GetLastError() == ERROR_ALREADY_EXISTS))
-                retn = 1;
         }
-    }
-    else {
-        hdir = LoadLibrary("shell32");
-        GFP = (typeof(GFP))GetProcAddress(hdir, "SHGetFolderPathW");
-        if (GFP(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
-                SHGFP_TYPE_CURRENT, path) == S_OK) {
+        else {
             wcscat((LPWSTR)path, L""DEF_OPTS);
             wide = _wcsdup((LPWSTR)path);
             retn = CreateDirectoryW((LPWSTR)path, 0);
-            if (!retn && (GetLastError() == ERROR_ALREADY_EXISTS))
-                retn = 1;
         }
+        if (!retn && (GetLastError() == ERROR_ALREADY_EXISTS))
+            retn = 1;
     }
-    FreeLibrary(hdir);
+    FreeLibrary(hlib);
     if (!(conf = (retn && wide)? UTF8(wide) : 0))
         printf("WARNING: cannot create '%s'!", conf);
     free(wide);
 
-    engc = eInitializeEngine(conf);
-    free(conf);
-
-    if (OldWin32()) {
-        WIN32_FIND_DATAA dirf;
-
-        hdir = FindFirstFileA(DEF_FLDR"/*", &dirf);
-        while ((hdir != INVALID_HANDLE_VALUE) &&
-               (GetLastError() != ERROR_NO_MORE_FILES)) {
-            eAppendLib(engc, DEF_CONF, DEF_FLDR, dirf.cFileName);
-            FindNextFileA(hdir, &dirf);
-        }
-    }
-    else {
-        WIN32_FIND_DATAW dirf;
-
-        hdir = FindFirstFileW(L""DEF_FLDR"/*", &dirf);
-        while ((hdir != INVALID_HANDLE_VALUE) &&
-               (GetLastError() != ERROR_NO_MORE_FILES)) {
-            char *temp = UTF8(dirf.cFileName);
-            eAppendLib(engc, DEF_CONF, DEF_FLDR, temp);
-            free(temp);
-            FindNextFileW(hdir, &dirf);
-        }
-    }
-    FindClose(hdir);
-
-    InitCommonControlsEx(&icct);
-    EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&area);
-    eExecuteEngine(engc, GetSystemMetrics(SM_CXSMICON),
+    eExecuteEngine(conf, (intptr_t)&find, GetSystemMetrics(SM_CXSMICON),
                    GetSystemMetrics(SM_CYSMICON),
                    area.left, area.top, area.right, area.bottom);
+    free(conf);
     fclose(stdout);
     FreeConsole();
     exit(0);

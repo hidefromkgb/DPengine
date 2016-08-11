@@ -87,11 +87,8 @@
 /** set listbox item state      **/ #define MSG_LSST 20
 /** imagebox update frame       **/ #define MSG_IFRM 21
 
-/// engine data (client side), opaque outside the module
-typedef struct ENGC ENGC;
-
 /// preview updater function
-typedef void (*UPRE)(ENGC *engc, intptr_t data, uint64_t time);
+typedef void (*UPRE)(intptr_t data, uint64_t time);
 
 /// control handler function (either control-to-exec or exec-to-control)
 struct _CTRL;
@@ -126,17 +123,14 @@ typedef struct _MENU {
 
 
 
-void  eAppendLib(ENGC *engc, char *pcnf, char *base, char *path);
 void  eProcessMenuItem(MENU *item);
-ENGC *eInitializeEngine(char *conf);
-void  eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
+void  eExecuteEngine(char *fcnf, intptr_t find, ulong xico, ulong yico,
                      long xpos, long ypos, ulong xdim, ulong ydim);
 
 
 
 /// external functions, have to be implemented or imported
-void  rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
-                        ENGC *engc, intptr_t data);
+void  rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data);
 void  rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text);
 void  rFreeControl(CTRL *ctrl);
 long  rMessage(char *text, char *head, uint32_t flgs);
@@ -144,7 +138,8 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim);
 void  rFreeTrayIcon(intptr_t icon);
 void  rOpenContextMenu(MENU *menu);
-MENU *rOSSpecificMenu(ENGC *engc);
+MENU *rOSSpecificMenu(void *engc);
 char *rConvertUTF8(char *utf8);
+char *rFindFile(intptr_t data);
 char *rLoadFile(char *name, long *size);
 long  rSaveFile(char *name, char *data, long size);

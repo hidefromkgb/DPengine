@@ -196,6 +196,9 @@ typedef struct _CTGS {
     char    *name;
 } CTGS;
 
+/// engine data (client side), prototype
+typedef struct ENGC ENGC;
+
 /// unit library info (write-once, read-only), opaque outside the module
 /// [TODO:] (priority 1) behaviours
 /// [TODO:] (priority 2) interactions
@@ -247,7 +250,7 @@ typedef struct _PICT {
                     ///      prohibit respawn if parity differs
 } PICT;
 
-/// engine data (client side), opaque outside the module
+/// engine data (client side)
 struct ENGC {
     MENU    *mspr,  /// per-sprite context menu
             *mctx;  /// engine`s main context menu
@@ -691,7 +694,7 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
         SET_FLAG(retn->flgs, temp, VAL_FALS, FLG_LOOP);
 }
 
-void eAppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
+void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
     char *file, *fptr, *conf, *temp;
     long bcnt, ecnt, ccnt = 0;
     uint32_t hash;
@@ -1476,16 +1479,6 @@ void FreeMenu(MENU **menu) {
 
 
 
-void UpdateMenuItemText(MENU *item, char *text) {
-    if (!item || !text)
-        return;
-
-    free(item->text);
-    item->text = rConvertUTF8(text);
-}
-
-
-
 MENU *MenuFromTemplate(MENU *tmpl) {
     MENU *retn, *iter;
 
@@ -1583,7 +1576,8 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                 pict = pict->boss;
             temp = malloc(32 + strlen(pict->ulib->name));
             sprintf(temp, "[ %s ]", pict->ulib->name);
-            UpdateMenuItemText(&engc->mspr[0], temp);
+            free(engc->mspr[0].text);
+            engc->mspr[0].text = rConvertUTF8(temp);
             free(temp);
             rOpenContextMenu(engc->mspr);
         }
@@ -1789,77 +1783,9 @@ void RecountLibsSelected(ENGC *engc) {
 
 
 
-ENGC *eInitializeEngine(char *fcnf) {
-    static uint32_t
-        uCNR[] = {CNF_RGPU, CNF_SHOW, CNF_IPBO,
-                  CNF_IBGR, CNF_OPAQ, CNF_IRGN, CNF_DRAW},
-        uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
-                  WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW},
-        uCNF[] = {CNF_EFCT},
-        uCSF[] = {CSF_EFCT};
-    ENGC *engc = calloc(1, sizeof(*engc));
-    char *file, *fptr, *conf, *temp, *tran = DEF_CORE;
-    uint32_t elem, *iter;
-
-    /// default options
-    engc->ftmp = COM_SHOW | COM_DRAW | COM_RGPU;
-    engc->flgs = CSF_EFCT;
-    engc->tdil = 1.0;
-    if (!fcnf)
-        tran = 0;
-    else {
-        engc->conf = Concatenate(0, fcnf, tran, 0);
-        tran = 0;
-        fptr = file = rLoadFile(engc->conf, 0);
-        while ((conf = GetNextLine(&fptr))) {
-            switch (DetermineType(&conf)) {
-                case CNF_LANG:
-                    GET_TEMP(&conf);
-                    free(tran);
-                    if (!(tran = (temp)? strdup(Dequote(temp)) : 0))
-                        break;
-                    if ((temp = rLoadFile(tran, 0)))
-                        free(temp);
-                    else {
-                        temp = Concatenate(0, fcnf, DEF_DSEP, tran, 0);
-                        free(tran);
-                        tran = temp;
-                    }
-                    break;
-
-                case CNF_TIME:
-                    if (TRY_TEMP(&conf))
-                        engc->tdil = ClampToBounds(StrToFloat(temp), 0.1, 4.0);
-                    break;
-
-                case CNF_RNDR:
-                    engc->ftmp = 0;
-                    while (conf) {
-                        IF_BIN_FIND(elem, uCNR, &conf)
-                            engc->ftmp |= uCOM[elem - 1];
-                    }
-                    break;
-
-                case CNF_FLGS:
-                    engc->flgs = 0;
-                    while (conf) {
-                        IF_BIN_FIND(elem, uCNF, &conf)
-                            engc->flgs |= uCSF[elem - 1];
-                    }
-                    break;
-            }
-        }
-        free(file);
-    }
-    Relocalize(engc, tran);
-    free(tran);
-    return engc;
-}
-
-
-
-void UpdPreview(ENGC *engc, intptr_t data, uint64_t time) {
-    uint64_t *fram = (typeof(fram))data; /// +0: time, +1: frame
+void UpdPreview(intptr_t data, uint64_t time) {
+    uint64_t *fram = (typeof(fram))data + 1; /// +0: time, +1: frame
+    ENGC *engc = (ENGC*)(uintptr_t)fram[-1];
     AINF *anim;
 
     if (engc->parr)
@@ -1922,7 +1848,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                  xsep, ysep, xinc, yinc, line, temp, ymax, ycap, yspi;
             ENGC *engc = (ENGC*)ctrl->data;
 
-            if (!engc->lcnt)
+            if (!engc->lcnt || !engc->libs[0].capt.fe2c)
                 break;
             xsep = 8; /// separator width
             ysep = 8; /// separator height
@@ -2179,32 +2105,83 @@ int linfcmp(const void *a, const void *b) {
     return strcmp(((LINF*)a)->name, ((LINF*)b)->name);
 }
 
-void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
+void eExecuteEngine(char *fcnf, intptr_t find, ulong xico, ulong yico,
                     long xpos, long ypos, ulong xdim, ulong ydim) {
     #define DEF_ENDL "\r\n"
     static uint32_t
-        uCOM[] = {COM_RGPU, COM_SHOW, COM_DRAW, COM_OPAQ,
-                  WIN_IPBO, WIN_IBGR, WIN_IRGN},
+        uCNR[] = {CNF_RGPU, CNF_SHOW, CNF_IPBO,
+                  CNF_IBGR, CNF_OPAQ, CNF_IRGN, CNF_DRAW},
+        uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
+                  WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW},
+        uCNF[] = {CNF_EFCT},
         uCSF[] = {CSF_EFCT};
     static char
-       *uSTR[] = {"GPU",    "Show",   "Draw",   "Opaque",
-                  "wPBO",   "wBGRA",  "wRegion"},
+       *uSTR[] = {"GPU",    "Show",   "wPBO",
+                  "wBGRA",  "Opaque", "wRegion","Draw"},
        *uSTF[] = {"Effects"};
-    long iter, indx, xmax, ymax, xoff, yoff;
-    char temp[256], *save = 0;
+    char *file, *fptr, *conf, *temp, *tran = DEF_CORE;
+    long indx, xmax, ymax, xoff, yoff;
+    uint32_t elem, *iter; /// for IF_BIN_FIND
     uint64_t *fram;
 
-    engc->idim = (T2IV){{xico, yico}};
-    engc->dpos = (T2IV){{xpos, ypos}};
-    engc->dims = (T2IV){{xdim - engc->dpos.x, ydim - engc->dpos.y}};
+    ENGC engc = {};
 
-    /// sort engine`s libraries by name, initialize the rendering engine
-    qsort(engc->libs, engc->lcnt, sizeof(*engc->libs), linfcmp);
-    cEngineCallback(0, ECB_INIT, (intptr_t)&engc->engd);
-    for (iter = 0; iter < engc->lcnt; iter++)
-        LoadLibPreview(&engc->libs[iter], engc->engd);
-    cEngineCallback(engc->engd, ECB_LOAD, 0);
-    cEngineCallback(engc->engd, ECB_LOAD, ~0);
+    /// default options
+    engc.ftmp = COM_SHOW | COM_DRAW | COM_RGPU;
+    engc.flgs = CSF_EFCT;
+    engc.tdil = 1.0;
+    if (!fcnf)
+        tran = 0;
+    else {
+        engc.conf = Concatenate(0, fcnf, tran, 0);
+        tran = 0;
+        fptr = file = rLoadFile(engc.conf, 0);
+        while ((conf = GetNextLine(&fptr))) {
+            switch (DetermineType(&conf)) {
+                case CNF_LANG:
+                    GET_TEMP(&conf);
+                    free(tran);
+                    if (!(tran = (temp)? strdup(Dequote(temp)) : 0))
+                        break;
+                    if ((temp = rLoadFile(tran, 0)))
+                        free(temp);
+                    else {
+                        temp = Concatenate(0, fcnf, DEF_DSEP, tran, 0);
+                        free(tran);
+                        tran = temp;
+                    }
+                    break;
+
+                case CNF_TIME:
+                    if (TRY_TEMP(&conf))
+                        engc.tdil = ClampToBounds(StrToFloat(temp), 0.1, 4.0);
+                    break;
+
+                case CNF_RNDR:
+                    engc.ftmp = 0;
+                    while (conf) {
+                        IF_BIN_FIND(elem, uCNR, &conf)
+                            engc.ftmp |= uCOM[elem - 1];
+                    }
+                    break;
+
+                case CNF_FLGS:
+                    engc.flgs = 0;
+                    while (conf) {
+                        IF_BIN_FIND(elem, uCNF, &conf)
+                            engc.flgs |= uCSF[elem - 1];
+                    }
+                    break;
+            }
+        }
+        free(file);
+    }
+    Relocalize(&engc, tran);
+    free(tran);
+
+    engc.idim = (T2IV){{xico, yico}};
+    engc.dpos = (T2IV){{xpos, ypos}};
+    engc.dims = (T2IV){{xdim - engc.dpos.x, ydim - engc.dpos.y}};
 
     /// primary initialization complete, now creating GUI
     ///  0. [ FIRST AND FOREMOST! ] do not forget to edit the appropriate CTL_
@@ -2229,115 +2206,133 @@ void eExecuteEngine(ENGC *engc, ulong xico, ulong yico,
     {}};
 
     xmax = ymax = xoff = yoff = 0;
-    engc->ctls = calloc(1, sizeof(ctls));
-    for (iter = 0; iter < countof(ctls) - 1; iter++) {
-        engc->ctls[iter] = ctls[iter];
-        engc->ctls[iter].data = (intptr_t)engc;
-        if (iter)
-            engc->ctls[iter].prev = &engc->ctls[0];
-        rMakeControl(&engc->ctls[iter], &xoff, &yoff,
-                   (((engc->ctls[iter].flgs & FCT_TTTT) == FCT_WNDW) ||
-                    ((engc->ctls[iter].flgs & FCT_TTTT) == FCT_TEXT) ||
-                    ((engc->ctls[iter].flgs & FCT_TTTT) == FCT_BUTN) ||
-                    ((engc->ctls[iter].flgs & FCT_TTTT) == FCT_CBOX) ||
-                    ((engc->ctls[iter].flgs & FCT_TTTT) == FCT_RBOX))?
-                      engc->tran[engc->ctls[iter].uuid] : 0);
+    engc.ctls = calloc(1, sizeof(ctls));
+    for (indx = 0; indx < countof(ctls) - 1; indx++) {
+        engc.ctls[indx] = ctls[indx];
+        engc.ctls[indx].data = (intptr_t)&engc;
+        if (indx)
+            engc.ctls[indx].prev = &engc.ctls[0];
+        rMakeControl(&engc.ctls[indx], &xoff, &yoff,
+                   (((engc.ctls[indx].flgs & FCT_TTTT) == FCT_WNDW) ||
+                    ((engc.ctls[indx].flgs & FCT_TTTT) == FCT_TEXT) ||
+                    ((engc.ctls[indx].flgs & FCT_TTTT) == FCT_BUTN) ||
+                    ((engc.ctls[indx].flgs & FCT_TTTT) == FCT_CBOX) ||
+                    ((engc.ctls[indx].flgs & FCT_TTTT) == FCT_RBOX))?
+                      engc.tran[engc.ctls[indx].uuid] : 0);
         xmax = (xmax > xoff)? xmax : xoff;
         ymax = (ymax > yoff)? ymax : yoff;
     }
-    RecountLibs(engc, TXT_SELE, 0, engc->lcnt);
-    RUN_FE2C(engc->CTL_SELE, MSG_PPOS, 0);
-    RUN_FE2C(engc->CTL_SPEC, MSG_NDIM, (100 << 16) | 100);
-    RUN_FE2C(engc->CTL_RGPU, MSG_NDIM, 50000 << 16);
-    for (indx = 0; indx < engc->ccnt; indx++)
-        RUN_FE2C(engc->CTL_OGRP, MSG_LADD, (intptr_t)engc->ctgs[indx].name);
-    RUN_FE2C(engc->CTL_OGRP, MSG_LCOL, (intptr_t)engc->tran[TXT_OGRP]);
+    RUN_FE2C(engc.CTL_SPEC, MSG_NDIM, (100 << 16) | 100);
+    RUN_FE2C(engc.CTL_RGPU, MSG_NDIM, 50000 << 16);
+    RUN_FE2C(engc.CTL_FLTR, MSG_BCLK, 0);
+    RUN_FC2E(engc.CTL_EXAC, MSG_BCLK, 0);
+    RUN_FE2C(engc.CTL_SRND, MSG_BCLK, 0);
+    RUN_FC2E(engc.CTL_BDUP, MSG_BCLK, 0);
 
-    RUN_FE2C(engc->CTL_FLTR, MSG_BCLK, 0);
-    RUN_FC2E(engc->CTL_FLTR, MSG_BCLK, 0);
-    RUN_FE2C(engc->CTL_SRND, MSG_BCLK, 0);
-    RUN_FC2E(engc->CTL_SRND, MSG_BCLK, 0);
+    /// resizing and showing the main window
+    RUN_FE2C(engc.CTL_CAPT, MSG_WSZC,
+            (uint16_t)xmax | ((uint32_t)ymax << 16));
+
+    while ((temp = rFindFile(find))) {
+        AppendLib(&engc, DEF_CONF, DEF_FLDR, temp);
+        free(temp);
+    }
+    /// sort engine`s libraries by name, initialize the rendering engine
+    qsort(engc.libs, engc.lcnt, sizeof(*engc.libs), linfcmp);
+    cEngineCallback(0, ECB_INIT, (intptr_t)&engc.engd);
+    for (indx = 0; indx < engc.lcnt; indx++) {
+        LoadLibPreview(&engc.libs[indx], engc.engd);
+        RecountLibs(&engc, TXT_LOAD, indx, engc.lcnt);
+    }
+    cEngineCallback(engc.engd, ECB_LOAD, 0);
+    cEngineCallback(engc.engd, ECB_LOAD, ~0);
 
     /// hiding the scroll window
-    RUN_FE2C(engc->CTL_CHAR, MSG__SHW, 0);
+    engc.CTL_CHAR.fc2e = FC2E;
+    RUN_FE2C(engc.CTL_CHAR, MSG__SHW, 0);
+
+    RecountLibs(&engc, TXT_SELE, 0, engc.lcnt);
+    RUN_FE2C(engc.CTL_SELE, MSG_PPOS, 0);
+    for (indx = 0; indx < engc.ccnt; indx++)
+        RUN_FE2C(engc.CTL_OGRP, MSG_LADD, (intptr_t)engc.ctgs[indx].name);
+    RUN_FE2C(engc.CTL_OGRP, MSG_LCOL, (intptr_t)engc.tran[TXT_OGRP]);
 
     /// getting minimal width for a preview from one of the spin controls
-    xico = (uint16_t)RUN_FE2C(engc->CTL_SPEC, MSG__GSZ, 0);
+    xico = (uint16_t)RUN_FE2C(engc.CTL_SPEC, MSG__GSZ, 0);
     /// constructing previews
     /// barr[0] should be barr[linf->prev], but barr is still unsorted here
-    for (iter = 0; iter < engc->lcnt; iter++) {
-        yico = engc->libs[iter].barr[0].unit[0].xdim;
-        indx = (xico > yico)? xico : yico;
-        engc->libs[iter].pict =
-            (CTRL){&engc->CTL_CHAR, (intptr_t)engc->engd, iter,
-                    FCT_IBOX, 0, 0, -indx,
-                    (engc->libs[iter].barr[0].unit[0].ydim)?
-                   -(long)engc->libs[iter].barr[0].unit[0].ydim : -1, FC2EI};
-        engc->libs[iter].spin =
-            (CTRL){&engc->CTL_CHAR, (intptr_t)&engc->libs[iter], iter,
-                    FCT_SPIN, 0, 0, -indx, 3, FC2EI};
-        engc->libs[iter].capt =
-            (CTRL){&engc->CTL_CHAR, (intptr_t)&engc->libs[iter], iter,
-                    FCT_TEXT | FST_CNTR, 0, 0, -indx, 2, FC2EI};
-        rMakeControl(&engc->libs[iter].pict, 0, 0, 0);
-        rMakeControl(&engc->libs[iter].spin, 0, 0, 0);
-        rMakeControl(&engc->libs[iter].capt, 0, 0, engc->libs[iter].name);
-        RUN_FE2C(engc->libs[iter].spin, MSG_NDIM, 50000 << 16);
+    for (indx = 0; indx < engc.lcnt; indx++) {
+        xmax = engc.libs[indx].barr[0].unit[0].xdim;
+        xmax = (xico > xmax)? xico : xmax;
+        engc.libs[indx].pict =
+            (CTRL){&engc.CTL_CHAR, (intptr_t)engc.engd, indx,
+                    FCT_IBOX, 0, 0, -xmax,
+                    (engc.libs[indx].barr[0].unit[0].ydim)?
+                   -(long)engc.libs[indx].barr[0].unit[0].ydim : -1, FC2EI};
+        engc.libs[indx].spin =
+            (CTRL){&engc.CTL_CHAR, (intptr_t)&engc.libs[indx], indx,
+                    FCT_SPIN, 0, 0, -xmax, 3, FC2EI};
+        engc.libs[indx].capt =
+            (CTRL){&engc.CTL_CHAR, (intptr_t)&engc.libs[indx], indx,
+                    FCT_TEXT | FST_CNTR, 0, 0, -xmax, 2, FC2EI};
+        rMakeControl(&engc.libs[indx].pict, 0, 0, 0);
+        rMakeControl(&engc.libs[indx].spin, 0, 0, 0);
+        rMakeControl(&engc.libs[indx].capt, 0, 0, engc.libs[indx].name);
+        RUN_FE2C(engc.libs[indx].spin, MSG_NDIM, 50000 << 16);
     }
-    engc->CTL_CHAR.fc2e = FC2E;
-    RUN_FE2C(engc->CTL_CAPT, MSG_WSZC,
-            (uint16_t)xmax | ((uint32_t)ymax << 16));
-    RUN_FE2C(engc->CTL_CHAR, MSG_WSZC, 0);
+    RUN_FC2E(engc.CTL_FLTR, MSG_BCLK, 0);
 
     printf("[((RNG))] seed = 0x%08X\n[**INI**] %s\n",
-           engc->seed = time(0), engc->conf);
+           engc.seed = time(0), engc.conf);
 
-    fram = calloc(sizeof(*fram), engc->lcnt * 2);
-    rInternalMainLoop(&engc->ctls[0], FRM_WAIT, UpdPreview,
-                       engc, (intptr_t)fram);
+    fram = calloc(sizeof(*fram), engc.lcnt * 2 + 1);
+    fram[0] = (uintptr_t)&engc;
+    rInternalMainLoop(&engc.ctls[0], FRM_WAIT, UpdPreview, (intptr_t)fram);
     free(fram);
 
-    RUN_FE2C(engc->CTL_CHAR, MSG__SHW, 0);
-    for (iter = 0; iter < engc->lcnt; iter++) {
-        rFreeControl(&engc->libs[iter].pict);
-        rFreeControl(&engc->libs[iter].spin);
-        rFreeControl(&engc->libs[iter].capt);
+    RUN_FE2C(engc.CTL_CHAR, MSG__SHW, 0);
+    for (indx = 0; indx < engc.lcnt; indx++) {
+        rFreeControl(&engc.libs[indx].pict);
+        rFreeControl(&engc.libs[indx].spin);
+        rFreeControl(&engc.libs[indx].capt);
     }
-    for (iter = countof(ctls) - 2; iter >= 0; iter--)
-        rFreeControl(&engc->ctls[iter]);
-    free(engc->ctls);
+    for (indx = countof(ctls) - 2; indx >= 0; indx--)
+        rFreeControl(&engc.ctls[indx]);
+    free(engc.ctls);
 
-    FreeMenu(&engc->mspr);
-    FreeMenu(&engc->mctx);
-    FreeLocalization(&engc->tran);
+    FreeMenu(&engc.mspr);
+    FreeMenu(&engc.mctx);
+    FreeLocalization(&engc.tran);
 
-    for (; engc->lcnt; engc->lcnt--)
-        FreeLib(&engc->libs[engc->lcnt - 1]);
-    free(engc->libs);
+    for (; engc.lcnt; engc.lcnt--)
+        FreeLib(&engc.libs[engc.lcnt - 1]);
+    free(engc.libs);
 
-    for (; engc->ccnt; engc->ccnt--)
-        free(engc->ctgs[engc->ccnt - 1].name);
-    free(engc->ctgs);
+    for (; engc.ccnt; engc.ccnt--)
+        free(engc.ctgs[engc.ccnt - 1].name);
+    free(engc.ctgs);
 
-    cEngineCallback(engc->engd, ECB_QUIT, 0);
+    cEngineCallback(engc.engd, ECB_QUIT, 0);
 
     /// now saving configs and exiting
-    sprintf(temp, "%0.2f", engc->tdil);
-    Concatenate(&save, "Language,", engc->lang, 0);
-    Concatenate(&save, DEF_ENDL, "Time,", temp, 0);
-    Concatenate(&save, DEF_ENDL, "Render,", 0);
-    for (iter = 0; iter < countof(uCOM); iter++)
-        if (engc->ftmp & uCOM[iter])
-            Concatenate(&save, uSTR[iter], ",", 0);
-    Concatenate(&save, DEF_ENDL, "Flags,", 0);
-    for (iter = 0; iter < countof(uCSF); iter++)
-        if (engc->flgs & uCSF[iter])
-            Concatenate(&save, uSTF[iter], ",", 0);
-    Concatenate(&save, DEF_ENDL, 0);
-    rSaveFile(engc->conf, save, strlen(save));
-    free(engc->lang);
-    free(engc->conf);
-    free(save);
-    free(engc);
+    conf = 0;
+    temp = calloc(1, 128);
+    sprintf(temp, "%0.2f", engc.tdil);
+    Concatenate(&conf, "Language,", engc.lang, 0);
+    Concatenate(&conf, DEF_ENDL, "Time,", temp, 0);
+    Concatenate(&conf, DEF_ENDL, "Render,", 0);
+    for (indx = 0; indx < countof(uCOM); indx++)
+        if (engc.ftmp & uCOM[indx])
+            Concatenate(&conf, uSTR[indx], ",", 0);
+    Concatenate(&conf, DEF_ENDL, "Flags,", 0);
+    for (indx = 0; indx < countof(uCSF); indx++)
+        if (engc.flgs & uCSF[indx])
+            Concatenate(&conf, uSTF[indx], ",", 0);
+    Concatenate(&conf, DEF_ENDL, 0);
+    rSaveFile(engc.conf, conf, strlen(conf));
+    free(engc.lang);
+    free(engc.conf);
+    free(temp);
+    free(conf);
     #undef DEF_ENDL
 }
