@@ -7,6 +7,13 @@
 
 
 
+typedef struct {
+    struct dirent **dirs;
+    long iter;
+} FIND;
+
+
+
 void GTKMenuHandler(GtkWidget *item, gpointer user) {
     eProcessMenuItem((MENU*)user);
 }
@@ -85,7 +92,7 @@ void rOpenContextMenu(MENU *menu) {
 
 
 
-inline MENU *rOSSpecificMenu(ENGC *engc) {
+inline MENU *rOSSpecificMenu(void *engc) {
     return 0;
 }
 
@@ -147,6 +154,26 @@ void rFreeTrayIcon(intptr_t icon) {
 
 
 
+char *rFindFile(intptr_t data) {
+    FIND *find = (FIND*)data;
+    char *retn = 0;
+
+    if (!find->iter) {
+        free(find->dirs);
+        return 0;
+    }
+    if ((find->dirs[--find->iter]->d_type == DT_DIR)
+    &&  strcmp(find->dirs[find->iter]->d_name, ".")
+    &&  strcmp(find->dirs[find->iter]->d_name, ".."))
+        retn = strdup(find->dirs[find->iter]->d_name);
+    else
+        retn = (char*)1;
+    free(find->dirs[find->iter]);
+    return retn;
+}
+
+
+
 char *rLoadFile(char *name, long *size) {
     char *retn = 0;
     long file, flen;
@@ -191,15 +218,14 @@ gboolean TmrFunc(gpointer data) {
 
     clock_gettime(CLOCK_REALTIME, &spec);
     time = spec.tv_sec * 1000 + spec.tv_nsec / 1000000;
-    ((UPRE)user[0])((ENGC*)user[1], user[2], time);
+    ((UPRE)user[0])(user[1], time);
     return TRUE;
 }
 
 
 
-void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
-                       ENGC *engc, intptr_t data) {
-    intptr_t user[3] = {(intptr_t)upre, (intptr_t)engc, data};
+void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
+    intptr_t user[2] = {(intptr_t)upre, data};
     guint tmrp;
 
     tmrp = g_timeout_add(fram, TmrFunc, user);
@@ -891,8 +917,7 @@ int main(int argc, char *argv[]) {
     gint xdim, ydim;
 
     char *home, *conf;
-    struct dirent **dirs;
-    ENGC *engc;
+    FIND find;
 
     if (!(home = getenv("HOME")))
         home = getpwuid(getuid())->pw_dir;
@@ -904,22 +929,12 @@ int main(int argc, char *argv[]) {
     if (!(home = (mkdir(conf, 0755))? (errno != EEXIST)? 0 : conf : conf))
         printf("WARNING: cannot create '%s'!", conf);
 
-    engc = eInitializeEngine(conf);
-    free(conf);
-    if ((xdim = scandir(DEF_FLDR, &dirs, 0, alphasort)) >= 0) {
-        while (xdim--) {
-            if ((dirs[xdim]->d_type == DT_DIR)
-            &&  strcmp(dirs[xdim]->d_name, ".")
-            &&  strcmp(dirs[xdim]->d_name, ".."))
-                eAppendLib(engc, DEF_CONF, DEF_FLDR, dirs[xdim]->d_name);
-            free(dirs[xdim]);
-        }
-        free(dirs);
-    }
     gtk_init(&argc, &argv);
     gscr = gdk_screen_get_default();
     gtk_icon_size_lookup(GTK_ICON_SIZE_DIALOG, &xdim, &ydim);
-    eExecuteEngine(engc, xdim, ydim, 0, 0,
+    find.iter = scandir(DEF_FLDR, &find.dirs, 0, alphasort);
+    eExecuteEngine(conf, (intptr_t)&find, xdim, ydim, 0, 0,
                    gdk_screen_get_width(gscr), gdk_screen_get_height(gscr));
+    free(conf);
     return 0;
 }

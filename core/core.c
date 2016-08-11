@@ -209,14 +209,14 @@ long CompareAnimStd(ASTD *a, ASTD *b, long flgs) {
             if (flgs & 1) {
                 spos += a->xdim - 1;
                 for (x = 0; x < a->xdim; x++)
-                    if (a->bpal[a->bptr[dpos + x]].BGRA !=
-                        b->bpal[b->bptr[spos - x]].BGRA)
+                    if (a->bpal[a->bptr[dpos + x]].bgra !=
+                        b->bpal[b->bptr[spos - x]].bgra)
                         return 0;
             }
             else {
                 for (x = 0; x < a->xdim; x++)
-                    if (a->bpal[a->bptr[dpos + x]].BGRA !=
-                        b->bpal[b->bptr[spos + x]].BGRA)
+                    if (a->bpal[a->bptr[dpos + x]].bgra !=
+                        b->bpal[b->bptr[spos + x]].bgra)
                         return 0;
             }
         }
@@ -231,7 +231,7 @@ long CompareAnimStd(ASTD *a, ASTD *b, long flgs) {
 /// String-oriented linear hash shift
 #define SLH_PLUS 0x11
 
-#define HASH(hash, trgt) hash = SLH_PLUS + SLH_MULT * hash + trgt.BGRA;
+#define HASH(hash, trgt) hash = SLH_PLUS + SLH_MULT * hash + trgt.bgra;
 uint64_t HashAnimStd(ASTD *anim, long *turn) {
     uint64_t hh00, hh01, hh10, hh11;
     long x, y, fram, dpos, rpos;
@@ -420,14 +420,14 @@ uint32_t RecolorPalette(BGRA *bpal, char *file, long size) {
         for (apal  = file + size -  sizeof(*amap);
              apal >= file;  apal -= sizeof(*amap))
             for (amap = (typeof(amap))apal, size = 0; size < 256; size++)
-                if ((bpal[size].R == amap->srcr)
-                &&  (bpal[size].G == amap->srcg)
-                &&  (bpal[size].B == amap->srcb)
-                &&  (bpal[size].A == 0xFF)) {
-                     bpal[size].R = ((long)amap->dstr * amap->tran) >> 8;
-                     bpal[size].G = ((long)amap->dstg * amap->tran) >> 8;
-                     bpal[size].B = ((long)amap->dstb * amap->tran) >> 8;
-                     bpal[size].A = amap->tran;
+                if ((bpal[size].chnl[0] == amap->srcb)
+                &&  (bpal[size].chnl[1] == amap->srcg)
+                &&  (bpal[size].chnl[2] == amap->srcr)
+                &&  (bpal[size].chnl[3] == 0xFF)) {
+                     bpal[size].chnl[0] = ((long)amap->dstb * amap->tran) >> 8;
+                     bpal[size].chnl[1] = ((long)amap->dstg * amap->tran) >> 8;
+                     bpal[size].chnl[2] = ((long)amap->dstr * amap->tran) >> 8;
+                     bpal[size].chnl[3] = amap->tran;
                      if (amap->tran < 0xFF)
                         retn++;
                      break;
@@ -648,17 +648,17 @@ void PTHR(THRD *data) {
             ysrc = (indx & 2)? -y - 1 : y + ymin;
             ysrc = (ysrc >> tail->scal) * anim->xdim + yoff;
             for (x = xmin; x < xmax; x++, ydst += yinc)
-                if (bptr[ydst].A != 0xFF) {
+                if (bptr[ydst].chnl[3] != 0xFF) {
                     b_r_ = anim->bpal[anim->bptr[ysrc + (x >> tail->scal)]];
-                    if (bptr[ydst].A == 0x00)
+                    if (bptr[ydst].chnl[3] == 0x00)
                         bptr[ydst] = b_r_;
                     else {
-                        _g_a.BGRA = ((b_r_.BGRA >> 8) & 0x00FF00FF)
-                                  * (0xFF - bptr[ydst].A);
-                        b_r_.BGRA = ((b_r_.BGRA     ) & 0x00FF00FF)
-                                  * (0xFF - bptr[ydst].A);
-                        bptr[ydst].BGRA += ((b_r_.BGRA >> 8) & 0x00FF00FF)
-                                        +  ((_g_a.BGRA     ) & 0xFF00FF00);
+                        _g_a.bgra = ((b_r_.bgra >> 8) & 0x00FF00FF)
+                                  * (0xFF - bptr[ydst].chnl[3]);
+                        b_r_.bgra = ((b_r_.bgra     ) & 0x00FF00FF)
+                                  * (0xFF - bptr[ydst].chnl[3]);
+                        bptr[ydst].bgra += ((b_r_.bgra >> 8) & 0x00FF00FF)
+                                        +  ((_g_a.bgra     ) & 0xFF00FF00);
                     }
                 }
         }
@@ -918,7 +918,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
                     /// division, OMFG! [TODO:] get rid of this
                     pixl = anim->bpal[bptr[anim->xdim * (y / ycoe)
                                                       + (x / xcoe)]];
-                    if (pixl.A != 0x00)
+                    if (pixl.chnl[3] != 0x00)
                         retn[xdim * y + x] = pixl;
                 }
             break;

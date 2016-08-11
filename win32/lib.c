@@ -245,11 +245,11 @@ BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
         for (y = size->cy - 1; y >= 0; y--) {
             ypos = (psrc->y < 0)? y : size->cy - 1 - y;
             for (xpos = 0, x = size->cx - 1; x >= 0; x--) {
-                if (bptr[size->cx * y + x].A && !xpos)
+                if (bptr[size->cx * y + x].chnl[3] && !xpos)
                     xpos = x + 1;
-                else if ((!bptr[size->cx * y + x].A || !x) && xpos) {
+                else if ((!bptr[size->cx * y + x].chnl[3] || !x) && xpos) {
                     rgns.rect[rgns.head.nCount++] =
-                        (RECT){(!x && bptr[size->cx * y].A)? 0 : x + 1,
+                        (RECT){(!x && bptr[size->cx * y].chnl[3])? 0 : x + 1,
                                  ypos, xpos, ypos + 1};
                     xpos = 0;
                 }

@@ -2233,10 +2233,11 @@ void eExecuteEngine(char *fcnf, intptr_t find, ulong xico, ulong yico,
     RUN_FE2C(engc.CTL_CAPT, MSG_WSZC,
             (uint16_t)xmax | ((uint32_t)ymax << 16));
 
-    while ((temp = rFindFile(find))) {
-        AppendLib(&engc, DEF_CONF, DEF_FLDR, temp);
-        free(temp);
-    }
+    while ((temp = rFindFile(find)))
+        if ((uintptr_t)temp > (uintptr_t)sizeof(temp)) {
+            AppendLib(&engc, DEF_CONF, DEF_FLDR, temp);
+            free(temp);
+        }
     /// sort engine`s libraries by name, initialize the rendering engine
     qsort(engc.libs, engc.lcnt, sizeof(*engc.libs), linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc.engd);
