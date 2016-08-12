@@ -1,0 +1,4 @@
+[submodule "core/gif/load"]
+	path = core/gif/load
+	url = https://github.com/hidefromkgb/gif_load
+	branch = master
