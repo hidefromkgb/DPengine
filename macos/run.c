@@ -450,6 +450,13 @@ typedef union {
     id _sub[9];
 } SCLS;
 
+/// file find data
+typedef struct {
+    struct dirent **dirs;
+    long hlen, iter;
+    char *home;
+} FIND;
+
 
 
 /// NAME holds the selector associated with this function
@@ -526,7 +533,7 @@ void rOpenContextMenu(MENU *tmpl) {
 
 
 
-inline MENU *rOSSpecificMenu(ENGC *engc) {
+inline MENU *rOSSpecificMenu(void *engc) {
     return 0;
 }
 
@@ -627,6 +634,30 @@ void rFreeTrayIcon(intptr_t icon) {
 
 
 
+char *rFindFile(intptr_t data) {
+    FIND *find = (FIND*)data;
+    char *retn = 0;
+
+    if (!find->iter) {
+        free(find->home);
+        free(find->dirs);
+        return 0;
+    }
+    if ((find->dirs[--find->iter]->d_type != DT_DIR)
+    || !strcmp(find->dirs[find->iter]->d_name, ".")
+    || !strcmp(find->dirs[find->iter]->d_name, ".."))
+        retn = (char*)1;
+    else {
+        retn = calloc(1, find->hlen + strlen(find->dirs[find->iter]->d_name));
+        strcat(retn, find->home);
+        strcat(retn, find->dirs[find->iter]->d_name);
+    }
+    free(find->dirs[find->iter]);
+    return retn;
+}
+
+
+
 char *rLoadFile(char *name, long *size) {
     char *retn = 0;
     long file, flen;
@@ -666,14 +697,13 @@ void TmrFunc(CFRunLoopTimerRef tmrp, void *user) {
 
     gettimeofday(&spec, 0);
     time = spec.tv_sec * 1000 + spec.tv_usec / 1000;
-    ((UPRE)data[0])((ENGC*)data[1], data[2], time);
+    ((UPRE)data[0])(data[1], time);
 }
 
 
 
-void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre,
-                       ENGC *engc, intptr_t data) {
-    intptr_t user[3] = {(intptr_t)upre, (intptr_t)engc, data};
+void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
+    intptr_t user[2] = {(intptr_t)upre, data};
     CFRunLoopTimerContext ctxt = {0, (void*)user};
     CFRunLoopTimerRef tmrp =
         CFRunLoopTimerCreate(0, CFAbsoluteTimeGetCurrent(),
@@ -1618,58 +1648,43 @@ int main(int argc, char *argv[]) {
     CFStringRef path;
     CGFloat icon;
     CGRect dims;
-
-    struct dirent **dirs;
-    ENGC *engc;
-    char *home;
-    long  iter;
+    char *conf;
+    FIND find = {};
 
     LoadObjC((char*[]){STR_OBJC_CLAS, 0}, (char*[]){STR_OBJC_SELE, 0});
 
     pool = init(alloc(NSAutoreleasePool));
+    setActivationPolicy_(sharedApplication(NSApplication),
+                         NSApplicationActivationPolicyAccessory);
+
+    find.home = CopyUTF8(path = (CFStringRef)bundlePath(mainBundle(NSBundle)));
+    find.home = realloc(find.home, find.hlen = strlen(find.home) + 32);
+    strcat(find.home, "/Contents/MacOS/"DEF_FLDR"/");
+    find.iter = scandir(find.home, &find.dirs, 0, alphasort);
+
     urls = URLsForDirectory_inDomains_(defaultManager(NSFileManager),
                                        NSApplicationSupportDirectory,
                                        NSUserDomainMask);
     path = CFURLCopyFileSystemPath
                (CFArrayGetValueAtIndex((CFArrayRef)urls, 0),
                                         kCFURLPOSIXPathStyle);
-    home = CopyUTF8(path);
+    conf = CopyUTF8(path);
     CFRelease(path);
-    home = realloc(home, strlen(home) + 32);
-    strcat(home, DEF_OPTS);
-    if (!((mkdir(home, 0755))? (errno != EEXIST)? 0 : 1 : 2))
-        printf("WARNING: cannot create '%s'!", home);
+    conf = realloc(conf, strlen(conf) + 32);
+    strcat(conf, DEF_OPTS);
+    if (!((mkdir(conf, 0755))? (errno != EEXIST)? 0 : 1 : 2))
+        printf("WARNING: cannot create '%s'!", conf);
 
-    engc = eInitializeEngine(home);
-    free(home);
-
-    home = CopyUTF8(path = (CFStringRef)bundlePath(mainBundle(NSBundle)));
-    home = realloc(home, strlen(home) + 32);
-    strcat(home, "/Contents/MacOS/"DEF_FLDR);
-
-    setActivationPolicy_(sharedApplication(NSApplication),
-                         NSApplicationActivationPolicyAccessory);
-
-    if ((iter = scandir(home, &dirs, 0, alphasort)) >= 0) {
-        while (iter--) {
-            if ((dirs[iter]->d_type == DT_DIR)
-            &&  strcmp(dirs[iter]->d_name, ".")
-            &&  strcmp(dirs[iter]->d_name, ".."))
-                eAppendLib(engc, DEF_CONF, home, dirs[iter]->d_name);
-            free(dirs[iter]);
-        }
-        free(dirs);
-    }
-    free(home);
     GetT4DV(dims, mainScreen(NSScreen), VisibleFrame);
     GetT1DV(icon, systemStatusBar(NSStatusBar), Thickness);
     menu = NewClass(NSObject, CLS_MENU, 0,
                     vmet = PutToArr(ActionSelector, OnMenu));
     free(vmet);
-    eExecuteEngine(engc, icon, icon, dims.origin.x, dims.origin.y,
-                   dims.size.width  + dims.origin.x,
+    eExecuteEngine(conf, (intptr_t)&find, icon, icon, dims.origin.x,
+                   dims.origin.y, dims.size.width  + dims.origin.x,
                    dims.size.height + dims.origin.y);
     DelClass((Class)menu);
     release(pool);
+    free(conf);
     return 0;
 }

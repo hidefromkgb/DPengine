@@ -2235,7 +2235,13 @@ void eExecuteEngine(char *fcnf, intptr_t find, ulong xico, ulong yico,
 
     while ((temp = rFindFile(find)))
         if ((uintptr_t)temp > (uintptr_t)sizeof(temp)) {
-            AppendLib(&engc, DEF_CONF, DEF_FLDR, temp);
+            for (conf = temp + strlen(temp); conf > temp; conf--)
+                if (*conf == *DEF_DSEP) {
+                    *conf++ = 0;
+                    break;
+                }
+            AppendLib(&engc, DEF_CONF, (conf > temp)? temp : DEF_FLDR,
+                                       (conf > temp)? conf : temp);
             free(temp);
         }
     /// sort engine`s libraries by name, initialize the rendering engine

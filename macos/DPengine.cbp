@@ -6,7 +6,7 @@
 		<Option makefile_is_custom="1" />
 		<Option execution_dir="." />
 		<Option compiler="gcc" />
-		<Option virtualFolders="src/;src/run/;src/run/exec/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/shad/;src/run/exec/loc/;" />
+		<Option virtualFolders="src/;src/run/;src/run/exec/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/shad/;src/run/exec/loc/;src/lib/core/gif/load/;" />
 		<Build>
 			<Target title="RelJoined">
 				<Option output="../macos.app/Contents/MacOS/DPE" prefix_auto="1" extension_auto="1" />
@@ -51,9 +51,6 @@
 				<Option compiler="gcc" />
 			</Target>
 		</Build>
-		<Unit filename="../macos.app/Contents/Info.plist">
-			<Option virtualFolder="src/run/" />
-		</Unit>
 		<Unit filename="../core/core.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/lib/core/" />
@@ -64,19 +61,15 @@
 		<Unit filename="../core/engine.h">
 			<Option virtualFolder="src/" />
 		</Unit>
-		<Unit filename="../core/gif/common.c">
-			<Option compilerVar="CC" />
-			<Option virtualFolder="src/lib/core/gif/" />
-		</Unit>
-		<Unit filename="../core/gif/common.h">
-			<Option virtualFolder="src/lib/core/gif/" />
-		</Unit>
 		<Unit filename="../core/gif/gifstd.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/lib/core/gif/" />
 		</Unit>
 		<Unit filename="../core/gif/gifstd.h">
 			<Option virtualFolder="src/lib/core/gif/" />
+		</Unit>
+		<Unit filename="../core/gif/load/gif_load.h">
+			<Option virtualFolder="src/lib/core/gif/load/" />
 		</Unit>
 		<Unit filename="../core/ogl/common.c">
 			<Option compilerVar="CC" />
@@ -113,6 +106,9 @@
 		</Unit>
 		<Unit filename="../exec/loc/ru.lang">
 			<Option virtualFolder="src/run/exec/loc/" />
+		</Unit>
+		<Unit filename="../macos.app/Contents/Info.plist">
+			<Option virtualFolder="src/run/" />
 		</Unit>
 		<Unit filename="Makefile">
 			<Option virtualFolder="src/" />
