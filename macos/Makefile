@@ -1,5 +1,5 @@
-CC = gcc -m32 -mstackrealign
-CX = gcc -m32 -mstackrealign
+CC = clang -m32 -mstackrealign
+CX = clang -m32 -mstackrealign
 
 
 OBJDIR = .obj
