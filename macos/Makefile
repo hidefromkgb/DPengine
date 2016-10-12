@@ -10,7 +10,7 @@ LINC =
 LCXFLAGS =
 LCFLAGS = -I../core -Wall -fPIC -fvisibility=hidden
 
-LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/common.o $(OBJDIR)/core/ogl/oglstd.o $(OBJDIR)/lib.o
+LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/oglstd.o $(OBJDIR)/lib.o
 LOUT = ../libengine.dylib
 
 
@@ -80,8 +80,6 @@ $(OBJDIR)/core/core.o: ../core/core.c
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/core.c -o $(OBJDIR)/core/core.o
 $(OBJDIR)/core/gif/gifstd.o: ../core/gif/gifstd.c
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/gif/gifstd.c -o $(OBJDIR)/core/gif/gifstd.o
-$(OBJDIR)/core/ogl/common.o: ../core/ogl/common.c
-	$(CC) $(LCFLAGS) $(LINC) -c ../core/ogl/common.c -o $(OBJDIR)/core/ogl/common.o
 $(OBJDIR)/core/ogl/oglstd.o: ../core/ogl/oglstd.c
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/ogl/oglstd.c -o $(OBJDIR)/core/ogl/oglstd.o
 $(OBJDIR)/lib.o: lib.c

@@ -5,7 +5,8 @@
 		<Option title="DPengine (win32)" />
 		<Option makefile_is_custom="1" />
 		<Option compiler="gcc" />
-		<Option virtualFolders="src\;src\run\;src\run\exec\;src\run\exec\loc\;src\lib\;src\lib\core\;src\lib\core\gif\;src\lib\core\ogl\;src\lib\core\ogl\shad\;" />
+		<Option virtualFolders="src\;src\run\;src\run\exec\;src\run\exec\loc\;src\lib\;src\lib\core\;src\lib\core\gif\;src\lib\core\ogl\;src\lib\core\ogl\shad\;src\lib\core\ogl\load\;src\lib\core\gif\load\;" />
+
 		<Build>
 			<Target title="RelJoined">
 				<Option output="..\win32" prefix_auto="1" extension_auto="1" />
@@ -56,13 +57,6 @@
 		<Unit filename="..\core\engine.h">
 			<Option virtualFolder="src\" />
 		</Unit>
-		<Unit filename="..\core\gif\common.c">
-			<Option compilerVar="CC" />
-			<Option virtualFolder="src\lib\core\gif\" />
-		</Unit>
-		<Unit filename="..\core\gif\common.h">
-			<Option virtualFolder="src\lib\core\gif\" />
-		</Unit>
 		<Unit filename="..\core\gif\gifstd.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src\lib\core\gif\" />
@@ -70,21 +64,11 @@
 		<Unit filename="..\core\gif\gifstd.h">
 			<Option virtualFolder="src\lib\core\gif\" />
 		</Unit>
-		<Unit filename="..\exec\loc\de.lang">
-			<Option virtualFolder="src\run\exec\loc\" />
+		<Unit filename="..\core\gif\load\gif_load.h">
+			<Option virtualFolder="src\lib\core\gif\load\" />
 		</Unit>
-		<Unit filename="..\exec\loc\en.lang">
-			<Option virtualFolder="src\run\exec\loc\" />
-		</Unit>
-		<Unit filename="..\exec\loc\ru.lang">
-			<Option virtualFolder="src\run\exec\loc\" />
-		</Unit>
-		<Unit filename="..\core\ogl\common.c">
-			<Option compilerVar="CC" />
-			<Option virtualFolder="src\lib\core\ogl\" />
-		</Unit>
-		<Unit filename="..\core\ogl\common.h">
-			<Option virtualFolder="src\lib\core\ogl\" />
+		<Unit filename="..\core\ogl\load\ogl_load.h">
+			<Option virtualFolder="src\lib\core\ogl\load\" />
 		</Unit>
 		<Unit filename="..\core\ogl\oglstd.c">
 			<Option compilerVar="CC" />
@@ -106,19 +90,28 @@
 		<Unit filename="..\exec\exec.h">
 			<Option virtualFolder="src\run\exec\" />
 		</Unit>
-		<Unit filename="Makefile">
-			<Option virtualFolder="src\" />
+		<Unit filename="..\exec\loc\de.lang">
+			<Option virtualFolder="src\run\exec\loc\" />
+		</Unit>
+		<Unit filename="..\exec\loc\en.lang">
+			<Option virtualFolder="src\run\exec\loc\" />
+		</Unit>
+		<Unit filename="..\exec\loc\ru.lang">
+			<Option virtualFolder="src\run\exec\loc\" />
 		</Unit>
 		<Unit filename="lib.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src\lib\" />
 		</Unit>
-		<Unit filename="rsrc\run.rc">
-			<Option compilerVar="WINDRES" />
-			<Option virtualFolder="src\run\" />
-		</Unit>
 		<Unit filename="run.c">
 			<Option compilerVar="CC" />
+			<Option virtualFolder="src\run\" />
+		</Unit>
+		<Unit filename="Makefile">
+			<Option virtualFolder="src\" />
+		</Unit>
+		<Unit filename="rsrc\run.rc">
+			<Option compilerVar="WINDRES" />
 			<Option virtualFolder="src\run\" />
 		</Unit>
 		<Extensions>

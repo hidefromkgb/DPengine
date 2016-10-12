@@ -157,6 +157,7 @@ static retn name(_ARGS(_VAR, ##__VA_ARGS__)(1, ##__VA_ARGS__)) {      \
     return func(_ARGS(_VAR, ##__VA_ARGS__)(0, ##__VA_ARGS__));        \
 }
 
+#ifndef __APPLE__
 _FUNC(0, GLvoid, glUniform1iv, GLint, GLsizei, GLint*);
 _FUNC(0, GLvoid, glUniform1fv, GLint, GLsizei, GLfloat*);
 _FUNC(0, GLvoid, glUniform2iv, GLint, GLsizei, GLint*);
@@ -178,7 +179,7 @@ _FUNC(0, GLvoid, glGetShaderiv, GLuint, GLenum, GLint*);
 _FUNC(0, GLuint, glCreateShader, GLenum);
 _FUNC(0, GLvoid, glDeleteShader, GLuint);
 _FUNC(0, GLvoid, glAttachShader, GLuint, GLuint);
-_FUNC(0, GLvoid, glShaderSource, GLuint, GLuint, GLchar**, GLuint*);
+_FUNC(0, GLvoid, glShaderSource, GLuint, GLuint, const GLchar**, GLint*);
 _FUNC(0, GLvoid, glCompileShader, GLuint);
 _FUNC(0, GLint,  glGetAttribLocation, GLuint, GLchar*);
 _FUNC(0, GLint,  glGetUniformLocation, GLuint, GLchar*);
@@ -192,7 +193,7 @@ _FUNC(0, GLvoid, glTexImage3D, GLenum, GLint, GLenum, GLsizei, GLsizei,
 _FUNC(0, GLvoid, glTexSubImage3D, GLenum, GLint, GLint, GLint, GLint,
                                   GLsizei, GLsizei, GLsizei, GLenum,
                                   GLenum, GLvoid*);
-#endif
+#endif /// _WIN32
 _FUNC(0, GLvoid, glGenBuffers, GLsizei, GLuint*);
 _FUNC(0, GLvoid, glBindBuffer, GLenum, GLuint);
 _FUNC(0, GLvoid, glBufferData, GLenum, GLsizei, GLvoid*, GLenum);
@@ -219,6 +220,7 @@ _FUNC("glFramebufferTexture2DEXT",
                                          GLuint, GLint);
 _FUNC("glFramebufferRenderbufferEXT",
          GLvoid, glFramebufferRenderbuffer, GLenum, GLenum, GLenum, GLuint);
+#endif /// __APPLE__
 
 #undef _ARGS
 #undef _ARGN
@@ -365,8 +367,8 @@ static GLint ShaderProgramStatus(GLuint prog, GLboolean shad, GLenum parm) {
 
 
 
-static GLboolean ShaderAdd(GLchar *fstr, GLuint prog, GLenum type) {
-    GLuint slen, shad;
+static GLboolean ShaderAdd(const GLchar *fstr, GLuint prog, GLenum type) {
+    GLint slen, shad;
 
     if (!(shad = glCreateShader(type))) {
         printf("Shader allocation failed (0x%X)\n", glGetError());
