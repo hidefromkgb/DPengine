@@ -9,7 +9,7 @@ LINC = -I/usr/include/gtkglext-1.0 -I/usr/lib/gtkglext-1.0/include
 LCXFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --libs` -pthread
 LCFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags` -I../core -Wall -fPIC
 
-LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/common.o $(OBJDIR)/core/ogl/oglstd.o $(OBJDIR)/lib.o
+LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/oglstd.o $(OBJDIR)/lib.o
 LOUT = ../libengine.so
 
 
@@ -34,7 +34,7 @@ DbgJoined: edebug
 DbgJoined: jlink
 
 RelLibOnly: lrelease
-RelLibOnly: LCXFLAGS += -s -flto -Wl,--build-id=none
+RelLibOnly: LCXFLAGS += -s -Wl,--build-id=none
 RelLibOnly: llink
 
 DbgLibOnly: ldebug
@@ -42,7 +42,7 @@ DbgLibOnly: llink
 
 RelSplit: RelLibOnly
 RelSplit: erelease
-RelSplit: ECXFLAGS += -s -flto -Wl,--build-id=none
+RelSplit: ECXFLAGS += -s -Wl,--build-id=none
 RelSplit: elink
 RelSplit:
 	if type upx &> /dev/null; then upx -qq $(EOUT) $(LOUT); fi
@@ -62,10 +62,10 @@ cleanRelLibOnly: clean
 cleanDbgLibOnly: clean
 
 
-lrelease: LCFLAGS += -fexpensive-optimizations -O2 -flto -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
+lrelease: LCFLAGS += -fexpensive-optimizations -O2 -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
 lrelease: lbuild $(LOBJ)
 
-erelease: ECFLAGS += -fexpensive-optimizations -O2 -flto -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
+erelease: ECFLAGS += -fexpensive-optimizations -O2 -fvisibility=hidden -fno-unwind-tables -fno-asynchronous-unwind-tables
 erelease: ebuild $(EOBJ)
 
 ldebug: LCFLAGS += -g
@@ -86,8 +86,6 @@ $(OBJDIR)/core/core.o: ../core/core.c
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/core.c -o $(OBJDIR)/core/core.o
 $(OBJDIR)/core/gif/gifstd.o: ../core/gif/gifstd.c
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/gif/gifstd.c -o $(OBJDIR)/core/gif/gifstd.o
-$(OBJDIR)/core/ogl/common.o: ../core/ogl/common.c
-	$(CC) $(LCFLAGS) $(LINC) -c ../core/ogl/common.c -o $(OBJDIR)/core/ogl/common.o
 $(OBJDIR)/core/ogl/oglstd.o: ../core/ogl/oglstd.c
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/ogl/oglstd.c -o $(OBJDIR)/core/ogl/oglstd.o
 $(OBJDIR)/lib.o: lib.c

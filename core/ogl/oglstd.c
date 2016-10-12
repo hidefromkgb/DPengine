@@ -1,4 +1,4 @@
-#include "common.h"
+#include "load/ogl_load.h"
 #include "oglstd.h"
 
 struct RNDR {
@@ -122,7 +122,7 @@ void FreeRendererOGL(RNDR **rndr) {
 long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                      ulong uniq, ulong size, ulong xscr, ulong yscr) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
-    GLchar *load, **sver, **spix;
+    GLchar **sver, **spix;
     GLubyte *atex, *aptr;
     T4FV *dims, *bank;
     GLuint *indx;
@@ -134,11 +134,6 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
     if (!rndr || *rndr)
         return !!rndr;
-    if ((load = LoadOpenGLFunctions(EXT_framebuffer_object
-                                  | NV_vertex_program3))) {
-        printf("%s\n", load);
-        return 0;
-    }
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mtex);
     test = calloc(1, sizeof(*test));
     mtex = min(mtex, 4096);
