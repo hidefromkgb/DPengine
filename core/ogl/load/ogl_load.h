@@ -1,3 +1,6 @@
+#ifndef OGL_LOAD_H
+#define OGL_LOAD_H
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -61,8 +64,8 @@
     #include <OpenGL/gl.h>
     #include <dlfcn.h>
     #define APIENTRY
-    #define GL_RGBA32F                      0x8814
-    #define GL_TEXTURE_2D_ARRAY             0x8C1A
+    #define GL_RGBA32F                        0x8814
+    #define GL_TEXTURE_2D_ARRAY               0x8C1A
     #define GL_GET_PROC_ADDR(s)  dlsym(RTLD_DEFAULT, s)
 #else
     #include <GL/gl.h>
@@ -72,197 +75,114 @@
 
 
 
-#define _ARGS(name, ...) \
-    _ARGN(name, ##__VA_ARGS__, 31,  30,  29,  28,  27,  26,  25,  24, \
-           23,  22,  21,  20,  19,  18,  17,  16,  15,  14,  13,  12, \
-           11,  10,   9,   8,   7,   6,   5,   4,   3,   2,   1,   0)
-#define _ARGN(name,  _1,  _2,  _3,  _4,  _5,  _6,  _7,  _8,  _9, _10, \
-          _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, \
-          _23, _24, _25, _26, _27, _28, _29, _30, _31, indx, ...) name ##indx
+#define L(c, ...) \
+L4(c,1,0,,,,,,,,,,,,,##__VA_ARGS__) L4(c,0,1,,,,,,,,,##__VA_ARGS__) \
+L4(c,0,2,,,,,        ##__VA_ARGS__) L4(c,0,3,        ##__VA_ARGS__)
 
-#define _SET(cond, what) _SET ##cond(what)
-#define _SET1(what) what
-#define _SET0(what)
+#define L4(c, f, n, ...) \
+L3(c,f,n##0,,,,__VA_ARGS__) L3(c,0,n##1,,,__VA_ARGS__) \
+L3(c,0,n##2,,  __VA_ARGS__) L3(c,0,n##3,  __VA_ARGS__)
 
-#define _VAR0(...)
-#define _VAR1(cond, type, ...)  _SET(cond, type) p
-#define _VAR2(cond, type, ...)  _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR3(cond, type, ...)  _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR4(cond, type, ...)  _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR5(cond, type, ...)  _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR6(cond, type, ...)  _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR7(cond, type, ...)  _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR8(cond, type, ...)  _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR9(cond, type, ...)  _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR10(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR11(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR12(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR13(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR14(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR15(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR16(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR17(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR18(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR19(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR20(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR21(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR22(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR23(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR24(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR25(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR26(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR27(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR28(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR29(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR30(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
-#define _VAR31(cond, type, ...) _SET(cond, type) _ARGS(p, __VA_ARGS__),  \
-                                _ARGS(_VAR, __VA_ARGS__)(cond, __VA_ARGS__)
+#define L3(...) L2(__VA_ARGS__, \
+1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1,  0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, )
 
-#define _FUNC(text, retn, name, ...) __attribute__((unused))          \
-static retn name(_ARGS(_VAR, ##__VA_ARGS__)(1, ##__VA_ARGS__)) {      \
+#define L2(c, f, \
+n00,n01,n02,n03, n04,n05,n06,n07, n08,n09,n0A,n0B, n0C,n0D,n0E,n0F, \
+a00,a01,a02,a03, a04,a05,a06,a07, a08,a09,a0A,a0B, a0C,a0D,a0E,a0F, \
+s, ...) L##s(c, f, n00, a00)
+
+#define L1(c, f, n, a) c##f(n, a)
+#define L0(c, f, n, a)
+
+#define P1(n, a)   a _##n
+#define P0(n, a) , P1(n, a)
+#define A1(n, a)   P1(n,  )
+#define A0(n, a)   P0(n,  )
+
+#define F(text, retn, name, ...) __attribute__((unused))              \
+static retn name(L(P, ##__VA_ARGS__)) {                               \
     static retn APIENTRY (*func)(__VA_ARGS__) = 0;                    \
     if (!(func || (func = (retn APIENTRY (*)(__VA_ARGS__))            \
                            GL_GET_PROC_ADDR((text)? text : #name))))  \
         printf("ERROR: cannot load '%s', terminating now!\n",         \
               (text)? text : #name);                                  \
-    return func(_ARGS(_VAR, ##__VA_ARGS__)(0, ##__VA_ARGS__));        \
+    return func(L(A, ##__VA_ARGS__));                                 \
 }
 
 #ifndef __APPLE__
-_FUNC(0, GLvoid, glUniform1iv, GLint, GLsizei, GLint*);
-_FUNC(0, GLvoid, glUniform1fv, GLint, GLsizei, GLfloat*);
-_FUNC(0, GLvoid, glUniform2iv, GLint, GLsizei, GLint*);
-_FUNC(0, GLvoid, glUniform2fv, GLint, GLsizei, GLfloat*);
-_FUNC(0, GLvoid, glUniform3iv, GLint, GLsizei, GLint*);
-_FUNC(0, GLvoid, glUniform3fv, GLint, GLsizei, GLfloat*);
-_FUNC(0, GLvoid, glUniform4iv, GLint, GLsizei, GLint*);
-_FUNC(0, GLvoid, glUniform4fv, GLint, GLsizei, GLfloat*);
-_FUNC(0, GLvoid, glUniformMatrix4fv, GLint, GLsizei, GLboolean, GLfloat*);
-_FUNC(0, GLuint, glCreateProgram);
-_FUNC(0, GLvoid, glDeleteProgram, GLuint);
-_FUNC(0, GLvoid, glValidateProgram, GLuint);
-_FUNC(0, GLvoid, glLinkProgram, GLuint);
-_FUNC(0, GLvoid, glUseProgram, GLuint);
-_FUNC(0, GLvoid, glGetProgramInfoLog, GLuint, GLint, GLint*, GLchar*);
-_FUNC(0, GLvoid, glGetShaderInfoLog, GLuint, GLint, GLint*, GLchar*);
-_FUNC(0, GLvoid, glGetProgramiv, GLuint, GLenum, GLint*);
-_FUNC(0, GLvoid, glGetShaderiv, GLuint, GLenum, GLint*);
-_FUNC(0, GLuint, glCreateShader, GLenum);
-_FUNC(0, GLvoid, glDeleteShader, GLuint);
-_FUNC(0, GLvoid, glAttachShader, GLuint, GLuint);
-_FUNC(0, GLvoid, glShaderSource, GLuint, GLuint, const GLchar**, GLint*);
-_FUNC(0, GLvoid, glCompileShader, GLuint);
-_FUNC(0, GLint,  glGetAttribLocation, GLuint, GLchar*);
-_FUNC(0, GLint,  glGetUniformLocation, GLuint, GLchar*);
-_FUNC(0, GLvoid, glEnableVertexAttribArray, GLint);
-_FUNC(0, GLvoid, glVertexAttribPointer, GLuint, GLint, GLenum,
-                                        GLboolean, GLsizei, GLvoid*);
+F(0,GLvoid, glUniform1iv, GLint, GLsizei, GLint*);
+F(0,GLvoid, glUniform1fv, GLint, GLsizei, GLfloat*);
+F(0,GLvoid, glUniform2iv, GLint, GLsizei, GLint*);
+F(0,GLvoid, glUniform2fv, GLint, GLsizei, GLfloat*);
+F(0,GLvoid, glUniform3iv, GLint, GLsizei, GLint*);
+F(0,GLvoid, glUniform3fv, GLint, GLsizei, GLfloat*);
+F(0,GLvoid, glUniform4iv, GLint, GLsizei, GLint*);
+F(0,GLvoid, glUniform4fv, GLint, GLsizei, GLfloat*);
+F(0,GLvoid, glUniformMatrix4fv, GLint, GLsizei, GLboolean, GLfloat*);
+F(0,GLuint, glCreateProgram);
+F(0,GLvoid, glDeleteProgram, GLuint);
+F(0,GLvoid, glValidateProgram, GLuint);
+F(0,GLvoid, glLinkProgram, GLuint);
+F(0,GLvoid, glUseProgram, GLuint);
+F(0,GLvoid, glGetProgramInfoLog, GLuint, GLint, GLint*, GLchar*);
+F(0,GLvoid, glGetShaderInfoLog, GLuint, GLint, GLint*, GLchar*);
+F(0,GLvoid, glGetProgramiv, GLuint, GLenum, GLint*);
+F(0,GLvoid, glGetShaderiv, GLuint, GLenum, GLint*);
+F(0,GLuint, glCreateShader, GLenum);
+F(0,GLvoid, glDeleteShader, GLuint);
+F(0,GLvoid, glAttachShader, GLuint, GLuint);
+F(0,GLvoid, glShaderSource, GLuint, GLuint, const GLchar**, GLint*);
+F(0,GLvoid, glCompileShader, GLuint);
+F(0,GLint,  glGetAttribLocation, GLuint, GLchar*);
+F(0,GLint,  glGetUniformLocation, GLuint, GLchar*);
+F(0,GLvoid, glEnableVertexAttribArray, GLint);
+F(0,GLvoid, glVertexAttribPointer, GLuint, GLint, GLenum,
+                                   GLboolean, GLsizei, GLvoid*);
 #ifdef _WIN32
-_FUNC(0, GLvoid, glActiveTexture, GLenum);
-_FUNC(0, GLvoid, glTexImage3D, GLenum, GLint, GLenum, GLsizei, GLsizei,
-                               GLsizei, GLint, GLenum, GLenum, GLvoid*);
-_FUNC(0, GLvoid, glTexSubImage3D, GLenum, GLint, GLint, GLint, GLint,
-                                  GLsizei, GLsizei, GLsizei, GLenum,
-                                  GLenum, GLvoid*);
+F(0,GLvoid, glActiveTexture, GLenum);
+F(0,GLvoid, glTexImage3D, GLenum, GLint, GLenum, GLsizei, GLsizei,
+                          GLsizei, GLint, GLenum, GLenum, GLvoid*);
+F(0,GLvoid, glTexSubImage3D, GLenum, GLint, GLint, GLint, GLint, GLsizei,
+                             GLsizei, GLsizei, GLenum, GLenum, GLvoid*);
 #endif /// _WIN32
-_FUNC(0, GLvoid, glGenBuffers, GLsizei, GLuint*);
-_FUNC(0, GLvoid, glBindBuffer, GLenum, GLuint);
-_FUNC(0, GLvoid, glBufferData, GLenum, GLsizei, GLvoid*, GLenum);
-_FUNC(0, GLvoid, glBufferSubData, GLenum, GLint, GLsizei, GLvoid*);
-_FUNC(0, GLvoid, glDeleteBuffers, GLsizei, GLuint*);
-_FUNC(0, GLvoid*,glMapBuffer, GLenum, GLenum);
-_FUNC(0, GLvoid, glUnmapBuffer, GLenum);
-_FUNC("glGenFramebuffersEXT",
-         GLvoid, glGenFramebuffers, GLsizei, GLuint*);
-_FUNC("glGenRenderbuffersEXT",
-         GLvoid, glGenRenderbuffers, GLsizei, GLuint*);
-_FUNC("glDeleteFramebuffersEXT",
-         GLvoid, glDeleteFramebuffers, GLsizei, GLuint*);
-_FUNC("glDeleteRenderbuffersEXT",
-         GLvoid, glDeleteRenderbuffers, GLsizei, GLuint*);
-_FUNC("glBindFramebufferEXT",
-         GLvoid, glBindFramebuffer, GLenum, GLuint);
-_FUNC("glBindRenderbufferEXT",
-         GLvoid, glBindRenderbuffer, GLenum, GLuint);
-_FUNC("glRenderbufferStorageEXT",
-         GLvoid, glRenderbufferStorage, GLenum, GLenum, GLsizei, GLsizei);
-_FUNC("glFramebufferTexture2DEXT",
-         GLvoid, glFramebufferTexture2D, GLenum, GLenum, GLenum,
-                                         GLuint, GLint);
-_FUNC("glFramebufferRenderbufferEXT",
-         GLvoid, glFramebufferRenderbuffer, GLenum, GLenum, GLenum, GLuint);
+F(0,GLvoid, glGenBuffers, GLsizei, GLuint*);
+F(0,GLvoid, glBindBuffer, GLenum, GLuint);
+F(0,GLvoid, glBufferData, GLenum, GLsizei, GLvoid*, GLenum);
+F(0,GLvoid, glBufferSubData, GLenum, GLint, GLsizei, GLvoid*);
+F(0,GLvoid, glDeleteBuffers, GLsizei, GLuint*);
+F(0,GLvoid*,glMapBuffer, GLenum, GLenum);
+F(0,GLvoid, glUnmapBuffer, GLenum);
+F("glGenFramebuffersEXT",
+    GLvoid, glGenFramebuffers, GLsizei, GLuint*);
+F("glGenRenderbuffersEXT",
+    GLvoid, glGenRenderbuffers, GLsizei, GLuint*);
+F("glDeleteFramebuffersEXT",
+    GLvoid, glDeleteFramebuffers, GLsizei, GLuint*);
+F("glDeleteRenderbuffersEXT",
+    GLvoid, glDeleteRenderbuffers, GLsizei, GLuint*);
+F("glBindFramebufferEXT",
+    GLvoid, glBindFramebuffer, GLenum, GLuint);
+F("glBindRenderbufferEXT",
+    GLvoid, glBindRenderbuffer, GLenum, GLuint);
+F("glRenderbufferStorageEXT",
+    GLvoid, glRenderbufferStorage, GLenum, GLenum, GLsizei, GLsizei);
+F("glFramebufferTexture2DEXT",
+    GLvoid, glFramebufferTexture2D, GLenum, GLenum, GLenum, GLuint, GLint);
+F("glFramebufferRenderbufferEXT",
+    GLvoid, glFramebufferRenderbuffer, GLenum, GLenum, GLenum, GLuint);
 #endif /// __APPLE__
 
-#undef _ARGS
-#undef _ARGN
-
-#undef _SET
-#undef _SET1
-#undef _SET0
-
-#undef _VAR0
-#undef _VAR1
-#undef _VAR2
-#undef _VAR3
-#undef _VAR4
-#undef _VAR5
-#undef _VAR6
-#undef _VAR7
-#undef _VAR8
-#undef _VAR9
-#undef _VAR10
-#undef _VAR11
-#undef _VAR12
-#undef _VAR13
-#undef _VAR14
-#undef _VAR15
-#undef _VAR16
-#undef _VAR17
-#undef _VAR18
-#undef _VAR19
-#undef _VAR20
-#undef _VAR21
-#undef _VAR22
-#undef _VAR23
-#undef _VAR24
-#undef _VAR25
-#undef _VAR26
-#undef _VAR27
-#undef _VAR28
-#undef _VAR29
-#undef _VAR30
-#undef _VAR31
-
-#undef _FUNC
+#undef L
+#undef L4
+#undef L3
+#undef L2
+#undef L1
+#undef L0
+#undef P1
+#undef P0
+#undef A1
+#undef A0
+#undef F
 
 
 
@@ -277,7 +197,7 @@ _FUNC("glFramebufferRenderbufferEXT",
 #define TEX_DFLT 1
 #define TEX_FRMB 2
 
-/// types of uniforms
+/** types of uniforms **/
 #define UNI_T1IV 0
 #define UNI_T1FV 1
 
@@ -292,10 +212,10 @@ _FUNC("glFramebufferRenderbufferEXT",
 
 #define UNI_TMFV 8
 
-/// this flag is to indicate that the uniform value is immediate
+/** this flag is to indicate that the uniform value is immediate **/
 #define UNI_IIII 0x8000
 
-/// immediate types
+/** immediate types **/
 #define UNI_T1II (UNI_T1IV | UNI_IIII)
 #define UNI_T1FI (UNI_T1FV | UNI_IIII)
 
@@ -377,7 +297,7 @@ static GLboolean ShaderAdd(const GLchar *fstr, GLuint prog, GLenum type) {
     }
     slen = strlen(fstr);
     glShaderSource(shad, 1, &fstr, &slen);
-    glCompileShader(shad); /// may emit a semicolon to STDOUT, this is normal
+    glCompileShader(shad); /** may emit a ';' to STDOUT, this is normal **/
 
     if (ShaderProgramStatus(shad, GL_TRUE, GL_COMPILE_STATUS) != GL_TRUE) {
         glDeleteShader(shad);
@@ -632,40 +552,24 @@ static FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[],
 
         for (iter = 1; iter < catr; iter++) {
             if (patr[iter].name
-            && (aloc = glGetAttribLocation(retn->pshd[shdr].prog,
-                                           patr[iter].name)) != -1) {
-                glBindBuffer(GL_ARRAY_BUFFER, retn->pvbo[iter]);
+            && ((aloc = glGetAttribLocation(retn->pshd[shdr].prog,
+                                            patr[iter].name)) != -1)) {
                 ecnt = 0;
                 switch (patr[iter].type) {
-                    case UNI_T1IV:
-                    case UNI_T1FV: ecnt = 1; break;
-
-                    case UNI_T2IV:
-                    case UNI_T2FV: ecnt = 2; break;
-
-                    case UNI_T3IV:
-                    case UNI_T3FV: ecnt = 3; break;
-
-                    case UNI_T4IV:
-                    case UNI_T4FV: ecnt = 4; break;
+                    case UNI_T1IV: case UNI_T1FV: ecnt = 1; break;
+                    case UNI_T2IV: case UNI_T2FV: ecnt = 2; break;
+                    case UNI_T3IV: case UNI_T3FV: ecnt = 3; break;
+                    case UNI_T4IV: case UNI_T4FV: ecnt = 4; break;
                 }
+                elem = 0;
                 switch (patr[iter].type) {
-                    case UNI_T1IV:
-                    case UNI_T2IV:
-                    case UNI_T3IV:
-                    case UNI_T4IV:
-                        glVertexAttribPointer(aloc, ecnt,
-                                              GL_INT, GL_FALSE, 0, 0);
-                        break;
-
-                    case UNI_T1FV:
-                    case UNI_T2FV:
-                    case UNI_T3FV:
-                    case UNI_T4FV:
-                        glVertexAttribPointer(aloc, ecnt,
-                                              GL_FLOAT, GL_FALSE, 0, 0);
-                        break;
+                    case UNI_T1IV: case UNI_T2IV:
+                    case UNI_T3IV: case UNI_T4IV: elem = GL_INT;   break;
+                    case UNI_T1FV: case UNI_T2FV:
+                    case UNI_T3FV: case UNI_T4FV: elem = GL_FLOAT; break;
                 }
+                glBindBuffer(GL_ARRAY_BUFFER, retn->pvbo[iter]);
+                glVertexAttribPointer(aloc, ecnt, elem, GL_FALSE, 0, 0);
                 glEnableVertexAttribArray(aloc);
             }
         }
@@ -696,55 +600,47 @@ static GLvoid DrawVBO(FVBO *vobj, GLuint shad) {
         for (iter = 0; iter < vobj->pshd[shad].cuni; iter++)
             switch ((unif = &vobj->pshd[shad].puni[iter])->type & ~UNI_IIII) {
                 case UNI_TMFV:
-                    glUniformMatrix4fv(unif->indx, 1 + unif->cdat,
-                                       GL_TRUE, *(GLfloat**)unif->pdat);
-                    break;
+                    glUniformMatrix4fv(unif->indx, 1, GL_TRUE,
+                                     *(GLfloat**)unif->pdat);
+                    continue;
 
                 case UNI_T1IV:
-                    glUniform1iv(unif->indx, 1 + unif->cdat,
-                                (unif->type & UNI_IIII)?
+                    glUniform1iv(unif->indx, 1, (unif->type & UNI_IIII)?
                                 (GLint*)&unif->pdat : (GLint*)unif->pdat);
                     break;
 
                 case UNI_T1FV:
-                    glUniform1fv(unif->indx, 1 + unif->cdat,
-                                (unif->type & UNI_IIII)?
+                    glUniform1fv(unif->indx, 1, (unif->type & UNI_IIII)?
                                 (GLfloat*)&unif->pdat : (GLfloat*)unif->pdat);
                     break;
 
                 case UNI_T2IV:
-                    glUniform2iv(unif->indx, 1 + unif->cdat,
-                                (unif->type & UNI_IIII)?
+                    glUniform2iv(unif->indx, 1, (unif->type & UNI_IIII)?
                                 (GLint*)&unif->pdat : (GLint*)unif->pdat);
                     break;
 
                 case UNI_T2FV:
-                    glUniform2fv(unif->indx, 1 + unif->cdat,
-                                (unif->type & UNI_IIII)?
+                    glUniform2fv(unif->indx, 1, (unif->type & UNI_IIII)?
                                 (GLfloat*)&unif->pdat : (GLfloat*)unif->pdat);
                     break;
 
                 case UNI_T3IV:
-                    glUniform3iv(unif->indx, 1 + unif->cdat,
-                                (unif->type & UNI_IIII)?
+                    glUniform3iv(unif->indx, 1, (unif->type & UNI_IIII)?
                                 (GLint*)&unif->pdat : (GLint*)unif->pdat);
                     break;
 
                 case UNI_T3FV:
-                    glUniform3fv(unif->indx, 1 + unif->cdat,
-                                (unif->type & UNI_IIII)?
+                    glUniform3fv(unif->indx, 1, (unif->type & UNI_IIII)?
                                 (GLfloat*)&unif->pdat : (GLfloat*)unif->pdat);
                     break;
 
                 case UNI_T4IV:
-                    glUniform4iv(unif->indx, 1 + unif->cdat,
-                                (unif->type & UNI_IIII)?
+                    glUniform4iv(unif->indx, 1, (unif->type & UNI_IIII)?
                                 (GLint*)&unif->pdat : (GLint*)unif->pdat);
                     break;
 
                 case UNI_T4FV:
-                    glUniform4fv(unif->indx, 1 + unif->cdat,
-                                (unif->type & UNI_IIII)?
+                    glUniform4fv(unif->indx, 1, (unif->type & UNI_IIII)?
                                 (GLfloat*)&unif->pdat : (GLfloat*)unif->pdat);
                     break;
 
@@ -779,3 +675,5 @@ static GLvoid FreeVBO(FVBO **vobj) {
         *vobj = 0;
     }
 }
+
+#endif /** OGL_LOAD_H **/
