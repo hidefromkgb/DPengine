@@ -253,12 +253,17 @@ typedef struct _SHDR {
 typedef struct _FVBO {
     GLenum  elem;
     GLuint  cind;
-    GLuint  cvbo;
-    GLuint *pvbo;
     GLuint  ctex;
     FTEX   *ptex;
     GLuint  cshd;
     SHDR   *pshd;
+    GLuint  catr;
+    GLuint *pbuf;
+    struct {
+        GLint  aloc;
+        GLint  ecnt;
+        GLenum elem;
+    } *patr;
 } FVBO;
 
 
@@ -446,12 +451,12 @@ static FTEX *BindTex(FVBO *vobj, GLuint bind, GLuint mode) {
     }
     if (mode == TEX_FRMB)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                               GL_TEXTURE_2D, vtex->ptex[ktex].indx, 0);
+                               GL_TEXTURE_2D, vobj->ptex[ktex].indx, 0);
     else if (mode == TEX_DFLT) {
         glActiveTexture(GL_TEXTURE0 + bind);
-        glBindTexture(vtex->ptex[ktex].trgt, vtex->ptex[ktex].indx);
+        glBindTexture(vobj->ptex[ktex].trgt, vobj->ptex[ktex].indx);
     }
-    return &vtex->ptex[ktex];
+    return &vobj->ptex[ktex];
 }
 
 
@@ -523,58 +528,52 @@ static FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[],
                      GLenum elem, GLuint catr, UNIF *patr,
                      GLuint cuni, UNIF *puni, GLuint ctex) {
     FVBO *retn = (prev)? prev : calloc(1, sizeof(*retn));
-    GLint iter, shdr, ecnt, aloc;
+    GLint iter, shdr;
 
     retn->elem = elem;
-    retn->cvbo = catr;
-
+    retn->catr = catr;
     if (vshd && pshd && cuni && puni)
         retn->pshd = MakeShaderList(vshd, pshd, cuni, puni, &retn->cshd);
     if (ctex) {
         retn->ctex = ctex;
         retn->ptex = calloc(retn->ctex, sizeof(*retn->ptex));
     }
-    glGenBuffers(catr, retn->pvbo = malloc(catr * sizeof(*retn->pvbo)));
+    glGenBuffers(catr, retn->pbuf = calloc(catr, sizeof(*retn->pbuf)));
+    retn->patr = calloc(catr, sizeof(*retn->patr));
 
     retn->cind = patr[0].cdat / sizeof(GLuint);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, retn->pvbo[0]);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, retn->pbuf[0]);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
                  patr[0].cdat, patr[0].pdat, patr[0].draw);
 
     for (iter = 1; iter < catr; iter++) {
-        glBindBuffer(GL_ARRAY_BUFFER, retn->pvbo[iter]);
+        glBindBuffer(GL_ARRAY_BUFFER, retn->pbuf[iter]);
         glBufferData(GL_ARRAY_BUFFER,
                      patr[iter].cdat, patr[iter].pdat, patr[iter].draw);
     }
     for (shdr = 0; shdr < retn->cshd; shdr++) {
         glUseProgram(retn->pshd[shdr].prog);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, retn->pvbo[0]);
-
         for (iter = 1; iter < catr; iter++) {
-            if (patr[iter].name
-            && ((aloc = glGetAttribLocation(retn->pshd[shdr].prog,
-                                            patr[iter].name)) != -1)) {
-                ecnt = 0;
-                switch (patr[iter].type) {
-                    case UNI_T1IV: case UNI_T1FV: ecnt = 1; break;
-                    case UNI_T2IV: case UNI_T2FV: ecnt = 2; break;
-                    case UNI_T3IV: case UNI_T3FV: ecnt = 3; break;
-                    case UNI_T4IV: case UNI_T4FV: ecnt = 4; break;
-                }
-                elem = 0;
-                switch (patr[iter].type) {
-                    case UNI_T1IV: case UNI_T2IV:
-                    case UNI_T3IV: case UNI_T4IV: elem = GL_INT;   break;
-                    case UNI_T1FV: case UNI_T2FV:
-                    case UNI_T3FV: case UNI_T4FV: elem = GL_FLOAT; break;
-                }
-                glBindBuffer(GL_ARRAY_BUFFER, retn->pvbo[iter]);
-                glVertexAttribPointer(aloc, ecnt, elem, GL_FALSE, 0, 0);
-                glEnableVertexAttribArray(aloc);
+            retn->patr[iter].aloc =
+                (patr[iter].name)? glGetAttribLocation(retn->pshd[shdr].prog,
+                                                       patr[iter].name) : -1;
+            switch (patr[iter].type) {
+                case UNI_T1IV: case UNI_T1FV: retn->patr[iter].ecnt = 1; break;
+                case UNI_T2IV: case UNI_T2FV: retn->patr[iter].ecnt = 2; break;
+                case UNI_T3IV: case UNI_T3FV: retn->patr[iter].ecnt = 3; break;
+                case UNI_T4IV: case UNI_T4FV: retn->patr[iter].ecnt = 4; break;
+            }
+            switch (patr[iter].type) {
+                case UNI_T1IV: case UNI_T2IV:
+                case UNI_T3IV: case UNI_T4IV:
+                    retn->patr[iter].elem = GL_INT;   break;
+                case UNI_T1FV: case UNI_T2FV:
+                case UNI_T3FV: case UNI_T4FV:
+                    retn->patr[iter].elem = GL_FLOAT; break;
             }
         }
+        glUseProgram(0);
     }
-    glUseProgram(0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     return retn;
@@ -590,10 +589,15 @@ static GLvoid DrawVBO(FVBO *vobj, GLuint shad) {
     if (shad < vobj->cshd) {
         glUseProgram(vobj->pshd[shad].prog);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vobj->pvbo[0]);
-        for (iter = 1; iter < vobj->cvbo; iter++)
-            glBindBuffer(GL_ARRAY_BUFFER, vobj->pvbo[0]);
-
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vobj->pbuf[0]);
+        for (iter = 1; iter < vobj->catr; iter++) {
+            if (vobj->patr[iter].aloc == -1)
+                continue;
+            glBindBuffer(GL_ARRAY_BUFFER, vobj->pbuf[iter]);
+            glVertexAttribPointer(vobj->patr[iter].aloc, vobj->patr[iter].ecnt,
+                                  vobj->patr[iter].elem, GL_FALSE, 0, 0);
+            glEnableVertexAttribArray(vobj->patr[iter].aloc);
+        }
         for (iter = 0; iter < vobj->ctex; iter++)
             BindTex(vobj, iter, TEX_DFLT);
 
@@ -647,6 +651,9 @@ static GLvoid DrawVBO(FVBO *vobj, GLuint shad) {
                 default: continue;
             }
         glDrawElements(vobj->elem, vobj->cind, GL_UNSIGNED_INT, 0);
+        for (iter = 1; iter < vobj->catr; iter++)
+            if (vobj->patr[iter].aloc != -1)
+                glDisableVertexAttribArray(vobj->patr[iter].aloc);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glUseProgram(0);
@@ -661,9 +668,10 @@ static GLvoid FreeVBO(FVBO **vobj) {
         while ((*vobj)->cshd) {
             glDeleteProgram((*vobj)->pshd[--(*vobj)->cshd].prog);
             free((*vobj)->pshd[(*vobj)->cshd].puni);
-        };
-        glDeleteBuffers((*vobj)->cvbo, (*vobj)->pvbo);
-        free((*vobj)->pvbo);
+        }
+        glDeleteBuffers((*vobj)->catr, (*vobj)->pbuf);
+        free((*vobj)->pbuf);
+        free((*vobj)->patr);
         free((*vobj)->pshd);
         if ((*vobj)->ctex) {
             while ((*vobj)->ctex)
