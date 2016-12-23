@@ -122,7 +122,6 @@ void FreeRendererOGL(RNDR **rndr) {
 long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                      ulong uniq, ulong size, ulong xscr, ulong yscr) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
-    GLchar **sver, **spix;
     GLubyte *atex, *aptr;
     T4FV *dims, *bank;
     GLuint *indx;
@@ -198,10 +197,8 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                    {.name = "disz", .type = UNI_T4FV, .pdat = &retn->disz},
                    {.name = "hitd", .type = UNI_T4FV, .pdat = &retn->hitd}};
 
-    MakeShaderSrc(&sver, &spix, tver, tpix, 0);
-    retn->surf = MakeVBO(0, sver, spix, GL_TRIANGLES,
-                         countof(satr), satr, countof(suni), suni, 5);
-    FreeShaderSrc(sver, spix);
+    retn->surf = MakeVBO(5, GL_TRIANGLES, countof(satr), satr,
+                         countof(suni), suni, tver, tpix);
     retn->surf->cind = 0;
     retn->disz.z = 1.0 / dhei;
     retn->disz.w = 1.0 / chei;
@@ -345,20 +342,20 @@ FRBO *MakeRBO(long xdim, long ydim) {
     retn->ydim = ydim;
     retn->swiz = 0;
 
-    glGenFramebuffers(1, &retn->fbuf);
-    glBindFramebuffer(GL_FRAMEBUFFER, retn->fbuf);
+    glGenFramebuffersEXT(1, &retn->fbuf);
+    glBindFramebufferEXT(GL_FRAMEBUFFER, retn->fbuf);
 
-    glGenRenderbuffers(2, retn->rbuf);
-    glBindRenderbuffer(GL_RENDERBUFFER, retn->rbuf[0]);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA,
-                          retn->xdim, retn->ydim);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                              GL_RENDERBUFFER, retn->rbuf[0]);
-    glBindRenderbuffer(GL_RENDERBUFFER, retn->rbuf[1]);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
-                          retn->xdim, retn->ydim);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                              GL_RENDERBUFFER, retn->rbuf[1]);
+    glGenRenderbuffersEXT(2, retn->rbuf);
+    glBindRenderbufferEXT(GL_RENDERBUFFER, retn->rbuf[0]);
+    glRenderbufferStorageEXT(GL_RENDERBUFFER, GL_RGBA,
+                             retn->xdim, retn->ydim);
+    glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                 GL_RENDERBUFFER, retn->rbuf[0]);
+    glBindRenderbufferEXT(GL_RENDERBUFFER, retn->rbuf[1]);
+    glRenderbufferStorageEXT(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
+                             retn->xdim, retn->ydim);
+    glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                 GL_RENDERBUFFER, retn->rbuf[1]);
     data = retn->xdim * retn->ydim * 4;
 
     glGenBuffers(2, retn->pbuf);
@@ -367,11 +364,11 @@ FRBO *MakeRBO(long xdim, long ydim) {
     glBindBuffer(GL_PIXEL_PACK_BUFFER, retn->pbuf[1]);
     glBufferData(GL_PIXEL_PACK_BUFFER, data, 0, GL_STREAM_READ);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
 
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, retn->fbuf);
+    glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER, retn->fbuf);
     glViewport(0, 0, retn->xdim, retn->ydim);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
     return retn;
 }
 
@@ -380,7 +377,7 @@ FRBO *MakeRBO(long xdim, long ydim) {
 void BindRBO(FRBO *robj, long bind) {
     GLuint buff = (bind)? robj->fbuf : 0;
 
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, buff);
+    glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER, buff);
 }
 
 
@@ -390,11 +387,11 @@ void ReadRBO(FRBO *robj, void *pict, ulong flgs) {
 
     if (flgs & WIN_IPBO)
         glBindBuffer(GL_PIXEL_PACK_BUFFER, robj->pbuf[robj->swiz]);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, robj->fbuf);
+    glBindFramebufferEXT(GL_READ_FRAMEBUFFER, robj->fbuf);
     glReadPixels(0, 0, robj->xdim, robj->ydim,
                 (flgs & WIN_IBGR)? GL_BGRA : GL_RGBA,
                  GL_UNSIGNED_BYTE, (flgs & WIN_IPBO)? 0 : pict);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glBindFramebufferEXT(GL_READ_FRAMEBUFFER, 0);
 
     if (flgs & WIN_IPBO) {
         robj->swiz ^= 1;
@@ -413,9 +410,9 @@ void ReadRBO(FRBO *robj, void *pict, ulong flgs) {
 void FreeRBO(FRBO **robj) {
     if (robj && *robj) {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glDeleteRenderbuffers(2, (*robj)->rbuf);
-        glDeleteFramebuffers(1, &(*robj)->fbuf);
+        glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
+        glDeleteRenderbuffersEXT(2, (*robj)->rbuf);
+        glDeleteFramebuffersEXT(1, &(*robj)->fbuf);
         glDeleteBuffers(2, (*robj)->pbuf);
         free(*robj);
         *robj = 0;

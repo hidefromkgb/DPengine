@@ -99,78 +99,69 @@ s, ...) L##s(c, f, n00, a00)
 #define A1(n, a)   P1(n,  )
 #define A0(n, a)   P0(n,  )
 
-#define F(text, retn, name, ...) __attribute__((unused))              \
+#define F(retn, name, ...) __attribute__((unused))                    \
 static retn name(L(P, ##__VA_ARGS__)) {                               \
     static retn APIENTRY (*func)(__VA_ARGS__) = 0;                    \
     if (!(func || (func = (retn APIENTRY (*)(__VA_ARGS__))            \
-                           GL_GET_PROC_ADDR((text)? text : #name))))  \
-        printf("ERROR: cannot load '%s', terminating now!\n",         \
-              (text)? text : #name);                                  \
+                           GL_GET_PROC_ADDR(#name))))                 \
+        printf("ERROR: cannot load '%s', terminating now!\n", #name); \
     return func(L(A, ##__VA_ARGS__));                                 \
 }
 
 #ifndef __APPLE__
-F(0,GLvoid, glUniform1iv, GLint, GLsizei, GLint*);
-F(0,GLvoid, glUniform1fv, GLint, GLsizei, GLfloat*);
-F(0,GLvoid, glUniform2iv, GLint, GLsizei, GLint*);
-F(0,GLvoid, glUniform2fv, GLint, GLsizei, GLfloat*);
-F(0,GLvoid, glUniform3iv, GLint, GLsizei, GLint*);
-F(0,GLvoid, glUniform3fv, GLint, GLsizei, GLfloat*);
-F(0,GLvoid, glUniform4iv, GLint, GLsizei, GLint*);
-F(0,GLvoid, glUniform4fv, GLint, GLsizei, GLfloat*);
-F(0,GLvoid, glUniformMatrix4fv, GLint, GLsizei, GLboolean, GLfloat*);
-F(0,GLuint, glCreateProgram);
-F(0,GLvoid, glDeleteProgram, GLuint);
-F(0,GLvoid, glValidateProgram, GLuint);
-F(0,GLvoid, glLinkProgram, GLuint);
-F(0,GLvoid, glUseProgram, GLuint);
-F(0,GLvoid, glGetProgramInfoLog, GLuint, GLint, GLint*, GLchar*);
-F(0,GLvoid, glGetShaderInfoLog, GLuint, GLint, GLint*, GLchar*);
-F(0,GLvoid, glGetProgramiv, GLuint, GLenum, GLint*);
-F(0,GLvoid, glGetShaderiv, GLuint, GLenum, GLint*);
-F(0,GLuint, glCreateShader, GLenum);
-F(0,GLvoid, glDeleteShader, GLuint);
-F(0,GLvoid, glAttachShader, GLuint, GLuint);
-F(0,GLvoid, glShaderSource, GLuint, GLuint, const GLchar**, GLint*);
-F(0,GLvoid, glCompileShader, GLuint);
-F(0,GLint,  glGetAttribLocation, GLuint, GLchar*);
-F(0,GLint,  glGetUniformLocation, GLuint, GLchar*);
-F(0,GLvoid, glEnableVertexAttribArray, GLint);
-F(0,GLvoid, glVertexAttribPointer, GLuint, GLint, GLenum,
-                                   GLboolean, GLsizei, GLvoid*);
+F(GLvoid, glUniform1iv, GLint, GLsizei, GLint*);
+F(GLvoid, glUniform1fv, GLint, GLsizei, GLfloat*);
+F(GLvoid, glUniform2iv, GLint, GLsizei, GLint*);
+F(GLvoid, glUniform2fv, GLint, GLsizei, GLfloat*);
+F(GLvoid, glUniform3iv, GLint, GLsizei, GLint*);
+F(GLvoid, glUniform3fv, GLint, GLsizei, GLfloat*);
+F(GLvoid, glUniform4iv, GLint, GLsizei, GLint*);
+F(GLvoid, glUniform4fv, GLint, GLsizei, GLfloat*);
+F(GLvoid, glUniformMatrix4fv, GLint, GLsizei, GLboolean, GLfloat*);
+F(GLuint, glCreateProgram);
+F(GLvoid, glDeleteProgram, GLuint);
+F(GLvoid, glValidateProgram, GLuint);
+F(GLvoid, glLinkProgram, GLuint);
+F(GLvoid, glUseProgram, GLuint);
+F(GLvoid, glGetProgramInfoLog, GLuint, GLint, GLint*, GLchar*);
+F(GLvoid, glGetShaderInfoLog, GLuint, GLint, GLint*, GLchar*);
+F(GLvoid, glGetProgramiv, GLuint, GLenum, GLint*);
+F(GLvoid, glGetShaderiv, GLuint, GLenum, GLint*);
+F(GLuint, glCreateShader, GLenum);
+F(GLvoid, glDeleteShader, GLuint);
+F(GLvoid, glAttachShader, GLuint, GLuint);
+F(GLvoid, glShaderSource, GLuint, GLuint, const GLchar**, GLint*);
+F(GLvoid, glCompileShader, GLuint);
+F(GLint,  glGetAttribLocation, GLuint, GLchar*);
+F(GLint,  glGetUniformLocation, GLuint, GLchar*);
+F(GLvoid, glEnableVertexAttribArray, GLint);
+F(GLvoid, glDisableVertexAttribArray, GLint);
+F(GLvoid, glVertexAttribPointer, GLuint, GLint, GLenum,
+                                 GLboolean, GLsizei, GLvoid*);
 #ifdef _WIN32
-F(0,GLvoid, glActiveTexture, GLenum);
-F(0,GLvoid, glTexImage3D, GLenum, GLint, GLenum, GLsizei, GLsizei,
-                          GLsizei, GLint, GLenum, GLenum, GLvoid*);
-F(0,GLvoid, glTexSubImage3D, GLenum, GLint, GLint, GLint, GLint, GLsizei,
-                             GLsizei, GLsizei, GLenum, GLenum, GLvoid*);
-#endif /// _WIN32
-F(0,GLvoid, glGenBuffers, GLsizei, GLuint*);
-F(0,GLvoid, glBindBuffer, GLenum, GLuint);
-F(0,GLvoid, glBufferData, GLenum, GLsizei, GLvoid*, GLenum);
-F(0,GLvoid, glBufferSubData, GLenum, GLint, GLsizei, GLvoid*);
-F(0,GLvoid, glDeleteBuffers, GLsizei, GLuint*);
-F(0,GLvoid*,glMapBuffer, GLenum, GLenum);
-F(0,GLvoid, glUnmapBuffer, GLenum);
-F("glGenFramebuffersEXT",
-    GLvoid, glGenFramebuffers, GLsizei, GLuint*);
-F("glGenRenderbuffersEXT",
-    GLvoid, glGenRenderbuffers, GLsizei, GLuint*);
-F("glDeleteFramebuffersEXT",
-    GLvoid, glDeleteFramebuffers, GLsizei, GLuint*);
-F("glDeleteRenderbuffersEXT",
-    GLvoid, glDeleteRenderbuffers, GLsizei, GLuint*);
-F("glBindFramebufferEXT",
-    GLvoid, glBindFramebuffer, GLenum, GLuint);
-F("glBindRenderbufferEXT",
-    GLvoid, glBindRenderbuffer, GLenum, GLuint);
-F("glRenderbufferStorageEXT",
-    GLvoid, glRenderbufferStorage, GLenum, GLenum, GLsizei, GLsizei);
-F("glFramebufferTexture2DEXT",
-    GLvoid, glFramebufferTexture2D, GLenum, GLenum, GLenum, GLuint, GLint);
-F("glFramebufferRenderbufferEXT",
-    GLvoid, glFramebufferRenderbuffer, GLenum, GLenum, GLenum, GLuint);
-#endif /// __APPLE__
+F(GLvoid, glActiveTexture, GLenum);
+F(GLvoid, glTexImage3D, GLenum, GLint, GLenum, GLsizei, GLsizei,
+                        GLsizei, GLint, GLenum, GLenum, GLvoid*);
+F(GLvoid, glTexSubImage3D, GLenum, GLint, GLint, GLint, GLint, GLsizei,
+                           GLsizei, GLsizei, GLenum, GLenum, GLvoid*);
+#endif /** _WIN32 **/
+F(GLvoid, glGenBuffers, GLsizei, GLuint*);
+F(GLvoid, glBindBuffer, GLenum, GLuint);
+F(GLvoid, glBufferData, GLenum, GLsizei, GLvoid*, GLenum);
+F(GLvoid, glBufferSubData, GLenum, GLint, GLsizei, GLvoid*);
+F(GLvoid, glDeleteBuffers, GLsizei, GLuint*);
+F(GLvoid*,glMapBuffer, GLenum, GLenum);
+F(GLvoid, glUnmapBuffer, GLenum);
+F(GLvoid, glGenFramebuffersEXT, GLsizei, GLuint*);
+F(GLvoid, glGenRenderbuffersEXT, GLsizei, GLuint*);
+F(GLvoid, glDeleteFramebuffersEXT, GLsizei, GLuint*);
+F(GLvoid, glDeleteRenderbuffersEXT, GLsizei, GLuint*);
+F(GLvoid, glBindFramebufferEXT, GLenum, GLuint);
+F(GLvoid, glBindRenderbufferEXT, GLenum, GLuint);
+F(GLvoid, glRenderbufferStorageEXT, GLenum, GLenum, GLsizei, GLsizei);
+F(GLvoid, glFramebufferTexture2DEXT, GLenum, GLenum, GLenum, GLuint, GLint);
+F(GLvoid, glFramebufferRenderbufferEXT, GLenum, GLenum, GLenum, GLuint);
+#endif /** !__APPLE__ **/
 
 #undef L
 #undef L4
@@ -189,9 +180,6 @@ F("glFramebufferRenderbufferEXT",
 #ifndef countof
 #define countof(a) (sizeof(a) / sizeof(*(a)))
 #endif
-
-#define DTR_CONV (M_PI / 180.0)
-#define RTD_CONV (1.0 / DTR_CONV)
 
 #define TEX_NSET 0
 #define TEX_DFLT 1
@@ -232,31 +220,24 @@ F("glFramebufferRenderbufferEXT",
 
 
 
-typedef struct _FTEX {
+typedef struct {
     GLenum trgt, type, mode;
     GLuint xdim, ydim, zdim, indx;
     struct _FVBO *orig;
 } FTEX;
 
-typedef struct _UNIF {
+typedef struct {
     GLenum type, draw;
     GLuint indx, cdat;
     GLvoid *pdat;
     GLchar *name;
 } UNIF;
 
-typedef struct _SHDR {
-    GLuint prog, cuni;
-    UNIF *puni;
-} SHDR;
-
 typedef struct _FVBO {
     GLenum  elem;
     GLuint  cind;
     GLuint  ctex;
     FTEX   *ptex;
-    GLuint  cshd;
-    SHDR   *pshd;
     GLuint  catr;
     GLuint *pbuf;
     struct {
@@ -264,10 +245,17 @@ typedef struct _FVBO {
         GLint  ecnt;
         GLenum elem;
     } *patr;
+    GLuint  cshd;
+    struct {
+        GLuint prog;
+        GLuint cuni;
+        UNIF  *puni;
+    } *pshd;
 } FVBO;
 
 
 
+__attribute__((unused))
 static GLint ShaderProgramStatus(GLuint prog, GLboolean shad, GLenum parm) {
     GLchar buff[2048];
     GLint stat, slen;
@@ -292,6 +280,7 @@ static GLint ShaderProgramStatus(GLuint prog, GLboolean shad, GLenum parm) {
 
 
 
+__attribute__((unused))
 static GLboolean ShaderAdd(const GLchar *fstr, GLuint prog, GLenum type) {
     GLint slen, shad;
 
@@ -316,129 +305,53 @@ static GLboolean ShaderAdd(const GLchar *fstr, GLuint prog, GLenum type) {
 
 
 
-static SHDR *MakeShaderList(GLchar *vert[], GLchar *pixl[],
-                            GLuint cuni, UNIF *puni, GLuint *cshd) {
-    GLchar *curp = 0, *curv = 0;
-    GLint ctmp, step, indx, iter = 0;
-    GLboolean stop = GL_FALSE;
-
-    while (pixl[iter]) iter++;
-
-    SHDR *retn = calloc(iter, sizeof(*retn));
-
-    *cshd = iter;
-    for (iter = 0; iter < *cshd; iter++) {
-        if (pixl[iter] != (GLchar*)-1)
-            curp = pixl[iter];
-        if (!stop) {
-            if (!vert[iter])
-                stop = GL_TRUE;
-            else if (vert[iter] != (GLchar*)-1)
-                curv = vert[iter];
-        }
-        retn[iter].prog = glCreateProgram();
-        if (ShaderAdd(curp, retn[iter].prog, GL_FRAGMENT_SHADER)
-        &&  ShaderAdd(curv, retn[iter].prog, GL_VERTEX_SHADER)) {
-            glLinkProgram(retn[iter].prog);
-            if (ShaderProgramStatus(retn[iter].prog, GL_FALSE,
-                                    GL_LINK_STATUS) == GL_TRUE) {
-                glUseProgram(retn[iter].prog);
-
-                for (retn[iter].cuni = ctmp = 0; ctmp < cuni; ctmp++)
-                    if ((indx = glGetUniformLocation(retn[iter].prog,
-                                                     puni[ctmp].name)) != -1)
-                        retn[iter].cuni++;
-
-                retn[iter].puni = malloc(retn[iter].cuni *
-                                         sizeof(*retn[iter].puni));
-                for (step = ctmp = 0; ctmp < cuni; ctmp++)
-                    if ((indx = glGetUniformLocation(retn[iter].prog,
-                                                     puni[ctmp].name)) != -1) {
-                        retn[iter].puni[step] = puni[ctmp];
-                        retn[iter].puni[step++].indx = indx;
-                    }
-                glUseProgram(0);
-                continue;
-            }
-        }
-        glDeleteProgram(retn[iter].prog);
-    }
-    return retn;
-}
-
-
-
-static GLchar *shader(GLchar *shdr, va_list list) {
-    va_list dupl;
+__attribute__((unused))
+static GLvoid MakeShaderSrc(GLchar ***shdr, GLchar **tmpl, va_list list) {
+    GLint iter, size;
     GLchar *retn;
-    GLint size;
+    va_list dupl;
 
-    retn = shdr;
-    if (retn != (typeof(retn))-1) {
-        va_copy(dupl, list);
-        size = strlen(shdr);
-        while ((retn = va_arg(list, typeof(retn))))
-            size += strlen(retn);
-
-        retn = calloc(sizeof(*retn), size + 1);
-        vsnprintf(retn, size + 1, shdr, dupl);
-        va_end(dupl);
-    }
-    return retn;
+    for (iter = 0; tmpl[iter]; iter++);
+    *shdr = calloc(iter + 1, sizeof(*tmpl));
+    for (iter = 0; tmpl[iter]; iter++)
+        if (tmpl[iter] == (typeof(*tmpl))-1)
+            (*shdr)[iter] = tmpl[iter];
+        else {
+            size = strlen(tmpl[iter]);
+            va_copy(dupl, list);
+            while ((retn = va_arg(dupl, typeof(retn))))
+                size += strlen(retn);
+            va_end(dupl);
+            retn = calloc(sizeof(*retn), size + 1);
+            va_copy(dupl, list);
+            vsnprintf(retn, size + 1, tmpl[iter], dupl);
+            va_end(dupl);
+            (*shdr)[iter] = retn;
+        }
 }
 
 
 
 __attribute__((unused))
-static GLvoid MakeShaderSrc(GLchar ***sver, GLchar ***spix,
-                            GLchar  **tver, GLchar  **tpix, ...) {
-    va_list list;
+static GLvoid FreeShaderSrc(GLchar **shdr) {
     GLint iter;
 
-    for (iter = 0; tver[iter]; iter++);
-    *sver = calloc(iter + 1, sizeof(*tver));
-
-    for (iter = 0; tpix[iter]; iter++);
-    *spix = calloc(iter + 1, sizeof(*tpix));
-
-    for (iter = 0; tver[iter]; iter++) {
-        va_start(list, tpix);
-        (*sver)[iter] = shader(tver[iter], list);
-        va_end(list);
-    }
-    for (iter = 0; tpix[iter]; iter++) {
-        va_start(list, tpix);
-        (*spix)[iter] = shader(tpix[iter], list);
-        va_end(list);
-    }
+    for (iter = 0; shdr[iter]; iter++)
+        if (shdr[iter] != (GLchar*)-1)
+            free(shdr[iter]);
+    free(shdr);
 }
 
 
 
 __attribute__((unused))
-static GLvoid FreeShaderSrc(GLchar **sver, GLchar **spix) {
-    GLint iter;
-
-    for (iter = 0; sver[iter]; iter++)
-        if (sver[iter] != (GLchar*)-1)
-            free(sver[iter]);
-
-    for (iter = 0; spix[iter]; iter++)
-        if (spix[iter] != (GLchar*)-1)
-            free(spix[iter]);
-
-    free(sver);
-    free(spix);
-}
-
-
-
 static FTEX *BindTex(FVBO *vobj, GLuint bind, GLuint mode) {
     GLuint ktex = bind;
     FVBO *vtex = vobj;
     FTEX *ftex;
 
-    if (!vtex) return 0;
+    if (!vtex)
+        return 0;
     if (vtex->ptex[ktex].orig) {
         do {
             ktex = (ftex = &vtex->ptex[ktex])->indx;
@@ -450,8 +363,8 @@ static FTEX *BindTex(FVBO *vobj, GLuint bind, GLuint mode) {
         vobj->ptex[ktex = bind] = *ftex;
     }
     if (mode == TEX_FRMB)
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                               GL_TEXTURE_2D, vobj->ptex[ktex].indx, 0);
+        glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                  GL_TEXTURE_2D, vobj->ptex[ktex].indx, 0);
     else if (mode == TEX_DFLT) {
         glActiveTexture(GL_TEXTURE0 + bind);
         glBindTexture(vobj->ptex[ktex].trgt, vobj->ptex[ktex].indx);
@@ -523,21 +436,82 @@ static GLenum LoadTex(FTEX  *retn, GLint  xpos, GLint  ypos, GLint   zpos,
 
 
 
+#define MakeVBO(ctex, elem, catr, patr, cuni, puni, vshd, pshd, ...) \
+      __MakeVBO(ctex, elem, catr, patr, cuni, puni, vshd, pshd, ##__VA_ARGS__, 0)
 __attribute__((unused))
-static FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[],
-                     GLenum elem, GLuint catr, UNIF *patr,
-                     GLuint cuni, UNIF *puni, GLuint ctex) {
-    FVBO *retn = (prev)? prev : calloc(1, sizeof(*retn));
-    GLint iter, shdr;
+static FVBO *__MakeVBO(GLuint ctex, GLenum elem, GLuint catr, UNIF *patr,
+                       GLuint cuni, UNIF *puni, GLchar *vshd[], GLchar *pshd[],
+                       ...) {
+    GLchar **vert, **pixl, *curp, *curv;
+    GLint iter, indx, ctmp, step;
+    GLboolean stop;
+    FVBO *retn;
+    va_list list;
 
-    retn->elem = elem;
-    retn->catr = catr;
-    if (vshd && pshd && cuni && puni)
-        retn->pshd = MakeShaderList(vshd, pshd, cuni, puni, &retn->cshd);
+    retn = calloc(1, sizeof(*retn));
+    if (vshd && pshd) {
+        retn->cshd = 0;
+        curp = curv = 0;
+        stop = GL_FALSE;
+        va_start(list, pshd);
+        MakeShaderSrc(&vert, vshd, list);
+        va_end(list);
+        va_start(list, pshd);
+        MakeShaderSrc(&pixl, pshd, list);
+        va_end(list);
+        while (pixl[retn->cshd])
+            retn->cshd++;
+        retn->pshd = calloc(retn->cshd, sizeof(*retn->pshd));
+        for (iter = 0; iter < retn->cshd; iter++) {
+            if (pixl[iter] != (GLchar*)-1)
+                curp = pixl[iter];
+            if (!stop) {
+                if (!vert[iter])
+                    stop = GL_TRUE;
+                else if (vert[iter] != (GLchar*)-1)
+                    curv = vert[iter];
+            }
+            retn->pshd[iter].prog = glCreateProgram();
+            if (ShaderAdd(curp, retn->pshd[iter].prog, GL_FRAGMENT_SHADER)
+            &&  ShaderAdd(curv, retn->pshd[iter].prog, GL_VERTEX_SHADER)) {
+                glLinkProgram(retn->pshd[iter].prog);
+                if (ShaderProgramStatus(retn->pshd[iter].prog, GL_FALSE,
+                                        GL_LINK_STATUS) == GL_TRUE) {
+                    glUseProgram(retn->pshd[iter].prog);
+                    retn->pshd[iter].cuni = 0;
+                    for (ctmp = 0; ctmp < cuni; ctmp++) {
+                        indx = glGetUniformLocation(retn->pshd[iter].prog,
+                                                    puni[ctmp].name);
+                        if (indx != -1)
+                            retn->pshd[iter].cuni++;
+                    }
+                    retn->pshd[iter].puni =
+                        (cuni)? malloc(retn->pshd[iter].cuni
+                                     * sizeof(*retn->pshd[iter].puni)) : 0;
+                    for (step = ctmp = 0; ctmp < cuni; ctmp++) {
+                        indx = glGetUniformLocation(retn->pshd[iter].prog,
+                                                    puni[ctmp].name);
+                        if (indx != -1) {
+                            retn->pshd[iter].puni[step] = puni[ctmp];
+                            retn->pshd[iter].puni[step++].indx = indx;
+                        }
+                    }
+                    glUseProgram(0);
+                    continue;
+                }
+            }
+            /** Only executed if it`s impossible to build the shader **/
+            glDeleteProgram(retn->pshd[iter].prog);
+        }
+        FreeShaderSrc(vert);
+        FreeShaderSrc(pixl);
+    }
     if (ctex) {
         retn->ctex = ctex;
         retn->ptex = calloc(retn->ctex, sizeof(*retn->ptex));
     }
+    retn->elem = elem;
+    retn->catr = catr;
     glGenBuffers(catr, retn->pbuf = calloc(catr, sizeof(*retn->pbuf)));
     retn->patr = calloc(catr, sizeof(*retn->patr));
 
@@ -551,11 +525,11 @@ static FVBO *MakeVBO(FVBO *prev, GLchar *vshd[], GLchar *pshd[],
         glBufferData(GL_ARRAY_BUFFER,
                      patr[iter].cdat, patr[iter].pdat, patr[iter].draw);
     }
-    for (shdr = 0; shdr < retn->cshd; shdr++) {
-        glUseProgram(retn->pshd[shdr].prog);
+    for (indx = 0; indx < retn->cshd; indx++) {
+        glUseProgram(retn->pshd[indx].prog);
         for (iter = 1; iter < catr; iter++) {
             retn->patr[iter].aloc =
-                (patr[iter].name)? glGetAttribLocation(retn->pshd[shdr].prog,
+                (patr[iter].name)? glGetAttribLocation(retn->pshd[indx].prog,
                                                        patr[iter].name) : -1;
             switch (patr[iter].type) {
                 case UNI_T1IV: case UNI_T1FV: retn->patr[iter].ecnt = 1; break;
