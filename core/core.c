@@ -627,23 +627,24 @@ void PTHR(THRD *data) {
         ypos = data->orig->data[iter].y - tail->offs[3 - ((indx >> 1) & 1)];
         anim = tail->anim;
         yoff = anim->xdim * anim->ydim * data->orig->data[iter].z;
-        ymax = min(0, data->ymax - ypos);
+        ymax = (ypos > data->ymax)? data->ymax - ypos : 0;
         ymin = anim->ydim << tail->scal;
         xinc = anim->xdim << tail->scal;
         if (indx & 1) {
-            xmax = min(xinc, xinc + xpos);
-            xmin = max(   0, xinc + xpos - xoff);
+            xmax = (0 <        xpos       )? xinc : xinc + xpos;
+            xmin = (0 > xinc + xpos - xoff)?    0 : xinc + xpos - xoff;
             yinc = -1;
         }
         else {
-            xmax = min(xinc, xoff - xpos);
-            xmin = max(   0,    0 - xpos);
+            xmax = (xinc < xoff - xpos)? xinc : xoff - xpos;
+            xmin = (   0 >    0 - xpos)?    0 :    0 - xpos;
             yinc = 1;
         }
         xinc = ((yinc < 0)? xinc - 1 - xmin : xmin) + xpos;
 
         /// alpha blending here
-        for (y = max(-ymin, data->ymin - ypos); y < ymax; y++) {
+        y = data->ymin - ypos;
+        for (y = (y > -ymin)? y : -ymin; y < ymax; y++) {
             ydst = (y + ypos) * xoff + xinc;
             ysrc = (indx & 2)? -y - 1 : y + ymin;
             ysrc = (ysrc >> tail->scal) * anim->xdim + yoff;

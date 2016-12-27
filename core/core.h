@@ -23,14 +23,6 @@
     #define THR_FUNC void *
 #endif
 
-#ifndef min
-#define min(a, b) (((a) < (b))? (a) : (b))
-#endif
-
-#ifndef max
-#define max(a, b) (((a) > (b))? (a) : (b))
-#endif
-
 #define PFR_HALT (1 << 31)
 #define PFR_SKIP (1 << 30)
 #define PFR_PICK (1 << 29)

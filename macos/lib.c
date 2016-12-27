@@ -5,204 +5,8 @@
 
 
 
-#define STR_OBJC_CLAS       \
-       "NSApplication",     \
-       "NSAutoreleasePool", \
-       "NSEvent",           \
-       "NSGraphicsContext", \
-       "NSColor",           \
-       "NSCursor",          \
-       "NSPanel",           \
-       "NSView",            \
-       "NSOpenGLView",      \
-       "NSOpenGLPixelFormat"
-
-#define NSApplication       (LoadedObjCClasses[0])
-#define NSAutoreleasePool   (LoadedObjCClasses[1])
-#define NSEvent             (LoadedObjCClasses[2])
-#define NSGraphicsContext   (LoadedObjCClasses[3])
-#define NSColor             (LoadedObjCClasses[4])
-#define NSCursor            (LoadedObjCClasses[5])
-#define NSPanel             (LoadedObjCClasses[6])
-#define NSView              (LoadedObjCClasses[7])
-#define NSOpenGLView        (LoadedObjCClasses[8])
-#define NSOpenGLPixelFormat (LoadedObjCClasses[9])
-
-#define STR_OBJC_SELE                                  \
-       "init",                                         \
-       "alloc",                                        \
-       "release",                                      \
-       "sharedApplication",                            \
-       "run",                                          \
-       "stop:",                                        \
-       "clearColor",                                   \
-       "setBackgroundColor:",                          \
-       "initWithContentRect:styleMask:backing:defer:", \
-       "initWithFrame:pixelFormat:",                   \
-       "initWithAttributes:",                          \
-       "setFrame:",                                    \
-       "orderFront:",                                  \
-       "orderOut:",                                    \
-       "setNeedsDisplay:",                             \
-       "setLevel:",                                    \
-       "setDelegate:",                                 \
-       "setHasShadow:",                                \
-       "setIgnoresMouseEvents:",                       \
-       "setContentView:",                              \
-       "setOpaque:",                                   \
-       "isOpaque",                                     \
-       "drawRect:",                                    \
-       "mouseLocation",                                \
-       "pressedMouseButtons",                          \
-       "pointingHandCursor",                           \
-       "push",                                         \
-       "pop",                                          \
-       "graphicsPort",                                 \
-       "currentContext",                               \
-       "openGLContext",                                \
-       "makeCurrentContext",                           \
-       "setValues:forParameter:",                      \
-       "flushBuffer",                                  \
-       "postEvent:atStart:",                           \
-       /** srsly, next line is just batshit insane **/ \
-       "otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:"
-
-#define init(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[ 0])
-#define alloc(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[ 1])
-#define release(inst)                                                  objc_msgSend(inst, LoadedObjCSelectors[ 2])
-#define sharedApplication(inst)                                        objc_msgSend(inst, LoadedObjCSelectors[ 3])
-#define run(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[ 4])
-#define stop_(inst, s)                                                 objc_msgSend(inst, LoadedObjCSelectors[ 5], s)
-#define clearColor(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[ 6])
-#define setBackgroundColor_(inst, c)                                   objc_msgSend(inst, LoadedObjCSelectors[ 7], c)
-#define initWithContentRect_styleMask_backing_defer_(inst, r, m, b, d) objc_msgSend(inst, LoadedObjCSelectors[ 8], r, (unsigned)(m), (unsigned)(b), (bool)(d))
-#define initWithFrame_pixelFormat_(inst, f, p)                         objc_msgSend(inst, LoadedObjCSelectors[ 9], f, p)
-#define initWithAttributes_(inst, a)                                   objc_msgSend(inst, LoadedObjCSelectors[10], (uint32_t*)(a))
-#define setFrame_(inst, f)                                             objc_msgSend(inst, LoadedObjCSelectors[11], f)
-#define orderFront_(inst, w)                                           objc_msgSend(inst, LoadedObjCSelectors[12], w)
-#define orderOut_(inst, w)                                             objc_msgSend(inst, LoadedObjCSelectors[13], w)
-#define setNeedsDisplay_(inst, d)                                      objc_msgSend(inst, LoadedObjCSelectors[14], (bool)(d))
-#define setLevel_(inst, l)                                             objc_msgSend(inst, LoadedObjCSelectors[15], (long)(l))
-#define setDelegate_(inst, d)                                          objc_msgSend(inst, LoadedObjCSelectors[16], d)
-#define setHasShadow_(inst, b)                                         objc_msgSend(inst, LoadedObjCSelectors[17], (bool)(b))
-#define setIgnoresMouseEvents_(inst, i)                                objc_msgSend(inst, LoadedObjCSelectors[18], (bool)(i))
-#define setContentView_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[19], v)
-#define setOpaque_(inst, b)                                            objc_msgSend(inst, LoadedObjCSelectors[20], (bool)(b))
-#define IsOpaque                                                                          LoadedObjCSelectors[21]
-#define DrawRect_                                                                         LoadedObjCSelectors[22]
-#define MouseLocation                                                                     LoadedObjCSelectors[23]
-#define pressedMouseButtons(inst)                                (long)objc_msgSend(inst, LoadedObjCSelectors[24])
-#define pointingHandCursor(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[25])
-#define push(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[26])
-#define pop(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[27])
-#define graphicsPort(inst)                               (CGContextRef)objc_msgSend(inst, LoadedObjCSelectors[28])
-#define currentContext(inst)                                           objc_msgSend(inst, LoadedObjCSelectors[29])
-#define openGLContext(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[30])
-#define makeCurrentContext(inst)                                       objc_msgSend(inst, LoadedObjCSelectors[31])
-#define setValues_forParameter_(inst, v, p)                            objc_msgSend(inst, LoadedObjCSelectors[32], (int*)(v), (int)(p))
-#define flushBuffer(inst)                                              objc_msgSend(inst, LoadedObjCSelectors[33])
-#define postEvent_atStart_(inst, e, s)                                 objc_msgSend(inst, LoadedObjCSelectors[34], e, (bool)(s))
-#define MakeEvent(t, l, m, s, w, c)                                 objc_msgSend(NSEvent, LoadedObjCSelectors[35], t, (CGPoint)(l), m, (CGFloat)(s), (id)(w), (id)(c), nil, nil, nil)
-
 /// name of the instance variable to access the engine structure
 #define VAR_ENGD "engd"
-
-
-
-enum {
-    NSBorderlessWindowMask         = (0     ),
-    NSTitledWindowMask             = (1 << 0),
-    NSClosableWindowMask           = (1 << 1),
-    NSMiniaturizableWindowMask     = (1 << 2),
-    NSResizableWindowMask          = (1 << 3),
-    NSNonactivatingPanelMask       = (1 << 7),
-    NSTexturedBackgroundWindowMask = (1 << 8),
-};
-enum {
-    NSNormalWindowLevel   =  0,
-    NSFloatingWindowLevel =  3,
-    NSDockWindowLevel     =  5,
-    NSSubmenuWindowLevel  = 10,
-    NSMainMenuWindowLevel = 20,
-};
-enum {
-    NSLeftMouseDown      =  1,
-    NSLeftMouseUp        =  2,
-    NSRightMouseDown     =  3,
-    NSRightMouseUp       =  4,
-    NSMouseMoved         =  5,
-    NSLeftMouseDragged   =  6,
-    NSRightMouseDragged  =  7,
-    NSMouseEntered       =  8,
-    NSMouseExited        =  9,
-    NSKeyDown            = 10,
-    NSKeyUp              = 11,
-    NSFlagsChanged       = 12,
-    NSAppKitDefined      = 13,
-    NSSystemDefined      = 14,
-    NSApplicationDefined = 15,
-    NSPeriodic           = 16,
-    NSCursorUpdate       = 17,
-    NSScrollWheel        = 22,
-    NSTabletPoint        = 23,
-    NSTabletProximity    = 24,
-    NSOtherMouseDown     = 25,
-    NSOtherMouseUp       = 26,
-    NSOtherMouseDragged  = 27,
-};
-enum {
-    NSOpenGLPFAAllRenderers          =   1,
-    NSOpenGLPFATripleBuffer          =   3,
-    NSOpenGLPFADoubleBuffer          =   5,
-    NSOpenGLPFAStereo                =   6,
-    NSOpenGLPFAAuxBuffers            =   7,
-    NSOpenGLPFAColorSize             =   8,
-    NSOpenGLPFAAlphaSize             =  11,
-    NSOpenGLPFADepthSize             =  12,
-    NSOpenGLPFAStencilSize           =  13,
-    NSOpenGLPFAAccumSize             =  14,
-    NSOpenGLPFAMinimumPolicy         =  51,
-    NSOpenGLPFAMaximumPolicy         =  52,
-    NSOpenGLPFAOffScreen             =  53,
-    NSOpenGLPFAFullScreen            =  54,
-    NSOpenGLPFASampleBuffers         =  55,
-    NSOpenGLPFASamples               =  56,
-    NSOpenGLPFAAuxDepthStencil       =  57,
-    NSOpenGLPFAColorFloat            =  58,
-    NSOpenGLPFAMultisample           =  59,
-    NSOpenGLPFASupersample           =  60,
-    NSOpenGLPFASampleAlpha           =  61,
-    NSOpenGLPFARendererID            =  70,
-    NSOpenGLPFASingleRenderer        =  71,
-    NSOpenGLPFANoRecovery            =  72,
-    NSOpenGLPFAAccelerated           =  73,
-    NSOpenGLPFAClosestPolicy         =  74,
-    NSOpenGLPFARobust                =  75,
-    NSOpenGLPFABackingStore          =  76,
-    NSOpenGLPFAMPSafe                =  78,
-    NSOpenGLPFAWindow                =  80,
-    NSOpenGLPFAMultiScreen           =  81,
-    NSOpenGLPFACompliant             =  83,
-    NSOpenGLPFAScreenMask            =  84,
-    NSOpenGLPFAPixelBuffer           =  90,
-    NSOpenGLPFARemotePixelBuffer     =  91,
-    NSOpenGLPFAAllowOfflineRenderers =  96,
-    NSOpenGLPFAAcceleratedCompute    =  97,
-    NSOpenGLPFAOpenGLProfile         =  99,
-    NSOpenGLPFAVirtualScreenCount    = 128,
-};
-enum {
-    NSOpenGLCPSwapInterval           = 222,
-    NSOpenGLCPSurfaceOrder           = 235,
-    NSOpenGLCPSurfaceOpacity         = 236,
-    NSOpenGLCPSurfaceBackingSize     = 304,
-    NSOpenGLCPReclaimResources       = 308,
-    NSOpenGLCPCurrentRendererID      = 309,
-    NSOpenGLCPGPUVertexProcessing    = 310,
-    NSOpenGLCPGPUFragmentProcessing  = 311,
-    NSOpenGLCPHasDrawable            = 314,
-    NSOpenGLCPMPSwapsInFlight        = 315,
-};
 
 
 
@@ -215,7 +19,9 @@ struct SEMD {
 typedef struct _DRAW {
     uint32_t attr;       /// last known mouse attributes
     long xdim, ydim;     /// drawing area dimensions
-    id hwnd, view, hand; /// main window with its view and the cursor
+    __NSWindow *hwnd;
+    __NSView *view;
+    __NSCursor *hand; /// main window with its view and the cursor
     CGContextRef hctx;   /// output context handle
 } DRAW;
 
@@ -231,24 +37,23 @@ uint64_t lTimeFunc() {
 
 
 void lRestartEngine(ENGD *engd) {
-    if (!LoadedObjCClasses)
-        return;
-
-    id thrd = sharedApplication(NSApplication);
-    CGPoint dptr = {};
+    __NSApplication *thrd = sharedApplication(NSApplication());
+    __NSEvent *post;
 
     stop_(thrd, 0);
     /// if called from inside a timer context, bump an event to the loop
     /// to ensure that it did process the stop notification we just sent;
     /// if not in a timer context, a dummy event will be rejected anyway
-    postEvent_atStart_(thrd, MakeEvent(NSApplicationDefined, dptr,
-                                       NSApplicationDefined, 0, 0, 0), true);
+    post = otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2_
+               (NSEvent(), NSApplicationDefined, (CGPoint){},
+                           NSApplicationDefined, 0, 0, 0, 0, 0, 0);
+    postEvent_atStart_(thrd, post, true);
 }
 
 
 
 void lShowMainWindow(ENGD *engd, long show) {
-    id thrd = sharedApplication(NSApplication);
+    __NSApplication *thrd = sharedApplication(NSApplication());
     intptr_t *data;
 
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
@@ -284,8 +89,11 @@ char *lLoadFile(char *name, long *size) {
 
 
 long lCountCPUs() {
-    return min(sizeof(SEM_TYPE) * CHAR_BIT,
-               max(1, sysconf(_SC_NPROCESSORS_ONLN)));
+    long temp;
+
+    temp = sysconf(_SC_NPROCESSORS_ONLN);
+    return (temp > 0)? (temp < sizeof(SEM_TYPE) * CHAR_BIT)?
+                        temp : sizeof(SEM_TYPE) * CHAR_BIT : 1;
 }
 
 
@@ -375,8 +183,8 @@ void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
     cEngineCallback((ENGD*)user, ECB_GUSR, (intptr_t)&data);
     draw = (DRAW*)data[0];
 
-    GetT2DV(dptr, NSEvent, MouseLocation);
-    attr = pressedMouseButtons(NSEvent);
+    dptr = mouseLocation(NSEvent());
+    attr = pressedMouseButtons(NSEvent());
 
     /// [TODO:] properly determine if the window is active
     attr = ((attr & 1)? UFR_LBTN : 0) | ((attr & 2)? UFR_RBTN : 0)
@@ -410,7 +218,7 @@ void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
 
 
 
-void OnDraw(id this, SEL name, CGRect rect) {
+void OnDraw(void *this, SEL name, CGRect rect) {
     CGContextRef ctxt;
     CGImageRef iref;
 
@@ -428,7 +236,7 @@ void OnDraw(id this, SEL name, CGRect rect) {
         flushBuffer(openGLContext(draw->view));
     else {
         iref = CGBitmapContextCreateImage(draw->hctx);
-        ctxt = graphicsPort(currentContext(NSGraphicsContext));
+        ctxt = graphicsPort(currentContext(NSGraphicsContext()));
         CGContextSetBlendMode(ctxt, kCGBlendModeCopy);
         CGContextDrawImage
             (ctxt, (CGRect){{0, 0}, {draw->xdim, draw->ydim}}, iref);
@@ -454,15 +262,14 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                   BGRA **bptr, intptr_t *data, uint32_t flgs) {
     #define SUB_VDLG "lNSV"
 
-    extern void CGSSetConnectionProperty(int, int, CFStringRef, CFBooleanRef);
-    extern int _CGSDefaultConnection();
-    id pool, thrd, view, *vmet, *vfld;
+    __NSView *view;
+    __NSApplication *thrd;
+    __NSAutoreleasePool *pool;
+    void **vmet, **vfld;
     CFRunLoopTimerRef tmrf, tmrd;
     CFStringRef scib;
     CGRect dims;
     DRAW draw;
-
-    LoadObjC((char*[]){STR_OBJC_CLAS, 0}, (char*[]){STR_OBJC_SELE, 0});
 
     /// a dirty hack to become capable of changing cursors at will
     CGSSetConnectionProperty
@@ -471,18 +278,18 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     CFRelease(scib);
 
     data[0] = (intptr_t)&draw;
-    draw.hand = pointingHandCursor(NSCursor);
+    draw.hand = pointingHandCursor(NSCursor());
     draw.attr = 0;
     draw.xdim = xdim - xpos;
     draw.ydim = ydim - ypos;
     dims = (CGRect){{0, 0}, {draw.xdim, draw.ydim}};
 
     /// view delegate`s methods and custom fields
-    vmet = PutToArr(DrawRect_, OnDraw, IsOpaque, OnOpaq);
+    vmet = PutToArr(__drawRect_(), OnDraw, __isOpaque(), OnOpaq);
     vfld = PutToArr(VAR_ENGD);
 
-    pool = init(alloc(NSAutoreleasePool));
-    thrd = sharedApplication(NSApplication);
+    pool = init(alloc(NSAutoreleasePool()));
+    thrd = sharedApplication(NSApplication());
     if (~flgs & COM_RGPU) {
         long line = draw.xdim * sizeof(**bptr);
         CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
@@ -493,18 +300,20 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                                               | kCGBitmapByteOrder32Little);
         CGColorSpaceRelease(drgb);
 
-        view = NewClass(NSView, SUB_VDLG, vfld, vmet);
+        view = NewClass(NSView(), SUB_VDLG, vfld, vmet);
         draw.view = init(alloc(view));
         setFrame_(draw.view, dims);
     }
     else {
         int attr[] = {NSOpenGLPFADoubleBuffer, NSOpenGLPFADepthSize, 32, 0},
             opaq = 0;
-        id pfmt, ctxt;
+        __NSOpenGLPixelFormat *pfmt;
+        __NSOpenGLContext *ctxt;
 
-        pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat), attr);
-        view = NewClass(NSOpenGLView, SUB_VDLG, vfld, vmet);
-        draw.view = initWithFrame_pixelFormat_(alloc(view), dims, pfmt);
+        pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat()), attr);
+        view = NewClass(NSOpenGLView(), SUB_VDLG, vfld, vmet);
+        draw.view =
+            (__NSView*)initWithFrame_pixelFormat_(alloc(view), dims, pfmt);
         makeCurrentContext((ctxt = openGLContext(draw.view)));
         setValues_forParameter_(ctxt, &opaq, NSOpenGLCPSurfaceOpacity);
         release(pfmt);
@@ -518,14 +327,14 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     /// [TODO:] NSNonactivatingPanelMask is flagged for deprecation in 10.12
     ///         so a suitable alternative has to be found
     draw.hwnd = initWithContentRect_styleMask_backing_defer_
-                    (alloc(NSPanel), dims, NSBorderlessWindowMask
-                                         | NSNonactivatingPanelMask,
+                    (alloc(NSPanel()), dims, NSBorderlessWindowMask
+                                           | NSNonactivatingPanelMask,
                      kCGBackingStoreBuffered, false);
 
     setContentView_(draw.hwnd, draw.view);
     setDelegate_(draw.hwnd, draw.view);
     setLevel_(draw.hwnd, NSMainMenuWindowLevel + 1);
-    setBackgroundColor_(draw.hwnd, clearColor(NSColor));
+    setBackgroundColor_(draw.hwnd, clearColor(NSColor()));
     setHasShadow_(draw.hwnd, false);
     setOpaque_(draw.hwnd, false);
 

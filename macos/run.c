@@ -9,304 +9,6 @@
 
 
 
-#define STR_OBJC_CLAS             \
-       "NSObject",                \
-       "NSApplication",           \
-       "NSAutoreleasePool",       \
-       "NSBundle",                \
-       "NSEvent",                 \
-       "NSFont",                  \
-       "NSMutableParagraphStyle", \
-       "NSFileManager",           \
-       "NSNumberFormatter",       \
-       "NSGraphicsContext",       \
-       "NSImage",                 \
-       "NSMenu",                  \
-       "NSMenuItem",              \
-       "NSStatusBar",             \
-       "NSScreen",                \
-       "NSWindow",                \
-       "NSTextField",             \
-       "NSButtonCell",            \
-       "NSButton",                \
-       "NSProgressIndicator",     \
-       "NSStepper",               \
-       "NSView",                  \
-       "NSScrollView",            \
-       "NSTableView",             \
-       "NSTableColumn"
-
-#define NSObject                (LoadedObjCClasses[ 0])
-#define NSApplication           (LoadedObjCClasses[ 1])
-#define NSAutoreleasePool       (LoadedObjCClasses[ 2])
-#define NSBundle                (LoadedObjCClasses[ 3])
-#define NSEvent                 (LoadedObjCClasses[ 4])
-#define NSFont                  (LoadedObjCClasses[ 5])
-#define NSMutableParagraphStyle (LoadedObjCClasses[ 6])
-#define NSFileManager           (LoadedObjCClasses[ 7])
-#define NSNumberFormatter       (LoadedObjCClasses[ 8])
-#define NSGraphicsContext       (LoadedObjCClasses[ 9])
-#define NSImage                 (LoadedObjCClasses[10])
-#define NSMenu                  (LoadedObjCClasses[11])
-#define NSMenuItem              (LoadedObjCClasses[12])
-#define NSStatusBar             (LoadedObjCClasses[13])
-#define NSScreen                (LoadedObjCClasses[14])
-#define NSWindow                (LoadedObjCClasses[15])
-#define NSTextField             (LoadedObjCClasses[16])
-#define NSButtonCell            (LoadedObjCClasses[17])
-#define NSButton                (LoadedObjCClasses[18])
-#define NSProgressIndicator     (LoadedObjCClasses[19])
-#define NSStepper               (LoadedObjCClasses[20])
-#define NSView                  (LoadedObjCClasses[21])
-#define NSScrollView            (LoadedObjCClasses[22])
-#define NSTableView             (LoadedObjCClasses[23])
-#define NSTableColumn           (LoadedObjCClasses[24])
-
-#define STR_OBJC_SELE                                            \
-       "init",                                                   \
-       "alloc",                                                  \
-       "release",                                                \
-       "retain",                                                 \
-       "class",                                                  \
-       "cell",                                                   \
-       "button",                                                 \
-       "_A",                                                     \
-       "setAction:",                                             \
-       "setTarget:",                                             \
-       "setActivationPolicy:",                                   \
-       "activateIgnoringOtherApps:",                             \
-       "sharedApplication",                                      \
-       "run",                                                    \
-       "stop:",                                                  \
-       "mainBundle",                                             \
-       "bundlePath",                                             \
-       "URLsForDirectory:inDomains:",                            \
-       "separatorItem",                                          \
-       "addItem:",                                               \
-       "setAutoenablesItems:",                                   \
-       "imageNamed:",                                            \
-       "setImage:",                                              \
-       "setOnStateImage:",                                       \
-       "setSubmenu:",                                            \
-       "popUpMenuPositioningItem:atLocation:inView:",            \
-       "initWithCGImage:size:",                                  \
-       "initWithContentRect:styleMask:backing:defer:",           \
-       "initWithTitle:action:keyEquivalent:",                    \
-       "contentRectForFrameRect:",                               \
-       "frameRectForContentRect:",                               \
-       "visibleFrame",                                           \
-       "frame",                                                  \
-       "setFrame:",                                              \
-       "setFrame:display:animate:",                              \
-       "setInitialFirstResponder:",                              \
-       "setMinSize:",                                            \
-       "setTitle:",                                              \
-       "setStringValue:",                                        \
-       "windowShouldClose:",                                     \
-       "windowDidResize:",                                       \
-       "makeKeyWindow",                                          \
-       "orderFront:",                                            \
-       "orderOut:",                                              \
-       "setNeedsDisplay:",                                       \
-       "setDelegate:",                                           \
-       "setEnabled:",                                            \
-       "setNextKeyView:",                                        \
-       "setDefaultButtonCell:",                                  \
-       "verticalScroller",                                       \
-       "setHasVerticalScroller:",                                \
-       "isEnabled",                                              \
-       "state",                                                  \
-       "setState:",                                              \
-       "setToolTip:",                                            \
-       "setButtonType:",                                         \
-       "setBezelStyle:",                                         \
-       "setImagePosition:",                                      \
-       "setSendsActionOnEndEditing:",                            \
-       "control:textView:doCommandBySelector:",                  \
-       "moveDown:",                                              \
-       "moveUp:",                                                \
-       "setEditable:",                                           \
-       "setSelectable:",                                         \
-       "setBezeled:",                                            \
-       "setBordered:",                                           \
-       "setDrawsBackground:",                                    \
-       "statusItemWithLength:",                                  \
-       "removeStatusItem:",                                      \
-       "systemStatusBar",                                        \
-       "mainScreen",                                             \
-       "thickness",                                              \
-       "cellSize",                                               \
-       "tag",                                                    \
-       "setTag:",                                                \
-       "setHighlightMode:",                                      \
-       "setHidden:",                                             \
-       "setContentView:",                                        \
-       "setDocumentView:",                                       \
-       "addSubview:",                                            \
-       "isFlipped",                                              \
-       "drawRect:",                                              \
-       "mouseLocation",                                          \
-       "graphicsPort",                                           \
-       "currentContext",                                         \
-       "defaultManager",                                         \
-       "systemFontOfSize:",                                      \
-       "systemFontSize",                                         \
-       "maximumAdvancement",                                     \
-       "setIndeterminate:",                                      \
-       "setAlignment:",                                          \
-       "addTableColumn:",                                        \
-       "headerCell",                                             \
-       "setWantsLayer:",                                         \
-       "scaleUnitSquareToSize:",                                 \
-       "drawInRect:withAttributes:",                             \
-       "textDidChange:",                                         \
-       "stringValue",                                            \
-       "doubleValue",                                            \
-       "setDoubleValue:",                                        \
-       "setIntValue:",                                           \
-       "displayIfNeeded",                                        \
-       "setMinValue:",                                           \
-       "setMaxValue:",                                           \
-       "setValueWraps:",                                         \
-       "setFormatter:",                                          \
-       "setFormatterBehavior:",                                  \
-       "setNumberStyle:",                                        \
-       "setPartialStringValidationEnabled:",                     \
-       "isPartialStringValid:newEditingString:errorDescription:",\
-       "getObjectValue:forString:errorDescription:",             \
-       "reloadData",                                             \
-       "dataCell",                                               \
-       "setDataCell:",                                           \
-       "setDataSource:",                                         \
-       "setResizingMask:",                                       \
-       "numberOfRowsInTableView:",                               \
-       "tableView:objectValueForTableColumn:row:",               \
-       "tableView:setObjectValue:forTableColumn:row:",           \
-       "tableView:dataCellForTableColumn:row:",                  \
-       "tableView:viewForTableColumn:row:"
-
-#define init(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[  0])
-#define alloc(inst)                                                     objc_msgSend(inst, LoadedObjCSelectors[  1])
-#define release(inst)                                                   objc_msgSend(inst, LoadedObjCSelectors[  2])
-#define retain(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[  3])
-#define class(inst)                                              (Class)objc_msgSend(inst, LoadedObjCSelectors[  4])
-#define cell(inst)                                                      objc_msgSend(inst, LoadedObjCSelectors[  5])
-#define button(inst)                                                    objc_msgSend(inst, LoadedObjCSelectors[  6])
-#define ActionSelector                                                                     LoadedObjCSelectors[  7]
-#define setAction_(inst, a)                                             objc_msgSend(inst, LoadedObjCSelectors[  8], a)
-#define setTarget_(inst, t)                                             objc_msgSend(inst, LoadedObjCSelectors[  9], t)
-#define setActivationPolicy_(inst, p)                                   objc_msgSend(inst, LoadedObjCSelectors[ 10], (unsigned)(p))
-#define activateIgnoringOtherApps_(inst, b)                             objc_msgSend(inst, LoadedObjCSelectors[ 11], (bool)(b))
-#define sharedApplication(inst)                                         objc_msgSend(inst, LoadedObjCSelectors[ 12])
-#define run(inst)                                                       objc_msgSend(inst, LoadedObjCSelectors[ 13])
-#define stop_(inst, s)                                                  objc_msgSend(inst, LoadedObjCSelectors[ 14], s)
-#define mainBundle(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[ 15])
-#define bundlePath(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[ 16])
-#define URLsForDirectory_inDomains_(inst, u, d)                         objc_msgSend(inst, LoadedObjCSelectors[ 17], u, d)
-#define separatorItem(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[ 18])
-#define addItem_(inst, i)                                               objc_msgSend(inst, LoadedObjCSelectors[ 19], i)
-#define setAutoenablesItems_(inst, b)                                   objc_msgSend(inst, LoadedObjCSelectors[ 20], (bool)(b))
-#define imageNamed_(inst, s)                                            objc_msgSend(inst, LoadedObjCSelectors[ 21], s)
-#define setImage_(inst, i)                                              objc_msgSend(inst, LoadedObjCSelectors[ 22], i)
-#define setOnStateImage_(inst, i)                                       objc_msgSend(inst, LoadedObjCSelectors[ 23], i)
-#define setSubmenu_(inst, m)                                            objc_msgSend(inst, LoadedObjCSelectors[ 24], m)
-#define popUpMenuPositioningItem_atLocation_inView_(inst, m, l, v)      objc_msgSend(inst, LoadedObjCSelectors[ 25], m, (CGPoint)(l), v)
-#define initWithCGImage_size_(inst, i, s)                               objc_msgSend(inst, LoadedObjCSelectors[ 26], i, s)
-#define initWithContentRect_styleMask_backing_defer_(inst, r, m, b, d)  objc_msgSend(inst, LoadedObjCSelectors[ 27], r, (unsigned)(m), (unsigned)(b), (bool)(d))
-#define initWithTitle_action_keyEquivalent_(inst, t, a, k)              objc_msgSend(inst, LoadedObjCSelectors[ 28], t, a, k)
-#define ContentRectForFrameRect_                                                           LoadedObjCSelectors[ 29]
-#define FrameRectForContentRect_                                                           LoadedObjCSelectors[ 30]
-#define VisibleFrame                                                                       LoadedObjCSelectors[ 31]
-#define Frame                                                                              LoadedObjCSelectors[ 32]
-#define setFrame_(inst, f)                                              objc_msgSend(inst, LoadedObjCSelectors[ 33], f)
-#define setFrame_display_animate_(inst, f, d, a)                        objc_msgSend(inst, LoadedObjCSelectors[ 34], f, d, a)
-#define setInitialFirstResponder_(inst, r)                              objc_msgSend(inst, LoadedObjCSelectors[ 35], r)
-#define setMinSize_(inst, s)                                            objc_msgSend(inst, LoadedObjCSelectors[ 36], s)
-#define setTitle_(inst, t)                                              objc_msgSend(inst, LoadedObjCSelectors[ 37], t)
-#define setStringValue_(inst, s)                                        objc_msgSend(inst, LoadedObjCSelectors[ 38], s)
-#define WindowShouldClose_                                                                 LoadedObjCSelectors[ 39]
-#define WindowDidResize_                                                                   LoadedObjCSelectors[ 40]
-#define makeKeyWindow(inst)                                             objc_msgSend(inst, LoadedObjCSelectors[ 41])
-#define orderFront_(inst, w)                                            objc_msgSend(inst, LoadedObjCSelectors[ 42], w)
-#define orderOut_(inst, w)                                              objc_msgSend(inst, LoadedObjCSelectors[ 43], w)
-#define setNeedsDisplay_(inst, d)                                       objc_msgSend(inst, LoadedObjCSelectors[ 44], (bool)(d))
-#define setDelegate_(inst, d)                                           objc_msgSend(inst, LoadedObjCSelectors[ 45], d)
-#define setEnabled_(inst, b)                                            objc_msgSend(inst, LoadedObjCSelectors[ 46], (bool)(b))
-#define setNextKeyView_(inst, v)                                        objc_msgSend(inst, LoadedObjCSelectors[ 47], v)
-#define setDefaultButtonCell_(inst, c)                                  objc_msgSend(inst, LoadedObjCSelectors[ 48], c)
-#define verticalScroller(inst)                                          objc_msgSend(inst, LoadedObjCSelectors[ 49])
-#define setHasVerticalScroller_(inst, s)                                objc_msgSend(inst, LoadedObjCSelectors[ 50], s)
-#define isEnabled(inst)                                           (bool)objc_msgSend(inst, LoadedObjCSelectors[ 51])
-#define state(inst)                                               (long)objc_msgSend(inst, LoadedObjCSelectors[ 52])
-#define setState_(inst, s)                                              objc_msgSend(inst, LoadedObjCSelectors[ 53], (int)(s))
-#define setToolTip_(inst, t)                                            objc_msgSend(inst, LoadedObjCSelectors[ 54], t)
-#define setButtonType_(inst, t)                                         objc_msgSend(inst, LoadedObjCSelectors[ 55], t)
-#define setBezelStyle_(inst, s)                                         objc_msgSend(inst, LoadedObjCSelectors[ 56], s)
-#define setImagePosition_(inst, p)                                      objc_msgSend(inst, LoadedObjCSelectors[ 57], p)
-#define setSendsActionOnEndEditing_(inst, b)                            objc_msgSend(inst, LoadedObjCSelectors[ 58], (bool)(b))
-#define Control_textView_doCommandBySelector_                                              LoadedObjCSelectors[ 59]
-#define MoveDown_                                                                          LoadedObjCSelectors[ 60]
-#define MoveUp_                                                                            LoadedObjCSelectors[ 61]
-#define setEditable_(inst, e)                                           objc_msgSend(inst, LoadedObjCSelectors[ 62], e)
-#define setSelectable_(inst, s)                                         objc_msgSend(inst, LoadedObjCSelectors[ 63], s)
-#define setBezeled_(inst, b)                                            objc_msgSend(inst, LoadedObjCSelectors[ 64], b)
-#define setBordered_(inst, b)                                           objc_msgSend(inst, LoadedObjCSelectors[ 65], b)
-#define setDrawsBackground_(inst, d)                                    objc_msgSend(inst, LoadedObjCSelectors[ 66], d)
-#define statusItemWithLength_(inst, l)                                  objc_msgSend(inst, LoadedObjCSelectors[ 67], PassT1FV(l))
-#define removeStatusItem_(inst, i)                                      objc_msgSend(inst, LoadedObjCSelectors[ 68], i)
-#define systemStatusBar(inst)                                           objc_msgSend(inst, LoadedObjCSelectors[ 69])
-#define mainScreen(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[ 70])
-#define Thickness                                                                          LoadedObjCSelectors[ 71]
-#define CellSize                                                                           LoadedObjCSelectors[ 72]
-#define tag(inst)                                                       objc_msgSend(inst, LoadedObjCSelectors[ 73])
-#define setTag_(inst, t)                                                objc_msgSend(inst, LoadedObjCSelectors[ 74], t)
-#define setHighlightMode_(inst, b)                                      objc_msgSend(inst, LoadedObjCSelectors[ 75], (bool)(b))
-#define setHidden_(inst, h)                                             objc_msgSend(inst, LoadedObjCSelectors[ 76], (bool)(h))
-#define setContentView_(inst, v)                                        objc_msgSend(inst, LoadedObjCSelectors[ 77], v)
-#define setDocumentView_(inst, v)                                       objc_msgSend(inst, LoadedObjCSelectors[ 78], v)
-#define addSubview_(inst, v)                                            objc_msgSend(inst, LoadedObjCSelectors[ 79], v)
-#define IsFlipped                                                                          LoadedObjCSelectors[ 80]
-#define DrawRect_                                                                          LoadedObjCSelectors[ 81]
-#define MouseLocation                                                                      LoadedObjCSelectors[ 82]
-#define graphicsPort(inst)                                (CGContextRef)objc_msgSend(inst, LoadedObjCSelectors[ 83])
-#define currentContext(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[ 84])
-#define defaultManager(inst)                                            objc_msgSend(inst, LoadedObjCSelectors[ 85])
-#define systemFontOfSize_(inst, s)                                      objc_msgSend(inst, LoadedObjCSelectors[ 86], PassT1FV(s))
-#define SystemFontSize                                                                     LoadedObjCSelectors[ 87]
-#define MaximumAdvancement                                                                 LoadedObjCSelectors[ 88]
-#define setIndeterminate_(inst, i)                                      objc_msgSend(inst, LoadedObjCSelectors[ 89], (bool)(i))
-#define setAlignment_(inst, a)                                          objc_msgSend(inst, LoadedObjCSelectors[ 90], (int)(a))
-#define addTableColumn_(inst, c)                                        objc_msgSend(inst, LoadedObjCSelectors[ 91], (id)(c))
-#define headerCell(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[ 92])
-#define setWantsLayer_(inst, w)                                         objc_msgSend(inst, LoadedObjCSelectors[ 93], (bool)(w))
-#define scaleUnitSquareToSize_(inst, s)                                 objc_msgSend(inst, LoadedObjCSelectors[ 94], (CGSize)(s))
-#define drawInRect_withAttributes_(inst, r, a)                          objc_msgSend(inst, LoadedObjCSelectors[ 95], (CGRect)(r), (id)(a))
-#define TextDidChange_                                                                     LoadedObjCSelectors[ 96]
-#define stringValue(inst)                                               objc_msgSend(inst, LoadedObjCSelectors[ 97])
-#define DoubleValue                                                                        LoadedObjCSelectors[ 98]
-#define setDoubleValue_(inst, v)                                        objc_msgSend(inst, LoadedObjCSelectors[ 99], (double)(v))
-#define setIntValue_(inst, v)                                           objc_msgSend(inst, LoadedObjCSelectors[100], (NSInteger)(v))
-#define displayIfNeeded(inst)                                           objc_msgSend(inst, LoadedObjCSelectors[101])
-#define setMinValue_(inst, v)                                           objc_msgSend(inst, LoadedObjCSelectors[102], (double)(v))
-#define setMaxValue_(inst, v)                                           objc_msgSend(inst, LoadedObjCSelectors[103], (double)(v))
-#define setValueWraps_(inst, w)                                         objc_msgSend(inst, LoadedObjCSelectors[104], w)
-#define setFormatter_(inst, f)                                          objc_msgSend(inst, LoadedObjCSelectors[105], f)
-#define setFormatterBehavior_(inst, b)                                  objc_msgSend(inst, LoadedObjCSelectors[106], b)
-#define setNumberStyle_(inst, s)                                        objc_msgSend(inst, LoadedObjCSelectors[107], s)
-#define setPartialStringValidationEnabled(inst, b)                      objc_msgSend(inst, LoadedObjCSelectors[108], b)
-#define IsPartialStringValid_newEditingString_errorDescription_                            LoadedObjCSelectors[109]
-#define getObjectValue_forString_errorDescription_(inst, v, s, e) (bool)objc_msgSend(inst, LoadedObjCSelectors[110], v, s, e)
-#define reloadData(inst)                                                objc_msgSend(inst, LoadedObjCSelectors[111])
-#define dataCell(inst)                                                  objc_msgSend(inst, LoadedObjCSelectors[112])
-#define setDataCell_(inst, c)                                           objc_msgSend(inst, LoadedObjCSelectors[113], c)
-#define setDataSource_(inst, d)                                         objc_msgSend(inst, LoadedObjCSelectors[114], d)
-#define setResizingMask_(inst, m)                                       objc_msgSend(inst, LoadedObjCSelectors[115], m)
-#define NumberOfRowsInTableView_                                                           LoadedObjCSelectors[116]
-#define TableView_objectValueForTableColumn_row_                                           LoadedObjCSelectors[117]
-#define TableView_setObjectValue_forTableColumn_row_                                       LoadedObjCSelectors[118]
-#define TableView_dataCellForTableColumn_row_                                              LoadedObjCSelectors[119]
-#define TableView_viewForTableColumn_row_                                                  LoadedObjCSelectors[120]
-
 /// name of the menu responder class
 #define CLS_MENU "lNSM"
 /// name of the instance variable to access the CTRL structure
@@ -316,138 +18,20 @@
 
 
 
-enum {
-    NSBorderlessWindowMask         = (0     ),
-    NSTitledWindowMask             = (1 << 0),
-    NSClosableWindowMask           = (1 << 1),
-    NSMiniaturizableWindowMask     = (1 << 2),
-    NSResizableWindowMask          = (1 << 3),
-    NSNonactivatingPanelMask       = (1 << 7),
-    NSTexturedBackgroundWindowMask = (1 << 8),
-};
-enum {
-    NSSquareStatusItemLength   = -2,
-    NSVariableStatusItemLength = -1,
-};
-enum {
-    NSUserDomainMask    = 0x0001,
-    NSLocalDomainMask   = 0x0002,
-    NSNetworkDomainMask = 0x0004,
-    NSSystemDomainMask  = 0x0008,
-    NSAllDomainsMask    = 0xFFFF,
-};
-enum {
-    NSApplicationDirectory          =   1,
-    NSDemoApplicationDirectory      =   2,
-    NSDeveloperApplicationDirectory =   3,
-    NSAdminApplicationDirectory     =   4,
-    NSLibraryDirectory              =   5,
-    NSDeveloperDirectory            =   6,
-    NSUserDirectory                 =   7,
-    NSDocumentationDirectory        =   8,
-    NSDocumentDirectory             =   9,
-    NSCoreServiceDirectory          =  10,
-    NSAutosavedInformationDirectory =  11,
-    NSDesktopDirectory              =  12,
-    NSCachesDirectory               =  13,
-    NSApplicationSupportDirectory   =  14,
-    NSDownloadsDirectory            =  15,
-    NSInputMethodsDirectory         =  16,
-    NSMoviesDirectory               =  17,
-    NSMusicDirectory                =  18,
-    NSPicturesDirectory             =  19,
-    NSPrinterDescriptionDirectory   =  20,
-    NSSharedPublicDirectory         =  21,
-    NSPreferencePanesDirectory      =  22,
-    NSItemReplacementDirectory      =  99,
-    NSAllApplicationsDirectory      = 100,
-    NSAllLibrariesDirectory         = 101,
-};
-enum {
-    NSNumberFormatterBehaviorDefault =    0,
-    NSNumberFormatterBehavior10_0    = 1000,
-    NSNumberFormatterBehavior10_4    = 1040,
-};
-enum {
-    NSTableColumnNoResizing        = (0     ),
-    NSTableColumnAutoresizingMask  = (1 << 0),
-    NSTableColumnUserResizingMask  = (1 << 1),
-};
-enum {
-    NSApplicationActivationPolicyRegular    = 0,
-    NSApplicationActivationPolicyAccessory  = 1,
-    NSApplicationActivationPolicyProhibited = 2,
-};
-enum {
-    NSMixedState = -1,
-    NSOffState   =  0,
-    NSOnState    =  1,
-};
-enum {
-    NSLeftTextAlignment      = 0,
-    NSRightTextAlignment     = 1,
-    NSCenterTextAlignment    = 2,
-    NSJustifiedTextAlignment = 3,
-    NSNaturalTextAlignment   = 4
-};
-enum {
-    NSMomentaryLightButton        = 0,
-    NSMomentaryPushButton         = 0,
-    NSPushOnPushOffButton         = 1,
-    NSToggleButton                = 2,
-    NSSwitchButton                = 3,
-    NSRadioButton                 = 4,
-    NSMomentaryChangeButton       = 5,
-    NSOnOffButton                 = 6,
-    NSMomentaryLight              = 7,
-    NSMomentaryPushInButton       = 7,
-    NSAcceleratorButton           = 8,
-    NSMultiLevelAcceleratorButton = 9,
-};
-enum {
-    NSRoundedBezelStyle           =  1,
-    NSRegularSquareBezelStyle     =  2,
-    NSSmallIconButtonBezelStyle   =  2,
-    NSThickSquareBezelStyle       =  3,
-    NSThickerSquareBezelStyle     =  4,
-    NSDisclosureBezelStyle        =  5,
-    NSShadowlessSquareBezelStyle  =  6,
-    NSCircularBezelStyle          =  7,
-    NSTexturedSquareBezelStyle    =  8,
-    NSHelpButtonBezelStyle        =  9,
-    NSSmallSquareBezelStyle       = 10,
-    NSTexturedRoundedBezelStyle   = 11,
-    NSRoundRectBezelStyle         = 12,
-    NSRecessedBezelStyle          = 13,
-    NSRoundedDisclosureBezelStyle = 14,
-    NSInlineBezelStyle            = 15,
-};
-enum {
-    NSNoImage       = 0,
-    NSImageOnly     = 1,
-    NSImageLeft     = 2,
-    NSImageRight    = 3,
-    NSImageBelow    = 4,
-    NSImageAbove    = 5,
-    NSImageOverlaps = 6,
-};
-
-
-
 /// subclass storage
 typedef union {
     struct {
-        id wndw,
-           text,
-           butn, /// +cbox/rbox
-           spin,
-           list,
-           pbar,
-           sbox,
-           ibox,
-           frmt; /// number formatter
+        void *wndw,
+             *text,
+             *butn, /// +cbox/rbox
+             *spin,
+             *list,
+             *pbar,
+             *sbox,
+             *ibox,
+             *frmt; /// number formatter
     };
-    id _sub[9];
+    void *_sub[9];
 } SCLS;
 
 /// file find data
@@ -459,34 +43,44 @@ typedef struct {
 
 
 
+static SEL ActionSelector() {
+    static SEL what = 0;
+
+    if (!what)
+        what = sel_registerName("_A");
+    return what;
+}
+
 /// NAME holds the selector associated with this function
-void OnMenu(id this, SEL name, id menu) {
+void OnMenu(void *this, SEL name, __NSMenu *menu) {
     eProcessMenuItem((MENU*)tag(menu));
 }
 
 
 
-id Submenu(MENU *menu, id base) {
+__NSMenu *Submenu(MENU *menu, __NSMenu *base) {
     if (!menu)
         return 0;
 
-    id cbtn, rbtn, item, retn = init(alloc(NSMenu));
+    __NSMenuItem *item;
+    __NSMenu *retn = init(alloc(NSMenu()));
+    __NSImage *cbtn, *rbtn;
     CFStringRef text, null = UTF8(0);
 
-    cbtn = imageNamed_(NSImage, text = UTF8("NSMenuCheckmark"));
+    cbtn = imageNamed_(NSImage(), text = UTF8("NSMenuCheckmark"));
     CFRelease(text);
-    rbtn = imageNamed_(NSImage, text = UTF8("NSMenuRadio"));
+    rbtn = imageNamed_(NSImage(), text = UTF8("NSMenuRadio"));
     CFRelease(text);
     setAutoenablesItems_(retn, false);
     while (menu->text) {
         if (!*menu->text) {
-            item = separatorItem(NSMenuItem);
+            item = separatorItem(NSMenuItem());
             addItem_(retn, item);
         }
         else {
             item = initWithTitle_action_keyEquivalent_
-                       (alloc(NSMenuItem),
-                        text = UTF8(menu->text), ActionSelector, null);
+                       (alloc(NSMenuItem()),
+                        text = UTF8(menu->text), ActionSelector(), null);
             CFRelease(text);
             if (menu->flgs & MFL_CCHK) {
                 setOnStateImage_(item, (menu->flgs & MFL_RCHK & ~MFL_CCHK)?
@@ -495,12 +89,12 @@ id Submenu(MENU *menu, id base) {
                                  NSOnState : NSOffState);
             }
             if (menu->chld) {
-                id next = Submenu(menu->chld, base);
+                __NSMenu *next = Submenu(menu->chld, base);
                 setSubmenu_(item, next);
                 release(next);
             }
-            /// might be dangerous if sizeof(long) is less than sizeof(MENU*)
-            setTag_(item, menu);
+            /// might be dangerous if sizeof(__NSInteger) < sizeof(MENU*)
+            setTag_(item, (__NSInteger)menu);
 
             setEnabled_(item, (menu->flgs & MFL_GRAY)? false : true);
             setTarget_(item, base);
@@ -516,7 +110,7 @@ id Submenu(MENU *menu, id base) {
 
 
 void rOpenContextMenu(MENU *tmpl) {
-    id menu, base;
+    __NSMenu *menu, *base;
     CGPoint dptr;
 
     /// getting the pre-allocated menu responder class
@@ -525,7 +119,7 @@ void rOpenContextMenu(MENU *tmpl) {
     DelClass((Class)menu);
 
     menu = Submenu(tmpl, base);
-    GetT2DV(dptr, NSEvent, MouseLocation);
+    dptr = mouseLocation(NSEvent());
     popUpMenuPositioningItem_atLocation_inView_(menu, nil, dptr, nil);
     release(menu);
     release(base);
@@ -572,7 +166,7 @@ long rMessage(char *text, char *head, uint32_t flgs) {
 
 
 
-void OnTray(id this) {
+void OnTray(void *this, SEL name) {
     MENU *mctx;
 
     GET_IVAR(this, VAR_DATA, &mctx);
@@ -590,14 +184,16 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
     CGImageRef iref = CGBitmapContextCreateImage(ctxt);
     CFStringRef capt;
 
-    id ibtn, pict, *vfld, *vmet, *retn = malloc(3 * sizeof(*retn));
+    __NSImage *pict;
+    __NSButton *ibtn;
+    void **vfld, **vmet, **retn = malloc(3 * sizeof(*retn));
 
-    pict = initWithCGImage_size_(alloc(NSImage), iref, ((CGPoint){}));
-    retn[0] = statusItemWithLength_(systemStatusBar(NSStatusBar),
+    pict = initWithCGImage_size_(alloc(NSImage()), iref, ((CGPoint){}));
+    retn[0] = statusItemWithLength_(systemStatusBar(NSStatusBar()),
                                     NSVariableStatusItemLength);
     retain(retn[0]);
-    retn[1] = NewClass(NSObject, "lNST", vfld = PutToArr(VAR_CTRL, VAR_DATA),
-                       vmet = PutToArr(ActionSelector, OnTray));
+    retn[1] = NewClass(NSObject(), "lNST", vfld = PutToArr(VAR_CTRL, VAR_DATA),
+                       vmet = PutToArr(ActionSelector(), OnTray));
     retn[2] = init(alloc(retn[1]));
     SET_IVAR(retn[2], VAR_CTRL, retn);
     SET_IVAR(retn[2], VAR_DATA, mctx);
@@ -610,7 +206,7 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
         setHighlightMode_(ibtn = retn[0], true);
     setImage_(ibtn, pict);
     setTarget_(ibtn, retn[2]);
-    setAction_(ibtn, ActionSelector);
+    setAction_(ibtn, ActionSelector());
     setToolTip_(retn[0], capt = UTF8(text));
     CFRelease(capt);
     release(pict);
@@ -623,9 +219,9 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
 
 
 void rFreeTrayIcon(intptr_t icon) {
-    id *retn = (id*)icon;
+    void **retn = (void**)icon;
 
-    removeStatusItem_(systemStatusBar(NSStatusBar), retn[0]);
+    removeStatusItem_(systemStatusBar(NSStatusBar()), retn[0]);
     release(retn[0]);
     release(retn[2]);
     DelClass((Class)retn[1]);
@@ -711,7 +307,7 @@ void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
 
     CFRunLoopAddTimer(CFRunLoopGetCurrent(), tmrp, kCFRunLoopCommonModes);
     while (root->priv[2])
-        run(sharedApplication(NSApplication));
+        run(sharedApplication(NSApplication()));
     CFRunLoopTimerInvalidate(tmrp);
 }
 
@@ -724,15 +320,15 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
 
     while (root->prev)
         root = root->prev;
-    GetT4DV(rect, (id)ctrl->priv[0], Frame);
+    rect = frame((void*)ctrl->priv[0]);
     rect.origin.x = (xpos < 0)? -xpos : xpos * (uint16_t)(root->priv[2]      );
     rect.origin.y = (ypos < 0)? -ypos : ypos * (uint16_t)(root->priv[2] >> 16);
-    setFrame_((id)ctrl->priv[0], rect);
+    setFrame_((__NSView*)ctrl->priv[0], rect);
 }
 
-bool OnValidate(id this, SEL name, id part, id retn, id desc) {
-    extern void NSBeep();
-    id temp;
+bool OnValidate(void *this, SEL name,
+                CFStringRef part, CFStringRef retn, CFStringRef desc) {
+    void *temp;
 
     if (getObjectValue_forString_errorDescription_(this, &temp, part, desc))
         return true;
@@ -740,7 +336,7 @@ bool OnValidate(id this, SEL name, id part, id retn, id desc) {
     return false;
 }
 
-void OnSpin(id this) {
+void OnSpin(void *this, SEL name) {
     double retn = 0.0;
     CTRL *ctrl = 0;
 
@@ -748,12 +344,12 @@ void OnSpin(id this) {
     if (!ctrl)
         return;
 
-    GetT1DV(retn, (id)ctrl->priv[6], DoubleValue);
-    setIntValue_((id)ctrl->priv[7], retn);
+    retn = doubleValue((__NSStepper*)ctrl->priv[6]);
+    setIntegerValue_((__NSTextField*)ctrl->priv[7], retn);
     ctrl->fc2e(ctrl, MSG_NSET, retn);
 }
 
-void OnEdit(id this) {
+void OnEdit(void *this, SEL name) {
     CTRL *ctrl = 0;
     double retn;
 
@@ -761,12 +357,18 @@ void OnEdit(id this) {
     if (!ctrl || ((ctrl->flgs & FCT_TTTT) != FCT_SPIN))
         return;
 
-    GetT1DV(retn, (id)ctrl->priv[7], DoubleValue);
+    retn = doubleValue((__NSTextField*)ctrl->priv[7]);
     ctrl->fe2c(ctrl, MSG_NSET, retn);
 }
 
-bool OnKeys(id this, SEL name, id ctrl, id view, SEL what) {
-    if ((what == MoveDown_) || (what == MoveUp_)) {
+bool OnKeys(void *this, SEL name, void *ctrl, __NSView *view, SEL what) {
+    static SEL MoveUp = 0, MoveDown = 0;
+
+    if (!MoveUp) {
+        MoveUp = __moveUp_();
+        MoveDown = __moveDown_();
+    }
+    if ((what == MoveDown) || (what == MoveUp)) {
         CTRL *ctrl = 0;
         double retn;
 
@@ -774,8 +376,8 @@ bool OnKeys(id this, SEL name, id ctrl, id view, SEL what) {
         if (!ctrl || ((ctrl->flgs & FCT_TTTT) != FCT_SPIN))
             return false;
 
-        GetT1DV(retn, (id)ctrl->priv[7], DoubleValue);
-        ctrl->fe2c(ctrl, MSG_NSET, retn + ((what == MoveUp_)? 1.0 : -1.0));
+        retn = doubleValue((void*)ctrl->priv[7]);
+        ctrl->fe2c(ctrl, MSG_NSET, retn + ((what == MoveUp)? 1.0 : -1.0));
         return true;
     }
     return false;
@@ -795,14 +397,14 @@ bool OnKeys(id this, SEL name, id ctrl, id view, SEL what) {
 intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__SHW: {
-            id thrd = sharedApplication(NSApplication);
+            __NSApplication *thrd = sharedApplication(NSApplication());
 
             if (!data)
-                orderOut_((id)ctrl->priv[0], thrd);
+                orderOut_((__NSWindow*)ctrl->priv[0], thrd);
             else {
                 activateIgnoringOtherApps_
-                    (sharedApplication(NSApplication), true);
-                orderFront_((id)ctrl->priv[0], thrd);
+                    (sharedApplication(NSApplication()), true);
+                orderFront_((__NSWindow*)ctrl->priv[0], thrd);
             }
             break;
         }
@@ -815,15 +417,17 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                              *   (uint16_t)(ctrl->priv[2] >> 16);
             ctrl->priv[1] =  (uint16_t)scrn.size.width
                           | ((uint32_t)scrn.size.height << 16);
-            GetT4DV(area, (id)ctrl->priv[0], FrameRectForContentRect_, scrn);
-            GetT4DV(scrn, mainScreen(NSScreen), VisibleFrame);
+            area = frameRectForContentRect_((void*)ctrl->priv[0], scrn);
+            scrn = visibleFrame(mainScreen(NSScreen()));
             area.origin.x = 0.5 * (scrn.size.width  - area.size.width )
                           + scrn.origin.x;
             area.origin.y = 0.5 * (scrn.size.height - area.size.height)
                           + scrn.origin.y;
-            setFrame_display_animate_((id)ctrl->priv[0], area, true, false);
-            setMinSize_((id)ctrl->priv[0], area.size);
-            orderFront_((id)ctrl->priv[0], sharedApplication(NSApplication));
+            setFrame_display_animate_((__NSWindow*)ctrl->priv[0],
+                                      area, true, false);
+            setMinSize_((__NSWindow*)ctrl->priv[0], area.size);
+            orderFront_((__NSWindow*)ctrl->priv[0],
+                         sharedApplication(NSApplication()));
             break;
         }
     }
@@ -844,9 +448,10 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG_PPOS:
-            setDoubleValue_((id)ctrl->priv[0], ctrl->priv[1] = data);
-            setNeedsDisplay_((id)ctrl->priv[0], true);
-            displayIfNeeded((id)ctrl->priv[0]);
+            setDoubleValue_((__NSProgressIndicator*)ctrl->priv[0],
+                             ctrl->priv[1] = data);
+            setNeedsDisplay_((__NSProgressIndicator*)ctrl->priv[0], true);
+            displayIfNeeded((__NSProgressIndicator*)ctrl->priv[0]);
             CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
             break;
 
@@ -858,7 +463,7 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
         case MSG_PLIM:
             ctrl->priv[2] = data;
-            setMaxValue_((id)ctrl->priv[0],
+            setMaxValue_((__NSProgressIndicator*)ctrl->priv[0],
                          (ctrl->priv[2] > 0)? ctrl->priv[2] : 1);
             break;
 
@@ -882,16 +487,18 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__ENB:
-            setEnabled_((id)ctrl->priv[0], !!data);
+            setEnabled_((__NSButton*)ctrl->priv[0], !!data);
             break;
 
         case MSG_BGST:
-            return ((isEnabled((id)ctrl->priv[0]))? FCS_ENBL : 0)
-                 | ((state((id)ctrl->priv[0]) == NSOnState)? FCS_MARK : 0);
+            return ((isEnabled((__NSButton*)ctrl->priv[0]))? FCS_ENBL : 0)
+                 | ((state((__NSButton*)ctrl->priv[0]) == NSOnState)?
+                     FCS_MARK : 0);
 
         case MSG_BCLK:
-            cmsg = (state((id)ctrl->priv[0]) == NSOnState);
-            setState_((id)ctrl->priv[0], (data)? NSOnState : NSOffState);
+            cmsg = (state((__NSButton*)ctrl->priv[0]) == NSOnState);
+            setState_((__NSButton*)ctrl->priv[0],
+                      (data)? NSOnState : NSOffState);
             return !!cmsg;
     }
     return 0;
@@ -913,44 +520,49 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
     switch (cmsg) {
         case MSG__ENB:
-            setEnabled_((id)ctrl->priv[7], !!data);
+            setEnabled_((__NSTableView*)ctrl->priv[7], !!data);
             if (OSX_10_07_PLUS)
                 for (cmsg = 0; cmsg < ctrl->priv[4]; cmsg++)
-                    setEnabled_(((id*)ctrl->priv[2])[cmsg], !!data);
+                    setEnabled_(((__NSView**)ctrl->priv[2])[cmsg], !!data);
             break;
 
         case MSG_LCOL:
-            setStringValue_(headerCell((id)ctrl->priv[6]), capt = UTF8(data));
+            setStringValue_(headerCell((__NSTableColumn*)ctrl->priv[6]),
+                            capt = UTF8(data));
             CFRelease(capt);
             if (OSX_10_07_PLUS)
                 for (cmsg = 0; cmsg < ctrl->priv[4]; cmsg++)
-                    setState_(((id*)ctrl->priv[2])[cmsg],
+                    setState_(((__NSView**)ctrl->priv[2])[cmsg],
                              (ctrl->fc2e(ctrl, MSG_LGST, cmsg))?
                               NSOnState : NSOffState);
-            reloadData((id)ctrl->priv[7]);
+            reloadData((__NSTableView*)ctrl->priv[7]);
             break;
 
         case MSG_LADD:
-            ctrl->priv[5] = (intptr_t)realloc((CFStringRef*)ctrl->priv[5],
-                                             ++ctrl->priv[4] * sizeof(id*));
+            ctrl->priv[5] = (intptr_t)
+                realloc((CFStringRef*)ctrl->priv[5],
+                       ++ctrl->priv[4] * sizeof(CFStringRef));
             ((CFStringRef*)ctrl->priv[5])[ctrl->priv[4] - 1] = UTF8(data);
             if (OSX_10_07_PLUS) {
-                id elem;
+                __NSView *elem;
 
-                ctrl->priv[2] = (intptr_t)realloc((id*)ctrl->priv[2],
-                                                  ctrl->priv[4] * sizeof(id*));
-                elem = init(alloc((id)ctrl->priv[1]));
+                ctrl->priv[2] = (intptr_t)
+                    realloc((__NSView**)ctrl->priv[2],
+                             ctrl->priv[4] * sizeof(__NSView**));
+                elem = init(alloc((__NSButton*)ctrl->priv[1]));
                 SET_IVAR(elem, VAR_CTRL, ctrl);
                 SET_IVAR(elem, VAR_DATA, ctrl->priv[4] - 1);
                 setTarget_(elem, elem);
-                setAction_(elem, ActionSelector);
+                setAction_(elem, ActionSelector());
                 setButtonType_(elem, NSSwitchButton);
-                ((id*)ctrl->priv[2])[ctrl->priv[4] - 1] = elem;
+                ((__NSView**)ctrl->priv[2])[ctrl->priv[4] - 1] = elem;
             }
             else if (!ctrl->priv[2]) {
-                ctrl->priv[2] = (intptr_t)init(alloc((id)ctrl->priv[1]));
-                setButtonType_((id)ctrl->priv[2], NSSwitchButton);
-                setDataCell_((id)ctrl->priv[6], (id)ctrl->priv[2]);
+                ctrl->priv[2] = (intptr_t)
+                    init(alloc((__NSButton*)ctrl->priv[1]));
+                setButtonType_((__NSButton*)ctrl->priv[2], NSSwitchButton);
+                setDataCell_((__NSTableColumn*)ctrl->priv[6],
+                             (__NSCell*)ctrl->priv[2]);
             }
             break;
     }
@@ -973,7 +585,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         case MSG__GSZ: {
             CGRect rect;
 
-            GetT4DV(rect, (id)ctrl->priv[0], Frame);
+            rect = frame((void*)ctrl->priv[0]);
             return (uint16_t)rect.size.width
                 | ((uint32_t)rect.size.height << 16);
         }
@@ -982,34 +594,31 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG__SHW:
-            setHidden_((id)ctrl->priv[0], !data);
+            setHidden_((__NSView*)ctrl->priv[0], !data);
             break;
 
         case MSG__ENB:
-            setEnabled_((id)ctrl->priv[6], !!data);
-            setEnabled_((id)ctrl->priv[7], !!data);
+            setEnabled_((__NSStepper*)ctrl->priv[6], !!data);
+            setEnabled_((__NSTextField*)ctrl->priv[7], !!data);
             break;
 
-        case MSG_NGET: {
-            CGFloat retn = 0;
+        case MSG_NGET:
+            return doubleValue((__NSStepper*)ctrl->priv[6]);
 
-            GetT1DV(retn, (id)ctrl->priv[6], DoubleValue);
-            return retn;
-        }
         case MSG_NSET:
             data = (data > ctrl->priv[1])? data : ctrl->priv[1];
             data = (data < ctrl->priv[2])? data : ctrl->priv[2];
-            setDoubleValue_((id)ctrl->priv[6], data);
-            OnSpin((id)ctrl->priv[6]);
+            setDoubleValue_((__NSStepper*)ctrl->priv[6], data);
+            OnSpin((__NSStepper*)ctrl->priv[6], 0);
             break;
 
         case MSG_NDIM:
             ctrl->priv[1] = -(uint16_t)data;
             ctrl->priv[2] = (uint16_t)(data >> 16);
-            setMinValue_((id)ctrl->priv[6], ctrl->priv[1]);
-            setMaxValue_((id)ctrl->priv[6], ctrl->priv[2]);
-            setDoubleValue_((id)ctrl->priv[6], 0);
-            OnSpin((id)ctrl->priv[6]);
+            setMinValue_((__NSStepper*)ctrl->priv[6], ctrl->priv[1]);
+            setMaxValue_((__NSStepper*)ctrl->priv[6], ctrl->priv[2]);
+            setDoubleValue_((__NSStepper*)ctrl->priv[6], 0);
+            OnSpin((__NSStepper*)ctrl->priv[6], 0);
             break;
     }
     return 0;
@@ -1031,7 +640,7 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         case MSG__GSZ: {
             CGRect rect;
 
-            GetT4DV(rect, (id)ctrl->priv[0], Frame);
+            rect = frame((__NSTextField*)ctrl->priv[0]);
             return (uint16_t)rect.size.width
                 | ((uint32_t)rect.size.height << 16);
         }
@@ -1040,7 +649,7 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG__SHW:
-            setHidden_((id)ctrl->priv[0], !data);
+            setHidden_((__NSTextField*)ctrl->priv[0], !data);
             break;
     }
     return 0;
@@ -1081,20 +690,20 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 ctrl->priv[1] =  (uint16_t)rect.size.width
                               | ((uint32_t)rect.size.height << 16);
             }
-            setFrame_((id)ctrl->priv[0], rect);
+            setFrame_((__NSScrollView*)ctrl->priv[0], rect);
             if (ctrl->fc2e) {
                 data = rect.size.height;
-                GetT4DV(rect, verticalScroller((id)ctrl->priv[0]), Frame);
+                rect = frame(verticalScroller((__NSScrollView*)ctrl->priv[0]));
                 cmsg = ctrl->priv[1] - rect.size.width;
                 data += ctrl->fc2e(ctrl, MSG_SMAX, cmsg);
-                setFrame_((id)ctrl->priv[7],
-                         ((CGRect){{0, 0}, {(uint16_t)cmsg, data}}));
+                setFrame_((__NSView*)ctrl->priv[7],
+                          (CGRect){{0, 0}, {(uint16_t)cmsg, data}});
             }
-            setNeedsDisplay_((id)ctrl->priv[0], true);
+            setNeedsDisplay_((__NSScrollView*)ctrl->priv[0], true);
             break;
         }
         case MSG__SHW:
-            setHidden_((id)ctrl->priv[0], !data);
+            setHidden_((__NSScrollView*)ctrl->priv[0], !data);
             break;
     }
     return 0;
@@ -1118,12 +727,12 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG__SHW:
-            setHidden_((id)ctrl->priv[0], !data);
+            setHidden_((__NSView*)ctrl->priv[0], !data);
             break;
 
         case MSG_IFRM:
             ctrl->priv[7] = data;
-            setNeedsDisplay_((id)ctrl->priv[0], true);
+            setNeedsDisplay_((__NSView*)ctrl->priv[0], true);
             break;
     }
     return 0;
@@ -1138,7 +747,7 @@ void rFreeControl(CTRL *ctrl) {
             long iter;
 
             /// releasing the formatter
-            release((id)ctrl->priv[5]);
+            release((__NSNumberFormatter*)ctrl->priv[5]);
             /// releasing classes
             for (iter = sizeof(scls->_sub) / sizeof(*scls->_sub) - 1;
                  iter >= 0; iter--)
@@ -1161,8 +770,8 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_SPIN:
-            release((id)ctrl->priv[6]); /// releasing NSStepper
-            release((id)ctrl->priv[7]); /// releasing NSTextField
+            release((__NSStepper*)ctrl->priv[6]);
+            release((__NSTextField*)ctrl->priv[7]);
             /// do not release the formatter, it is common between all spins
             break;
 
@@ -1171,23 +780,23 @@ void rFreeControl(CTRL *ctrl) {
             if (!OSX_10_07_PLUS) {
                 for (--ctrl->priv[4]; ctrl->priv[4] >= 0; ctrl->priv[4]--)
                     CFRelease(((CFStringRef*)ctrl->priv[5])[ctrl->priv[4]]);
-                release((id)ctrl->priv[2]);
+                release((__NSCell*)ctrl->priv[2]);
             }
             else {
                 for (--ctrl->priv[4]; ctrl->priv[4] >= 0; ctrl->priv[4]--) {
-                    release(((id*)ctrl->priv[2])[ctrl->priv[4]]);
+                    release(((__NSView**)ctrl->priv[2])[ctrl->priv[4]]);
                     CFRelease(((CFStringRef*)ctrl->priv[5])[ctrl->priv[4]]);
                 }
-                free((id*)ctrl->priv[2]);
+                free((__NSView**)ctrl->priv[2]);
             }
             DelClass((Class)ctrl->priv[1]);
             free((CFStringRef*)ctrl->priv[5]);
-            release((id)ctrl->priv[6]); /// releasing NSTableColumn
-            release((id)ctrl->priv[7]); /// releasing NSTableView
+            release((__NSTableColumn*)ctrl->priv[6]);
+            release((__NSTableView*)ctrl->priv[7]);
             break;
 
         case FCT_SBOX:
-            release((id)ctrl->priv[7]); /// releasing NSView
+            release((__NSView*)ctrl->priv[7]);
             break;
 
         case FCT_IBOX:
@@ -1197,40 +806,45 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_PBAR:
-            CFRelease((void*)ctrl->priv[5]);     /// releasing text attributes
+            /// releasing text attributes and the string
+            CFRelease((CFArrayRef)ctrl->priv[5]);
             if (ctrl->priv[3])
-                CFRelease((void*)ctrl->priv[3]); /// freeing the text string
+                CFRelease((CFStringRef)ctrl->priv[3]);
             break;
     }
-    release((id)ctrl->priv[0]);
+    release((__NSView*)ctrl->priv[0]);
 }
 
 
 
-NSInteger OnRows(id this, SEL name, id view) {
+__NSInteger OnRows(void *this, SEL name, __NSTableView *view) {
     CTRL *ctrl = 0;
 
     GET_IVAR(view, VAR_CTRL, &ctrl);
     return ctrl->priv[4];
 }
 
-id OnValueOld(id this, SEL name, id view, id icol, NSInteger irow) {
+__NSCell *OnValueOld(void *this, SEL name, __NSTableView *view,
+                     __NSTableColumn *icol, __NSInteger irow) {
     return (OSX_10_07_PLUS)? 0 : dataCell(icol);
 }
 
-id OnValue(id this, SEL name, id view, id icol, NSInteger irow) {
+__NSCell *OnValue(void *this, SEL name, __NSTableView *view,
+                  __NSTableColumn *icol, __NSInteger irow) {
+    __NSCell *cell;
     CTRL *ctrl = 0;
-    id cell;
 
     GET_IVAR(view, VAR_CTRL, &ctrl);
-    cell = (OSX_10_07_PLUS)? ((id*)ctrl->priv[2])[irow] : dataCell(icol);
+    cell = (OSX_10_07_PLUS)?
+           ((__NSCell**)ctrl->priv[2])[irow] : dataCell(icol);
     setTitle_(cell, ((CFStringRef*)ctrl->priv[5])[irow]);
     setState_(cell, (ctrl->fc2e(ctrl, MSG_LGST, irow))?
                      NSOnState : NSOffState);
     return cell;
 }
 
-void OnReset(id this, SEL name, id view, id what, id icol, NSInteger irow) {
+void OnReset(void *this, SEL name, __NSTableView *view,
+             void *what, __NSTableColumn *icol, __NSInteger irow) {
     CTRL *ctrl = 0;
 
     GET_IVAR(view, VAR_CTRL, &ctrl);
@@ -1238,7 +852,7 @@ void OnReset(id this, SEL name, id view, id what, id icol, NSInteger irow) {
               (irow << 1) | (ctrl->fc2e(ctrl, MSG_LGST, irow) ^ 1));
 }
 
-void OnListButton(id this) {
+void OnListButton(void *this, SEL name) {
     CTRL *ctrl = 0;
     intptr_t irow;
 
@@ -1247,21 +861,22 @@ void OnListButton(id this) {
     OnReset(0, 0, this, 0, 0, irow);
 }
 
-void OnButton(id this) {
+void OnButton(void *this, SEL name) {
     CTRL *ctrl = 0;
 
     GET_IVAR(this, VAR_CTRL, &ctrl);
-    ctrl->fc2e(ctrl, MSG_BCLK, ((ctrl->flgs & FCT_TTTT) != FCT_BUTN)?
-                                (state((id)ctrl->priv[0]) == NSOnState) : 0);
+    ctrl->fc2e(ctrl, MSG_BCLK,
+              ((ctrl->flgs & FCT_TTTT) != FCT_BUTN)?
+              (state((__NSButton*)ctrl->priv[0]) == NSOnState) : 0);
 }
 
-void PBoxDraw(id this, SEL name, CGRect rect) {
-    struct objc_super prev = {this, class(NSProgressIndicator)};
+void PBoxDraw(void *this, SEL name, CGRect rect) {
+    struct objc_super prev = {this, class(NSProgressIndicator())};
     CTRL *ctrl = 0;
 
     GET_IVAR(this, VAR_CTRL, &ctrl);
-    objc_msgSendSuper(&prev, DrawRect_, rect);
-    GetT4DV(rect, (id)ctrl->priv[0], Frame);
+    objc_msgSendSuper(&prev, __drawRect_(), rect);
+    rect = frame((void*)ctrl->priv[0]);
     rect.origin.y = ctrl->priv[4];
     rect.origin.x = 0;
     if (OSX_10_10_PLUS) {
@@ -1269,10 +884,11 @@ void PBoxDraw(id this, SEL name, CGRect rect) {
         rect.size.width *= 0.5;
         rect.size.height *= 0.5;
     }
-    drawInRect_withAttributes_((id)ctrl->priv[3], rect, (id)ctrl->priv[5]);
+    drawInRect_withAttributes_((void*)ctrl->priv[3], rect,
+                               (CFDictionaryRef)ctrl->priv[5]);
 }
 
-void IBoxDraw(id this, SEL name, CGRect rect) {
+void IBoxDraw(void *this, SEL name, CGRect rect) {
     CGImageRef pict;
     CGRect area;
     AINF anim;
@@ -1291,30 +907,30 @@ void IBoxDraw(id this, SEL name, CGRect rect) {
     CGContextFlush((CGContextRef)ctrl->priv[1]);
     ctrl->fc2e(ctrl, MSG_IFRM, (intptr_t)&anim);
     pict = CGBitmapContextCreateImage((CGContextRef)ctrl->priv[1]);
-    CGContextDrawImage(graphicsPort(currentContext(NSGraphicsContext)),
+    CGContextDrawImage(graphicsPort(currentContext(NSGraphicsContext())),
                        area, pict);
     CGImageRelease(pict);
 }
 
-bool OnFalse() {
+bool OnFalse(void *this, SEL name) {
     return false;
 }
 
-bool OnTrue() {
+bool OnTrue(void *this, SEL name) {
     return true;
 }
 
-bool OnClose(id this) {
+bool OnClose(void *this, SEL name) {
     CTRL *ctrl = 0;
 
     GET_IVAR(this, VAR_CTRL, &ctrl);
     ctrl->priv[2] = 0; /// requesting a halt, or just crashing if CTRL is 0
                        /// (the program is stopping anyway)
-    stop_(sharedApplication(NSApplication), this);
+    stop_(sharedApplication(NSApplication()), this);
     return true;
 }
 
-void OnSize(id this) {
+void OnSize(void *this, SEL name) {
     CTRL *ctrl = 0;
     CGRect rect;
 
@@ -1322,8 +938,8 @@ void OnSize(id this) {
     if (!ctrl)
         return;
 
-    GetT4DV(rect, (id)ctrl->priv[0], Frame);
-    GetT4DV(rect, (id)ctrl->priv[0], ContentRectForFrameRect_, rect);
+    rect = frame((void*)ctrl->priv[0]);
+    rect = contentRectForFrameRect_((void*)ctrl->priv[0], rect);
     ctrl->priv[1] =  (uint16_t)rect.size.width
                   | ((uint32_t)rect.size.height << 16);
     ctrl->fc2e(ctrl, MSG_WSZC, ctrl->priv[1]);
@@ -1331,79 +947,81 @@ void OnSize(id this) {
 
 void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
     #define CLS_MAKE(r, p, n, f, ...) \
-        { id *CLS_MAKE = PutToArr(__VA_ARGS__); \
-          r = NewClass(p, n, f, CLS_MAKE); free(CLS_MAKE); }
+        do { void **CLS_MAKE = PutToArr(__VA_ARGS__); \
+             r = NewClass(p, n, f, CLS_MAKE); free(CLS_MAKE); } while (0)
     CTRL *root;
     SCLS *scls;
     CFStringRef capt;
     CGRect dims;
-    id gwnd;
+    void *gwnd;
 
     gwnd = 0;
     root = ctrl->prev;
     if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
-        id *vfld, thrd;
+        __NSApplication *thrd;
         CGPoint fadv;
         CGFloat ffsz;
+        void **vfld;
 
         ctrl->fe2c = FE2CW;
-        GetT1DV(ffsz, NSFont, SystemFontSize);
-        gwnd = systemFontOfSize_(NSFont, ffsz);
-        GetT2DV(fadv, gwnd, MaximumAdvancement);
+        ffsz = systemFontSize(NSFont());
+        gwnd = systemFontOfSize_(NSFont(), ffsz);
+        fadv = maximumAdvancement(gwnd);
         ctrl->priv[2] =  (uint16_t)round(0.45 * fadv.x)
                       | ((uint32_t)round(0.60 * ffsz) << 16);
 
         vfld = PutToArr(VAR_CTRL);
         ctrl->priv[6] = (intptr_t)(scls = calloc(1, sizeof(*scls)));
-        CLS_MAKE(scls->wndw, NSView,              "rNSW", vfld,
-                 WindowShouldClose_, OnClose,
-                 WindowDidResize_, OnSize, IsFlipped, OnTrue);
-        CLS_MAKE(scls->text, NSTextField,         "rNST", vfld,
-                 ActionSelector, OnEdit,
-                 Control_textView_doCommandBySelector_, OnKeys);
-        CLS_MAKE(scls->butn, NSButton,            "rNSB", vfld,
-                 ActionSelector, OnButton);
-        CLS_MAKE(scls->spin, NSStepper,           "rNSN", vfld,
-                 ActionSelector, OnSpin);
-        CLS_MAKE(scls->list, NSTableView,         "rNSL", vfld,
-                (OSX_10_07_PLUS)? TableView_viewForTableColumn_row_
-               : TableView_dataCellForTableColumn_row_,        OnValue,
-                 TableView_objectValueForTableColumn_row_,     OnValueOld,
-                 TableView_setObjectValue_forTableColumn_row_, OnReset,
-                 NumberOfRowsInTableView_,                     OnRows);
-        CLS_MAKE(scls->pbar, NSProgressIndicator, "rNSP", vfld,
-                 DrawRect_, PBoxDraw);
-        CLS_MAKE(scls->sbox, NSView,              "rNSS", vfld,
-                 IsFlipped, OnTrue);
-        CLS_MAKE(scls->ibox, NSView,              "rNSI", vfld,
-                 DrawRect_, IBoxDraw);
-        CLS_MAKE(scls->frmt, NSNumberFormatter,   "rNSF", vfld,
-                 IsPartialStringValid_newEditingString_errorDescription_,
+        CLS_MAKE(scls->wndw, NSView(),              "rNSW", vfld,
+                 __windowShouldClose_(), OnClose,
+                 __windowDidResize_(), OnSize, __isFlipped(), OnTrue);
+        CLS_MAKE(scls->text, NSTextField(),         "rNST", vfld,
+                 ActionSelector(), OnEdit,
+                 __control_textView_doCommandBySelector_(), OnKeys);
+        CLS_MAKE(scls->butn, NSButton(),            "rNSB", vfld,
+                 ActionSelector(), OnButton);
+        CLS_MAKE(scls->spin, NSStepper(),           "rNSN", vfld,
+                 ActionSelector(), OnSpin);
+        CLS_MAKE(scls->list, NSTableView(),         "rNSL", vfld,
+                (OSX_10_07_PLUS)? __tableView_viewForTableColumn_row_()
+               : __tableView_dataCellForTableColumn_row_(),        OnValue,
+                 __tableView_objectValueForTableColumn_row_(),     OnValueOld,
+                 __tableView_setObjectValue_forTableColumn_row_(), OnReset,
+                 __numberOfRowsInTableView_(),                     OnRows);
+        CLS_MAKE(scls->pbar, NSProgressIndicator(), "rNSP", vfld,
+                 __drawRect_(), PBoxDraw);
+        CLS_MAKE(scls->sbox, NSView(),              "rNSS", vfld,
+                 __isFlipped(), OnTrue);
+        CLS_MAKE(scls->ibox, NSView(),              "rNSI", vfld,
+                 __drawRect_(), IBoxDraw);
+        CLS_MAKE(scls->frmt, NSNumberFormatter(),   "rNSF", vfld,
+                 __isPartialStringValid_newEditingString_errorDescription_(),
                  OnValidate);
         free(vfld);
 
         ctrl->priv[5] = (intptr_t)init(alloc(scls->frmt));
-        setFormatterBehavior_((id)ctrl->priv[5],
+        setFormatterBehavior_((__NSNumberFormatter*)ctrl->priv[5],
                                NSNumberFormatterBehavior10_4);
-        setNumberStyle_((id)ctrl->priv[5], kCFNumberFormatterNoStyle);
-        setPartialStringValidationEnabled((id)ctrl->priv[5], true);
-
+        setNumberStyle_((__NSNumberFormatter*)ctrl->priv[5],
+                         kCFNumberFormatterNoStyle);
+        setPartialStringValidationEnabled_((__NSNumberFormatter*)ctrl->priv[5],
+                                            true);
         dims = (CGRect){};
         gwnd = initWithContentRect_styleMask_backing_defer_
-                   (alloc(NSWindow), dims, NSTitledWindowMask
-                                         | NSClosableWindowMask
-                                         | NSResizableWindowMask
-                                         | NSMiniaturizableWindowMask,
+                   (alloc(NSWindow()), dims, NSTitledWindowMask
+                                           | NSClosableWindowMask
+                                           | NSResizableWindowMask
+                                           | NSMiniaturizableWindowMask,
                     kCGBackingStoreBuffered, false);
 
         ctrl->priv[7] = (intptr_t)init(alloc(scls->wndw));
-        setContentView_(gwnd, (id)ctrl->priv[7]);
-        setDelegate_(gwnd, (id)ctrl->priv[7]);
+        setContentView_(gwnd, (__NSView*)ctrl->priv[7]);
+        setDelegate_(gwnd, (__NSView*)ctrl->priv[7]);
         setTitle_(gwnd, capt = UTF8(text));
         CFRelease(capt);
-        SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
+        SET_IVAR((__NSView*)ctrl->priv[7], VAR_CTRL, ctrl);
         makeKeyWindow(gwnd);
-        thrd = sharedApplication(NSApplication);
+        thrd = sharedApplication(NSApplication());
         activateIgnoringOtherApps_(thrd, true);
         orderFront_(gwnd, thrd);
     }
@@ -1462,13 +1080,15 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 SET_IVAR(gwnd, VAR_CTRL, ctrl);
                 SET_IVAR(gwnd, VAR_DATA, nil);
                 setTarget_(gwnd, gwnd);
-                setAction_(gwnd, ActionSelector);
+                setAction_(gwnd, ActionSelector());
                 setButtonType_(gwnd, NSMomentaryLightButton);
                 setBezelStyle_(gwnd, NSSmallSquareBezelStyle);
                 if ((ctrl->flgs & FSB_DFLT) && ctrl->prev
                 && ((ctrl->prev->flgs & FCT_TTTT) == FCT_WNDW)) {
-                    setInitialFirstResponder_((id)ctrl->prev->priv[0], gwnd);
-                    setDefaultButtonCell_((id)ctrl->prev->priv[0], cell(gwnd));
+                    setInitialFirstResponder_((__NSWindow*)ctrl->prev->priv[0],
+                                               gwnd);
+                    setDefaultButtonCell_((__NSWindow*)ctrl->prev->priv[0],
+                                          (__NSButtonCell*)cell(gwnd));
                 }
                 setTitle_(gwnd, capt = UTF8(temp));
                 CFRelease(capt);
@@ -1480,7 +1100,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 gwnd = init(alloc(scls->butn));
                 SET_IVAR(gwnd, VAR_CTRL, ctrl);
                 setTarget_(gwnd, gwnd);
-                setAction_(gwnd, ActionSelector);
+                setAction_(gwnd, ActionSelector());
                 setButtonType_(gwnd, NSSwitchButton);
                 setImagePosition_(gwnd, (ctrl->flgs & FSX_LEFT)?
                                          NSImageRight : NSImageLeft);
@@ -1497,59 +1117,68 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 CGPoint spin;
 
                 ctrl->fe2c = FE2CN;
-                gwnd = init(alloc(NSView));
+                gwnd = init(alloc(NSView()));
                 ctrl->priv[3] = root->priv[5];
                 ctrl->priv[6] = (intptr_t)init(alloc(scls->spin));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->text));
-                SET_IVAR((id)ctrl->priv[6], VAR_CTRL, ctrl);
-                SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
-                GetT2DV(spin, cell((id)ctrl->priv[6]), CellSize);
+                SET_IVAR((__NSStepper*)ctrl->priv[6], VAR_CTRL, ctrl);
+                SET_IVAR((__NSTextField*)ctrl->priv[7], VAR_CTRL, ctrl);
+                spin = cellSize(cell((__NSStepper*)ctrl->priv[6]));
                 temp.size = dims.size;
                 temp.size.width -= spin.x;
-                setFrame_((id)ctrl->priv[7], temp);
-                setSendsActionOnEndEditing_(cell((id)ctrl->priv[7]), true);
-                setFormatter_((id)ctrl->priv[7], (id)ctrl->priv[3]);
-                setDelegate_((id)ctrl->priv[7], (id)ctrl->priv[7]);
-                setTarget_((id)ctrl->priv[7], (id)ctrl->priv[7]);
-                setAction_((id)ctrl->priv[7], ActionSelector);
+                setFrame_((__NSTextField*)ctrl->priv[7], temp);
+                setSendsActionOnEndEditing_
+                    (cell((__NSTextField*)ctrl->priv[7]), true);
+                setFormatter_((__NSTextField*)ctrl->priv[7],
+                              (__NSNumberFormatter*)ctrl->priv[3]);
+                setDelegate_((__NSTextField*)ctrl->priv[7],
+                             (__NSTextField*)ctrl->priv[7]);
+                setTarget_((__NSTextField*)ctrl->priv[7],
+                           (__NSTextField*)ctrl->priv[7]);
+                setAction_((__NSTextField*)ctrl->priv[7], ActionSelector());
                 temp.origin.x = temp.size.width;
                 temp.size.width = spin.x;
-                setFrame_((id)ctrl->priv[6], temp);
-                setValueWraps_((id)ctrl->priv[6], false);
-                setTarget_((id)ctrl->priv[6], (id)ctrl->priv[6]);
-                setAction_((id)ctrl->priv[6], ActionSelector);
-                addSubview_(gwnd, (id)ctrl->priv[6]);
-                addSubview_(gwnd, (id)ctrl->priv[7]);
+                setFrame_((__NSStepper*)ctrl->priv[6], temp);
+                setValueWraps_((__NSStepper*)ctrl->priv[6], false);
+                setTarget_((__NSStepper*)ctrl->priv[6],
+                           (__NSStepper*)ctrl->priv[6]);
+                setAction_((__NSStepper*)ctrl->priv[6], ActionSelector());
+                addSubview_(gwnd, (__NSView*)ctrl->priv[6]);
+                addSubview_(gwnd, (__NSView*)ctrl->priv[7]);
                 break;
             }
             case FCT_LIST: {
-                id *vfld, *vmet;
+                void **vfld, **vmet;
                 CGRect temp = {};
 
                 ctrl->fe2c = FE2CL;
                 temp.size = dims.size;
                 ctrl->priv[1] = (intptr_t)NewClass
-                    ((OSX_10_07_PLUS)? NSButton : NSButtonCell,
+                    ((OSX_10_07_PLUS)? NSButton() : NSButtonCell(),
                      "rNSX", vfld = PutToArr(VAR_CTRL, VAR_DATA),
-                      vmet = PutToArr(ActionSelector, OnListButton));
+                      vmet = PutToArr(ActionSelector(), OnListButton));
                 free(vmet);
                 free(vfld);
 
-                gwnd = init(alloc(NSScrollView));
+                gwnd = init(alloc(NSScrollView()));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
-                SET_IVAR((id)ctrl->priv[7], VAR_CTRL, ctrl);
-                setDataSource_((id)ctrl->priv[7], (id)ctrl->priv[7]);
-                setDelegate_((id)ctrl->priv[7], (id)ctrl->priv[7]);
-                setFrame_((id)ctrl->priv[7], temp);
+                SET_IVAR((__NSTableView*)ctrl->priv[7], VAR_CTRL, ctrl);
+                setDataSource_((__NSTableView*)ctrl->priv[7],
+                               (__NSTableView*)ctrl->priv[7]);
+                setDelegate_((__NSTableView*)ctrl->priv[7],
+                             (__NSTableView*)ctrl->priv[7]);
+                setFrame_((__NSTableView*)ctrl->priv[7], temp);
 
-                ctrl->priv[6] = (intptr_t)init(alloc(NSTableColumn));
-                setStringValue_(headerCell((id)ctrl->priv[6]), capt = UTF8(0));
+                ctrl->priv[6] = (intptr_t)init(alloc(NSTableColumn()));
+                setStringValue_(headerCell((__NSTableColumn*)ctrl->priv[6]),
+                                capt = UTF8(0));
                 CFRelease(capt);
-                addTableColumn_((id)ctrl->priv[7], (id)ctrl->priv[6]);
-                setResizingMask_((id)ctrl->priv[6],
+                addTableColumn_((__NSTableView*)ctrl->priv[7],
+                                (__NSTableColumn*)ctrl->priv[6]);
+                setResizingMask_((__NSTableColumn*)ctrl->priv[6],
                                   NSTableColumnAutoresizingMask);
 
-                setDocumentView_(gwnd, (id)ctrl->priv[7]);
+                setDocumentView_(gwnd, (__NSView*)ctrl->priv[7]);
                 setHasVerticalScroller_(gwnd, true);
                 break;
             }
@@ -1559,11 +1188,11 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                               | ((uint32_t)dims.size.height << 16);
                 ctrl->priv[2] =  (uint16_t)dims.origin.x
                               | ((uint32_t)dims.origin.y << 16);
-                gwnd = init(alloc(NSScrollView));
+                gwnd = init(alloc(NSScrollView()));
                 setHasVerticalScroller_(gwnd, true);
                 setDrawsBackground_(gwnd, false);
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->sbox));
-                setDocumentView_(gwnd, (id)ctrl->priv[7]);
+                setDocumentView_(gwnd, (__NSView*)ctrl->priv[7]);
                 break;
 
             case FCT_IBOX: {
@@ -1587,22 +1216,22 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             }
             case FCT_PBAR: {
                 CGFloat ffsz;
-                id psty, font;
+                __NSFont *font;
+                void *psty;
 
                 ctrl->fe2c = FE2CP;
                 gwnd = init(alloc(scls->pbar));
                 SET_IVAR(gwnd, VAR_CTRL, ctrl);
                 setIndeterminate_(gwnd, false);
                 setWantsLayer_(gwnd, true);
-                psty = init(alloc(NSMutableParagraphStyle));
+                psty = init(alloc(NSMutableParagraphStyle()));
                 setAlignment_(psty, NSCenterTextAlignment);
-                GetT1DV(ffsz, NSFont, SystemFontSize);
-                ffsz *= 0.85;
+                ffsz = systemFontSize(NSFont()) * 0.85;
                 if (OSX_10_10_PLUS) {
-                    scaleUnitSquareToSize_(gwnd, ((CGSize){2.0, 2.0}));
+                    scaleUnitSquareToSize_(gwnd, (CGSize){2.0, 2.0});
                     ffsz *= 0.5;
                 }
-                font = systemFontOfSize_(NSFont, ffsz);
+                font = systemFontOfSize_(NSFont(), ffsz);
                 ctrl->priv[5] = (intptr_t)MakeDict
                     (kCTFontAttributeName,           font,
                      kCTParagraphStyleAttributeName, psty);
@@ -1612,27 +1241,28 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             }
         }
         setFrame_(gwnd, dims);
-        addSubview_((id)ctrl->prev->priv[7], gwnd);
+        addSubview_((__NSView*)ctrl->prev->priv[7], gwnd);
         if (ctrl->prev && ((ctrl->prev->flgs & FCT_TTTT) == FCT_WNDW)) {
-            id resp; /// tab-stop responder
+            __NSView *resp; /// tab-stop responder
 
             switch (ctrl->flgs & FCT_TTTT) {
                 case FCT_TEXT:
                 case FCT_PBAR:
                 case FCT_SBOX: resp = 0; break;
-                case FCT_SPIN: resp = (id)ctrl->priv[7]; break;
+                case FCT_SPIN: resp = (__NSView*)ctrl->priv[7]; break;
                 default:       resp = gwnd; break;
             }
             if (resp) {
                 if (ctrl->prev->priv[4]) {
-                    setNextKeyView_((id)ctrl->prev->priv[4], resp);
-                    setNextKeyView_(resp, (id)ctrl->prev->priv[3]);
+                    setNextKeyView_((__NSView*)ctrl->prev->priv[4], resp);
+                    setNextKeyView_(resp, (__NSView*)ctrl->prev->priv[3]);
                     ctrl->prev->priv[4] = (intptr_t)resp;
                 }
                 else {
                     ctrl->prev->priv[3] = ctrl->prev->priv[4] = (intptr_t)resp;
                     /// shall do nothing if there already is a first responder
-                    setInitialFirstResponder_((id)ctrl->prev->priv[0], resp);
+                    setInitialFirstResponder_((__NSWindow*)ctrl->prev->priv[0],
+                                               resp);
                 }
             }
         }
@@ -1644,25 +1274,25 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 
 int main(int argc, char *argv[]) {
-    id *vmet, pool, urls, menu;
+    void **vmet, *pool, *menu;
     CFStringRef path;
+    CFArrayRef urls;
     CGFloat icon;
     CGRect dims;
     char *conf;
     FIND find = {};
 
-    LoadObjC((char*[]){STR_OBJC_CLAS, 0}, (char*[]){STR_OBJC_SELE, 0});
-
-    pool = init(alloc(NSAutoreleasePool));
-    setActivationPolicy_(sharedApplication(NSApplication),
+    pool = init(alloc(NSAutoreleasePool()));
+    setActivationPolicy_(sharedApplication(NSApplication()),
                          NSApplicationActivationPolicyAccessory);
 
-    find.home = CopyUTF8(path = (CFStringRef)bundlePath(mainBundle(NSBundle)));
+    find.home = CopyUTF8(path =
+                        (CFStringRef)bundlePath(mainBundle(NSBundle())));
     find.home = realloc(find.home, find.hlen = strlen(find.home) + 32);
     strcat(find.home, "/Contents/MacOS/"DEF_FLDR"/");
     find.iter = scandir(find.home, &find.dirs, 0, alphasort);
 
-    urls = URLsForDirectory_inDomains_(defaultManager(NSFileManager),
+    urls = URLsForDirectory_inDomains_(defaultManager(NSFileManager()),
                                        NSApplicationSupportDirectory,
                                        NSUserDomainMask);
     path = CFURLCopyFileSystemPath
@@ -1675,10 +1305,10 @@ int main(int argc, char *argv[]) {
     if (!((mkdir(conf, 0755))? (errno != EEXIST)? 0 : 1 : 2))
         printf("WARNING: cannot create '%s'!", conf);
 
-    GetT4DV(dims, mainScreen(NSScreen), VisibleFrame);
-    GetT1DV(icon, systemStatusBar(NSStatusBar), Thickness);
-    menu = NewClass(NSObject, CLS_MENU, 0,
-                    vmet = PutToArr(ActionSelector, OnMenu));
+    dims = visibleFrame(mainScreen(NSScreen()));
+    icon = thickness(systemStatusBar(NSStatusBar()));
+    menu = NewClass(NSObject(), CLS_MENU, 0,
+                    vmet = PutToArr(ActionSelector(), OnMenu));
     free(vmet);
     eExecuteEngine(conf, (intptr_t)&find, icon, icon, dims.origin.x,
                    dims.origin.y, dims.size.width  + dims.origin.x,

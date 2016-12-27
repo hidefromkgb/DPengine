@@ -135,7 +135,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         return !!rndr;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mtex);
     test = calloc(1, sizeof(*test));
-    mtex = min(mtex, 4096);
+    mtex = (mtex < 4096)? mtex : 4096;
     while (mtex) {
         curr = MakeTex(test, mtex, mtex, 1,
                        GL_TEXTURE_3D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
@@ -244,8 +244,8 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                 fill = 0;
                 cbnk++;
             }
-            fend = min((GLfloat)fcnt,
-                       (GLfloat)(mtex * mtex - fill) / txsz[curr].size);
+            fend = (mtex * mtex - fill) / txsz[curr].size;
+            fend = (fcnt < fend)? fcnt : fend;
             fill += txsz[curr].size * fend;
             fcnt -= fend;
         }
@@ -265,8 +265,8 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                 cbnk++;
             }
             /// final frame that may be safely allocated in the current FB
-            fend = min((GLfloat)txsz[curr].fcnt,
-                       (GLfloat)(atex + fill - aptr) / txsz[curr].size);
+            fend = (atex + fill - aptr) / txsz[curr].size;
+            fend = (txsz[curr].fcnt < fend)? txsz[curr].fcnt : fend;
             if (!fcnt) {
                 /// this is the first time we allocate frames for the CA,
                 /// so let`s add its header to the frame header bank

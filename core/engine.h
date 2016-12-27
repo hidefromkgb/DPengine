@@ -1,8 +1,5 @@
 #include <stdint.h>
 
-#define _STRING(s) #s
-#define STRING(s) _STRING(s)
-
 #define LIB_OPEN __attribute__((visibility("default")))
 
 #ifdef _WIN32
@@ -19,10 +16,10 @@
     #define INCBIN(file, pvar)     \
     __asm__(                       \
         ".section .data;"          \
-        ".global _"STRING(pvar)";" \
-        "_"STRING(pvar)":"         \
+        ".global _"#pvar";"        \
+        "_"#pvar":"                \
         ".incbin \""file"\";"      \
-        "_"STRING(pvar)"_end:"     \
+        "_"#pvar"_end:"            \
         ".byte 0;"                 \
         ".align 4;"                \
         ".section .text;"          \
@@ -32,10 +29,10 @@
     #define INCBIN(file, pvar)     \
     __asm__(                       \
         ".section __DATA,__data\n" \
-        ".globl _"STRING(pvar)"\n" \
-        "_"STRING(pvar)":\n"       \
+        ".globl _"#pvar"\n"        \
+        "_"#pvar":\n"              \
         ".incbin \""file"\"\n"     \
-        "_"STRING(pvar)"_end:\n"   \
+        "_"#pvar"_end:\n"          \
         ".byte 0\n"                \
         ".align 4\n"               \
         ".section __TEXT,__text\n" \
@@ -45,10 +42,10 @@
     #define INCBIN(file, pvar)     \
     __asm__(                       \
         ".pushsection .data;"      \
-        ".global "STRING(pvar)";"  \
-        STRING(pvar)":"            \
+        ".global "#pvar";"         \
+        #pvar":"                   \
         ".incbin \""file"\";"      \
-        STRING(pvar)"_end:"        \
+        #pvar"_end:"               \
         ".byte 0;"                 \
         ".align 4;"                \
         ".popsection;"             \
