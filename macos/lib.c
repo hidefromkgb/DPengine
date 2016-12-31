@@ -19,9 +19,9 @@ struct SEMD {
 typedef struct _DRAW {
     uint32_t attr;       /// last known mouse attributes
     long xdim, ydim;     /// drawing area dimensions
-    __NSWindow *hwnd;
-    __NSView *view;
-    __NSCursor *hand; /// main window with its view and the cursor
+    NSWindow *hwnd;      /// main window
+    NSView *view;        /// main view
+    NSCursor *hand;      /// main cursor
     CGContextRef hctx;   /// output context handle
 } DRAW;
 
@@ -37,8 +37,8 @@ uint64_t lTimeFunc() {
 
 
 void lRestartEngine(ENGD *engd) {
-    __NSApplication *thrd = sharedApplication(NSApplication());
-    __NSEvent *post;
+    NSApplication *thrd = sharedApplication(NSApplication());
+    NSEvent *post;
 
     stop_(thrd, 0);
     /// if called from inside a timer context, bump an event to the loop
@@ -53,7 +53,7 @@ void lRestartEngine(ENGD *engd) {
 
 
 void lShowMainWindow(ENGD *engd, long show) {
-    __NSApplication *thrd = sharedApplication(NSApplication());
+    NSApplication *thrd = sharedApplication(NSApplication());
     intptr_t *data;
 
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
@@ -262,9 +262,9 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                   BGRA **bptr, intptr_t *data, uint32_t flgs) {
     #define SUB_VDLG "lNSV"
 
-    __NSView *view;
-    __NSApplication *thrd;
-    __NSAutoreleasePool *pool;
+    NSView *view;
+    NSApplication *thrd;
+    NSAutoreleasePool *pool;
     void **vmet, **vfld;
     CFRunLoopTimerRef tmrf, tmrd;
     CFStringRef scib;
@@ -285,7 +285,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     dims = (CGRect){{0, 0}, {draw.xdim, draw.ydim}};
 
     /// view delegate`s methods and custom fields
-    vmet = PutToArr(__drawRect_(), OnDraw, __isOpaque(), OnOpaq);
+    vmet = PutToArr(drawRect_(), OnDraw, isOpaque(), OnOpaq);
     vfld = PutToArr(VAR_ENGD);
 
     pool = init(alloc(NSAutoreleasePool()));
@@ -307,13 +307,13 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     else {
         int attr[] = {NSOpenGLPFADoubleBuffer, NSOpenGLPFADepthSize, 32, 0},
             opaq = 0;
-        __NSOpenGLPixelFormat *pfmt;
-        __NSOpenGLContext *ctxt;
+        NSOpenGLPixelFormat *pfmt;
+        NSOpenGLContext *ctxt;
 
         pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat()), attr);
         view = NewClass(NSOpenGLView(), SUB_VDLG, vfld, vmet);
         draw.view =
-            (__NSView*)initWithFrame_pixelFormat_(alloc(view), dims, pfmt);
+            (NSView*)initWithFrame_pixelFormat_(alloc(view), dims, pfmt);
         makeCurrentContext((ctxt = openGLContext(draw.view)));
         setValues_forParameter_(ctxt, &opaq, NSOpenGLCPSurfaceOpacity);
         release(pfmt);
