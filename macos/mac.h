@@ -329,7 +329,8 @@ static void *NewClass(void *base, char *name, void **flds, void **mths) {
          SubclassedObjCClasses && SubclassedObjCClasses[iter].name; iter++)
         if (!strcmp(name, SubclassedObjCClasses[iter].name)) {
             retn = SubclassedObjCClasses[iter].uuid;
-            SubclassedObjCClasses[iter].icnt++;
+            if (base)
+                SubclassedObjCClasses[iter].icnt++;
             break;
         }
     if (!retn) {

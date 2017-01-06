@@ -9,29 +9,35 @@
 
 
 
-/// name of the menu responder class
-#define CLS_MENU "lNSM"
-/// name of the instance variable to access the CTRL structure
-#define VAR_CTRL "ctrl"
-/// name of the instance variable to access the associated data
-#define VAR_DATA "data"
+#define CLS_CELL "lNSX" /** class name for list box cell **/
+#define CLS_TRAY "lNSR" /** class name for tray icon **/
+#define CLS_MENU "lNSM" /** class name for menu responder **/
+#define CLS_WNDW "lNSW" /** class name for window **/
+#define CLS_TEXT "lNST" /** class name for text box **/
+#define CLS_BUTN "lNSB" /** class name for button **/
+#define CLS_SPIN "lNSN" /** class name for spin box **/
+#define CLS_LIST "lNSL" /** class name for list box **/
+#define CLS_PBAR "lNSP" /** class name for progress bar **/
+#define CLS_SBOX "lNSS" /** class name for size box **/
+#define CLS_IBOX "lNSI" /** class name for image box **/
+#define CLS_FRMT "lNSF" /** class name for number formatter **/
+
+#define VAR_CTRL "ctrl" /** instance variable for the CTRL structure **/
+#define VAR_DATA "data" /** instance variable for the associated data **/
 
 
 
 /// subclass storage
-typedef union {
-    struct {
-        void *wndw,
-             *text,
-             *butn, /// +cbox/rbox
-             *spin,
-             *list,
-             *pbar,
-             *sbox,
-             *ibox,
-             *frmt; /// number formatter
-    };
-    void *_sub[9];
+typedef struct {
+    void *wndw,
+         *text,
+         *butn, /// +cbox/rbox
+         *spin,
+         *list,
+         *pbar,
+         *sbox,
+         *ibox,
+         *frmt; /// number formatter
 } SCLS;
 
 /// file find data
@@ -114,13 +120,8 @@ void rOpenContextMenu(MENU *tmpl) {
     NSMenu *menu, *base;
     CGPoint dptr;
 
-    /// getting the pre-allocated menu responder class
-    menu = NewClass(0, CLS_MENU, 0, 0);
-    base = init(alloc(menu));
-    DelClass((Class)menu);
-
-    menu = Submenu(tmpl, base);
     dptr = mouseLocation(NSEvent());
+    menu = Submenu(tmpl, base = init(alloc(NewClass(0, CLS_MENU, 0, 0))));
     popUpMenuPositioningItem_atLocation_inView_(menu, nil, dptr, nil);
     release(menu);
     release(base);
@@ -187,26 +188,22 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
 
     NSImage *pict;
     NSButton *ibtn;
-    void **vfld, **vmet, **retn = malloc(3 * sizeof(*retn));
+    void **retn = malloc(2 * sizeof(*retn));
 
     pict = initWithCGImage_size_(alloc(NSImage()), iref, ((CGPoint){}));
     retn[0] = statusItemWithLength_(systemStatusBar(NSStatusBar()),
                                     NSVariableStatusItemLength);
     retain(retn[0]);
-    retn[1] = NewClass(NSObject(), "lNST", vfld = PutToArr(VAR_CTRL, VAR_DATA),
-                       vmet = PutToArr(ActionSelector(), OnTray));
-    retn[2] = init(alloc(retn[1]));
-    SET_IVAR(retn[2], VAR_CTRL, retn);
-    SET_IVAR(retn[2], VAR_DATA, mctx);
-    free(vmet);
-    free(vfld);
+    retn[1] = init(alloc(NewClass(0, CLS_TRAY, 0, 0)));
+    SET_IVAR(retn[1], VAR_CTRL, retn);
+    SET_IVAR(retn[1], VAR_DATA, mctx);
 
     if (OSX_10_10_PLUS)
         ibtn = button(retn[0]); /// Yosemite or newer, so we are using buttons
     else
         setHighlightMode_(ibtn = retn[0], true);
     setImage_(ibtn, pict);
-    setTarget_(ibtn, retn[2]);
+    setTarget_(ibtn, retn[1]);
     setAction_(ibtn, ActionSelector());
     setToolTip_(retn[0], capt = UTF8(text));
     CFRelease(capt);
@@ -224,8 +221,7 @@ void rFreeTrayIcon(intptr_t icon) {
 
     removeStatusItem_(systemStatusBar(NSStatusBar()), retn[0]);
     release(retn[0]);
-    release(retn[2]);
-    DelClass((Class)retn[1]);
+    release(retn[1]);
     free(retn);
 }
 
@@ -744,19 +740,14 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 void rFreeControl(CTRL *ctrl) {
     switch (ctrl->flgs & FCT_TTTT) {
         case FCT_WNDW: {
-            SCLS *scls = (SCLS*)ctrl->priv[6];
-            long iter;
-
+            /// releasing the subclass storage
+            free((SCLS*)ctrl->priv[6]);
             /// releasing the formatter
             release((NSNumberFormatter*)ctrl->priv[5]);
-            /// releasing classes
-            for (iter = sizeof(scls->_sub) / sizeof(*scls->_sub) - 1;
-                 iter >= 0; iter--)
-                DelClass((Class)scls->_sub[iter]);
-            free(scls);
-            /// we must release neither the window nor its NSView;
+            /// we must release neither the window (0) nor its view (7);
             /// if we do, the program segfaults, don`t know why exactly
-            return;
+            ctrl->priv[0] = 0;
+            break;
         }
         case FCT_TEXT:
             break;
@@ -790,7 +781,6 @@ void rFreeControl(CTRL *ctrl) {
                 }
                 free((NSView**)ctrl->priv[2]);
             }
-            DelClass((Class)ctrl->priv[1]);
             free((CFStringRef*)ctrl->priv[5]);
             release((NSTableColumn*)ctrl->priv[6]);
             release((NSTableView*)ctrl->priv[7]);
@@ -813,7 +803,8 @@ void rFreeControl(CTRL *ctrl) {
                 CFRelease((CFStringRef)ctrl->priv[3]);
             break;
     }
-    release((NSView*)ctrl->priv[0]);
+    if (ctrl->priv[0])
+        release((NSObject*)ctrl->priv[0]);
 }
 
 
@@ -947,9 +938,6 @@ void OnSize(void *this, SEL name) {
 }
 
 void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
-    #define CLS_MAKE(r, p, n, f, ...) \
-        do { void **CLS_MAKE = PutToArr(__VA_ARGS__); \
-             r = NewClass(p, n, f, CLS_MAKE); free(CLS_MAKE); } while (0)
     CTRL *root;
     SCLS *scls;
     CFStringRef capt;
@@ -962,7 +950,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         NSApplication *thrd;
         CGPoint fadv;
         CGFloat ffsz;
-        void **vfld;
 
         ctrl->fe2c = FE2CW;
         ffsz = systemFontSize(NSFont());
@@ -971,34 +958,16 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         ctrl->priv[2] =  (uint16_t)round(0.45 * fadv.x)
                       | ((uint32_t)round(0.60 * ffsz) << 16);
 
-        vfld = PutToArr(VAR_CTRL);
         ctrl->priv[6] = (intptr_t)(scls = calloc(1, sizeof(*scls)));
-        CLS_MAKE(scls->wndw, NSView(),              "rNSW", vfld,
-                 windowShouldClose_(), OnClose,
-                 windowDidResize_(), OnSize, isFlipped(), OnTrue);
-        CLS_MAKE(scls->text, NSTextField(),         "rNST", vfld,
-                 ActionSelector(), OnEdit,
-                 control_textView_doCommandBySelector_(), OnKeys);
-        CLS_MAKE(scls->butn, NSButton(),            "rNSB", vfld,
-                 ActionSelector(), OnButton);
-        CLS_MAKE(scls->spin, NSStepper(),           "rNSN", vfld,
-                 ActionSelector(), OnSpin);
-        CLS_MAKE(scls->list, NSTableView(),         "rNSL", vfld,
-                (OSX_10_07_PLUS)? tableView_viewForTableColumn_row_()
-               : tableView_dataCellForTableColumn_row_(),        OnValue,
-                 tableView_objectValueForTableColumn_row_(),     OnValueOld,
-                 tableView_setObjectValue_forTableColumn_row_(), OnReset,
-                 numberOfRowsInTableView_(),                     OnRows);
-        CLS_MAKE(scls->pbar, NSProgressIndicator(), "rNSP", vfld,
-                 drawRect_(), PBoxDraw);
-        CLS_MAKE(scls->sbox, NSView(),              "rNSS", vfld,
-                 isFlipped(), OnTrue);
-        CLS_MAKE(scls->ibox, NSView(),              "rNSI", vfld,
-                 drawRect_(), IBoxDraw);
-        CLS_MAKE(scls->frmt, NSNumberFormatter(),   "rNSF", vfld,
-                 isPartialStringValid_newEditingString_errorDescription_(),
-                 OnValidate);
-        free(vfld);
+        scls->wndw = NewClass(0, CLS_WNDW, 0, 0);
+        scls->text = NewClass(0, CLS_TEXT, 0, 0);
+        scls->butn = NewClass(0, CLS_BUTN, 0, 0);
+        scls->spin = NewClass(0, CLS_SPIN, 0, 0);
+        scls->list = NewClass(0, CLS_LIST, 0, 0);
+        scls->pbar = NewClass(0, CLS_PBAR, 0, 0);
+        scls->sbox = NewClass(0, CLS_SBOX, 0, 0);
+        scls->ibox = NewClass(0, CLS_IBOX, 0, 0);
+        scls->frmt = NewClass(0, CLS_FRMT, 0, 0);
 
         ctrl->priv[5] = (intptr_t)init(alloc(scls->frmt));
         setFormatterBehavior_((NSNumberFormatter*)ctrl->priv[5],
@@ -1149,17 +1118,11 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 break;
             }
             case FCT_LIST: {
-                void **vfld, **vmet;
                 CGRect temp = {};
 
                 ctrl->fe2c = FE2CL;
                 temp.size = dims.size;
-                ctrl->priv[1] = (intptr_t)NewClass
-                    ((OSX_10_07_PLUS)? NSButton() : NSButtonCell(),
-                     "rNSX", vfld = PutToArr(VAR_CTRL, VAR_DATA),
-                      vmet = PutToArr(ActionSelector(), OnListButton));
-                free(vmet);
-                free(vfld);
+                ctrl->priv[1] = (intptr_t)NewClass(0, CLS_CELL, 0, 0);
 
                 gwnd = init(alloc(NSScrollView()));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
@@ -1269,13 +1232,15 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         }
     }
     ctrl->priv[0] = (intptr_t)gwnd;
-    #undef CLS_MAKE
 }
 
 
 
 int main(int argc, char *argv[]) {
-    void **vmet, *pool, *menu;
+    #define CLS_MAKE(r, p, n, f, ...) \
+        do { void **CLS_MAKE = PutToArr(__VA_ARGS__); \
+             r = NewClass(p, n, f, CLS_MAKE); free(CLS_MAKE); } while (0)
+    void **vfld, *pool, *scls[16] = {};
     CFStringRef path;
     CFArrayRef urls;
     CGFloat icon;
@@ -1308,14 +1273,52 @@ int main(int argc, char *argv[]) {
 
     dims = visibleFrame(mainScreen(NSScreen()));
     icon = thickness(systemStatusBar(NSStatusBar()));
-    menu = NewClass(NSObject(), CLS_MENU, 0,
-                    vmet = PutToArr(ActionSelector(), OnMenu));
-    free(vmet);
+
+    vfld = PutToArr(VAR_CTRL, VAR_DATA);
+    CLS_MAKE(scls[ 0], (OSX_10_07_PLUS)? NSButton() : NSButtonCell(),
+             CLS_CELL, vfld, ActionSelector(), OnListButton);
+    CLS_MAKE(scls[ 1], NSObject(),            CLS_TRAY, vfld,
+             ActionSelector(), OnTray);
+    CLS_MAKE(scls[ 2], NSObject(),            CLS_MENU, 0,
+             ActionSelector(), OnMenu);
+    free(vfld);
+    vfld = PutToArr(VAR_CTRL);
+    CLS_MAKE(scls[ 3], NSView(),              CLS_WNDW, vfld,
+             windowShouldClose_(), OnClose,
+             windowDidResize_(), OnSize, isFlipped(), OnTrue);
+    CLS_MAKE(scls[ 4], NSTextField(),         CLS_TEXT, vfld,
+             ActionSelector(), OnEdit,
+             control_textView_doCommandBySelector_(), OnKeys);
+    CLS_MAKE(scls[ 5], NSButton(),            CLS_BUTN, vfld,
+             ActionSelector(), OnButton);
+    CLS_MAKE(scls[ 6], NSStepper(),           CLS_SPIN, vfld,
+             ActionSelector(), OnSpin);
+    CLS_MAKE(scls[ 7], NSTableView(),         CLS_LIST, vfld,
+            (OSX_10_07_PLUS)? tableView_viewForTableColumn_row_()
+           : tableView_dataCellForTableColumn_row_(),        OnValue,
+             tableView_objectValueForTableColumn_row_(),     OnValueOld,
+             tableView_setObjectValue_forTableColumn_row_(), OnReset,
+             numberOfRowsInTableView_(),                     OnRows);
+    CLS_MAKE(scls[ 8], NSProgressIndicator(), CLS_PBAR, vfld,
+             drawRect_(), PBoxDraw);
+    CLS_MAKE(scls[ 9], NSView(),              CLS_SBOX, vfld,
+             isFlipped(), OnTrue);
+    CLS_MAKE(scls[10], NSView(),              CLS_IBOX, vfld,
+             drawRect_(), IBoxDraw);
+    CLS_MAKE(scls[11], NSNumberFormatter(),   CLS_FRMT, vfld,
+             isPartialStringValid_newEditingString_errorDescription_(),
+             OnValidate);
+    free(vfld);
+
     eExecuteEngine(conf, (intptr_t)&find, icon, icon, dims.origin.x,
                    dims.origin.y, dims.size.width  + dims.origin.x,
                    dims.size.height + dims.origin.y);
-    DelClass((Class)menu);
     release(pool);
     free(conf);
+    /// it is crucial to free all subclasses AFTER freeing the release pool
+    for (argc = 0; argc < sizeof(scls) / sizeof(*scls); argc++)
+        if (scls[argc])
+            DelClass((Class)scls[argc]);
     return 0;
+    #undef CLS_MAKE
 }
