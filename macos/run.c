@@ -1257,6 +1257,7 @@ int main(int argc, char *argv[]) {
     find.home = realloc(find.home, find.hlen = strlen(find.home) + 32);
     strcat(find.home, "/Contents/MacOS/"DEF_FLDR"/");
     find.iter = scandir(find.home, &find.dirs, 0, alphasort);
+    find.iter = (find.iter > 0)? find.iter : 0;
 
     urls = URLsForDirectory_inDomains_(defaultManager(NSFileManager()),
                                        NSApplicationSupportDirectory,

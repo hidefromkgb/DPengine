@@ -917,7 +917,7 @@ int main(int argc, char *argv[]) {
     gint xdim, ydim;
 
     char *home, *conf;
-    FIND find;
+    FIND find = {};
 
     if (!(home = getenv("HOME")))
         home = getpwuid(getuid())->pw_dir;
@@ -933,6 +933,7 @@ int main(int argc, char *argv[]) {
     gscr = gdk_screen_get_default();
     gtk_icon_size_lookup(GTK_ICON_SIZE_DIALOG, &xdim, &ydim);
     find.iter = scandir(DEF_FLDR, &find.dirs, 0, alphasort);
+    find.iter = (find.iter > 0)? find.iter : 0;
     eExecuteEngine(conf, (intptr_t)&find, xdim, ydim, 0, 0,
                    gdk_screen_get_width(gscr), gdk_screen_get_height(gscr));
     free(conf);
