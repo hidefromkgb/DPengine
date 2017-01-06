@@ -6,3 +6,7 @@
 	path = core/ogl/load
 	url = https://github.com/hidefromkgb/ogl_load
 	branch = master
+[submodule "macos/load"]
+	path = macos/load
+	url = https://github.com/hidefromkgb/mac_load
+	branch = master
