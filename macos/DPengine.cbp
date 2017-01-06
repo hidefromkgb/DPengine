@@ -117,7 +117,7 @@
 		<Unit filename="Makefile">
 			<Option virtualFolder="src/" />
 		</Unit>
-		<Unit filename="mac.h">
+		<Unit filename="load/mac_load.h">
 			<Option virtualFolder="src/" />
 		</Unit>
 		<Extensions>
