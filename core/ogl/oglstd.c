@@ -2,7 +2,7 @@
 #include "oglstd.h"
 
 struct RNDR {
-    FVBO *surf;
+    OGL_FVBO *surf;
     T4FV *temp;
     T4FV  disz;
     T4FV  hitd;
@@ -108,7 +108,7 @@ int sizecmp(const void *a, const void *b) {
 
 void FreeRendererOGL(RNDR **rndr) {
     if (rndr && *rndr) {
-        FreeVBO(&(*rndr)->surf);
+        OGL_FreeVBO(&(*rndr)->surf);
         free((*rndr)->temp);
         free(*rndr);
         *rndr = 0;
@@ -126,8 +126,8 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     T3FV *vert;
     TXSZ *txsz;
     BGRA *apal;
-    FTEX *test;
     RNDR *retn;
+    OGL_FTEX *test;
 
     if (!rndr || *rndr)
         return !!rndr;
@@ -135,9 +135,9 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     test = calloc(1, sizeof(*test));
     mtex = (mtex < 4096)? mtex : 4096;
     while (mtex) {
-        curr = MakeTex(test, mtex, mtex, 1, GL_TEXTURE_3D,
-                       GL_REPEAT, GL_NEAREST, GL_NEAREST,
-                       GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0);
+        curr = OGL_MakeTex(test, mtex, mtex, 1, GL_TEXTURE_3D,
+                           GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                           GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0);
         glDeleteTextures(1, &test->indx);
         if (curr == GL_NO_ERROR)
             break;
@@ -183,22 +183,25 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     fill = 6 * sizeof(*indx);
     curr = 4 * sizeof(*vert);
 
-    UNIF satr[] = {{.cdat = mtex * dhei * fill, .draw = GL_STATIC_DRAW,
-                    /** No name/type for indices! **/ .pdat = indx},
-                   {.cdat = mtex * dhei * curr, .draw = GL_STATIC_DRAW,
-                    .name = "vert", .type = UNI_T3FV, .pdat = vert}},
-         suni[] = {{.name = "data", .type = UNI_T1II, .pdat = (GLvoid*)0},
-                   {.name = "dims", .type = UNI_T1II, .pdat = (GLvoid*)1},
-                   {.name = "bank", .type = UNI_T1II, .pdat = (GLvoid*)2},
-                   {.name = "apal", .type = UNI_T1II, .pdat = (GLvoid*)3},
-                   {.name = "atex", .type = UNI_T1II, .pdat = (GLvoid*)4},
-                   {.name = "disz", .type = UNI_T4FV, .pdat = &retn->disz},
-                   {.name = "hitd", .type = UNI_T4FV, .pdat = &retn->hitd}};
+    OGL_UNIF satr[] =
+        {{.cdat = mtex * dhei * fill, .draw = GL_STATIC_DRAW,
+          /** No name and type for indices! **/ .pdat = indx},
+         {.cdat = mtex * dhei * curr, .draw = GL_STATIC_DRAW,
+          .name = "vert", .type = OGL_UNI_T3FV, .pdat = vert}};
+    OGL_UNIF suni[] =
+        {{.name = "data", .type = OGL_UNI_T1II, .pdat = (GLvoid*)0},
+         {.name = "dims", .type = OGL_UNI_T1II, .pdat = (GLvoid*)1},
+         {.name = "bank", .type = OGL_UNI_T1II, .pdat = (GLvoid*)2},
+         {.name = "apal", .type = OGL_UNI_T1II, .pdat = (GLvoid*)3},
+         {.name = "atex", .type = OGL_UNI_T1II, .pdat = (GLvoid*)4},
+         {.name = "disz", .type = OGL_UNI_T4FV, .pdat = &retn->disz},
+         {.name = "hitd", .type = OGL_UNI_T4FV, .pdat = &retn->hitd}};
 
-    retn->surf = MakeVBO(5, GL_TRIANGLES,
-                         countof(satr), satr, countof(suni), suni,
-                        (char*[]){MainVertexShader, 0},
-                        (char*[]){MainPixelShader, 0});
+    retn->surf = OGL_MakeVBO(5, GL_TRIANGLES,
+                             sizeof(satr) / sizeof(*satr), satr,
+                             sizeof(suni) / sizeof(*suni), suni,
+                            (char*[]){MainVertexShader, 0},
+                            (char*[]){MainPixelShader, 0});
 
     retn->surf->cind = 0;
     retn->disz.z = 1.0 / dhei;
@@ -207,9 +210,9 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     free(indx);
 
     /// allocate the sprite data texture (uninitialized)
-    MakeTex(&retn->surf->ptex[0], mtex, dhei, 0,
-            GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-            GL_FLOAT, GL_RGBA32F, GL_RGBA, 0);
+    OGL_MakeTex(&retn->surf->ptex[0], mtex, dhei, 0,
+                GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                GL_FLOAT, GL_RGBA32F, GL_RGBA, 0);
 
     txsz = calloc(uniq, sizeof(*txsz));
     dims = calloc(mtex * chei, sizeof(*dims));
@@ -226,15 +229,15 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         }
 
     /// allocate the palette texture
-    MakeTex(&retn->surf->ptex[3], mtex, phei, 0,
-            GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-            GL_UNSIGNED_BYTE, GL_RGBA8, (rgba)? GL_RGBA : GL_BGRA, apal);
+    OGL_MakeTex(&retn->surf->ptex[3], mtex, phei, 0,
+                GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                GL_UNSIGNED_BYTE, GL_RGBA8, (rgba)? GL_RGBA : GL_BGRA, apal);
     free(apal);
 
     /// allocate the sprite dimension texture
-    MakeTex(&retn->surf->ptex[1], mtex, chei, 0,
-            GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-            GL_FLOAT, GL_RGBA32F, GL_RGBA, dims);
+    OGL_MakeTex(&retn->surf->ptex[1], mtex, chei, 0,
+                GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                GL_FLOAT, GL_RGBA32F, GL_RGBA, dims);
     free(dims);
 
     qsort(txsz, uniq, sizeof(*txsz), sizecmp);
@@ -252,16 +255,17 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         }
     }
     /// allocate the main FB array texture (uninitialized)
-    MakeTex(&retn->surf->ptex[4], mtex, mtex, cbnk + 1,
-            GL_TEXTURE_3D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-            GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0);
+    OGL_MakeTex(&retn->surf->ptex[4], mtex, mtex, cbnk + 1,
+                GL_TEXTURE_3D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0);
 
     bank = calloc(mtex * chei, sizeof(*bank));
     atex = aptr = calloc(fill = mtex * mtex, sizeof(*atex));
     for (cbnk = fcnt = curr = 0; curr < uniq; fcnt = 0, curr++)
         while (txsz[curr].fcnt) {
             if (aptr - atex + txsz[curr].size > fill) {
-                LoadTex(&retn->surf->ptex[4], 0, 0, cbnk, mtex, mtex, 1, atex);
+                OGL_LoadTex(&retn->surf->ptex[4], 0, 0, cbnk,
+                            mtex, mtex, 1, atex);
                 aptr = atex;
                 cbnk++;
             }
@@ -285,13 +289,13 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         }
     free(txsz);
     if (aptr > atex)
-        LoadTex(&retn->surf->ptex[4], 0, 0, cbnk, mtex, mtex, 1, atex);
+        OGL_LoadTex(&retn->surf->ptex[4], 0, 0, cbnk, mtex, mtex, 1, atex);
     free(atex);
 
     /// allocate the FB control texture
-    MakeTex(&retn->surf->ptex[2], mtex, chei, 0,
-            GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-            GL_FLOAT, GL_RGBA32F, GL_RGBA, bank);
+    OGL_MakeTex(&retn->surf->ptex[2], mtex, chei, 0,
+                GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                GL_FLOAT, GL_RGBA32F, GL_RGBA, bank);
     free(bank);
 
     retn->hitd = (T4FV){{1.0 / (cbnk + 1), 1.0 / phei, 1.0 / mtex, 1.0}};
@@ -327,10 +331,10 @@ void DrawRendererOGL(RNDR *rndr, UNIT *uarr, T4FV *data,
     }
     glClearColor(0.0, 0.0, 0.0, (opaq)? 1.0 : 0.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    LoadTex(&rndr->surf->ptex[0], 0, 0, 0,
-            rndr->surf->ptex[0].xdim, ydim, 0, rndr->temp);
+    OGL_LoadTex(&rndr->surf->ptex[0], 0, 0, 0,
+                rndr->surf->ptex[0].xdim, ydim, 0, rndr->temp);
     rndr->surf->cind = size * 6;
-    DrawVBO(rndr->surf, 0);
+    OGL_DrawVBO(rndr->surf, 0);
 }
 
 
