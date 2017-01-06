@@ -579,6 +579,8 @@ static GLvoid DrawVBO(FVBO *vobj, GLuint shad) {
             switch ((unif = &vobj->pshd[shad].puni[iter])->type & ~UNI_IIII) {
                 case UNI_TMFV:
                     glUniformMatrix4fv(unif->indx, 1, GL_TRUE,
+                                      (unif->type & UNI_IIII)?
+                                      (GLfloat*)unif->pdat :
                                      *(GLfloat**)unif->pdat);
                     continue;
 

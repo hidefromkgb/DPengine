@@ -92,7 +92,7 @@ typedef struct ENGD ENGD;
 
 typedef unsigned long ulong;
 
-typedef union _T2FV {
+typedef union {
     struct {
         float x, y;
     };
@@ -101,7 +101,7 @@ typedef union _T2FV {
     };
 } T2FV;
 
-typedef union _T3FV {
+typedef union {
     struct {
         float x, y, z;
     };
@@ -110,7 +110,7 @@ typedef union _T3FV {
     };
 } T3FV;
 
-typedef union _T4FV {
+typedef union {
     struct {
         float x, y, z, w;
     };
@@ -122,7 +122,7 @@ typedef union _T4FV {
     };
 } T4FV;
 
-typedef union _T2IV {
+typedef union {
     struct {
         int32_t x, y;
     };
@@ -131,7 +131,7 @@ typedef union _T2IV {
     };
 } T2IV;
 
-typedef union _T3IV {
+typedef union {
     struct {
         int32_t x, y, z;
     };
@@ -140,7 +140,7 @@ typedef union _T3IV {
     };
 } T3IV;
 
-typedef union _T4IV {
+typedef union {
     struct {
         int32_t x, y, z, w;
     };
@@ -153,7 +153,7 @@ typedef union _T4IV {
 } T4IV;
 
 /// animation unit info
-typedef struct _AINF {
+typedef struct {
     uint32_t uuid,   /// unique animation identifier
              xdim,   /// frame width (actual, non-modified)
              ydim,   /// frame height (actual, non-modified)

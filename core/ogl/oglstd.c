@@ -61,7 +61,6 @@ struct FRBO {
                  w = CA palette V-pos in texture + 0.5
  **/
 INCBIN("../core/ogl/shad/vert.glsl", MainVertexShader);
-char *tver[] = {MainVertexShader, 0};
 
 
 
@@ -91,11 +90,10 @@ char *tver[] = {MainVertexShader, 0};
     T4FV <apal>: palette texture
  **/
 INCBIN("../core/ogl/shad/pixl.glsl", MainPixelShader);
-char *tpix[] = {MainPixelShader, 0};
 
 
 
-typedef struct _TXSZ {
+typedef struct {
     GLint size, fcnt, indx;
     GLubyte *bptr;
 } TXSZ;
@@ -137,8 +135,8 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     test = calloc(1, sizeof(*test));
     mtex = (mtex < 4096)? mtex : 4096;
     while (mtex) {
-        curr = MakeTex(test, mtex, mtex, 1,
-                       GL_TEXTURE_3D, GL_CLAMP_TO_EDGE, GL_NEAREST, GL_NEAREST,
+        curr = MakeTex(test, mtex, mtex, 1, GL_TEXTURE_3D,
+                       GL_REPEAT, GL_NEAREST, GL_NEAREST,
                        GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0);
         glDeleteTextures(1, &test->indx);
         if (curr == GL_NO_ERROR)
@@ -197,8 +195,11 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                    {.name = "disz", .type = UNI_T4FV, .pdat = &retn->disz},
                    {.name = "hitd", .type = UNI_T4FV, .pdat = &retn->hitd}};
 
-    retn->surf = MakeVBO(5, GL_TRIANGLES, countof(satr), satr,
-                         countof(suni), suni, tver, tpix);
+    retn->surf = MakeVBO(5, GL_TRIANGLES,
+                         countof(satr), satr, countof(suni), suni,
+                        (char*[]){MainVertexShader, 0},
+                        (char*[]){MainPixelShader, 0});
+
     retn->surf->cind = 0;
     retn->disz.z = 1.0 / dhei;
     retn->disz.w = 1.0 / chei;

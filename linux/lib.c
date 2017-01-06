@@ -248,8 +248,11 @@ char *lLoadFile(char *name, long *size) {
 
 
 long lCountCPUs() {
-    return min(sizeof(SEM_TYPE) * CHAR_BIT,
-               max(1, sysconf(_SC_NPROCESSORS_ONLN)));
+    long retn = sysconf(_SC_NPROCESSORS_ONLN);
+
+    retn = (retn < sizeof(SEM_TYPE) * CHAR_BIT)?
+            retn : sizeof(SEM_TYPE) * CHAR_BIT;
+    return (retn > 1)? retn : 1;
 }
 
 

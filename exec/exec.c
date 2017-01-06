@@ -2258,7 +2258,7 @@ void eExecuteEngine(char *fcnf, intptr_t find, ulong xico, ulong yico,
     RUN_FE2C(engc.CTL_RGPU, MSG_NDIM, 50000 << 16);
     RUN_FE2C(engc.CTL_FLTR, MSG_BCLK, 0);
     RUN_FC2E(engc.CTL_EXAC, MSG_BCLK, 0);
-    RUN_FE2C(engc.CTL_SRND, MSG_BCLK, 0);
+    RUN_FC2E(engc.CTL_SRND, MSG_BCLK, 0);
     RUN_FC2E(engc.CTL_BDUP, MSG_BCLK, 0);
 
     /// resizing and showing the main window

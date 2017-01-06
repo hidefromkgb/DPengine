@@ -143,14 +143,10 @@ long lCountCPUs() {
 
 
 uint64_t lTimeFunc() {
-#ifdef OLD_TICK
-    /// overflows in ~49.7 * 24 hours since OS boot
-    return GetTickCount();
-#else
     static int32_t lock = 0;
     static int32_t hbit = 0;
     static int32_t lbit = 0;
-    uint64_t retn;
+    int64_t retn;
 
     /// yes, this is a spinlock, requiring at least a 80486
     while (__sync_fetch_and_or(&lock, 1));
@@ -164,7 +160,6 @@ uint64_t lTimeFunc() {
     /// releasing the lock
     lock = 0;
     return retn;
-#endif
 }
 
 
