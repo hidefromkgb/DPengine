@@ -2,3 +2,7 @@
 	path = core/gif/load
 	url = https://github.com/hidefromkgb/gif_load
 	branch = master
+[submodule "core/ogl/load"]
+	path = core/ogl/load
+	url = https://github.com/hidefromkgb/ogl_load
+	branch = master
