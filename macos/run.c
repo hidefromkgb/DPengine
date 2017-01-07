@@ -872,11 +872,13 @@ void PBoxDraw(void *this, SEL name, CGRect rect) {
     rect = frame((void*)ctrl->priv[0]);
     rect.origin.y = ctrl->priv[4];
     rect.origin.x = 0;
+#ifndef MAC_OLD
     if (MAC_10_10_PLUS) {
         rect.origin.y *= 0.25;
         rect.size.width *= 0.5;
         rect.size.height *= 0.5;
     }
+#endif
     drawInRect_withAttributes_((void*)ctrl->priv[3], rect,
                                (CFDictionaryRef)ctrl->priv[5]);
 }
@@ -1192,10 +1194,12 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 psty = init(alloc(NSMutableParagraphStyle()));
                 setAlignment_(psty, NSCenterTextAlignment);
                 ffsz = systemFontSize(NSFont()) * 0.85;
+#ifndef MAC_OLD
                 if (MAC_10_10_PLUS) {
                     scaleUnitSquareToSize_(gwnd, (CGSize){2.0, 2.0});
                     ffsz *= 0.5;
                 }
+#endif
                 font = systemFontOfSize_(NSFont(), ffsz);
                 ctrl->priv[5] = (intptr_t)MAC_MakeDict
                     (kCTFontAttributeName,           font,

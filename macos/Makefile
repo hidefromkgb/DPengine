@@ -1,6 +1,11 @@
-CC = clang -m32 -mstackrealign -no-integrated-as -fno-stack-protector -fvisibility=hidden
-CX = clang -m32 -mstackrealign -no-integrated-as -fno-stack-protector -fvisibility=hidden
+MAC_VER = $(shell sw_vers -productVersion | cut -d. -f-2 | tr -d .)
+MAC_OLD = $(shell [ $(MAC_VER) -le 107 ] && echo true)
 
+CC = clang -m32 -mstackrealign -fno-stack-protector -fvisibility=hidden
+ifeq ($(MAC_OLD), true)
+CC += -no-integrated-as -DMAC_OLD
+endif
+CX = $(CC)
 
 OBJDIR = .obj
 EXEPATH = ../macos.app/Contents/MacOS
