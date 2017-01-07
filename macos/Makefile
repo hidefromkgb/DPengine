@@ -1,5 +1,5 @@
-CC = clang -m32 -mstackrealign -fno-stack-protector -fvisibility=hidden
-CX = clang -m32 -mstackrealign -fno-stack-protector -fvisibility=hidden
+CC = clang -m32 -mstackrealign -no-integrated-as -fno-stack-protector -fvisibility=hidden
+CX = clang -m32 -mstackrealign -no-integrated-as -fno-stack-protector -fvisibility=hidden
 
 
 OBJDIR = .obj
