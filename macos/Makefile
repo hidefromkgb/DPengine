@@ -1,14 +1,14 @@
-CC = clang -m32 -mstackrealign
-CX = clang -m32 -mstackrealign
+CC = clang -m32 -mstackrealign -fno-stack-protector -fvisibility=hidden
+CX = clang -m32 -mstackrealign -fno-stack-protector -fvisibility=hidden
 
 
 OBJDIR = .obj
 EXEPATH = ../macos.app/Contents/MacOS
 
-LLIB = -framework AppKit -framework OpenGL
+LLIB = -framework OpenGL -framework AppKit
 LINC =
 LCXFLAGS =
-LCFLAGS = -I../core -Wall -fPIC -fvisibility=hidden
+LCFLAGS = -I../core -Wall -fPIC
 
 LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/oglstd.o $(OBJDIR)/lib.o
 LOUT = ../libengine.dylib
@@ -26,6 +26,7 @@ EOUT = $(EXEPATH)/DPE
 RelJoined: lrelease
 RelJoined: erelease
 RelJoined: jlink
+RelJoined: strip
 
 DbgJoined: ldebug
 DbgJoined: edebug
@@ -33,6 +34,7 @@ DbgJoined: jlink
 
 RelLibOnly: lrelease
 RelLibOnly: llink
+RelLibOnly: strip
 
 DbgLibOnly: ldebug
 DbgLibOnly: llink
@@ -40,6 +42,7 @@ DbgLibOnly: llink
 RelSplit: RelLibOnly
 RelSplit: erelease
 RelSplit: elink
+RelSplit: strip
 
 DbgSplit: DbgLibOnly
 DbgSplit: edebug
@@ -73,6 +76,10 @@ clean:
 	rm -f $(LOUT) $(EOUT)
 	rm -rf $(OBJDIR)
 
+strip:
+	if type strip &>/dev/null && [ -f $(EOUT) ]; then strip -x $(EOUT); fi
+	if type strip &>/dev/null && [ -f $(LOUT) ]; then strip -x $(LOUT); fi
+
 lbuild:
 	mkdir -p $(OBJDIR)/core/gif
 	mkdir -p $(OBJDIR)/core/ogl
@@ -93,7 +100,7 @@ $(OBJDIR)/run.o: run.c
 	$(CC) $(ECFLAGS) $(EINC) -c run.c -o $(OBJDIR)/run.o
 
 jlink:
-	$(CX) $(LCXFLAGS) $(LOBJ) $(EOBJ) -o $(EOUT) $(LLIB)
+	$(CX) $(ECXFLAGS) $(LOBJ) $(EOBJ) -o $(EOUT) $(LLIB)
 	if ! [ -h $(EXEPATH)/Ponies ]; then ln -s ../../../Ponies $(EXEPATH)/Ponies; fi
 
 llink: LCXFLAGS += -shared

@@ -227,7 +227,7 @@ void OnDraw(void *this, SEL name, CGRect rect) {
     ENGD *engd;
     DRAW *draw;
 
-    GET_IVAR(this, VAR_ENGD, &engd);
+    MAC_GET_IVAR(this, VAR_ENGD, &engd);
     cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
     draw = (DRAW*)data[0];
@@ -274,7 +274,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     /// a dirty hack to become capable of changing cursors at will
     CGSSetConnectionProperty
         (_CGSDefaultConnection(), _CGSDefaultConnection(),
-         scib = UTF8("SetsCursorInBackground"), kCFBooleanTrue);
+         scib = MAC_UTF8("SetsCursorInBackground"), kCFBooleanTrue);
     CFRelease(scib);
 
     data[0] = (intptr_t)&draw;
@@ -285,8 +285,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     dims = (CGRect){{0, 0}, {draw.xdim, draw.ydim}};
 
     /// view delegate`s methods and custom fields
-    vmet = PutToArr(drawRect_(), OnDraw, isOpaque(), OnOpaq);
-    vfld = PutToArr(VAR_ENGD);
+    vmet = MAC_PutToArr(drawRect_(), OnDraw, isOpaque(), OnOpaq);
+    vfld = MAC_PutToArr(VAR_ENGD);
 
     pool = init(alloc(NSAutoreleasePool()));
     thrd = sharedApplication(NSApplication());
@@ -300,7 +300,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                                               | kCGBitmapByteOrder32Little);
         CGColorSpaceRelease(drgb);
 
-        view = NewClass(NSView(), SUB_VDLG, vfld, vmet);
+        view = MAC_NewClass(NSView(), SUB_VDLG, vfld, vmet);
         draw.view = init(alloc(view));
         setFrame_(draw.view, dims);
     }
@@ -311,7 +311,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         NSOpenGLContext *ctxt;
 
         pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat()), attr);
-        view = NewClass(NSOpenGLView(), SUB_VDLG, vfld, vmet);
+        view = MAC_NewClass(NSOpenGLView(), SUB_VDLG, vfld, vmet);
         draw.view =
             (NSView*)initWithFrame_pixelFormat_(alloc(view), dims, pfmt);
         makeCurrentContext((ctxt = openGLContext(draw.view)));
@@ -320,7 +320,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     }
     free(vfld);
     free(vmet);
-    SET_IVAR(draw.view, VAR_ENGD, engd);
+    MAC_SET_IVAR(draw.view, VAR_ENGD, engd);
     dims.origin.x = xpos;
     dims.origin.y = ypos;
 
@@ -357,7 +357,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     release(draw.view);
     release(draw.hwnd);
     release(pool);
-    DelClass((Class)view);
+    MAC_DelClass((Class)view);
 
     #undef SUB_VDLG
 }
