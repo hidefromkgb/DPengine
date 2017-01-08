@@ -103,7 +103,7 @@
 		<Unit filename="../exec/loc/ru.lang">
 			<Option virtualFolder="src/run/exec/loc/" />
 		</Unit>
-		<Unit filename="../macos.app/Contents/Info.plist">
+		<Unit filename="rsrc/Info.plist">
 			<Option virtualFolder="src/run/" />
 		</Unit>
 		<Unit filename="lib.c">

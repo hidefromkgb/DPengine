@@ -8,7 +8,8 @@ endif
 CX = $(CC)
 
 OBJDIR = .obj
-EXEPATH = ../macos.app/Contents/MacOS
+EXEBASE = ../macos.app
+EXEPATH = $(EXEBASE)/Contents/MacOS
 
 LLIB = -framework OpenGL -framework AppKit
 LINC =
@@ -79,15 +80,17 @@ edebug: ebuild $(EOBJ)
 
 clean:
 	rm -f $(LOUT) $(EOUT)
-	rm -rf $(OBJDIR)
+	rm -rf $(OBJDIR) $(EXEBASE)
 
 strip:
 	if type strip &>/dev/null && [ -f $(EOUT) ]; then strip -x $(EOUT); fi
 	if type strip &>/dev/null && [ -f $(LOUT) ]; then strip -x $(LOUT); fi
 
 lbuild:
-	mkdir -p $(OBJDIR)/core/gif
-	mkdir -p $(OBJDIR)/core/ogl
+	mkdir -p $(OBJDIR)/core/gif $(OBJDIR)/core/ogl
+	mkdir -p $(EXEPATH) $(EXEPATH)/../Resources
+	cp rsrc/main.icns $(EXEPATH)/../Resources
+	cp rsrc/Info.plist $(EXEPATH)/..
 $(OBJDIR)/core/core.o: ../core/core.c
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/core.c -o $(OBJDIR)/core/core.o
 $(OBJDIR)/core/gif/gifstd.o: ../core/gif/gifstd.c
