@@ -14,7 +14,7 @@
 #define CLS_MENU "lNSM" /** class name for menu responder **/
 #define CLS_WNDW "lNSW" /** class name for window **/
 #define CLS_TEXT "lNST" /** class name for text box **/
-#define CLS_BUTN "lNSB" /** class name for button **/
+#define CLS_BUTN "lNSB" /** class name for button + checkbox + radiobox **/
 #define CLS_SPIN "lNSN" /** class name for spin box **/
 #define CLS_LIST "lNSL" /** class name for list box **/
 #define CLS_PBAR "lNSP" /** class name for progress bar **/
@@ -29,15 +29,8 @@
 
 /// subclass storage
 typedef struct {
-    void *wndw,
-         *text,
-         *butn, /// +cbox/rbox
-         *spin,
-         *list,
-         *pbar,
-         *sbox,
-         *ibox,
-         *frmt; /// number formatter
+    Class cell, tray, menu, wndw, text, butn,
+          spin, list, pbar, sbox, ibox, frmt;
 } SCLS;
 
 /// file find data
@@ -121,7 +114,7 @@ void rOpenContextMenu(MENU *tmpl) {
     CGPoint dptr;
 
     dptr = mouseLocation(NSEvent());
-    menu = Submenu(tmpl, base = init(alloc(MAC_NewClass(0, CLS_MENU, 0, 0))));
+    menu = Submenu(tmpl, base = init(alloc(MAC_LoadClass(CLS_MENU))));
     popUpMenuPositioningItem_atLocation_inView_(menu, nil, dptr, nil);
     release(menu);
     release(base);
@@ -190,11 +183,11 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
     NSButton *ibtn;
     void **retn = malloc(2 * sizeof(*retn));
 
-    pict = initWithCGImage_size_(alloc(NSImage()), iref, ((CGPoint){}));
+    pict = initWithCGImage_size_(alloc(NSImage()), iref, (CGPoint){});
     retn[0] = statusItemWithLength_(systemStatusBar(NSStatusBar()),
                                     NSVariableStatusItemLength);
     retain(retn[0]);
-    retn[1] = init(alloc(MAC_NewClass(0, CLS_TRAY, 0, 0)));
+    retn[1] = init(alloc(MAC_LoadClass(CLS_TRAY)));
     MAC_SET_IVAR(retn[1], VAR_CTRL, retn);
     MAC_SET_IVAR(retn[1], VAR_DATA, mctx);
 
@@ -297,15 +290,12 @@ void TmrFunc(CFRunLoopTimerRef tmrp, void *user) {
 
 void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
     intptr_t user[2] = {(intptr_t)upre, data};
-    CFRunLoopTimerContext ctxt = {0, (void*)user};
-    CFRunLoopTimerRef tmrp =
-        CFRunLoopTimerCreate(0, CFAbsoluteTimeGetCurrent(),
-                             0.001 * fram, 0, 0, TmrFunc, &ctxt);
+    CFRunLoopTimerRef tmrp;
 
-    CFRunLoopAddTimer(CFRunLoopGetCurrent(), tmrp, kCFRunLoopCommonModes);
+    tmrp = MAC_MakeTimer(fram, TmrFunc, user);
     while (root->priv[2])
         run(sharedApplication(NSApplication()));
-    CFRunLoopTimerInvalidate(tmrp);
+    MAC_FreeTimer(tmrp);
 }
 
 
@@ -317,7 +307,7 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
 
     while (root->prev)
         root = root->prev;
-    rect = frame((void*)ctrl->priv[0]);
+    rect = frame((NSView*)ctrl->priv[0]);
     rect.origin.x = (xpos < 0)? -xpos : xpos * (uint16_t)(root->priv[2]      );
     rect.origin.y = (ypos < 0)? -ypos : ypos * (uint16_t)(root->priv[2] >> 16);
     setFrame_((NSView*)ctrl->priv[0], rect);
@@ -373,7 +363,7 @@ bool OnKeys(void *this, SEL name, void *ctrl, NSView *view, SEL what) {
         if (!ctrl || ((ctrl->flgs & FCT_TTTT) != FCT_SPIN))
             return false;
 
-        retn = doubleValue((void*)ctrl->priv[7]);
+        retn = doubleValue((NSTextField*)ctrl->priv[7]);
         ctrl->fe2c(ctrl, MSG_NSET, retn + ((what == MoveUp)? 1.0 : -1.0));
         return true;
     }
@@ -414,7 +404,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                              *   (uint16_t)(ctrl->priv[2] >> 16);
             ctrl->priv[1] =  (uint16_t)scrn.size.width
                           | ((uint32_t)scrn.size.height << 16);
-            area = frameRectForContentRect_((void*)ctrl->priv[0], scrn);
+            area = frameRectForContentRect_((NSWindow*)ctrl->priv[0], scrn);
             scrn = visibleFrame(mainScreen(NSScreen()));
             area.origin.x = 0.5 * (scrn.size.width  - area.size.width )
                           + scrn.origin.x;
@@ -454,7 +444,7 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
         case MSG_PTXT:
             if (ctrl->priv[3])
-                CFRelease((void*)ctrl->priv[3]);
+                CFRelease((CFStringRef)ctrl->priv[3]);
             ctrl->priv[3] = (intptr_t)MAC_UTF8(data);
             break;
 
@@ -582,7 +572,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         case MSG__GSZ: {
             CGRect rect;
 
-            rect = frame((void*)ctrl->priv[0]);
+            rect = frame((NSView*)ctrl->priv[0]);
             return (uint16_t)rect.size.width
                 | ((uint32_t)rect.size.height << 16);
         }
@@ -799,7 +789,7 @@ void rFreeControl(CTRL *ctrl) {
 
         case FCT_PBAR:
             /// releasing text attributes and the string
-            CFRelease((CFArrayRef)ctrl->priv[5]);
+            MAC_FreeDict((CFDictionaryRef)ctrl->priv[5]);
             if (ctrl->priv[3])
                 CFRelease((CFStringRef)ctrl->priv[3]);
             break;
@@ -869,7 +859,7 @@ void PBoxDraw(void *this, SEL name, CGRect rect) {
 
     MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
     objc_msgSendSuper(&prev, drawRect_(), rect);
-    rect = frame((void*)ctrl->priv[0]);
+    rect = frame((NSProgressIndicator*)ctrl->priv[0]);
     rect.origin.y = ctrl->priv[4];
     rect.origin.x = 0;
 #ifndef MAC_OLD
@@ -933,8 +923,8 @@ void OnSize(void *this, SEL name) {
     if (!ctrl)
         return;
 
-    rect = frame((void*)ctrl->priv[0]);
-    rect = contentRectForFrameRect_((void*)ctrl->priv[0], rect);
+    rect = frame((NSView*)ctrl->priv[0]);
+    rect = contentRectForFrameRect_((NSView*)ctrl->priv[0], rect);
     ctrl->priv[1] =  (uint16_t)rect.size.width
                   | ((uint32_t)rect.size.height << 16);
     ctrl->fc2e(ctrl, MSG_WSZC, ctrl->priv[1]);
@@ -962,15 +952,16 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                       | ((uint32_t)round(0.60 * ffsz) << 16);
 
         ctrl->priv[6] = (intptr_t)(scls = calloc(1, sizeof(*scls)));
-        scls->wndw = MAC_NewClass(0, CLS_WNDW, 0, 0);
-        scls->text = MAC_NewClass(0, CLS_TEXT, 0, 0);
-        scls->butn = MAC_NewClass(0, CLS_BUTN, 0, 0);
-        scls->spin = MAC_NewClass(0, CLS_SPIN, 0, 0);
-        scls->list = MAC_NewClass(0, CLS_LIST, 0, 0);
-        scls->pbar = MAC_NewClass(0, CLS_PBAR, 0, 0);
-        scls->sbox = MAC_NewClass(0, CLS_SBOX, 0, 0);
-        scls->ibox = MAC_NewClass(0, CLS_IBOX, 0, 0);
-        scls->frmt = MAC_NewClass(0, CLS_FRMT, 0, 0);
+        scls->cell = MAC_LoadClass(CLS_CELL);
+        scls->wndw = MAC_LoadClass(CLS_WNDW);
+        scls->text = MAC_LoadClass(CLS_TEXT);
+        scls->butn = MAC_LoadClass(CLS_BUTN);
+        scls->spin = MAC_LoadClass(CLS_SPIN);
+        scls->list = MAC_LoadClass(CLS_LIST);
+        scls->pbar = MAC_LoadClass(CLS_PBAR);
+        scls->sbox = MAC_LoadClass(CLS_SBOX);
+        scls->ibox = MAC_LoadClass(CLS_IBOX);
+        scls->frmt = MAC_LoadClass(CLS_FRMT);
 
         ctrl->priv[5] = (intptr_t)init(alloc(scls->frmt));
         setFormatterBehavior_((NSNumberFormatter*)ctrl->priv[5],
@@ -1125,9 +1116,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
                 ctrl->fe2c = FE2CL;
                 temp.size = dims.size;
-                ctrl->priv[1] = (intptr_t)MAC_NewClass(0, CLS_CELL, 0, 0);
-
                 gwnd = init(alloc(NSScrollView()));
+                ctrl->priv[1] = (intptr_t)scls->cell;
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
                 MAC_SET_IVAR((NSTableView*)ctrl->priv[7], VAR_CTRL, ctrl);
                 setDataSource_((NSTableView*)ctrl->priv[7],
@@ -1242,21 +1232,52 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 
 int main(int argc, char *argv[]) {
-    #define CLS_MAKE(r, p, n, f, ...) \
-        do { void **CLS_MAKE = MAC_PutToArr(__VA_ARGS__); \
-             r = MAC_NewClass(p, n, f, CLS_MAKE); free(CLS_MAKE); } while (0)
-    void **vfld, *pool, *scls[16] = {};
+    #define CLS_MAKE(n, p, ...) \
+        MAC_MakeClass(n, p, MAC_TempArray(VAR_CTRL, VAR_DATA), \
+                            MAC_TempArray(__VA_ARGS__))
+    NSAutoreleasePool *pool = init(alloc(NSAutoreleasePool()));
+    Class scls[] = {
+        CLS_MAKE(CLS_CELL, (MAC_10_07_PLUS)? NSButton() : NSButtonCell(),
+                 ActionSelector(), OnListButton),
+        CLS_MAKE(CLS_TRAY, NSObject(),
+                 ActionSelector(), OnTray),
+        CLS_MAKE(CLS_MENU, NSObject(),
+                 ActionSelector(), OnMenu),
+        CLS_MAKE(CLS_WNDW, NSView(),
+                 windowShouldClose_(), OnClose,
+                 windowDidResize_(), OnSize, isFlipped(), OnTrue),
+        CLS_MAKE(CLS_TEXT, NSTextField(),
+                 ActionSelector(), OnEdit,
+                 control_textView_doCommandBySelector_(), OnKeys),
+        CLS_MAKE(CLS_BUTN, NSButton(),
+                 ActionSelector(), OnButton),
+        CLS_MAKE(CLS_SPIN, NSStepper(),
+                 ActionSelector(), OnSpin),
+        CLS_MAKE(CLS_LIST, NSTableView(),
+                (MAC_10_07_PLUS)? tableView_viewForTableColumn_row_()
+               : tableView_dataCellForTableColumn_row_(),        OnValue,
+                 tableView_objectValueForTableColumn_row_(),     OnValueOld,
+                 tableView_setObjectValue_forTableColumn_row_(), OnReset,
+                 numberOfRowsInTableView_(),                     OnRows),
+        CLS_MAKE(CLS_PBAR, NSProgressIndicator(),
+                 drawRect_(), PBoxDraw),
+        CLS_MAKE(CLS_SBOX, NSView(),
+                 isFlipped(), OnTrue),
+        CLS_MAKE(CLS_IBOX, NSView(),
+                 drawRect_(), IBoxDraw),
+        CLS_MAKE(CLS_FRMT, NSNumberFormatter(),
+                 isPartialStringValid_newEditingString_errorDescription_(),
+                 OnValidate)
+    };
+    FIND find = {};
     CFStringRef path;
     CFArrayRef urls;
     CGFloat icon;
     CGRect dims;
     char *conf;
-    FIND find = {};
 
-    pool = init(alloc(NSAutoreleasePool()));
     setActivationPolicy_(sharedApplication(NSApplication()),
                          NSApplicationActivationPolicyAccessory);
-
     find.home = MAC_CopyUTF8(path =
                             (CFStringRef)bundlePath(mainBundle(NSBundle())));
     find.home = realloc(find.home, find.hlen = strlen(find.home) + 32);
@@ -1280,42 +1301,6 @@ int main(int argc, char *argv[]) {
     dims = visibleFrame(mainScreen(NSScreen()));
     icon = thickness(systemStatusBar(NSStatusBar()));
 
-    vfld = MAC_PutToArr(VAR_CTRL, VAR_DATA);
-    CLS_MAKE(scls[ 0], (MAC_10_07_PLUS)? NSButton() : NSButtonCell(),
-             CLS_CELL, vfld, ActionSelector(), OnListButton);
-    CLS_MAKE(scls[ 1], NSObject(),            CLS_TRAY, vfld,
-             ActionSelector(), OnTray);
-    CLS_MAKE(scls[ 2], NSObject(),            CLS_MENU, 0,
-             ActionSelector(), OnMenu);
-    free(vfld);
-    vfld = MAC_PutToArr(VAR_CTRL);
-    CLS_MAKE(scls[ 3], NSView(),              CLS_WNDW, vfld,
-             windowShouldClose_(), OnClose,
-             windowDidResize_(), OnSize, isFlipped(), OnTrue);
-    CLS_MAKE(scls[ 4], NSTextField(),         CLS_TEXT, vfld,
-             ActionSelector(), OnEdit,
-             control_textView_doCommandBySelector_(), OnKeys);
-    CLS_MAKE(scls[ 5], NSButton(),            CLS_BUTN, vfld,
-             ActionSelector(), OnButton);
-    CLS_MAKE(scls[ 6], NSStepper(),           CLS_SPIN, vfld,
-             ActionSelector(), OnSpin);
-    CLS_MAKE(scls[ 7], NSTableView(),         CLS_LIST, vfld,
-            (MAC_10_07_PLUS)? tableView_viewForTableColumn_row_()
-           : tableView_dataCellForTableColumn_row_(),        OnValue,
-             tableView_objectValueForTableColumn_row_(),     OnValueOld,
-             tableView_setObjectValue_forTableColumn_row_(), OnReset,
-             numberOfRowsInTableView_(),                     OnRows);
-    CLS_MAKE(scls[ 8], NSProgressIndicator(), CLS_PBAR, vfld,
-             drawRect_(), PBoxDraw);
-    CLS_MAKE(scls[ 9], NSView(),              CLS_SBOX, vfld,
-             isFlipped(), OnTrue);
-    CLS_MAKE(scls[10], NSView(),              CLS_IBOX, vfld,
-             drawRect_(), IBoxDraw);
-    CLS_MAKE(scls[11], NSNumberFormatter(),   CLS_FRMT, vfld,
-             isPartialStringValid_newEditingString_errorDescription_(),
-             OnValidate);
-    free(vfld);
-
     eExecuteEngine(conf, (intptr_t)&find, icon, icon, dims.origin.x,
                    dims.origin.y, dims.size.width  + dims.origin.x,
                    dims.size.height + dims.origin.y);
@@ -1324,7 +1309,7 @@ int main(int argc, char *argv[]) {
     /// it is crucial to free all subclasses AFTER freeing the release pool
     for (argc = 0; argc < sizeof(scls) / sizeof(*scls); argc++)
         if (scls[argc])
-            MAC_DelClass((Class)scls[argc]);
+            MAC_FreeClass(scls[argc]);
     return 0;
     #undef CLS_MAKE
 }

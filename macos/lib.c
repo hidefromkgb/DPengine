@@ -246,29 +246,16 @@ void OnDraw(void *this, SEL name, CGRect rect) {
 
 
 
-CFRunLoopTimerRef AddTimer(ulong time, void *func, void *data) {
-    CFRunLoopTimerContext ctxt = {0, data};
-    CFRunLoopTimerRef retn =
-        CFRunLoopTimerCreate(0, CFAbsoluteTimeGetCurrent(),
-                             0.001 * time, 0, 0, func, &ctxt);
-
-    CFRunLoopAddTimer(CFRunLoopGetCurrent(), retn, kCFRunLoopCommonModes);
-    return retn;
-}
-
-
-
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                   BGRA **bptr, intptr_t *data, uint32_t flgs) {
     #define SUB_VDLG "lNSV"
 
-    NSView *view;
     NSApplication *thrd;
     NSAutoreleasePool *pool;
-    void **vmet, **vfld;
     CFRunLoopTimerRef tmrf, tmrd;
     CFStringRef scib;
     CGRect dims;
+    Class view;
     DRAW draw;
 
     /// a dirty hack to become capable of changing cursors at will
@@ -284,10 +271,6 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     draw.ydim = ydim - ypos;
     dims = (CGRect){{0, 0}, {draw.xdim, draw.ydim}};
 
-    /// view delegate`s methods and custom fields
-    vmet = MAC_PutToArr(drawRect_(), OnDraw, isOpaque(), OnOpaq);
-    vfld = MAC_PutToArr(VAR_ENGD);
-
     pool = init(alloc(NSAutoreleasePool()));
     thrd = sharedApplication(NSApplication());
     if (~flgs & COM_RGPU) {
@@ -300,7 +283,9 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                                               | kCGBitmapByteOrder32Little);
         CGColorSpaceRelease(drgb);
 
-        view = MAC_NewClass(NSView(), SUB_VDLG, vfld, vmet);
+        view = MAC_MakeClass(SUB_VDLG, NSView(), MAC_TempArray(VAR_ENGD),
+                             MAC_TempArray(drawRect_(), OnDraw,
+                                           isOpaque(), OnOpaq));
         draw.view = init(alloc(view));
         setFrame_(draw.view, dims);
     }
@@ -311,15 +296,15 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         NSOpenGLContext *ctxt;
 
         pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat()), attr);
-        view = MAC_NewClass(NSOpenGLView(), SUB_VDLG, vfld, vmet);
+        view = MAC_MakeClass(SUB_VDLG, NSOpenGLView(), MAC_TempArray(VAR_ENGD),
+                             MAC_TempArray(drawRect_(), OnDraw,
+                                           isOpaque(), OnOpaq));
         draw.view =
             (NSView*)initWithFrame_pixelFormat_(alloc(view), dims, pfmt);
-        makeCurrentContext((ctxt = openGLContext(draw.view)));
+        makeCurrentContext(ctxt = openGLContext(draw.view));
         setValues_forParameter_(ctxt, &opaq, NSOpenGLCPSurfaceOpacity);
         release(pfmt);
     }
-    free(vfld);
-    free(vmet);
     MAC_SET_IVAR(draw.view, VAR_ENGD, engd);
     dims.origin.x = xpos;
     dims.origin.y = ypos;
@@ -338,14 +323,14 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     setHasShadow_(draw.hwnd, false);
     setOpaque_(draw.hwnd, false);
 
-    tmrf = AddTimer(1000, OnFPS,  engd),
-    tmrd = AddTimer(   1, OnCalc, engd);
+    tmrf = MAC_MakeTimer(1000, OnFPS,  engd),
+    tmrd = MAC_MakeTimer(   1, OnCalc, engd);
     orderFront_(draw.hwnd, thrd);
 
     run(thrd);
 
-    CFRunLoopTimerInvalidate(tmrd);
-    CFRunLoopTimerInvalidate(tmrf);
+    MAC_FreeTimer(tmrd);
+    MAC_FreeTimer(tmrf);
 
     cDeallocFrame(engd, 0);
     if (~flgs & COM_RGPU) {
@@ -357,7 +342,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     release(draw.view);
     release(draw.hwnd);
     release(pool);
-    MAC_DelClass((Class)view);
+    MAC_FreeClass(view);
 
     #undef SUB_VDLG
 }
