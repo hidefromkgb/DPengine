@@ -64,12 +64,12 @@ NSMenu *Submenu(MENU *menu, NSMenu *base) {
     NSMenuItem *item;
     NSMenu *retn = init(alloc(NSMenu()));
     NSImage *cbtn, *rbtn;
-    CFStringRef text, null = MAC_UTF8(0);
+    CFStringRef text, null = MAC_MakeString(0);
 
-    cbtn = imageNamed_(NSImage(), text = MAC_UTF8("NSMenuCheckmark"));
-    CFRelease(text);
-    rbtn = imageNamed_(NSImage(), text = MAC_UTF8("NSMenuRadio"));
-    CFRelease(text);
+    cbtn = imageNamed_(NSImage(), text = MAC_MakeString("NSMenuCheckmark"));
+    MAC_FreeString(text);
+    rbtn = imageNamed_(NSImage(), text = MAC_MakeString("NSMenuRadio"));
+    MAC_FreeString(text);
     setAutoenablesItems_(retn, false);
     while (menu->text) {
         if (!*menu->text) {
@@ -78,9 +78,9 @@ NSMenu *Submenu(MENU *menu, NSMenu *base) {
         }
         else {
             item = initWithTitle_action_keyEquivalent_
-                       (alloc(NSMenuItem()),
-                        text = MAC_UTF8(menu->text), ActionSelector(), null);
-            CFRelease(text);
+                       (alloc(NSMenuItem()), text = MAC_MakeString(menu->text),
+                        ActionSelector(), null);
+            MAC_FreeString(text);
             if (menu->flgs & MFL_CCHK) {
                 setOnStateImage_(item, (menu->flgs & MFL_RCHK & ~MFL_CCHK)?
                                         rbtn : cbtn);
@@ -103,7 +103,7 @@ NSMenu *Submenu(MENU *menu, NSMenu *base) {
         }
         menu++;
     }
-    CFRelease(null);
+    MAC_FreeString(null);
     return retn;
 }
 
@@ -141,8 +141,8 @@ void *MsgFunc(void *data) {
     CFUserNotificationDisplayAlert
         (0, kCFUserNotificationNoteAlertLevel, 0, 0, 0,
         (CFStringRef)user[1], (CFStringRef)user[2], 0, 0, 0, &retn);
-    CFRelease((CFStringRef)user[1]);
-    CFRelease((CFStringRef)user[2]);
+    MAC_FreeString((CFStringRef)user[1]);
+    MAC_FreeString((CFStringRef)user[2]);
     free(user);
     return 0;
 }
@@ -153,8 +153,8 @@ long rMessage(char *text, char *head, uint32_t flgs) {
 
     user = calloc(3, sizeof(*user));
     user[0] = flgs;
-    user[1] = (intptr_t)MAC_UTF8(head);
-    user[2] = (intptr_t)MAC_UTF8(text);
+    user[1] = (intptr_t)MAC_MakeString(head);
+    user[2] = (intptr_t)MAC_MakeString(text);
     pthread_create(&pthr, 0, MsgFunc, user);
     return 0;
 }
@@ -164,7 +164,7 @@ long rMessage(char *text, char *head, uint32_t flgs) {
 void OnTray(void *this, SEL name) {
     MENU *mctx;
 
-    MAC_GET_IVAR(this, VAR_DATA, &mctx);
+    MAC_GetIvar(this, VAR_DATA, &mctx);
     rOpenContextMenu(mctx);
 }
 
@@ -188,8 +188,8 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                                     NSVariableStatusItemLength);
     retain(retn[0]);
     retn[1] = init(alloc(MAC_LoadClass(CLS_TRAY)));
-    MAC_SET_IVAR(retn[1], VAR_CTRL, retn);
-    MAC_SET_IVAR(retn[1], VAR_DATA, mctx);
+    MAC_SetIvar(retn[1], VAR_CTRL, retn);
+    MAC_SetIvar(retn[1], VAR_DATA, mctx);
 
     if (MAC_10_10_PLUS)
         ibtn = button(retn[0]); /// Yosemite or newer, so we are using buttons
@@ -198,8 +198,8 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
     setImage_(ibtn, pict);
     setTarget_(ibtn, retn[1]);
     setAction_(ibtn, ActionSelector());
-    setToolTip_(retn[0], capt = MAC_UTF8(text));
-    CFRelease(capt);
+    setToolTip_(retn[0], capt = MAC_MakeString(text));
+    MAC_FreeString(capt);
     release(pict);
     CGImageRelease(iref);
     CGContextRelease(ctxt);
@@ -327,7 +327,7 @@ void OnSpin(void *this, SEL name) {
     double retn = 0.0;
     CTRL *ctrl = 0;
 
-    MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(this, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
 
@@ -340,7 +340,7 @@ void OnEdit(void *this, SEL name) {
     CTRL *ctrl = 0;
     double retn;
 
-    MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(this, VAR_CTRL, &ctrl);
     if (!ctrl || ((ctrl->flgs & FCT_TTTT) != FCT_SPIN))
         return;
 
@@ -359,7 +359,7 @@ bool OnKeys(void *this, SEL name, void *ctrl, NSView *view, SEL what) {
         CTRL *ctrl = 0;
         double retn;
 
-        MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
+        MAC_GetIvar(this, VAR_CTRL, &ctrl);
         if (!ctrl || ((ctrl->flgs & FCT_TTTT) != FCT_SPIN))
             return false;
 
@@ -444,8 +444,8 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
         case MSG_PTXT:
             if (ctrl->priv[3])
-                CFRelease((CFStringRef)ctrl->priv[3]);
-            ctrl->priv[3] = (intptr_t)MAC_UTF8(data);
+                MAC_FreeString((CFStringRef)ctrl->priv[3]);
+            ctrl->priv[3] = (intptr_t)MAC_MakeString(data);
             break;
 
         case MSG_PLIM:
@@ -515,8 +515,8 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
         case MSG_LCOL:
             setStringValue_(headerCell((NSTableColumn*)ctrl->priv[6]),
-                            capt = MAC_UTF8(data));
-            CFRelease(capt);
+                            capt = MAC_MakeString(data));
+            MAC_FreeString(capt);
             if (MAC_10_07_PLUS)
                 for (cmsg = 0; cmsg < ctrl->priv[4]; cmsg++)
                     setState_(((NSView**)ctrl->priv[2])[cmsg],
@@ -529,7 +529,8 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             ctrl->priv[5] = (intptr_t)
                 realloc((CFStringRef*)ctrl->priv[5],
                        ++ctrl->priv[4] * sizeof(CFStringRef));
-            ((CFStringRef*)ctrl->priv[5])[ctrl->priv[4] - 1] = MAC_UTF8(data);
+            ((CFStringRef*)ctrl->priv[5])[ctrl->priv[4] - 1] =
+                MAC_MakeString(data);
             if (MAC_10_07_PLUS) {
                 NSView *elem;
 
@@ -537,8 +538,8 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                     realloc((NSView**)ctrl->priv[2],
                              ctrl->priv[4] * sizeof(NSView**));
                 elem = init(alloc((NSButton*)ctrl->priv[1]));
-                MAC_SET_IVAR(elem, VAR_CTRL, ctrl);
-                MAC_SET_IVAR(elem, VAR_DATA, ctrl->priv[4] - 1);
+                MAC_SetIvar(elem, VAR_CTRL, ctrl);
+                MAC_SetIvar(elem, VAR_DATA, ctrl->priv[4] - 1);
                 setTarget_(elem, elem);
                 setAction_(elem, ActionSelector());
                 setButtonType_(elem, NSSwitchButton);
@@ -762,13 +763,15 @@ void rFreeControl(CTRL *ctrl) {
             /// releasing cells/strings and deleting their common subclass
             if (!MAC_10_07_PLUS) {
                 for (--ctrl->priv[4]; ctrl->priv[4] >= 0; ctrl->priv[4]--)
-                    CFRelease(((CFStringRef*)ctrl->priv[5])[ctrl->priv[4]]);
+                    MAC_FreeString
+                        (((CFStringRef*)ctrl->priv[5])[ctrl->priv[4]]);
                 release((NSCell*)ctrl->priv[2]);
             }
             else {
                 for (--ctrl->priv[4]; ctrl->priv[4] >= 0; ctrl->priv[4]--) {
                     release(((NSView**)ctrl->priv[2])[ctrl->priv[4]]);
-                    CFRelease(((CFStringRef*)ctrl->priv[5])[ctrl->priv[4]]);
+                    MAC_FreeString
+                        (((CFStringRef*)ctrl->priv[5])[ctrl->priv[4]]);
                 }
                 free((NSView**)ctrl->priv[2]);
             }
@@ -791,7 +794,7 @@ void rFreeControl(CTRL *ctrl) {
             /// releasing text attributes and the string
             MAC_FreeDict((CFDictionaryRef)ctrl->priv[5]);
             if (ctrl->priv[3])
-                CFRelease((CFStringRef)ctrl->priv[3]);
+                MAC_FreeString((CFStringRef)ctrl->priv[3]);
             break;
     }
     if (ctrl->priv[0])
@@ -803,7 +806,7 @@ void rFreeControl(CTRL *ctrl) {
 NSInteger OnRows(void *this, SEL name, NSTableView *view) {
     CTRL *ctrl = 0;
 
-    MAC_GET_IVAR(view, VAR_CTRL, &ctrl);
+    MAC_GetIvar(view, VAR_CTRL, &ctrl);
     return ctrl->priv[4];
 }
 
@@ -817,7 +820,7 @@ NSCell *OnValue(void *this, SEL name, NSTableView *view,
     NSCell *cell;
     CTRL *ctrl = 0;
 
-    MAC_GET_IVAR(view, VAR_CTRL, &ctrl);
+    MAC_GetIvar(view, VAR_CTRL, &ctrl);
     cell = (MAC_10_07_PLUS)?
            ((NSCell**)ctrl->priv[2])[irow] : dataCell(icol);
     setTitle_(cell, ((CFStringRef*)ctrl->priv[5])[irow]);
@@ -830,7 +833,7 @@ void OnReset(void *this, SEL name, NSTableView *view,
              void *what, NSTableColumn *icol, NSInteger irow) {
     CTRL *ctrl = 0;
 
-    MAC_GET_IVAR(view, VAR_CTRL, &ctrl);
+    MAC_GetIvar(view, VAR_CTRL, &ctrl);
     ctrl->fc2e(ctrl, MSG_LSST,
               (irow << 1) | (ctrl->fc2e(ctrl, MSG_LGST, irow) ^ 1));
 }
@@ -839,15 +842,15 @@ void OnListButton(void *this, SEL name) {
     CTRL *ctrl = 0;
     intptr_t irow;
 
-    MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
-    MAC_GET_IVAR(this, VAR_DATA, &irow);
+    MAC_GetIvar(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(this, VAR_DATA, &irow);
     OnReset(0, 0, this, 0, 0, irow);
 }
 
 void OnButton(void *this, SEL name) {
     CTRL *ctrl = 0;
 
-    MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(this, VAR_CTRL, &ctrl);
     ctrl->fc2e(ctrl, MSG_BCLK,
               ((ctrl->flgs & FCT_TTTT) != FCT_BUTN)?
               (state((NSButton*)ctrl->priv[0]) == NSOnState) : 0);
@@ -857,7 +860,7 @@ void PBoxDraw(void *this, SEL name, CGRect rect) {
     struct objc_super prev = {this, class(NSProgressIndicator())};
     CTRL *ctrl = 0;
 
-    MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(this, VAR_CTRL, &ctrl);
     objc_msgSendSuper(&prev, drawRect_(), rect);
     rect = frame((NSProgressIndicator*)ctrl->priv[0]);
     rect.origin.y = ctrl->priv[4];
@@ -879,7 +882,7 @@ void IBoxDraw(void *this, SEL name, CGRect rect) {
     AINF anim;
     CTRL *ctrl = 0;
 
-    MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(this, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
     anim = (AINF){(ctrl->priv[7] >> 10) & 0x3FFFFF,
@@ -908,7 +911,7 @@ bool OnTrue(void *this, SEL name) {
 bool OnClose(void *this, SEL name) {
     CTRL *ctrl = 0;
 
-    MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(this, VAR_CTRL, &ctrl);
     ctrl->priv[2] = 0; /// requesting a halt, or just crashing if CTRL is 0
                        /// (the program is stopping anyway)
     stop_(sharedApplication(NSApplication()), this);
@@ -919,7 +922,7 @@ void OnSize(void *this, SEL name) {
     CTRL *ctrl = 0;
     CGRect rect;
 
-    MAC_GET_IVAR(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(this, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
 
@@ -981,9 +984,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         ctrl->priv[7] = (intptr_t)init(alloc(scls->wndw));
         setContentView_(gwnd, (NSView*)ctrl->priv[7]);
         setDelegate_(gwnd, (NSView*)ctrl->priv[7]);
-        setTitle_(gwnd, capt = MAC_UTF8(text));
-        CFRelease(capt);
-        MAC_SET_IVAR((NSView*)ctrl->priv[7], VAR_CTRL, ctrl);
+        setTitle_(gwnd, capt = MAC_MakeString(text));
+        MAC_FreeString(capt);
+        MAC_SetIvar((NSView*)ctrl->priv[7], VAR_CTRL, ctrl);
         makeKeyWindow(gwnd);
         thrd = sharedApplication(NSApplication());
         activateIgnoringOtherApps_(thrd, true);
@@ -1015,8 +1018,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             case FCT_TEXT:
                 ctrl->fe2c = FE2CT;
                 gwnd = init(alloc(scls->text));
-                MAC_SET_IVAR(gwnd, VAR_CTRL, 0);
-                setStringValue_(gwnd, capt = MAC_UTF8(text));
+                MAC_SetIvar(gwnd, VAR_CTRL, 0);
+                setStringValue_(gwnd, capt = MAC_MakeString(text));
                 setAlignment_(gwnd, (ctrl->flgs & FST_CNTR)?
                                      NSCenterTextAlignment :
                                      NSLeftTextAlignment);
@@ -1025,7 +1028,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 setEditable_(gwnd, false);
                 setBordered_(gwnd, false);
                 setBezeled_(gwnd, false);
-                CFRelease(capt);
+                MAC_FreeString(capt);
                 break;
 
             case FCT_BUTN: {
@@ -1041,8 +1044,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 temp[size - 1] = '\0';
 
                 gwnd = init(alloc(scls->butn));
-                MAC_SET_IVAR(gwnd, VAR_CTRL, ctrl);
-                MAC_SET_IVAR(gwnd, VAR_DATA, nil);
+                MAC_SetIvar(gwnd, VAR_CTRL, ctrl);
+                MAC_SetIvar(gwnd, VAR_DATA, nil);
                 setTarget_(gwnd, gwnd);
                 setAction_(gwnd, ActionSelector());
                 setButtonType_(gwnd, NSMomentaryLightButton);
@@ -1054,22 +1057,22 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                     setDefaultButtonCell_((NSWindow*)ctrl->prev->priv[0],
                                           (NSButtonCell*)cell(gwnd));
                 }
-                setTitle_(gwnd, capt = MAC_UTF8(temp));
-                CFRelease(capt);
+                setTitle_(gwnd, capt = MAC_MakeString(temp));
+                MAC_FreeString(capt);
                 free(temp);
                 break;
             }
             case FCT_CBOX:
                 ctrl->fe2c = FE2CX;
                 gwnd = init(alloc(scls->butn));
-                MAC_SET_IVAR(gwnd, VAR_CTRL, ctrl);
+                MAC_SetIvar(gwnd, VAR_CTRL, ctrl);
                 setTarget_(gwnd, gwnd);
                 setAction_(gwnd, ActionSelector());
                 setButtonType_(gwnd, NSSwitchButton);
                 setImagePosition_(gwnd, (ctrl->flgs & FSX_LEFT)?
                                          NSImageRight : NSImageLeft);
-                setTitle_(gwnd, capt = MAC_UTF8(text));
-                CFRelease(capt);
+                setTitle_(gwnd, capt = MAC_MakeString(text));
+                MAC_FreeString(capt);
                 break;
 
             case FCT_RBOX:
@@ -1085,8 +1088,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 ctrl->priv[3] = root->priv[5];
                 ctrl->priv[6] = (intptr_t)init(alloc(scls->spin));
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->text));
-                MAC_SET_IVAR((NSStepper*)ctrl->priv[6], VAR_CTRL, ctrl);
-                MAC_SET_IVAR((NSTextField*)ctrl->priv[7], VAR_CTRL, ctrl);
+                MAC_SetIvar((NSStepper*)ctrl->priv[6], VAR_CTRL, ctrl);
+                MAC_SetIvar((NSTextField*)ctrl->priv[7], VAR_CTRL, ctrl);
                 spin = cellSize(cell((NSStepper*)ctrl->priv[6]));
                 temp.size = dims.size;
                 temp.size.width -= spin.x;
@@ -1119,7 +1122,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 gwnd = init(alloc(NSScrollView()));
                 ctrl->priv[1] = (intptr_t)scls->cell;
                 ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
-                MAC_SET_IVAR((NSTableView*)ctrl->priv[7], VAR_CTRL, ctrl);
+                MAC_SetIvar((NSTableView*)ctrl->priv[7], VAR_CTRL, ctrl);
                 setDataSource_((NSTableView*)ctrl->priv[7],
                                (NSTableView*)ctrl->priv[7]);
                 setDelegate_((NSTableView*)ctrl->priv[7],
@@ -1128,8 +1131,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
                 ctrl->priv[6] = (intptr_t)init(alloc(NSTableColumn()));
                 setStringValue_(headerCell((NSTableColumn*)ctrl->priv[6]),
-                                capt = MAC_UTF8(0));
-                CFRelease(capt);
+                                capt = MAC_MakeString(0));
+                MAC_FreeString(capt);
                 addTableColumn_((NSTableView*)ctrl->priv[7],
                                 (NSTableColumn*)ctrl->priv[6]);
                 setResizingMask_((NSTableColumn*)ctrl->priv[6],
@@ -1158,7 +1161,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
                 ctrl->fe2c = FE2CI;
                 gwnd = init(alloc(scls->ibox));
-                MAC_SET_IVAR(gwnd, VAR_CTRL, ctrl);
+                MAC_SetIvar(gwnd, VAR_CTRL, ctrl);
                 ctrl->priv[3] =  (uint16_t)dims.size.width
                               | ((uint32_t)dims.size.height << 16);
                 ctrl->priv[2] = (uintptr_t)malloc(line * dims.size.height);
@@ -1178,7 +1181,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
                 ctrl->fe2c = FE2CP;
                 gwnd = init(alloc(scls->pbar));
-                MAC_SET_IVAR(gwnd, VAR_CTRL, ctrl);
+                MAC_SetIvar(gwnd, VAR_CTRL, ctrl);
                 setIndeterminate_(gwnd, false);
                 setWantsLayer_(gwnd, true);
                 psty = init(alloc(NSMutableParagraphStyle()));
@@ -1278,8 +1281,8 @@ int main(int argc, char *argv[]) {
 
     setActivationPolicy_(sharedApplication(NSApplication()),
                          NSApplicationActivationPolicyAccessory);
-    find.home = MAC_CopyUTF8(path =
-                            (CFStringRef)bundlePath(mainBundle(NSBundle())));
+    find.home = MAC_LoadString(path =
+                              (CFStringRef)bundlePath(mainBundle(NSBundle())));
     find.home = realloc(find.home, find.hlen = strlen(find.home) + 32);
     strcat(find.home, "/Contents/MacOS/"DEF_FLDR"/");
     find.iter = scandir(find.home, &find.dirs, 0, alphasort);
@@ -1291,8 +1294,8 @@ int main(int argc, char *argv[]) {
     path = CFURLCopyFileSystemPath
                (CFArrayGetValueAtIndex((CFArrayRef)urls, 0),
                                         kCFURLPOSIXPathStyle);
-    conf = MAC_CopyUTF8(path);
-    CFRelease(path);
+    conf = MAC_LoadString(path);
+    MAC_FreeString(path);
     conf = realloc(conf, strlen(conf) + 32);
     strcat(conf, DEF_OPTS);
     if (!((mkdir(conf, 0755))? (errno != EEXIST)? 0 : 1 : 2))

@@ -227,7 +227,7 @@ void OnDraw(void *this, SEL name, CGRect rect) {
     ENGD *engd;
     DRAW *draw;
 
-    MAC_GET_IVAR(this, VAR_ENGD, &engd);
+    MAC_GetIvar(this, VAR_ENGD, &engd);
     cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
     draw = (DRAW*)data[0];
@@ -261,8 +261,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     /// a dirty hack to become capable of changing cursors at will
     CGSSetConnectionProperty
         (_CGSDefaultConnection(), _CGSDefaultConnection(),
-         scib = MAC_UTF8("SetsCursorInBackground"), kCFBooleanTrue);
-    CFRelease(scib);
+         scib = MAC_MakeString("SetsCursorInBackground"), kCFBooleanTrue);
+    MAC_FreeString(scib);
 
     data[0] = (intptr_t)&draw;
     draw.hand = pointingHandCursor(NSCursor());
@@ -305,7 +305,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         setValues_forParameter_(ctxt, &opaq, NSOpenGLCPSurfaceOpacity);
         release(pfmt);
     }
-    MAC_SET_IVAR(draw.view, VAR_ENGD, engd);
+    MAC_SetIvar(draw.view, VAR_ENGD, engd);
     dims.origin.x = xpos;
     dims.origin.y = ypos;
 
