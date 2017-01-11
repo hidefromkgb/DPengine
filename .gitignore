@@ -1,10 +1,10 @@
 # Binaries
 win32.exe
 linux-gtk
-macos.app/*
+macos.app
 *.dll
-*.dylib
 *.so
+*.dylib
 
 # Animations
 Ponies*
