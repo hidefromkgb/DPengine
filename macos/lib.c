@@ -218,7 +218,7 @@ void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
 
 
 
-void OnDraw(void *this, SEL name, CGRect rect) {
+void MAC_Handler(OnDraw, CGRect rect) {
     CGContextRef ctxt;
     CGImageRef iref;
 
@@ -227,7 +227,7 @@ void OnDraw(void *this, SEL name, CGRect rect) {
     ENGD *engd;
     DRAW *draw;
 
-    MAC_GetIvar(this, VAR_ENGD, &engd);
+    MAC_GetIvar(self, VAR_ENGD, &engd);
     cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
     draw = (DRAW*)data[0];

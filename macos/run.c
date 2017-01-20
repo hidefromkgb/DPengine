@@ -51,7 +51,7 @@ static SEL ActionSelector() {
 }
 
 /// NAME holds the selector associated with this function
-void OnMenu(void *this, SEL name, NSMenu *menu) {
+void MAC_Handler(OnMenu, NSMenu *menu) {
     eProcessMenuItem((MENU*)tag(menu));
 }
 
@@ -161,10 +161,10 @@ long rMessage(char *text, char *head, uint32_t flgs) {
 
 
 
-void OnTray(void *this, SEL name) {
+void MAC_Handler(OnTray) {
     MENU *mctx;
 
-    MAC_GetIvar(this, VAR_DATA, &mctx);
+    MAC_GetIvar(self, VAR_DATA, &mctx);
     rOpenContextMenu(mctx);
 }
 
@@ -313,21 +313,21 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
     setFrame_((NSView*)ctrl->priv[0], rect);
 }
 
-bool OnValidate(void *this, SEL name,
-                CFStringRef part, CFStringRef retn, CFStringRef desc) {
+bool MAC_Handler(OnValidate,
+                 CFStringRef part, CFStringRef retn, CFStringRef desc) {
     void *temp;
 
-    if (getObjectValue_forString_errorDescription_(this, &temp, part, desc))
+    if (getObjectValue_forString_errorDescription_(self, &temp, part, desc))
         return true;
     NSBeep();
     return false;
 }
 
-void OnSpin(void *this, SEL name) {
+void MAC_Handler(OnSpin) {
     double retn = 0.0;
     CTRL *ctrl = 0;
 
-    MAC_GetIvar(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(self, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
 
@@ -336,11 +336,11 @@ void OnSpin(void *this, SEL name) {
     ctrl->fc2e(ctrl, MSG_NSET, retn);
 }
 
-void OnEdit(void *this, SEL name) {
+void MAC_Handler(OnEdit) {
     CTRL *ctrl = 0;
     double retn;
 
-    MAC_GetIvar(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(self, VAR_CTRL, &ctrl);
     if (!ctrl || ((ctrl->flgs & FCT_TTTT) != FCT_SPIN))
         return;
 
@@ -348,7 +348,7 @@ void OnEdit(void *this, SEL name) {
     ctrl->fe2c(ctrl, MSG_NSET, retn);
 }
 
-bool OnKeys(void *this, SEL name, void *ctrl, NSView *view, SEL what) {
+bool MAC_Handler(OnKeys, void *ctrl, NSView *view, SEL what) {
     static SEL MoveUp = 0, MoveDown = 0;
 
     if (!MoveUp) {
@@ -359,7 +359,7 @@ bool OnKeys(void *this, SEL name, void *ctrl, NSView *view, SEL what) {
         CTRL *ctrl = 0;
         double retn;
 
-        MAC_GetIvar(this, VAR_CTRL, &ctrl);
+        MAC_GetIvar(self, VAR_CTRL, &ctrl);
         if (!ctrl || ((ctrl->flgs & FCT_TTTT) != FCT_SPIN))
             return false;
 
@@ -803,19 +803,19 @@ void rFreeControl(CTRL *ctrl) {
 
 
 
-NSInteger OnRows(void *this, SEL name, NSTableView *view) {
+NSInteger MAC_Handler(OnRows, NSTableView *view) {
     CTRL *ctrl = 0;
 
     MAC_GetIvar(view, VAR_CTRL, &ctrl);
     return ctrl->priv[4];
 }
 
-NSCell *OnValueOld(void *this, SEL name, NSTableView *view,
-                   NSTableColumn *icol, NSInteger irow) {
+NSCell *MAC_Handler(OnValueOld, NSTableView *view,
+                    NSTableColumn *icol, NSInteger irow) {
     return (MAC_10_07_PLUS)? 0 : dataCell(icol);
 }
 
-NSCell *OnValue(void *this, SEL name, NSTableView *view,
+NSCell *MAC_Handler(OnValue, NSTableView *view,
                 NSTableColumn *icol, NSInteger irow) {
     NSCell *cell;
     CTRL *ctrl = 0;
@@ -829,8 +829,8 @@ NSCell *OnValue(void *this, SEL name, NSTableView *view,
     return cell;
 }
 
-void OnReset(void *this, SEL name, NSTableView *view,
-             void *what, NSTableColumn *icol, NSInteger irow) {
+void MAC_Handler(OnReset, NSTableView *view, void *what,
+                 NSTableColumn *icol, NSInteger irow) {
     CTRL *ctrl = 0;
 
     MAC_GetIvar(view, VAR_CTRL, &ctrl);
@@ -838,29 +838,29 @@ void OnReset(void *this, SEL name, NSTableView *view,
               (irow << 1) | (ctrl->fc2e(ctrl, MSG_LGST, irow) ^ 1));
 }
 
-void OnListButton(void *this, SEL name) {
+void MAC_Handler(OnListButton) {
     CTRL *ctrl = 0;
     intptr_t irow;
 
-    MAC_GetIvar(this, VAR_CTRL, &ctrl);
-    MAC_GetIvar(this, VAR_DATA, &irow);
-    OnReset(0, 0, this, 0, 0, irow);
+    MAC_GetIvar(self, VAR_CTRL, &ctrl);
+    MAC_GetIvar(self, VAR_DATA, &irow);
+    OnReset(0, 0, self, 0, 0, irow);
 }
 
-void OnButton(void *this, SEL name) {
+void MAC_Handler(OnButton) {
     CTRL *ctrl = 0;
 
-    MAC_GetIvar(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(self, VAR_CTRL, &ctrl);
     ctrl->fc2e(ctrl, MSG_BCLK,
               ((ctrl->flgs & FCT_TTTT) != FCT_BUTN)?
               (state((NSButton*)ctrl->priv[0]) == NSOnState) : 0);
 }
 
-void PBoxDraw(void *this, SEL name, CGRect rect) {
-    struct objc_super prev = {this, class(NSProgressIndicator())};
+void MAC_Handler(PBoxDraw, CGRect rect) {
+    struct objc_super prev = {self, class(NSProgressIndicator())};
     CTRL *ctrl = 0;
 
-    MAC_GetIvar(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(self, VAR_CTRL, &ctrl);
     objc_msgSendSuper(&prev, drawRect_(), rect);
     rect = frame((NSProgressIndicator*)ctrl->priv[0]);
     rect.origin.y = ctrl->priv[4];
@@ -876,13 +876,13 @@ void PBoxDraw(void *this, SEL name, CGRect rect) {
                                (CFDictionaryRef)ctrl->priv[5]);
 }
 
-void IBoxDraw(void *this, SEL name, CGRect rect) {
+void MAC_Handler(IBoxDraw, CGRect rect) {
     CGImageRef pict;
     CGRect area;
     AINF anim;
     CTRL *ctrl = 0;
 
-    MAC_GetIvar(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(self, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
     anim = (AINF){(ctrl->priv[7] >> 10) & 0x3FFFFF,
@@ -900,29 +900,29 @@ void IBoxDraw(void *this, SEL name, CGRect rect) {
     CGImageRelease(pict);
 }
 
-bool OnFalse(void *this, SEL name) {
+bool MAC_Handler(OnFalse) {
     return false;
 }
 
-bool OnTrue(void *this, SEL name) {
+bool MAC_Handler(OnTrue) {
     return true;
 }
 
-bool OnClose(void *this, SEL name) {
+bool MAC_Handler(OnClose) {
     CTRL *ctrl = 0;
 
-    MAC_GetIvar(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(self, VAR_CTRL, &ctrl);
     ctrl->priv[2] = 0; /// requesting a halt, or just crashing if CTRL is 0
                        /// (the program is stopping anyway)
-    stop_(sharedApplication(NSApplication()), this);
+    stop_(sharedApplication(NSApplication()), self);
     return true;
 }
 
-void OnSize(void *this, SEL name) {
+void MAC_Handler(OnSize) {
     CTRL *ctrl = 0;
     CGRect rect;
 
-    MAC_GetIvar(this, VAR_CTRL, &ctrl);
+    MAC_GetIvar(self, VAR_CTRL, &ctrl);
     if (!ctrl)
         return;
 
