@@ -132,18 +132,15 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     if (!rndr || *rndr)
         return !!rndr;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mtex);
-    test = calloc(1, sizeof(*test));
     mtex = (mtex < 4096)? mtex : 4096;
     while (mtex) {
-        curr = OGL_MakeTex(test, mtex, mtex, 1, GL_TEXTURE_3D,
-                           GL_REPEAT, GL_NEAREST, GL_NEAREST,
-                           GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0);
-        glDeleteTextures(1, &test->indx);
-        if (curr == GL_NO_ERROR)
+        if ((test = OGL_MakeTex(mtex, mtex, 1, GL_TEXTURE_3D,
+                                GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                                GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0)))
             break;
         mtex >>= 1;
     }
-    free(test);
+    OGL_FreeTex(&test);
 
     if (!mtex)
         return 0;
@@ -200,18 +197,17 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     retn->surf = OGL_MakeVBO(5, GL_TRIANGLES,
                              sizeof(satr) / sizeof(*satr), satr,
                              sizeof(suni) / sizeof(*suni), suni,
-                            (char*[]){MainVertexShader, MainPixelShader, 0});
-
-    retn->surf->cind = 0;
+                             2, (char*[]){MainVertexShader, MainPixelShader});
     retn->disz.z = 1.0 / dhei;
     retn->disz.w = 1.0 / chei;
     free(vert);
     free(indx);
 
     /// allocate the sprite data texture (uninitialized)
-    OGL_MakeTex(&retn->surf->ptex[0], mtex, dhei, 0,
-                GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-                GL_FLOAT, GL_RGBA32F, GL_RGBA, 0);
+    *OGL_BindTex(retn->surf, 0, OGL_TEX_NSET) =
+        OGL_MakeTex(mtex, dhei, 0, GL_TEXTURE_2D,
+                    GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                    GL_FLOAT, GL_RGBA32F, GL_RGBA, 0);
 
     txsz = calloc(uniq, sizeof(*txsz));
     dims = calloc(mtex * chei, sizeof(*dims));
@@ -228,15 +224,17 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         }
 
     /// allocate the palette texture
-    OGL_MakeTex(&retn->surf->ptex[3], mtex, phei, 0,
-                GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-                GL_UNSIGNED_BYTE, GL_RGBA8, (rgba)? GL_RGBA : GL_BGRA, apal);
+    *OGL_BindTex(retn->surf, 3, OGL_TEX_NSET) =
+        OGL_MakeTex(mtex, phei, 0, GL_TEXTURE_2D,
+                    GL_REPEAT, GL_NEAREST, GL_NEAREST, GL_UNSIGNED_BYTE,
+                    GL_RGBA8, (rgba)? GL_RGBA : GL_BGRA, apal);
     free(apal);
 
     /// allocate the sprite dimension texture
-    OGL_MakeTex(&retn->surf->ptex[1], mtex, chei, 0,
-                GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-                GL_FLOAT, GL_RGBA32F, GL_RGBA, dims);
+    *OGL_BindTex(retn->surf, 1, OGL_TEX_NSET) =
+        OGL_MakeTex(mtex, chei, 0, GL_TEXTURE_2D,
+                    GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                    GL_FLOAT, GL_RGBA32F, GL_RGBA, dims);
     free(dims);
 
     qsort(txsz, uniq, sizeof(*txsz), sizecmp);
@@ -254,17 +252,17 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         }
     }
     /// allocate the main FB array texture (uninitialized)
-    OGL_MakeTex(&retn->surf->ptex[4], mtex, mtex, cbnk + 1,
-                GL_TEXTURE_3D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-                GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0);
+    test = *OGL_BindTex(retn->surf, 4, OGL_TEX_NSET) =
+        OGL_MakeTex(mtex, mtex, cbnk + 1, GL_TEXTURE_3D,
+                    GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                    GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0);
 
     bank = calloc(mtex * chei, sizeof(*bank));
     atex = aptr = calloc(fill = mtex * mtex, sizeof(*atex));
     for (cbnk = fcnt = curr = 0; curr < uniq; fcnt = 0, curr++)
         while (txsz[curr].fcnt) {
             if (aptr - atex + txsz[curr].size > fill) {
-                OGL_LoadTex(&retn->surf->ptex[4], 0, 0, cbnk,
-                            mtex, mtex, 1, atex);
+                OGL_LoadTex(test, 0, 0, cbnk, mtex, mtex, 1, atex);
                 aptr = atex;
                 cbnk++;
             }
@@ -288,13 +286,14 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         }
     free(txsz);
     if (aptr > atex)
-        OGL_LoadTex(&retn->surf->ptex[4], 0, 0, cbnk, mtex, mtex, 1, atex);
+        OGL_LoadTex(test, 0, 0, cbnk, mtex, mtex, 1, atex);
     free(atex);
 
     /// allocate the FB control texture
-    OGL_MakeTex(&retn->surf->ptex[2], mtex, chei, 0,
-                GL_TEXTURE_2D, GL_REPEAT, GL_NEAREST, GL_NEAREST,
-                GL_FLOAT, GL_RGBA32F, GL_RGBA, bank);
+    *OGL_BindTex(retn->surf, 2, OGL_TEX_NSET) =
+        OGL_MakeTex(mtex, chei, 0, GL_TEXTURE_2D,
+                    GL_REPEAT, GL_NEAREST, GL_NEAREST,
+                    GL_FLOAT, GL_RGBA32F, GL_RGBA, bank);
     free(bank);
 
     retn->hitd = (T4FV){{1.0 / (cbnk + 1), 1.0 / phei, 1.0 / mtex, 1.0}};
@@ -306,13 +305,19 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
 void DrawRendererOGL(RNDR *rndr, UNIT *uarr, T4FV *data,
                      ulong size, ulong opaq) {
-    long iter, indx, ydim = ceil((GLfloat)size / rndr->surf->ptex[0].xdim);
+    long iter, indx;
+    GLuint xdim, ydim;
+    OGL_FTEX *surf;
     T4FV *pfwd, *pbwd;
     UNIT *retn;
 
-    if (!(iter = rndr->surf->ptex[0].xdim * ydim))
+    xdim = 0;
+    surf = *OGL_BindTex(rndr->surf, 0, OGL_TEX_NSET);
+    OGL_EnumTex(surf, 0, 0, 0, &xdim, 0, 0);
+    if (!xdim || !size)
         return;
-    if (rndr->size != iter) {
+    ydim = ceil((GLfloat)size / (GLfloat)xdim);
+    if (rndr->size != (iter = xdim * ydim)) {
         free(rndr->temp);
         rndr->size = iter;
         rndr->temp = malloc(rndr->size * sizeof(*rndr->temp));
@@ -330,10 +335,8 @@ void DrawRendererOGL(RNDR *rndr, UNIT *uarr, T4FV *data,
     }
     glClearColor(0.0, 0.0, 0.0, (opaq)? 1.0 : 0.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    OGL_LoadTex(&rndr->surf->ptex[0], 0, 0, 0,
-                rndr->surf->ptex[0].xdim, ydim, 0, rndr->temp);
-    rndr->surf->cind = size * 6;
-    OGL_DrawVBO(rndr->surf, 0);
+    OGL_LoadTex(surf, 0, 0, 0, xdim, ydim, 0, rndr->temp);
+    OGL_DrawVBO(rndr->surf, 0, size * 6);
 }
 
 
