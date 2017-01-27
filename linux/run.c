@@ -912,16 +912,17 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 
 
-int main(int argc, char *argv[]) {
+void _start() {
+    /** the stack MUST be aligned to a 256-bit (32-byte) boundary: **/
+    __attribute__((aligned(32))) volatile uint32_t size = 32;
+    char *home, *conf;
     GdkScreen *gscr;
     gint xdim, ydim;
-
-    char *home, *conf;
     FIND find = {};
 
     if (!(home = getenv("HOME")))
         home = getpwuid(getuid())->pw_dir;
-    conf = calloc(32 + strlen(home), sizeof(*conf));
+    conf = calloc(strlen(home) + size, sizeof(*conf));
     strcat(conf, home);
     strcat(conf, "/.config");
     mkdir(conf, 0700);
@@ -929,7 +930,7 @@ int main(int argc, char *argv[]) {
     if (!(home = (mkdir(conf, 0755))? (errno != EEXIST)? 0 : conf : conf))
         printf("WARNING: cannot create '%s'!", conf);
 
-    gtk_init(&argc, &argv);
+    gtk_init(0, 0);
     gscr = gdk_screen_get_default();
     gtk_icon_size_lookup(GTK_ICON_SIZE_DIALOG, &xdim, &ydim);
     find.iter = scandir(DEF_FLDR, &find.dirs, 0, alphasort);
@@ -937,5 +938,5 @@ int main(int argc, char *argv[]) {
     eExecuteEngine(conf, (intptr_t)&find, xdim, ydim, 0, 0,
                    gdk_screen_get_width(gscr), gdk_screen_get_height(gscr));
     free(conf);
-    return 0;
+    exit(0);
 }

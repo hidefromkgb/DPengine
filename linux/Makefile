@@ -6,8 +6,8 @@ OBJDIR = .obj
 
 LLIB = -lXrender -lX11 -lGL -lm
 LINC = -I/usr/include/gtkglext-1.0 -I/usr/lib/gtkglext-1.0/include
-LCXFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --libs` -pthread
-LCFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags` -I../core -Wall -fPIC
+LCXFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --libs` -pthread -fno-stack-protector -nostartfiles -Wl,--gc-sections
+LCFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags` -I../core -Wall -ffunction-sections -fdata-sections
 
 LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/oglstd.o $(OBJDIR)/lib.o
 LOUT = ../libengine.so
@@ -15,8 +15,8 @@ LOUT = ../libengine.so
 
 ELIB = -lengine -lm
 EINC =
-ECXFLAGS = `pkg-config gtk+-2.0 --libs` -L..
-ECFLAGS = `pkg-config gtk+-2.0 --cflags` -I../core -Wall
+ECXFLAGS = `pkg-config gtk+-2.0 --libs` -L.. -fno-stack-protector -nostartfiles -Wl,--gc-sections
+ECFLAGS = `pkg-config gtk+-2.0 --cflags` -I../core -Wall -ffunction-sections -fdata-sections
 
 EOBJ = $(OBJDIR)/exec/exec.o $(OBJDIR)/run.o
 EOUT = ../linux-gtk
@@ -27,16 +27,19 @@ RelJoined: erelease
 RelJoined: LCXFLAGS += -s -flto -Wl,--build-id=none
 RelJoined: jlink
 RelJoined:
+	strip -R .eh_frame -R .gnu.version -R .comment $(EOUT)
 	if type upx &> /dev/null; then upx -qq $(EOUT); fi
 
 DbgJoined: ldebug
 DbgJoined: edebug
 DbgJoined: jlink
 
+RelLibOnly: LCFLAGS += -fPIC
 RelLibOnly: lrelease
 RelLibOnly: LCXFLAGS += -s -Wl,--build-id=none
 RelLibOnly: llink
 
+DbgLibOnly: LCFLAGS += -fPIC
 DbgLibOnly: ldebug
 DbgLibOnly: llink
 
