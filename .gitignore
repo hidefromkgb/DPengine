@@ -6,8 +6,8 @@ macos.app
 *.so
 *.dylib
 
-# Animations
-Ponies*
+# DP stuff
+Content*
 
 # Code::Blocks service files
 *.cscope_file_list

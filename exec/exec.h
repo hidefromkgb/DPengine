@@ -1,17 +1,27 @@
 #include <time.h>
 #include <math.h>
 #include <stdio.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <ctype.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <unistd.h>
 #include <engine.h>
+
+#ifndef _WIN32
+    #include <openssl/ssl.h>
+    #include <sys/socket.h>
+    #include <sys/stat.h>
+    #include <netdb.h>
+#endif /** _WIN32 **/
 
 
 
 /** default config directory    **/ #define DEF_OPTS "/DesktopPonies"
 /** default core config         **/ #define DEF_CORE "/core.conf"
-/** default anim directory      **/ #define DEF_FLDR "Ponies"
+/** default anim directory      **/ #define DEF_FLDR "Content"
 /** default config file         **/ #define DEF_CONF "pony.ini"
 
 /// /// /// /// /// /// /// /// /// menu constants
@@ -87,6 +97,10 @@
 /** set listbox item state      **/ #define MSG_LSST 20
 /** imagebox update frame       **/ #define MSG_IFRM 21
 
+/// /// /// /// /// /// /// /// /// message box flags
+/** "OK" button only            **/ #define RMF_BTOK   0
+/** "Accept" and "Deny" buttons **/ #define RMF_BTAD  (1 << 0)
+
 /// preview updater function
 typedef void (*UPRE)(intptr_t data, uint64_t time);
 
@@ -124,16 +138,17 @@ typedef struct _MENU {
 
 
 void  eProcessMenuItem(MENU *item);
-void  eExecuteEngine(char *fcnf, intptr_t find, ulong xico, ulong yico,
+void  eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                      long xpos, long ypos, ulong xdim, ulong ydim);
 
 
 
 /// external functions, have to be implemented or imported
+long  rMessage(char *text, char *head, uint32_t flgs);
 void  rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data);
 void  rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text);
 void  rFreeControl(CTRL *ctrl);
-long  rMessage(char *text, char *head, uint32_t flgs);
+intptr_t rFindMake(char *base);
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim);
 void  rFreeTrayIcon(intptr_t icon);

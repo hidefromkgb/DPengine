@@ -109,13 +109,14 @@ long rMessage(char *text, char *head, uint32_t flgs) {
     long retn;
 
     hdlg = gtk_message_dialog_new(0, GTK_DIALOG_MODAL, GTK_MESSAGE_OTHER,
-                                  GTK_BUTTONS_OK, text);
+                                 (flgs & RMF_BTAD)? GTK_BUTTONS_OK_CANCEL
+                                                  : GTK_BUTTONS_OK, text);
     if (head)
         gtk_window_set_title(GTK_WINDOW(hdlg), head);
 
     retn = gtk_dialog_run(GTK_DIALOG(hdlg));
     gtk_widget_destroy(hdlg);
-    return retn;
+    return !!(retn == GTK_RESPONSE_OK);
 }
 
 
@@ -154,21 +155,33 @@ void rFreeTrayIcon(intptr_t icon) {
 
 
 
+intptr_t rFindMake(char *base) {
+    FIND *find;
+
+    find = calloc(1, sizeof(*find));
+    find->iter = scandir(base, &find->dirs, 0, alphasort);
+    find->iter = (find->iter > 0)? find->iter : 0;
+    return (intptr_t)find;
+}
+
+
+
 char *rFindFile(intptr_t data) {
     FIND *find = (FIND*)data;
     char *retn = 0;
 
-    if (!find->iter) {
-        free(find->dirs);
+    if (find->iter <= 0)
         return 0;
-    }
-    if ((find->dirs[--find->iter]->d_type == DT_DIR)
-    &&  strcmp(find->dirs[find->iter]->d_name, ".")
-    &&  strcmp(find->dirs[find->iter]->d_name, ".."))
+    while ((--find->iter + 1) && ((find->dirs[find->iter]->d_type != DT_DIR)
+                              || !strcmp(find->dirs[find->iter]->d_name, "..")
+                              || !strcmp(find->dirs[find->iter]->d_name, ".")))
+        free(find->dirs[find->iter]);
+    if (find->iter >= 0) {
         retn = strdup(find->dirs[find->iter]->d_name);
-    else
-        retn = (char*)1;
-    free(find->dirs[find->iter]);
+        free(find->dirs[find->iter]);
+    }
+    if (find->iter <= 0)
+        free(find->dirs);
     return retn;
 }
 
@@ -918,7 +931,6 @@ void _start() {
     char *home, *conf;
     GdkScreen *gscr;
     gint xdim, ydim;
-    FIND find = {};
 
     if (!(home = getenv("HOME")))
         home = getpwuid(getuid())->pw_dir;
@@ -933,9 +945,7 @@ void _start() {
     gtk_init(0, 0);
     gscr = gdk_screen_get_default();
     gtk_icon_size_lookup(GTK_ICON_SIZE_DIALOG, &xdim, &ydim);
-    find.iter = scandir(DEF_FLDR, &find.dirs, 0, alphasort);
-    find.iter = (find.iter > 0)? find.iter : 0;
-    eExecuteEngine(conf, (intptr_t)&find, xdim, ydim, 0, 0,
+    eExecuteEngine(conf, DEF_FLDR, xdim, ydim, 0, 0,
                    gdk_screen_get_width(gscr), gdk_screen_get_height(gscr));
     free(conf);
     exit(0);
