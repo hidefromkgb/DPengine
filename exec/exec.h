@@ -1,7 +1,6 @@
 #include <time.h>
 #include <math.h>
 #include <stdio.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <ctype.h>
 #include <string.h>
@@ -9,13 +8,6 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <engine.h>
-
-#ifndef _WIN32
-    #include <openssl/ssl.h>
-    #include <sys/socket.h>
-    #include <sys/stat.h>
-    #include <netdb.h>
-#endif /** _WIN32 **/
 
 
 
@@ -148,7 +140,12 @@ long  rMessage(char *text, char *head, uint32_t flgs);
 void  rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data);
 void  rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text);
 void  rFreeControl(CTRL *ctrl);
+void  rFreeHTTPS(intptr_t user);
+void  rFreeParallel(intptr_t user);
+void  rLoadParallel(intptr_t user, intptr_t data);
+intptr_t rMakeParallel(UPRE func, long size);
 intptr_t rFindMake(char *base);
+intptr_t rMakeHTTPS(char *user, char *serv);
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim);
 void  rFreeTrayIcon(intptr_t icon);
@@ -158,3 +155,5 @@ char *rConvertUTF8(char *utf8);
 char *rFindFile(intptr_t data);
 char *rLoadFile(char *name, long *size);
 long  rSaveFile(char *name, char *data, long size);
+long  rLoadHTTPS(intptr_t user, char *page, char **dest);
+long  rMakeDir(char *name);

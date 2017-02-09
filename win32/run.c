@@ -3,6 +3,7 @@
 #define WINVER _WIN32_WINNT
 
 #include <windows.h>
+#include <wininet.h>
 #include <commctrl.h>
 #include <shlobj.h>
 
@@ -15,9 +16,19 @@
 
 
 typedef struct {
+    HANDLE isem;
+    UPRE func;
+    long size;
+} DTHR;
+
+typedef struct {
     HANDLE hdir;
-    WIN32_FIND_DATA dirf;
+    LPSTR base;
 } FIND;
+
+typedef struct {
+    HINTERNET hnet, hcon;
+} NETC;
 
 
 
@@ -77,13 +88,14 @@ long rMessage(char *text, char *head, uint32_t flgs) {
         MSGBOXPARAMSA a;
         MSGBOXPARAMSW w;
     } msgp = {{sizeof(msgp), 0, GetModuleHandle(0), tttt, hhhh,
-               flgs | MB_TASKMODAL | MB_USERICON, (LPSTR)1}};
+             ((flgs & RMF_BTAD)? MB_OKCANCEL : MB_OK)
+             | MB_TASKMODAL | MB_USERICON, (LPSTR)1}};
 
     long retn = (OldWin32())? MessageBoxIndirectA(&msgp.a)
                             : MessageBoxIndirectW(&msgp.w);
     free(tttt);
     free(hhhh);
-    return retn;
+    return !!(retn == IDOK);
 }
 
 
@@ -222,10 +234,10 @@ HMENU Submenu(MENU *menu, long *chld) {
 
 
 
-DWORD APIENTRY MenuThread(MENU *menu) {
+DWORD APIENTRY MenuThread(LPVOID menu) {
     MENUITEMINFOA pmii = {sizeof(pmii), MIIM_DATA};
     HWND  iwnd = CreateWindowEx(0, WC_STATIC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    HMENU mwnd = Submenu(menu, 0);
+    HMENU mwnd = Submenu((MENU*)menu, 0);
     POINT ppos;
     DWORD retn;
 
@@ -247,7 +259,58 @@ DWORD APIENTRY MenuThread(MENU *menu) {
 void rOpenContextMenu(MENU *menu) {
     DWORD retn;
 
-    CreateThread(0, 0, (LPTHREAD_START_ROUTINE)MenuThread, menu, 0, &retn);
+    CreateThread(0, 0, MenuThread, menu, 0, &retn);
+}
+
+
+
+DWORD APIENTRY ParallelFunc(LPVOID data) {
+    DTHR *dthr = (DTHR*)((intptr_t*)data)[0];
+    intptr_t user = ((intptr_t*)data)[1];
+
+    free(data);
+    dthr->func(user, 0);
+    ReleaseSemaphore(dthr->isem, 1, 0);
+    return TRUE;
+}
+
+
+
+intptr_t rMakeParallel(UPRE func, long size) {
+    SYSTEM_INFO syin = {};
+    DTHR *dthr;
+
+    GetSystemInfo(&syin);
+    size = (syin.dwNumberOfProcessors > 1)?
+            syin.dwNumberOfProcessors * size : size;
+    *(dthr = calloc(1, sizeof(*dthr))) =
+        (DTHR){CreateSemaphore(0, size, size, 0), func, size};
+    return (intptr_t)dthr;
+}
+
+
+
+void rLoadParallel(intptr_t user, intptr_t data) {
+    DTHR *dthr = (DTHR*)user;
+    DWORD retn;
+    intptr_t *pass;
+
+    pass = calloc(2, sizeof(intptr_t));
+    pass[0] = user;
+    pass[1] = data;
+    WaitForSingleObject(dthr->isem, INFINITE);
+    CreateThread(0, 0, ParallelFunc, pass, 0, &retn);
+}
+
+
+
+void rFreeParallel(intptr_t user) {
+    DTHR *dthr = (DTHR*)user;
+
+    for (; dthr->size; dthr->size--)
+        WaitForSingleObject(dthr->isem, INFINITE);
+    CloseHandle(dthr->isem);
+    free(dthr);
 }
 
 
@@ -321,6 +384,82 @@ long rSaveFile(char *name, char *data, long size) {
         return flen;
     }
     return 0;
+}
+
+
+
+long rMakeDir(char *name) {
+    BOOL retn;
+
+    name = rConvertUTF8(name);
+    if (OldWin32())
+        retn = CreateDirectoryA(name, 0);
+    else
+        retn = CreateDirectoryW((LPWSTR)name, 0);
+    if (!retn && (GetLastError() == ERROR_ALREADY_EXISTS))
+        retn = TRUE;
+    free(name);
+    return !!retn;
+}
+
+
+
+void rFreeHTTPS(intptr_t user) {
+    NETC *netc = (NETC*)user;
+
+    if (netc) {
+        if (netc->hcon)
+            InternetCloseHandle(netc->hcon);
+        if (netc->hnet)
+            InternetCloseHandle(netc->hnet);
+        free(netc);
+    }
+}
+
+
+
+intptr_t rMakeHTTPS(char *user, char *serv) {
+    NETC *netc;
+
+    if (!user || !serv)
+        return 0;
+    netc = calloc(1, sizeof(*netc));
+    netc->hnet = InternetOpen(user, INTERNET_OPEN_TYPE_PRECONFIG, 0, 0, 0);
+    netc->hcon = InternetConnect(netc->hnet, serv, INTERNET_DEFAULT_HTTPS_PORT,
+                                 0, 0, INTERNET_SERVICE_HTTP, 0, 1);
+    if (!netc->hnet || !netc->hcon) {
+        rFreeHTTPS((intptr_t)netc);
+        netc = 0;
+    }
+    return (intptr_t)netc;
+}
+
+
+
+long rLoadHTTPS(intptr_t user, char *page, char **dest) {
+    NETC *netc = (NETC*)user;
+    char *retn = 0;
+    long  size = 0;
+    DWORD read = 0;
+    HINTERNET hreq;
+
+    if (!user || !page || !dest)
+        return 0;
+    *dest = 0;
+    user = INTERNET_FLAG_KEEP_CONNECTION | INTERNET_FLAG_SECURE;
+    if ((hreq = HttpOpenRequest(netc->hcon, "GET", page, 0, 0, 0, user, 1))) {
+        HttpSendRequest(hreq, 0, 0, 0, 0);
+        do {
+            retn = realloc(retn, (size += read) + 0x1000 + 1);
+        } while (InternetReadFile(hreq, retn + size, 0x1000, &read) && read);
+        InternetCloseHandle(hreq);
+        retn = realloc(retn, size + 1);
+        if (size) {
+            retn[size] = 0;
+            *dest = retn;
+        }
+    }
+    return size;
 }
 
 
@@ -1361,30 +1500,56 @@ void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
 
 
 
+intptr_t rFindMake(char *base) {
+    FIND *find;
+    char *temp;
+    long  size;
+
+    if (!base)
+        return 0;
+    size = strlen(base);
+    memcpy(temp = calloc(1, 32 + size), base, size);
+    memcpy(temp + size, "/*", sizeof("/*"));
+    find = calloc(1, sizeof(*find));
+    find->base = rConvertUTF8(temp);
+    find->hdir = INVALID_HANDLE_VALUE;
+    free(temp);
+    return (intptr_t)find;
+}
+
+
+
 char *rFindFile(intptr_t data) {
     FIND *find = (FIND*)data;
+    WIN32_FIND_DATAA dira;
+    WIN32_FIND_DATAW dirw;
     char *retn;
 
+    if (!find)
+        return 0;
     if (!OldWin32()) {
         if (find->hdir == INVALID_HANDLE_VALUE)
-            find->hdir = FindFirstFileW(L""DEF_FLDR"/*",
-                                       (LPWIN32_FIND_DATAW)&find->dirf);
-        else if (!FindNextFileW(find->hdir, (LPWIN32_FIND_DATAW)&find->dirf)) {
+            find->hdir = FindFirstFileW((LPWSTR)find->base, &dirw);
+        else if (!FindNextFileW(find->hdir, &dirw)) {
             FindClose(find->hdir);
             find->hdir = INVALID_HANDLE_VALUE;
         }
         retn = (find->hdir != INVALID_HANDLE_VALUE)?
-                UTF8((LPWSTR)find->dirf.cFileName) : 0;
+                UTF8(dirw.cFileName) : 0;
     }
     else {
         if (find->hdir == INVALID_HANDLE_VALUE)
-            find->hdir = FindFirstFileA(DEF_FLDR"/*", &find->dirf);
-        else if (!FindNextFileA(find->hdir, &find->dirf)) {
+            find->hdir = FindFirstFileA(find->base, &dira);
+        else if (!FindNextFileA(find->hdir, &dira)) {
             FindClose(find->hdir);
             find->hdir = INVALID_HANDLE_VALUE;
         }
         retn = (find->hdir != INVALID_HANDLE_VALUE)?
-                strdup(find->dirf.cFileName) : 0;
+                strdup(dira.cFileName) : 0;
+    }
+    if (!retn) {
+        free(find->base);
+        free(find);
     }
     return retn;
 }
@@ -1394,49 +1559,38 @@ char *rFindFile(intptr_t data) {
 int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
     RECT area = {MAXLONG, MAXLONG, MINLONG, MINLONG};
-    CHAR *conf, path[4 * (MAX_PATH + 1)] = {};
-    FIND find = {INVALID_HANDLE_VALUE};
+    CHAR *conf = 0, path[4 * (MAX_PATH + 1)] = {};
     HRESULT APIENTRY (*GFP)(HWND, int, HANDLE, DWORD, LPSTR);
-    LPWSTR wide = 0;
     HMODULE hlib;
-    long retn;
 
 //    if (flgs & FLG_CONS) {
-//        AllocConsole();
-//        freopen("CONOUT$", "wb", stdout);
+        AllocConsole();
+        freopen("CONOUT$", "wb", stdout);
 //    }
 
     InitCommonControlsEx(&icct);
     EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&area);
 
-    retn = 0;
     hlib = LoadLibrary((OldWin32())? "shfolder" : "shell32");
-    GFP = (typeof(GFP))GetProcAddress(hlib, (OldWin32())? "SHGetFolderPathA"
-                                                        : "SHGetFolderPathW");
+    GFP = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHGetFolderPathA"
+                                                  : "SHGetFolderPathW");
     if (GFP(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
             SHGFP_TYPE_CURRENT, path) == S_OK) {
-        if (OldWin32()) {
-            strcat(path, DEF_OPTS);
-            wide = UTF16(path);
-            retn = CreateDirectoryA((LPSTR)path, 0);
+        if (!OldWin32()) {
+            strcpy(path, conf = UTF8((LPWSTR)path));
+            free(conf);
         }
+        if (rMakeDir(strcat(path, DEF_OPTS)))
+            conf = path;
         else {
-            wcscat((LPWSTR)path, L""DEF_OPTS);
-            wide = _wcsdup((LPWSTR)path);
-            retn = CreateDirectoryW((LPWSTR)path, 0);
+            printf("WARNING: cannot create '%s'!", path);
+            conf = 0;
         }
-        if (!retn && (GetLastError() == ERROR_ALREADY_EXISTS))
-            retn = 1;
     }
     FreeLibrary(hlib);
-    if (!(conf = (retn && wide)? UTF8(wide) : 0))
-        printf("WARNING: cannot create '%s'!", conf);
-    free(wide);
-
-    eExecuteEngine(conf, (intptr_t)&find, GetSystemMetrics(SM_CXSMICON),
+    eExecuteEngine(conf, DEF_FLDR, GetSystemMetrics(SM_CXSMICON),
                    GetSystemMetrics(SM_CYSMICON),
                    area.left, area.top, area.right, area.bottom);
-    free(conf);
     fclose(stdout);
     FreeConsole();
     exit(0);

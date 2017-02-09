@@ -1,8 +1,8 @@
 # DPengine
 
-An alternative experimental engine for [Desktop Ponies](https://github.com/RoosterDragon/Desktop-Ponies/) written in C and GLSL and focused on performance.
+An alternative experimental engine for [Desktop Ponies](https://github.com/RoosterDragon/Desktop-Ponies/) written in C and GLSL and focused on performance. Don\`t trust GitHub if it shows ObjC in the list of used languages, it\`s pure C.
 
-To run properly, DPE requires the [DP animation base](https://github.com/RoosterDragon/Desktop-Ponies/tree/master/Content/Ponies) directory to be present in the project root.
+To run properly, DPE requires the [DP animation base](https://github.com/RoosterDragon/Desktop-Ponies/tree/master/Content) directory to be present in the project root. In case it\`s not there, DPE tries to download it from GitHub.
 
 The source code is meant to be built via either Code::Blocks IDE or makefiles included in the project.
 

@@ -201,6 +201,12 @@ typedef struct {
     uint32_t size, indx, data[];
 } RNGS;
 
+/// parallel execution unit data
+typedef struct {
+    intptr_t desc;
+    char *hash, *file, *hreq;
+} PARA;
+
 /// engine data (client side), prototype
 typedef struct ENGC ENGC;
 
@@ -283,125 +289,26 @@ struct ENGC {
              idim;  /// tray icon dimensions
 };
 
-/// SSL socket data
-typedef struct {
-    SSL     *issl;  /// SSL descriptor
-    long     sock;  /// socket
-} NET_DESC;
 
 
-
-void NET_FreeDesc(NET_DESC **retn) {
-    if (!retn || !*retn)
-        return;
-    if ((*retn)->sock) {
-        SSL_shutdown((*retn)->issl);
-        SSL_free((*retn)->issl);
-        close((*retn)->sock);
-    }
-    *retn = realloc(*retn, 0);
-    *retn = 0;
-}
-
-NET_DESC *NET_MakeDesc(SSL_CTX *cssl, char *host) {
-    struct sockaddr_in dest = {};
-    struct hostent *hent;
-    NET_DESC *retn;
-
-    if (!(hent = gethostbyname(host)))
-        return 0;
-    retn = realloc(0, sizeof(*retn));
-    retn->sock = socket(AF_INET, SOCK_STREAM, 0);
-    retn->issl = 0;
-
-    dest.sin_family = AF_INET;
-    dest.sin_port = htons(443); /** 443 = standard HTTPS port **/
-    dest.sin_addr.s_addr = *(long*)(hent->h_addr_list[0]);
-
-    if (connect(retn->sock, (struct sockaddr*)&dest,
-                sizeof(struct sockaddr)) == -1)
-        NET_FreeDesc(&retn);
-    else {
-        SSL_set_fd(retn->issl = SSL_new(cssl), retn->sock);
-        if (SSL_connect(retn->issl) != 1)
-            NET_FreeDesc(&retn);
-    }
-    return retn;
-}
-
-long NET_SendDesc(NET_DESC *desc, char *what) {
-    if (desc && desc->sock)
-        return SSL_write(desc->issl, what, strlen(what));
-    return -2;
-}
-
-long NET_RecvDesc(NET_DESC *desc, char **text) {
-    #define NET_SLEN "Content-Length: "
-    #define NET_SEOH "\r\n\r\n"
-
-    intptr_t size = 0, full = 0;
-    char *temp = 0, *head = 0;
-
-    /** [TODO:] SSL_read() can return negatives; fix me! **/
-    if (desc && desc->sock) {
-        do {
-            head = realloc(head, full + 4096);
-            head[full += (size = SSL_read(desc->issl, head + full, 4095))] = 0;
-        } while ((size > 0) && !(temp = strstr(head, NET_SLEN)));
-        if (!temp) {
-            head = realloc(head, 0);
-            head = 0;
-            size = 0;
-        }
-        else {
-            size = strtol(temp + sizeof(NET_SLEN) - 1, 0, 10);
-            while (!(temp = strstr(head, NET_SEOH))) {
-                head = realloc(head, full + 4096);
-                full += SSL_read(desc->issl, head + full, 4096);
-            }
-            temp = (char*)(temp - head + sizeof(NET_SEOH) - 1);
-            temp += (intptr_t)(head = realloc(head, (intptr_t)temp + size));
-            while (head + full < temp + size)
-                full += SSL_read(desc->issl, head + full,
-                                 temp - head + size - full);
-            memmove(head, temp, size);
-            head = realloc(head, size + 1);
-            head[size] = 0;
-        }
-    }
-    *text = head;
-    return size;
-
-    #undef NET_CLEN
-}
-
-
-
-#define MakeGetQuery(utf8, user, host, ...) \
-       _MakeGetQuery(utf8, user, host, ##__VA_ARGS__, (char*)0)
-char *_MakeGetQuery(long utf8, char *user, char *host, ...) {
-    #define MGQ_LINE "\r\n"
-    #define MGQ_SGET "GET "
-    #define MGQ_HOST " HTTP/1.1" MGQ_LINE "Host: "
-    #define MGQ_TAIL MGQ_LINE "User-Agent: "
-
-    char *temp, *indx, *retn;
-    long size, ulen, hlen;
+#define MakeGetQuery(uenc, ...) \
+       _MakeGetQuery(uenc, ##__VA_ARGS__, (char*)0)
+char *_MakeGetQuery(long uenc, ...) {
+    char *indx, *temp, *retn;
+    long size;
     va_list list;
 
-    va_start(list, host);
-    size = sizeof(MGQ_SGET MGQ_HOST MGQ_TAIL MGQ_LINE MGQ_LINE)
-         + 1 + (ulen = strlen(user)) + (hlen = strlen(host));
+    size = 1;
+    va_start(list, uenc);
     while ((temp = va_arg(list, char*)))
         size += strlen(temp) * 3 * 6;
     va_end(list);
+
+    va_start(list, uenc);
     temp = retn = realloc(0, size);
-    memmove(temp, MGQ_SGET, size = sizeof(MGQ_SGET) - 1);
-    temp += size;
-    va_start(list, host);
     while ((indx = va_arg(list, char*))) {
         for (indx -= (size = -strlen(indx) + 1); size <= 0; size++)
-            if (!utf8 || (indx[size] == '/'))
+            if (!uenc || (indx[size] == *DEF_DSEP))
                 *temp++ = indx[size];
             else {
                 temp[2] = "0123456789ABCDEF"[(indx[size] >> 0) & 0xF];
@@ -410,18 +317,9 @@ char *_MakeGetQuery(long utf8, char *user, char *host, ...) {
                 temp += 3;
             }
     }
+    *temp = 0;
     va_end(list);
-    memmove(temp, MGQ_HOST, size = sizeof(MGQ_HOST) - 1);
-    memmove(temp += size, host, hlen);
-    memmove(temp += hlen, MGQ_TAIL, size = sizeof(MGQ_TAIL) - 1);
-    memmove(temp += size, user, ulen);
-    memmove(temp += ulen, MGQ_LINE MGQ_LINE, sizeof(MGQ_LINE MGQ_LINE));
     return retn;
-
-    #undef MGQ_TAIL
-    #undef MGQ_HOST
-    #undef MGQ_SGET
-    #undef MGQ_LINE
 }
 
 /** [TODO:] fix little-endian dependency **/
@@ -480,8 +378,66 @@ void MakeSHA1(uint32_t *curr, char *text, uint32_t size,
 
 
 
-void GetFromGithub(SSL_CTX *cssl, char *user, char *auth, char *proj,
-                                  char *bran, char *repo, char *disk) {
+void CheckHashAndDownload(intptr_t user, uint64_t zero) {
+    PARA *para = (PARA*)user;
+    char shas[5 * 4 * 2 + 1], *blob, *load, *text;
+    uint32_t curr[5 * 4 * 4 + 4 + 1], retn;
+    uint8_t shan[5 * 4];
+    long size, flen;
+
+    flen = sprintf(text = calloc(1, 0x100 + strlen(para->file)),
+                   "Checking \"%s\"... ", para->file);
+    size = 0;
+    shan[0] = 1;
+    shas[1] = 0;
+    shas[0] = '0';
+    load = rLoadFile(para->file, &size);
+    if (strlen(para->hash) == sizeof(shan) << 1) {
+        retn = sprintf(blob = realloc(0, 32), "blob %ld", size);
+        curr[0] = 0x67452301; curr[1] = 0xEFCDAB89;
+        curr[2] = 0x98BADCFE; curr[3] = 0x10325476;
+        curr[4] = 0xC3D2E1F0;
+        MakeSHA1(curr, blob, retn + 1 + size, 0, retn);
+        MakeSHA1(curr, load - (retn + 1), retn + 1 + size, retn + 1, 0);
+        for (retn = 0; retn < sizeof(shan); retn++) {
+            /** [TODO:] fix little-endian dependency **/
+            shan[retn] = curr[retn >> 2] >> ((~retn & 3) << 3);
+            sprintf(shas + (retn << 1), "%02x", shan[retn]);
+        }
+        for (retn = 0; retn < (sizeof(shan)) << 1; retn++) {
+            /** [TODO:] fix little-endian dependency **/
+            shan[retn >> 1] = (shan[retn >> 1] << 4) | (shan[retn >> 1] >> 4);
+            shan[retn >> 1] ^= ((para->hash[retn] & 0x0F)
+                             + ((para->hash[retn] & 0x40)? 9 : 0)) & 0x0F;
+        }
+        for (retn = 0; retn < sizeof(shan); retn++)
+            shan[0] |= shan[retn];
+        blob = realloc(blob, 0);
+    }
+    load = realloc(load, 0);
+    if (!shan[0])
+        sprintf(text + flen, "already updated");
+    else {
+        size = rLoadHTTPS(para->desc, para->hreq, &load);
+        if (!load)
+            sprintf(text + flen, "error!");
+        else {
+            sprintf(text + flen, "%s vs. %s", shas, para->hash);
+            rSaveFile(para->file, load, size);
+            load = realloc(load, 0);
+        }
+        para->hreq = realloc(para->hreq, 0);
+    }
+    para->file = realloc(para->file, 0);
+    para = realloc(para, 0);
+    printf("%s\n", text);
+    text = realloc(text, 0);
+}
+
+
+
+void GetFromGithub(char *user, char *auth, char *proj,
+                   char *bran, char *repo, char *disk) {
     #define GIT_SFIN "\""
     #define GIT_SURL GIT_SFIN "url"  GIT_SFIN ":" GIT_SFIN
     #define GIT_SSHA GIT_SFIN "sha"  GIT_SFIN ":" GIT_SFIN
@@ -490,19 +446,20 @@ void GetFromGithub(SSL_CTX *cssl, char *user, char *auth, char *proj,
     #define GIT_SRAW "raw.githubusercontent.com"
     #define GIT_SAPI "api.github.com"
 
-    char shas[5 * 4 * 2 + 1], *blob, *load, *path, *file, *text, *temp, *tail;
-    uint32_t curr[5 * 4 * 4 + 4 + 1], retn;
-    uint8_t shan[5 * 4];
+    char *path, *file, *text, *temp, *tail;
+    intptr_t desc, para;
     long size, rlen;
-    NET_DESC *desc;
+    PARA *tmpl;
 
     tail = 0;
-    if ((desc = NET_MakeDesc(cssl, GIT_SAPI))) {
-        text = MakeGetQuery(0, user, GIT_SAPI,
-                            "/repos/", auth, "/", proj, "/git/trees/", bran);
-        NET_SendDesc(desc, text);
-        text = realloc(text, 0);
-        NET_RecvDesc(desc, &text);
+    while ((desc = rMakeHTTPS(user, GIT_SAPI))) {
+        temp = MakeGetQuery(0, "repos", DEF_DSEP,  auth, DEF_DSEP,
+                                  proj, DEF_DSEP, "git", DEF_DSEP,
+                               "trees", DEF_DSEP,  bran);
+        rLoadHTTPS(desc, temp, &text);
+        temp = realloc(temp, 0);
+        if (!text)
+            break;
         size = sizeof(GIT_SPTH) + 1 + (rlen = strlen(repo));
         memmove(path = realloc(0, size), GIT_SPTH, sizeof(GIT_SPTH) - 1);
         memmove(path + sizeof(GIT_SPTH) - 1, repo, rlen);
@@ -510,22 +467,24 @@ void GetFromGithub(SSL_CTX *cssl, char *user, char *auth, char *proj,
         path[size - 1] = 0;
         if ((temp = strstr(text, path)) && (temp = strstr(temp, GIT_SURL)))
             tail = strstr(temp += sizeof(GIT_SURL) - 1, GIT_SFIN);
-        if (!tail)
-            text = realloc(text, 0);
-        else {
+        path = realloc(path, 0);
+        if (tail) {
             tail[0] = 0;
-            temp = strstr(temp, GIT_SAPI) + sizeof(GIT_SAPI) - 1;
-            NET_SendDesc(desc, tail = MakeGetQuery(0, user, GIT_SAPI,
-                                                   temp, "?recursive=1"));
-            tail = realloc(tail, 0);
-            text = realloc(text, 0);
-            NET_RecvDesc(desc, &text);
-            tail = text - 1;
+            tail = 0;
+            if ((temp = strstr(temp, GIT_SAPI))) {
+                temp += sizeof(GIT_SAPI); /** no -1 to skip the slash **/
+                temp = MakeGetQuery(0, temp, "?recursive=1");
+                rLoadHTTPS(desc, temp, &tail);
+                temp = realloc(temp, 0);
+            }
         }
-        free(path);
-        NET_FreeDesc(&desc);
+        text = realloc(text, 0);
+        text = (tail)? tail-- : 0;
+        rFreeHTTPS(desc);
+        break;
     }
-    if (tail && (desc = NET_MakeDesc(cssl, GIT_SRAW))) {
+    if (tail && (desc = rMakeHTTPS(user, GIT_SRAW))) {
+        para = rMakeParallel(CheckHashAndDownload, 4);
         while ((temp = strstr(tail + 1, GIT_SPTH))) {
             tail = strstr(temp += sizeof(GIT_SPTH) - 1, GIT_SFIN);
             tail[0] = 0;
@@ -540,73 +499,34 @@ void GetFromGithub(SSL_CTX *cssl, char *user, char *auth, char *proj,
             if (path) {
                 file = realloc(strdup(path), 2 + (rlen = strlen(disk))
                                                + (size = strlen(path)));
-                file[rlen] = '/';
+                file[rlen] = *DEF_DSEP;
                 memmove(file, disk, rlen);
                 memmove(file + rlen + 1, path, size + 1);
-                for (temp = file; (temp = strstr(temp, "/"));) {
+                for (temp = file; (temp = strstr(temp, DEF_DSEP));) {
                     *temp = 0;
-                    if (mkdir(file, 0755) && (errno != EEXIST)) {
+                    if (!rMakeDir(file)) {
                         printf("[!!!] cannot create \"%s\".\n", file);
                         file = realloc(file, 0);
                         path = 0;
                         break;
                     }
-                    *temp++ = '/';
+                    *temp++ = *DEF_DSEP;
                 }
             }
             temp = strstr(tail + 1, GIT_SSHA);
             tail = strstr(temp += sizeof(GIT_SSHA) - 1, GIT_SFIN);
             tail[0] = 0;
             if (path) {
-                printf("Checking \"%s\"... ", file);
-                size = 0;
-                shan[0] = 1;
-                shas[1] = 0;
-                shas[0] = '0';
-                load = rLoadFile(file, &size);
-                if (strlen(temp) == (sizeof(shan)) << 1) {
-                    retn = sprintf(blob = realloc(0, 32), "blob %ld", size);
-                    curr[0] = 0x67452301; curr[1] = 0xEFCDAB89;
-                    curr[2] = 0x98BADCFE; curr[3] = 0x10325476;
-                    curr[4] = 0xC3D2E1F0;
-                    MakeSHA1(curr, blob, retn + 1 + size, 0, retn);
-                    MakeSHA1(curr, load - (retn + 1),
-                             retn + 1 + size, retn + 1, 0);
-                    for (retn = 0; retn < sizeof(shan); retn++) {
-                        /** [TODO:] fix little-endian dependency **/
-                        shan[retn] = curr[retn >> 2] >> ((~retn & 3) << 3);
-                        sprintf(shas + (retn << 1), "%02x", shan[retn]);
-                    }
-                    for (retn = 0; retn < (sizeof(shan)) << 1; retn++) {
-                        /** [TODO:] fix little-endian dependency **/
-                        shan[retn >> 1] = (shan[retn >> 1] << 4)
-                                        | (shan[retn >> 1] >> 4);
-                        shan[retn >> 1] ^= ((temp[retn] & 0x0F)
-                                         + ((temp[retn] & 0x40)? 9 : 0))
-                                         & 0x0F;
-                    }
-                    for (retn = 0; retn < sizeof(shan); retn++)
-                        shan[0] |= shan[retn];
-                    blob = realloc(blob, 0);
-                }
-                load = realloc(load, 0);
-                if (!shan[0])
-                    printf("already updated\n");
-                else {
-                    printf("%s vs. %s\n", shas, temp);
-                    temp = MakeGetQuery(1, user, GIT_SRAW, "/", auth, "/",
-                                        proj, "/", bran, "/", repo, "/", path);
-                    NET_SendDesc(desc, temp);
-                    temp = realloc(temp, 0);
-                    size = NET_RecvDesc(desc, &temp);
-                    rSaveFile(file, temp, size);
-                    temp = realloc(temp, 0);
-                }
-                file = realloc(file, 0);
+                *(tmpl = calloc(1, sizeof(*tmpl))) =
+                    (PARA){desc, temp, file,
+                           MakeGetQuery(1, auth, DEF_DSEP, proj, DEF_DSEP,
+                                        bran, DEF_DSEP, repo, DEF_DSEP, path)};
+                rLoadParallel(para, (intptr_t)tmpl);
             }
         }
+        rFreeParallel(para);
         text = realloc(text, 0);
-        NET_FreeDesc(&desc);
+        rFreeHTTPS(desc);
     }
     #undef GIT_SAPI
     #undef GIT_SRAW
@@ -2492,7 +2412,6 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     uint64_t *fram;
     intptr_t find;
 
-    SSL_CTX *cssl = 0;
     ENGC engc = {};
 
     /// default options
@@ -2612,18 +2531,10 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
         }
         if (engc.lcnt || !(xmax || rMessage("Network?", "WWW", RMF_BTAD)))
             break;
-        if (!cssl) {
-            SSL_library_init();
-            OpenSSL_add_all_algorithms();
-            SSL_CTX_set_options(cssl = SSL_CTX_new(SSLv23_client_method()),
-                                SSL_OP_NO_SSLv2);
-        }
-        GetFromGithub(cssl, "DPE", "RoosterDragon", "Desktop-Ponies",
-                            "master", "Content", base);
+        GetFromGithub("DPE", "RoosterDragon", "Desktop-Ponies",
+                      "master", "Content", base);
     } while (++xmax < 3);
     free(file);
-    if (cssl)
-        SSL_CTX_free(cssl);
     /// sort engine`s libraries by name, initialize the rendering engine
     qsort(engc.libs, engc.lcnt, sizeof(*engc.libs), linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc.engd);

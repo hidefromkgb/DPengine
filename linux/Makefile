@@ -4,7 +4,7 @@ CX = gcc
 
 OBJDIR = .obj
 
-LLIB = -lXrender -lX11 -lGL -lm -lssl -lcrypto
+LLIB = -lXrender -lX11 -lGL -lm -lcurl -lssl -lcrypto
 LINC = -I/usr/include/gtkglext-1.0 -I/usr/lib/gtkglext-1.0/include
 LCXFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --libs` -pthread -fno-stack-protector -nostartfiles -Wl,--gc-sections
 LCFLAGS = `pkg-config gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0 --cflags` -I../core -Wall -ffunction-sections -fdata-sections
@@ -13,9 +13,9 @@ LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/ogls
 LOUT = ../libengine.so
 
 
-ELIB = -lengine -lm -lssl -lcrypto
+ELIB = -lengine -lm -lcurl -lssl -lcrypto
 EINC =
-ECXFLAGS = `pkg-config gtk+-2.0 --libs` -L.. -fno-stack-protector -nostartfiles -Wl,--gc-sections
+ECXFLAGS = `pkg-config gtk+-2.0 --libs` -L.. -pthread -fno-stack-protector -nostartfiles -Wl,--gc-sections
 ECFLAGS = `pkg-config gtk+-2.0 --cflags` -I../core -Wall -ffunction-sections -fdata-sections
 
 EOBJ = $(OBJDIR)/exec/exec.o $(OBJDIR)/run.o

@@ -1,16 +1,27 @@
 #include <pwd.h>
 #include <errno.h>
 #include <dirent.h>
+#include <semaphore.h>
 #include <gtk/gtk.h>
 #include <sys/stat.h>
+#include <curl/curl.h>
+#include <openssl/err.h>
 #include "../exec/exec.h"
 
 
 
 typedef struct {
+    long size;
+    UPRE func;
+    sem_t isem;
+} DTHR;
+
+typedef struct {
     struct dirent **dirs;
     long iter;
 } FIND;
+
+pthread_mutex_t *pmtx; /// the necessary evil: global mutex table for OpenSSL
 
 
 
@@ -220,6 +231,120 @@ long rSaveFile(char *name, char *data, long size) {
         return size;
     }
     return 0;
+}
+
+
+
+long rMakeDir(char *name) {
+    return !mkdir(name, 0755) || (errno == EEXIST);
+}
+
+
+
+void *ParallelFunc(void *data) {
+    DTHR *dthr = (DTHR*)((intptr_t*)data)[0];
+    intptr_t user = ((intptr_t*)data)[1];
+
+    free(data);
+    dthr->func(user, 0);
+    sem_post(&dthr->isem);
+    return 0;
+}
+
+
+
+intptr_t rMakeParallel(UPRE func, long size) {
+    DTHR *dthr;
+
+    size *= sysconf(_SC_NPROCESSORS_ONLN);
+    *(dthr = calloc(1, sizeof(*dthr))) = (DTHR){(size > 1)? size : 1, func};
+    sem_init(&dthr->isem, 0, size);
+    return (intptr_t)dthr;
+}
+
+
+
+void rLoadParallel(intptr_t user, intptr_t data) {
+    DTHR *dthr = (DTHR*)user;
+    pthread_t pthr;
+    intptr_t *pass;
+
+    pass = calloc(2, sizeof(intptr_t));
+    pass[0] = user;
+    pass[1] = data;
+    sem_wait(&dthr->isem);
+    pthread_create(&pthr, 0, ParallelFunc, pass);
+}
+
+
+
+void rFreeParallel(intptr_t user) {
+    DTHR *dthr = (DTHR*)user;
+
+    for (; dthr->size; dthr->size--)
+        sem_wait(&dthr->isem);
+    sem_destroy(&dthr->isem);
+    free(dthr);
+}
+
+
+
+size_t WriteHTTPS(char *cptr, size_t size, size_t memb, void *user) {
+    intptr_t *data = (intptr_t*)user;
+
+    data[1] = (intptr_t)realloc((char*)data[1], 1 + data[0] + (size *= memb));
+    memcpy((char*)data[1] + data[0], cptr, size);
+    ((char*)data[1])[data[0] += size] = 0;
+    return size;
+}
+
+
+
+void rFreeHTTPS(intptr_t user) {
+    free(((char**)user)[0]);
+    free(((char**)user)[1]);
+    free((char**)user);
+}
+
+
+
+intptr_t rMakeHTTPS(char *user, char *serv) {
+    char **retn;
+
+    if (!user || !serv)
+        return 0;
+    retn = calloc(2, sizeof(*retn));
+    retn[0] = strdup(user);
+    retn[1] = calloc(1, 10 + strlen(serv));
+    strcat(strcat(strcat(retn[1], "https://"), serv), "/");
+    return (intptr_t)retn;
+}
+
+
+
+long rLoadHTTPS(intptr_t user, char *page, char **dest) {
+    char *hreq, **ctxt = (char**)user;
+    intptr_t data[2] = {};
+    CURL *curl;
+
+    if (!page || !dest) {
+        *dest = 0;
+        return 0;
+    }
+    curl = curl_easy_init();
+    hreq = calloc(1, 1 + strlen(ctxt[1]) + strlen(page));
+    curl_easy_setopt(curl, CURLOPT_URL, strcat(strcat(hreq, ctxt[1]), page));
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, ctxt[0]);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteHTTPS);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, data);
+    if (curl_easy_perform(curl)) {
+        data[1] = (intptr_t)realloc((char*)data[1], 0);
+        data[1] = data[0] = 0;
+    }
+    curl_easy_cleanup(curl);
+    free(hreq);
+    *dest = (char*)data[1];
+    return data[0];
 }
 
 
@@ -925,13 +1050,28 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 
 
+void lockfunc(int mode, int indx, const char *file, int line) {
+    if (mode & CRYPTO_LOCK)
+        pthread_mutex_lock(&pmtx[indx]);
+    else
+        pthread_mutex_unlock(&pmtx[indx]);
+}
+
+
+
 void _start() {
     /** the stack MUST be aligned to a 256-bit (32-byte) boundary: **/
     __attribute__((aligned(32))) volatile uint32_t size = 32;
     char *home, *conf;
     GdkScreen *gscr;
-    gint xdim, ydim;
+    gint xdim, ydim, cmtx;
 
+    pmtx = calloc(cmtx = CRYPTO_num_locks(), sizeof(*pmtx));
+    for (xdim = 0; xdim < cmtx; xdim++)
+        pthread_mutex_init(&pmtx[xdim], 0);
+    CRYPTO_set_id_callback(pthread_self);
+    CRYPTO_set_locking_callback(lockfunc);
+    curl_global_init(CURL_GLOBAL_DEFAULT);
     if (!(home = getenv("HOME")))
         home = getpwuid(getuid())->pw_dir;
     conf = calloc(strlen(home) + size, sizeof(*conf));
@@ -948,5 +1088,11 @@ void _start() {
     eExecuteEngine(conf, DEF_FLDR, xdim, ydim, 0, 0,
                    gdk_screen_get_width(gscr), gdk_screen_get_height(gscr));
     free(conf);
+    curl_global_cleanup();
+    CRYPTO_set_locking_callback(0);
+    CRYPTO_set_id_callback(0);
+    for (xdim = 0; xdim < cmtx; xdim++)
+        pthread_mutex_destroy(&pmtx[xdim]);
+    free(pmtx);
     exit(0);
 }
