@@ -120,44 +120,42 @@
 /** Remove all similar          **/ #define TXT_ADEL  1
 /** Sleep/pause                 **/ #define TXT_CSLP  2
 /** Sleep/pause all similar     **/ #define TXT_ASLP  3
-/** Add character >>>           **/ #define TXT_CHAR  4
-/** Add house >>>               **/ #define TXT_HOUS  5
-/** Take control: Player 1      **/ #define TXT_TPL1  6
-/** Take control: Player 2      **/ #define TXT_TPL2  7
-/** Show options...             **/ #define TXT_OPTS  8
+/** Take control: Player 1      **/ #define TXT_TPL1  4
+/** Take control: Player 2      **/ #define TXT_TPL2  5
+/** Show options...             **/ #define TXT_OPTS  6
 
-/** [ Desktop Ponies Engine ]   **/ #define TXT_HEAD  9
-/** OS specific options         **/ #define TXT_SPEC 10
-/** Disable transparency        **/ #define TXT_OPAQ 11
-/** Play animation              **/ #define TXT_DRAW 12
-/** Show window                 **/ #define TXT_SHOW 13
-/** Exit                        **/ #define TXT_EXIT 14
-/** Use GPU for drawing         **/ #define TXT_RGPU 15
-/** [ none ]                    **/ #define TXT_NONE 16
+/** [ Desktop Ponies Engine ]   **/ #define TXT_HEAD  7
+/** OS specific options         **/ #define TXT_SPEC  8
+/** Disable transparency        **/ #define TXT_OPAQ  9
+/** Play animation              **/ #define TXT_DRAW 10
+/** Show window                 **/ #define TXT_SHOW 11
+/** Exit                        **/ #define TXT_EXIT 12
+/** Use GPU for drawing         **/ #define TXT_RGPU 13
+/** [ none ]                    **/ #define TXT_NONE 14
 
-/** Show console                **/ #define TXT_CONS 17
-/** Use regions                 **/ #define TXT_IRGN 18
-/** Enable BGRA                 **/ #define TXT_IBGR 19
-/** Enable pixel buffers        **/ #define TXT_IPBO 20
-/** Useless on full opacity!    **/ #define TXT_UOFO 21
-/** Useless without GPU!        **/ #define TXT_UWGL 22
-/** Cannot initialize GPU!      **/ #define TXT_CIGL 23
-/** The animation base <...>    **/ #define TXT_CTUP 24
-/** Update                      **/ #define TXT_CCUP 25
+/** Show console                **/ #define TXT_CONS 15
+/** Use regions                 **/ #define TXT_IRGN 16
+/** Enable BGRA                 **/ #define TXT_IBGR 17
+/** Enable pixel buffers        **/ #define TXT_IPBO 18
+/** Useless on full opacity!    **/ #define TXT_UOFO 19
+/** Useless without GPU!        **/ #define TXT_UWGL 20
+/** Cannot initialize GPU!      **/ #define TXT_CIGL 21
+/** The animation base <...>    **/ #define TXT_CTUP 22
+/** Update                      **/ #define TXT_CCUP 23
 
-/** Desktop Ponies              **/ #define TXT_CAPT 26
-/** Enable filters              **/ #define TXT_FLTR 27
-/** Exact matching              **/ #define TXT_EXAC 28
-/** [At least one:]             **/ #define TXT_OGRP 29
-/** [All at once:]              **/ #define TXT_AGRP 30
-/** Random selection:           **/ #define TXT_SRND 31
-/** Group selection:            **/ #define TXT_SGRP 32
-/** Add                         **/ #define TXT_BADD 33
-/** Copies                      **/ #define TXT_BDUP 34
-/** Selected:                   **/ #define TXT_SELE 35
-/** Loaded:                     **/ #define TXT_LOAD 36
-/** Updated:                    **/ #define TXT_UPTO 37
-/** GO!                         **/ #define TXT_GOGO 38
+/** Desktop Ponies              **/ #define TXT_CAPT 24
+/** Enable filters              **/ #define TXT_FLTR 25
+/** Exact matching              **/ #define TXT_EXAC 26
+/** [At least one:]             **/ #define TXT_OGRP 27
+/** [All at once:]              **/ #define TXT_AGRP 28
+/** Random selection:           **/ #define TXT_SRND 29
+/** Group selection:            **/ #define TXT_SGRP 30
+/** Add                         **/ #define TXT_BADD 31
+/** Copies                      **/ #define TXT_BDUP 32
+/** Selected:                   **/ #define TXT_SELE 33
+/** Loaded:                     **/ #define TXT_LOAD 34
+/** Updated:                    **/ #define TXT_UPTO 35
+/** GO!                         **/ #define TXT_GOGO 36
 
 /// /// /// /// /// /// /// /// /// ENGC.CTLS array indices
 /**                             **/ #define CTL_CAPT ctls[ 0]
@@ -275,7 +273,8 @@ struct ENGC {
     CTGS    *ctgs;  /// categories array
     RNGS    *seed;  /// random number generator seed
     PICT    *pcur,  /// the sprite currently picked
-           **parr;  /// on-screen sprite pointers array
+           **parr,  /// on-screen sprite pointers array
+           **elem;  /// pointer buffer for SortByY()
     char   **tran,  /// localized text array (ASCIIZ; last item is also 0)
             *lang,  /// name of the loaded language file
             *conf;  /// name of the main configuration file
@@ -482,7 +481,8 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
     intptr_t desc, para;
     PARA *tmpl;
 
-    if (!rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP], RMF_BTAD))
+    if (engc->lcnt
+    || !rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP], RMF_BTAD))
         return 0;
     text = 0;
     while ((desc = rMakeHTTPS(user, GIT_SAPI))) {
@@ -1216,27 +1216,22 @@ void LoadLibPreview(LINF *elem, ENGD *engd) {
 
 
 void SortByY(ENGC *engc) {
-    #define MAX_YDIM 0x1000
-    long ymin, ymax, ytmp, iter;
-    PICT *temp, *elem[MAX_YDIM + 1];
+    long ydim, ymin, ymax, ytmp, iter;
+    PICT *temp;
 
-    if (engc->pcnt < 2)
+    if (engc->pcnt < 1)
         return;
 
-    /// manual stack checking
-    for (ymax = sizeof(*elem) - 1; ymax >= 0; ymax--) {
-        elem[ymax * MAX_YDIM / sizeof(*elem)] = 0;
-        asm volatile("" ::: "memory");
-    }
-    memset(elem, 0, (MAX_YDIM + 1) * sizeof(*elem));
+    ydim = (engc->dims.y << 1) - 1;
+    memset(engc->elem, 0, (ydim + 1) * sizeof(*engc->elem));
 
-    ymin = MAX_YDIM + 1;
+    ymin = ydim + 1;
     ymax = -1;
 
     for (iter = 0; iter < engc->pcnt; iter++)
         if ((temp = engc->parr[iter])) {
             ytmp = temp->offs.y;
-            if ((ytmp >= 0) && (ytmp < MAX_YDIM)) {
+            if ((ytmp >= 0) && (ytmp < ydim)) {
                 if (ytmp > ymax)
                     ymax = ytmp;
                 else if (ytmp < ymin)
@@ -1248,20 +1243,19 @@ void SortByY(ENGC *engc) {
             engc->pcnt--;
         else {
             ytmp = temp->offs.y - ymin + 1;
-            if ((ytmp < 0) || (temp->offs.y >= MAX_YDIM)
+            if ((ytmp < 0) || (temp->offs.y >= ydim)
             || (temp->tmov & TMR_PAIR)) /// reserved ones go to the very end
                 ytmp = 0;
-            temp->next = elem[ytmp];
-            elem[ytmp] = temp;
+            temp->next = engc->elem[ytmp];
+            engc->elem[ytmp] = temp;
         }
     if ((ymax -= ymin - 1) < 0)
         ymax = 1;
     for (iter = 0; ymax >= 0; ymax--)
-        while (elem[ymax]) {
-            engc->parr[iter++] = elem[ymax];
-            elem[ymax] = elem[ymax]->next;
+        while (engc->elem[ymax]) {
+            engc->parr[iter++] = engc->elem[ymax];
+            engc->elem[ymax] = engc->elem[ymax]->next;
         }
-    #undef MAX_YDIM
 }
 
 
@@ -1646,13 +1640,49 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
 
 
 void MMH(MENU *item) {
+    PICT *pict;
+    LINF *ulib;
+    ENGC *engc;
+    long indx;
+
     switch (item->uuid) {
         case TXT_CDEL:
-            rMessage("Not implemented yet!", "WIP", 0);
+            pict = (PICT*)item->data;
+            engc = pict->ulib->engc;
+            for (indx = 0; indx < engc->pcnt; indx++) {
+                if ((engc->parr[indx] == pict)
+                || ((engc->parr[indx]->indx & FLG_EFCT)
+                &&  (engc->parr[indx]->boss == pict))) {
+                    /// purging the character and all its
+                    /// effects, including those reserved.
+                    free(engc->parr[indx]);
+                    engc->parr[indx] = 0;
+                }
+                else if (engc->parr[indx]->boss == pict) {
+                    /// some character has been connected
+                    /// to the one removed; disconnecting.
+                    engc->parr[indx]->boss = 0;
+                }
+            }
             break;
 
         case TXT_ADEL:
-            rMessage("Not implemented yet!", "WIP", 0);
+            ulib = ((PICT*)item->data)->ulib;
+            engc = ulib->engc;
+            for (indx = 0; indx < engc->pcnt; indx++) {
+                if (engc->parr[indx]->ulib == ulib) {
+                    /// purging all similar characters and all
+                    /// their effects, including those reserved.
+                    free(engc->parr[indx]);
+                    engc->parr[indx] = 0;
+                }
+                else if (engc->parr[indx]->boss
+                     && (engc->parr[indx]->boss->ulib == ulib)) {
+                    /// some character has been connected to
+                    /// one of the removed; disconnecting.
+                    engc->parr[indx]->boss = 0;
+                }
+            }
             break;
 
         case TXT_CSLP:
@@ -1660,14 +1690,6 @@ void MMH(MENU *item) {
             break;
 
         case TXT_ASLP:
-            rMessage("Not implemented yet!", "WIP", 0);
-            break;
-
-        case TXT_CHAR:
-            rMessage("Not implemented yet!", "WIP", 0);
-            break;
-
-        case TXT_HOUS:
             rMessage("Not implemented yet!", "WIP", 0);
             break;
 
@@ -1913,9 +1935,14 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             free(engc->mspr[0].text);
             engc->mspr[0].text = rConvertUTF8(temp);
             free(temp);
+            /// setting data for "remove character", "remove all",
+            /// "pause", "pause all", "player 1", "player 2"
+            engc->mspr[2].data = engc->mspr[3].data =
+            engc->mspr[5].data = engc->mspr[6].data =
+            engc->mspr[8].data = engc->mspr[9].data = (intptr_t)pict;
             rOpenContextMenu(engc->mspr);
         }
-        if (!pict && (isel >= 0)) {
+        if (!pict && (isel >= 0) && engc->parr[isel]) {
             /// we`ve got a simple mouseover situation here
             if (~engc->parr[isel]->indx & FLG_EFCT) {
                 /// effects shall not react to mouseover
@@ -1925,7 +1952,8 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         engc->ppos.z = attr;
     }
     for (indx = 0; indx < engc->pcnt; indx++) {
-        pict = engc->parr[indx];
+        if (!(pict = engc->parr[indx]))
+            continue;
         binf = (~pict->indx & FLG_EFCT)? &pict->ulib->barr[pict->indx >> 1]
              : &pict->ulib->earr[(pict->indx & ~FLG_EFCT) >> 1];
         anim = &binf->unit[pict->indx & 1];
@@ -2031,8 +2059,9 @@ void Relocalize(ENGC *engc, char *lang) {
     free(engc->lang);
     engc->lang = (data)? strdup(lang) : 0;
 
-    MENU *spec = 0, *temp = 0,
+    MENU *spec,
 
+    /** BE SURE TO UPDATE MSPR INDICES UP THERE BEFORE REARRANGING!!! **/
     mspr[] =
    {{.text = "",                   .flgs = MFL_GRAY},
     {.text = ""},
@@ -2042,13 +2071,11 @@ void Relocalize(ENGC *engc, char *lang) {
     {.text = engc->tran[TXT_CSLP], .uuid = TXT_CSLP, .func = MMH},
     {.text = engc->tran[TXT_ASLP], .uuid = TXT_ASLP, .func = MMH},
     {.text = ""},
-    {.text = engc->tran[TXT_CHAR], .uuid = TXT_CHAR, .func = MMH},
-    {.text = engc->tran[TXT_HOUS], .uuid = TXT_HOUS, .func = MMH},
-    {.text = ""},
     {.text = engc->tran[TXT_TPL1], .uuid = TXT_TPL1, .func = MMH},
     {.text = engc->tran[TXT_TPL2], .uuid = TXT_TPL2, .func = MMH},
     {.text = ""},
-    {.text = engc->tran[TXT_OPTS], .uuid = TXT_OPTS, .func = MMH},
+    {.text = engc->tran[TXT_OPTS], .uuid = TXT_OPTS, .func = MMH,
+     .data = (intptr_t)engc},
     {.text = engc->tran[TXT_EXIT], .uuid = TXT_EXIT, .func = MMH,
      .data = (intptr_t)engc},
     {}},
@@ -2074,16 +2101,9 @@ void Relocalize(ENGC *engc, char *lang) {
    {{.text = engc->tran[TXT_NONE], .flgs = MFL_GRAY},
     {}};
 
-    if (engc->mspr) {
-        spec = engc->mspr[8].chld; /// Add character
-        temp = engc->mspr[9].chld; /// Add house
-        engc->mspr[8].chld = engc->mspr[9].chld = 0;
-    }
     FreeMenu(&engc->mspr);
     FreeMenu(&engc->mctx);
     engc->mspr = MenuFromTemplate(mspr);
-    engc->mspr[8].chld = spec;
-    engc->mspr[9].chld = temp;
     engc->mctx = MenuFromTemplate(mctx);
     engc->mctx[2].chld = ((spec = rOSSpecificMenu(engc)))?
                            spec : MenuFromTemplate(none);
@@ -2147,7 +2167,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     INCBIN("../exec/icon.gif", MainIcon);
 
     switch (ctrl->uuid) {
-        case TXT_CHAR: {
+        case TXT_HEAD: {
             if (cmsg != MSG_SMAX)
                 break;
 
@@ -2491,6 +2511,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     engc.idim = (T2IV){{xico, yico}};
     engc.dpos = (T2IV){{xpos, ypos}};
     engc.dims = (T2IV){{xdim - engc.dpos.x, ydim - engc.dpos.y}};
+    engc.elem = calloc(engc.dims.y << 1, sizeof(*engc.elem));
 
     /// primary initialization complete, now creating GUI
     ///  0. [ FIRST AND FOREMOST! ] do not forget to edit the appropriate CTL_
@@ -2511,7 +2532,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     {0, 0, TXT_SELE, FCP_VERT | FCT_PBAR           , 0,  1, 19,  3, 0   },
     {0, 0, TXT_OPTS, FCP_VERT | FCT_BUTN           , 0,  1,  9,  6, FC2E},
     {0, 0, TXT_GOGO, FCP_BOTH | FCT_BUTN | FSB_DFLT, 1, -6,  9,  6, FC2E},
-    {0, 0, TXT_CHAR, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, 0   },
+    {0, 0, TXT_HEAD, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, 0   },
     {}};
 
     xmax = ymax = xoff = yoff = 0;
@@ -2649,6 +2670,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     Concatenate(&conf, DEF_ENDL);
     rSaveFile(engc.conf, conf, strlen(conf));
     FreePRNG(&engc.seed);
+    free(engc.elem);
     free(engc.lang);
     free(engc.conf);
     free(temp);

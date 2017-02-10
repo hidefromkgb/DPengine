@@ -966,6 +966,8 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    MSG pmsg;
+
     switch (cmsg) {
         case MSG_PLIM:
             ctrl->priv[4] = data;
@@ -983,6 +985,10 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 SendMessage((HWND)ctrl->priv[0], PBM_SETPOS,
                              ctrl->priv[3] + 1, 0);
             SendMessage((HWND)ctrl->priv[0], PBM_SETPOS, ctrl->priv[3], 0);
+            while (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE)) {
+                TranslateMessage(&pmsg);
+                DispatchMessage(&pmsg);
+            }
             break;
 
         case MSG_PTXT:

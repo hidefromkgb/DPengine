@@ -542,9 +542,8 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
             gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ctrl->priv[0]),
                                           dcur / dmax);
-            GTK_PROGRESS_GET_CLASS(ctrl->priv[0])->paint
-                (GTK_PROGRESS(ctrl->priv[0])); /// this is bad; [TODO:] fix
             gtk_widget_queue_draw(GTK_WIDGET(ctrl->priv[0]));
+            gtk_main_iteration_do(0);
             break;
         }
         case MSG_PTXT:
