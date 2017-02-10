@@ -142,19 +142,22 @@
 /** Useless on full opacity!    **/ #define TXT_UOFO 21
 /** Useless without GPU!        **/ #define TXT_UWGL 22
 /** Cannot initialize GPU!      **/ #define TXT_CIGL 23
+/** The animation base <...>    **/ #define TXT_CTUP 24
+/** Update                      **/ #define TXT_CCUP 25
 
-/** Desktop Ponies              **/ #define TXT_CAPT 24
-/** Enable filters              **/ #define TXT_FLTR 25
-/** Exact matching              **/ #define TXT_EXAC 26
-/** [At least one:]             **/ #define TXT_OGRP 27
-/** [All at once:]              **/ #define TXT_AGRP 28
-/** Random selection:           **/ #define TXT_SRND 29
-/** Group selection:            **/ #define TXT_SGRP 30
-/** Add                         **/ #define TXT_BADD 31
-/** Copies                      **/ #define TXT_BDUP 32
-/** Selected:                   **/ #define TXT_SELE 33
-/** Loaded:                     **/ #define TXT_LOAD 34
-/** GO!                         **/ #define TXT_GOGO 35
+/** Desktop Ponies              **/ #define TXT_CAPT 26
+/** Enable filters              **/ #define TXT_FLTR 27
+/** Exact matching              **/ #define TXT_EXAC 28
+/** [At least one:]             **/ #define TXT_OGRP 29
+/** [All at once:]              **/ #define TXT_AGRP 30
+/** Random selection:           **/ #define TXT_SRND 31
+/** Group selection:            **/ #define TXT_SGRP 32
+/** Add                         **/ #define TXT_BADD 33
+/** Copies                      **/ #define TXT_BDUP 34
+/** Selected:                   **/ #define TXT_SELE 35
+/** Loaded:                     **/ #define TXT_LOAD 36
+/** Updated:                    **/ #define TXT_UPTO 37
+/** GO!                         **/ #define TXT_GOGO 38
 
 /// /// /// /// /// /// /// /// /// ENGC.CTLS array indices
 /**                             **/ #define CTL_CAPT ctls[ 0]
@@ -291,6 +294,32 @@ struct ENGC {
 
 
 
+void SetProgress(ENGC *engc, long tran, long frac, long full) {
+    char *text;
+
+    text = malloc(32 + strlen(engc->tran[tran]));
+    sprintf(text, "%s %ld / %ld", engc->tran[tran], frac, full);
+    RUN_FE2C(engc->CTL_SELE, MSG_PTXT, (intptr_t)text);
+    RUN_FE2C(engc->CTL_SELE, MSG_PLIM, full);
+    RUN_FE2C(engc->CTL_SELE, MSG_PPOS, frac);
+    free(text);
+}
+
+
+
+void RecountSelectedLibs(ENGC *engc) {
+    long full, frac, indx;
+
+    for (full = frac = indx = 0; indx < engc->lcnt; indx++)
+        if (engc->libs[indx].icnt > 0)
+            frac++;
+        else if (!engc->libs[indx].icnt)
+            full++;
+    SetProgress(engc, TXT_SELE, frac, frac + full);
+}
+
+
+
 #define MakeGetQuery(uenc, ...) \
        _MakeGetQuery(uenc, ##__VA_ARGS__, (char*)0)
 char *_MakeGetQuery(long uenc, ...) {
@@ -321,6 +350,8 @@ char *_MakeGetQuery(long uenc, ...) {
     va_end(list);
     return retn;
 }
+
+
 
 /** [TODO:] fix little-endian dependency **/
 void MakeSHA1(uint32_t *curr, char *text, uint32_t size,
@@ -386,7 +417,7 @@ void CheckHashAndDownload(intptr_t user, uint64_t zero) {
     long size, flen;
 
     flen = sprintf(text = calloc(1, 0x100 + strlen(para->file)),
-                   "Checking \"%s\"... ", para->file);
+                   "\"%s\"... ", para->file);
     size = 0;
     shan[0] = 1;
     shas[1] = 0;
@@ -430,14 +461,14 @@ void CheckHashAndDownload(intptr_t user, uint64_t zero) {
     }
     para->file = realloc(para->file, 0);
     para = realloc(para, 0);
-    printf("%s\n", text);
+    printf("[**WEB**] %s\n", text);
     text = realloc(text, 0);
 }
 
 
 
-void GetFromGithub(char *user, char *auth, char *proj,
-                   char *bran, char *repo, char *disk) {
+long TryGetFromGithub(ENGC *engc, char *user, char *auth,
+                      char *proj, char *bran, char *repo, char *disk) {
     #define GIT_SFIN "\""
     #define GIT_SURL GIT_SFIN "url"  GIT_SFIN ":" GIT_SFIN
     #define GIT_SSHA GIT_SFIN "sha"  GIT_SFIN ":" GIT_SFIN
@@ -447,11 +478,13 @@ void GetFromGithub(char *user, char *auth, char *proj,
     #define GIT_SAPI "api.github.com"
 
     char *path, *file, *text, *temp, *tail;
+    long size, rlen, iter, full = 0;
     intptr_t desc, para;
-    long size, rlen;
     PARA *tmpl;
 
-    tail = 0;
+    if (!rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP], RMF_BTAD))
+        return 0;
+    text = 0;
     while ((desc = rMakeHTTPS(user, GIT_SAPI))) {
         temp = MakeGetQuery(0, "repos", DEF_DSEP,  auth, DEF_DSEP,
                                   proj, DEF_DSEP, "git", DEF_DSEP,
@@ -483,9 +516,21 @@ void GetFromGithub(char *user, char *auth, char *proj,
         rFreeHTTPS(desc);
         break;
     }
-    if (tail && (desc = rMakeHTTPS(user, GIT_SRAW))) {
-        para = rMakeParallel(CheckHashAndDownload, 4);
+    if (text && (desc = rMakeHTTPS(user, GIT_SRAW))) {
         while ((temp = strstr(tail + 1, GIT_SPTH))) {
+            if ((tail = strstr(temp + sizeof(GIT_SPTH) - 1, GIT_SFIN))
+            &&  (temp = strstr(tail + 1, GIT_STYP))
+            &&  (tail = strstr(temp + sizeof(GIT_STYP) - 1, GIT_SFIN))
+            &&  (temp = strstr(tail + 1, GIT_SSHA))
+            &&  (tail = strstr(temp + sizeof(GIT_SSHA) - 1, GIT_SFIN)))
+                full++;
+            else
+                break;
+        }
+        tail = text - 1;
+        para = rMakeParallel(CheckHashAndDownload, 4);
+        for (iter = 0; iter < full; iter++) {
+            temp = strstr(tail + 1, GIT_SPTH);
             tail = strstr(temp += sizeof(GIT_SPTH) - 1, GIT_SFIN);
             tail[0] = 0;
             path = temp;
@@ -502,10 +547,10 @@ void GetFromGithub(char *user, char *auth, char *proj,
                 file[rlen] = *DEF_DSEP;
                 memmove(file, disk, rlen);
                 memmove(file + rlen + 1, path, size + 1);
-                for (temp = file; (temp = strstr(temp, DEF_DSEP));) {
+                for (temp = file + 1; (temp = strstr(temp, DEF_DSEP));) {
                     *temp = 0;
                     if (!rMakeDir(file)) {
-                        printf("[!!!] cannot create \"%s\".\n", file);
+                        printf("[>>ERR<<] Cannot create \"%s\"!\n", file);
                         file = realloc(file, 0);
                         path = 0;
                         break;
@@ -523,11 +568,13 @@ void GetFromGithub(char *user, char *auth, char *proj,
                                         bran, DEF_DSEP, repo, DEF_DSEP, path)};
                 rLoadParallel(para, (intptr_t)tmpl);
             }
+            SetProgress(engc, TXT_UPTO, iter, full);
         }
         rFreeParallel(para);
         text = realloc(text, 0);
         rFreeHTTPS(desc);
     }
+    return 1;
     #undef GIT_SAPI
     #undef GIT_SRAW
     #undef GIT_SPTH
@@ -2044,32 +2091,6 @@ void Relocalize(ENGC *engc, char *lang) {
 
 
 
-void RecountLibs(ENGC *engc, long tran, long frac, long full) {
-    char *text;
-
-    text = malloc(32 + strlen(engc->tran[tran]));
-    sprintf(text, "%s %ld / %ld", engc->tran[tran], frac, full);
-    RUN_FE2C(engc->CTL_SELE, MSG_PTXT, (intptr_t)text);
-    RUN_FE2C(engc->CTL_SELE, MSG_PLIM, full);
-    RUN_FE2C(engc->CTL_SELE, MSG_PPOS, frac);
-    free(text);
-}
-
-
-
-void RecountLibsSelected(ENGC *engc) {
-    long full, frac, indx;
-
-    for (full = frac = indx = 0; indx < engc->lcnt; indx++)
-        if (engc->libs[indx].icnt > 0)
-            frac++;
-        else if (!engc->libs[indx].icnt)
-            full++;
-    RecountLibs(engc, TXT_SELE, frac, frac + full);
-}
-
-
-
 void UpdPreview(intptr_t data, uint64_t time) {
     uint64_t *fram = (typeof(fram))data + 1; /// +0: time, +1: frame
     ENGC *engc = (ENGC*)(uintptr_t)fram[-1];
@@ -2116,7 +2137,7 @@ void CategorizePreviews(ENGC *engc) {
             ((!elem & !!flgs) ^ (engc->libs[indx].icnt < 0))?
             -engc->libs[indx].icnt - 1 : engc->libs[indx].icnt;
     }
-    RecountLibsSelected(engc);
+    RecountSelectedLibs(engc);
     RUN_FE2C(engc->CTL_CHAR, MSG_WSZC, 0);
 }
 
@@ -2301,13 +2322,13 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             for (cmsg = icon = 0; icon < engc->lcnt; icon++)
                 if (engc->libs[icon].icnt > 0)
                     cmsg++;
-            RecountLibs(engc, TXT_LOAD, 0, cmsg);
+            SetProgress(engc, TXT_LOAD, 0, cmsg);
 
             cEngineCallback(engc->engd, ECB_LOAD, ~0);
             for (data = icon = 0; icon < engc->lcnt; icon++)
                 if (engc->libs[icon].icnt > 0) {
                     LoadLib(&engc->libs[icon], engc->engd);
-                    RecountLibs(engc, TXT_LOAD, ++data, cmsg);
+                    SetProgress(engc, TXT_LOAD, ++data, cmsg);
                     RUN_FE2C(engc->CTL_SELE, MSG_PPOS, data);
                 }
             cEngineLoadAnimAsync(engc->engd, (uint8_t*)"/Icon/",
@@ -2353,7 +2374,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             engc->pmax = engc->pcnt = 0;
 
             /// finally showing the window
-            RecountLibsSelected(engc);
+            RecountSelectedLibs(engc);
             RUN_FE2C(engc->CTL_CAPT, MSG__SHW, ~0);
             break;
         }
@@ -2375,7 +2396,7 @@ intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 LINF *libs = (LINF*)ctrl->data;
 
                 if (!!libs->icnt ^ !!data)
-                    RecountLibs(libs->engc, TXT_SELE,
+                    SetProgress(libs->engc, TXT_SELE,
                                 RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 0)
                              + ((!libs->icnt && data)? 1 : -1),
                                 RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 1));
@@ -2522,25 +2543,24 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
             (uint16_t)xmax | ((uint32_t)ymax << 16));
 
     xmax = 0;
-    file = Concatenate(0, base, DEF_DSEP, "Ponies");
     do {
-        find = rFindMake(file);
-        while ((temp = rFindFile(find))) {
-            AppendLib(&engc, DEF_CONF, file, temp);
-            free(temp);
+        if (1 /** [TODO:] add the negation of need-to-update condition **/) {
+            find = rFindMake(file = Concatenate(0, base, DEF_DSEP, "Ponies"));
+            while ((temp = rFindFile(find))) {
+                AppendLib(&engc, DEF_CONF, file, temp);
+                free(temp);
+            }
+            free(file);
         }
-        if (engc.lcnt || !(xmax || rMessage("Network?", "WWW", RMF_BTAD)))
-            break;
-        GetFromGithub("DPE", "RoosterDragon", "Desktop-Ponies",
-                      "master", "Content", base);
-    } while (++xmax < 3);
-    free(file);
+    } while (!xmax++ && TryGetFromGithub(&engc, "DPE", "RoosterDragon",
+                                         "Desktop-Ponies", "master",
+                                         "Content", base));
     /// sort engine`s libraries by name, initialize the rendering engine
     qsort(engc.libs, engc.lcnt, sizeof(*engc.libs), linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc.engd);
     for (indx = 0; indx < engc.lcnt; indx++) {
         LoadLibPreview(&engc.libs[indx], engc.engd);
-        RecountLibs(&engc, TXT_LOAD, indx, engc.lcnt);
+        SetProgress(&engc, TXT_LOAD, indx, engc.lcnt);
     }
     cEngineCallback(engc.engd, ECB_LOAD, 0);
     cEngineCallback(engc.engd, ECB_LOAD, ~0);
@@ -2549,7 +2569,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     engc.CTL_CHAR.fc2e = FC2E;
     RUN_FE2C(engc.CTL_CHAR, MSG__SHW, 0);
 
-    RecountLibs(&engc, TXT_SELE, 0, engc.lcnt);
+    SetProgress(&engc, TXT_SELE, 0, engc.lcnt);
     RUN_FE2C(engc.CTL_SELE, MSG_PPOS, 0);
     for (indx = 0; indx < engc.ccnt; indx++)
         RUN_FE2C(engc.CTL_OGRP, MSG_LADD, (intptr_t)engc.ctgs[indx].name);

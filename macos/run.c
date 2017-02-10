@@ -1,8 +1,11 @@
 #include <errno.h>
 #include <dirent.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <curl/curl.h>
+#include <openssl/err.h>
 
 #include "../exec/exec.h"
 #include "load/mac_load.h"
@@ -33,12 +36,20 @@ typedef struct {
           spin, list, pbar, sbox, ibox, frmt;
 } SCLS;
 
+///thread data
+typedef struct {
+    long size;
+    UPRE func;
+    sem_t *isem;
+} DTHR;
+
 /// file find data
 typedef struct {
     struct dirent **dirs;
-    long hlen, iter;
-    char *home;
+    long iter;
 } FIND;
+
+pthread_mutex_t *pmtx; /// the necessary evil: global mutex table for OpenSSL
 
 
 
@@ -134,29 +145,18 @@ char *rConvertUTF8(char *utf8) {
 
 
 
-void *MsgFunc(void *data) {
-    intptr_t *user = (intptr_t*)data;
-    CFOptionFlags retn = 0;
-
-    CFUserNotificationDisplayAlert
-        (0, kCFUserNotificationNoteAlertLevel, 0, 0, 0,
-        (CFStringRef)user[1], (CFStringRef)user[2], 0, 0, 0, &retn);
-    MAC_FreeString((CFStringRef)user[1]);
-    MAC_FreeString((CFStringRef)user[2]);
-    free(user);
-    return 0;
-}
-
 long rMessage(char *text, char *head, uint32_t flgs) {
-    pthread_t pthr;
-    intptr_t *user;
+    CFStringRef tttt, hhhh;
+    CFOptionFlags retn;
 
-    user = calloc(3, sizeof(*user));
-    user[0] = flgs;
-    user[1] = (intptr_t)MAC_MakeString(head);
-    user[2] = (intptr_t)MAC_MakeString(text);
-    pthread_create(&pthr, 0, MsgFunc, user);
-    return 0;
+    /** [TODO:] internationalize "Cancel" **/
+    CFUserNotificationDisplayAlert
+         (0, kCFUserNotificationNoteAlertLevel, 0, 0, 0,
+          hhhh = MAC_MakeString(head), tttt = MAC_MakeString(text), 0,
+         (flgs & RMF_BTAD)? CFSTR("Cancel") : 0, 0, &retn);
+    MAC_FreeString(tttt);
+    MAC_FreeString(hhhh);
+    return !retn;
 }
 
 
@@ -220,25 +220,33 @@ void rFreeTrayIcon(intptr_t icon) {
 
 
 
+intptr_t rFindMake(char *base) {
+    FIND *find;
+
+    find = calloc(1, sizeof(*find));
+    find->iter = scandir(base, &find->dirs, 0, alphasort);
+    find->iter = (find->iter > 0)? find->iter : 0;
+    return (intptr_t)find;
+}
+
+
+
 char *rFindFile(intptr_t data) {
     FIND *find = (FIND*)data;
     char *retn = 0;
 
-    if (!find->iter) {
-        free(find->home);
-        free(find->dirs);
+    if (find->iter <= 0)
         return 0;
+    while ((--find->iter + 1) && ((find->dirs[find->iter]->d_type != DT_DIR)
+                              || !strcmp(find->dirs[find->iter]->d_name, "..")
+                              || !strcmp(find->dirs[find->iter]->d_name, ".")))
+        free(find->dirs[find->iter]);
+    if (find->iter >= 0) {
+        retn = strdup(find->dirs[find->iter]->d_name);
+        free(find->dirs[find->iter]);
     }
-    if ((find->dirs[--find->iter]->d_type != DT_DIR)
-    || !strcmp(find->dirs[find->iter]->d_name, ".")
-    || !strcmp(find->dirs[find->iter]->d_name, ".."))
-        retn = (char*)1;
-    else {
-        retn = calloc(1, find->hlen + strlen(find->dirs[find->iter]->d_name));
-        strcat(retn, find->home);
-        strcat(retn, find->dirs[find->iter]->d_name);
-    }
-    free(find->dirs[find->iter]);
+    if (find->iter <= 0)
+        free(find->dirs);
     return retn;
 }
 
@@ -272,6 +280,128 @@ long rSaveFile(char *name, char *data, long size) {
         return size;
     }
     return 0;
+}
+
+
+
+long rMakeDir(char *name) {
+    return !mkdir(name, 0755) || (errno == EEXIST);
+}
+
+
+
+void *ParallelFunc(void *data) {
+    DTHR *dthr = (DTHR*)((intptr_t*)data)[0];
+    intptr_t user = ((intptr_t*)data)[1];
+
+    free(data);
+    dthr->func(user, 0);
+    sem_post(dthr->isem);
+    return 0;
+}
+
+
+
+intptr_t rMakeParallel(UPRE func, long size) {
+    static unsigned long indx = 0;
+    char name[64];
+    DTHR *dthr;
+
+    size *= sysconf(_SC_NPROCESSORS_ONLN);
+    *(dthr = calloc(1, sizeof(*dthr))) = (DTHR){(size > 1)? size : 1, func};
+    sprintf(name, "sem%ld", ++indx);
+    dthr->isem = sem_open(name, O_CREAT | O_EXCL, 0, size);
+    sem_unlink(name);
+    if (dthr->isem == SEM_FAILED) {
+        free(dthr);
+        dthr = 0;
+    }
+    return (intptr_t)dthr;
+}
+
+
+
+void rLoadParallel(intptr_t user, intptr_t data) {
+    DTHR *dthr = (DTHR*)user;
+    pthread_t pthr;
+    intptr_t *pass;
+
+    pass = calloc(2, sizeof(intptr_t));
+    pass[0] = user;
+    pass[1] = data;
+    sem_wait(dthr->isem);
+    pthread_create(&pthr, 0, ParallelFunc, pass);
+}
+
+
+
+void rFreeParallel(intptr_t user) {
+    DTHR *dthr = (DTHR*)user;
+
+    for (; dthr->size; dthr->size--)
+        sem_wait(dthr->isem);
+    sem_close(dthr->isem);
+    free(dthr);
+}
+
+
+
+size_t WriteHTTPS(char *cptr, size_t size, size_t memb, void *user) {
+    intptr_t *data = (intptr_t*)user;
+
+    data[1] = (intptr_t)realloc((char*)data[1], 1 + data[0] + (size *= memb));
+    memcpy((char*)data[1] + data[0], cptr, size);
+    ((char*)data[1])[data[0] += size] = 0;
+    return size;
+}
+
+
+
+void rFreeHTTPS(intptr_t user) {
+    free(((char**)user)[0]);
+    free(((char**)user)[1]);
+    free((char**)user);
+}
+
+
+
+intptr_t rMakeHTTPS(char *user, char *serv) {
+    char **retn;
+
+    if (!user || !serv)
+        return 0;
+    retn = calloc(2, sizeof(*retn));
+    retn[0] = strdup(user);
+    retn[1] = calloc(1, 10 + strlen(serv));
+    strcat(strcat(strcat(retn[1], "https://"), serv), "/");
+    return (intptr_t)retn;
+}
+
+
+
+long rLoadHTTPS(intptr_t user, char *page, char **dest) {
+    char *hreq, **ctxt = (char**)user;
+    intptr_t data[2] = {};
+    CURL *curl;
+
+    if (!page || !dest) {
+        *dest = 0;
+        return 0;
+    }
+    curl = curl_easy_init();
+    hreq = calloc(1, 1 + strlen(ctxt[1]) + strlen(page));
+    curl_easy_setopt(curl, CURLOPT_URL, strcat(strcat(hreq, ctxt[1]), page));
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, ctxt[0]);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteHTTPS);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, data);
+    if (curl_easy_perform(curl)) {
+        data[1] = (intptr_t)realloc((char*)data[1], 0);
+        data[1] = data[0] = 0;
+    }
+    curl_easy_cleanup(curl);
+    free(hreq);
+    *dest = (char*)data[1];
+    return data[0];
 }
 
 
@@ -1234,6 +1364,15 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
 
 
+void lockfunc(int mode, int indx, const char *file, int line) {
+    if (mode & CRYPTO_LOCK)
+        pthread_mutex_lock(&pmtx[indx]);
+    else
+        pthread_mutex_unlock(&pmtx[indx]);
+}
+
+
+
 int main(int argc, char *argv[]) {
     #define CLS_MAKE(n, p, ...) \
         MAC_MakeClass(n, p, MAC_TempArray(VAR_CTRL, VAR_DATA), \
@@ -1272,21 +1411,24 @@ int main(int argc, char *argv[]) {
                  isPartialStringValid_newEditingString_errorDescription_(),
                  OnValidate)
     };
-    FIND find = {};
+    char *conf, *home;
+    long iter, cmtx;
     CFStringRef path;
     CFArrayRef urls;
     CGFloat icon;
     CGRect dims;
-    char *conf;
 
+    pmtx = calloc(cmtx = CRYPTO_num_locks(), sizeof(*pmtx));
+    for (iter = 0; iter < cmtx; iter++)
+        pthread_mutex_init(&pmtx[iter], 0);
+    CRYPTO_set_id_callback((unsigned long (*)())pthread_self);
+    CRYPTO_set_locking_callback(lockfunc);
+    curl_global_init(CURL_GLOBAL_DEFAULT);
     setActivationPolicy_(sharedApplication(NSApplication()),
                          NSApplicationActivationPolicyAccessory);
-    find.home = MAC_LoadString(path =
-                              (CFStringRef)bundlePath(mainBundle(NSBundle())));
-    find.home = realloc(find.home, find.hlen = strlen(find.home) + 32);
-    strcat(find.home, "/Contents/MacOS/"DEF_FLDR"/");
-    find.iter = scandir(find.home, &find.dirs, 0, alphasort);
-    find.iter = (find.iter > 0)? find.iter : 0;
+    home = MAC_LoadString(bundlePath(mainBundle(NSBundle())));
+    strcat(home = realloc(home, 64 + strlen(home)),
+           "/Contents/Resources/"DEF_FLDR);
 
     urls = URLsForDirectory_inDomains_(defaultManager(NSFileManager()),
                                        NSApplicationSupportDirectory,
@@ -1295,24 +1437,29 @@ int main(int argc, char *argv[]) {
                (CFArrayGetValueAtIndex((CFArrayRef)urls, 0),
                                         kCFURLPOSIXPathStyle);
     conf = MAC_LoadString(path);
-    MAC_FreeString(path);
-    conf = realloc(conf, strlen(conf) + 32);
-    strcat(conf, DEF_OPTS);
-    if (!((mkdir(conf, 0755))? (errno != EEXIST)? 0 : 1 : 2))
+    if (!rMakeDir(strcat(conf = realloc(conf, 64 + strlen(conf)), DEF_OPTS)))
         printf("WARNING: cannot create '%s'!", conf);
+    MAC_FreeString(path);
 
     dims = visibleFrame(mainScreen(NSScreen()));
     icon = thickness(systemStatusBar(NSStatusBar()));
 
-    eExecuteEngine(conf, (intptr_t)&find, icon, icon, dims.origin.x,
-                   dims.origin.y, dims.size.width  + dims.origin.x,
+    eExecuteEngine(conf, home, icon, icon, dims.origin.x, dims.origin.y,
+                   dims.size.width  + dims.origin.x,
                    dims.size.height + dims.origin.y);
     release(pool);
     free(conf);
+    free(home);
     /// it is crucial to free all subclasses AFTER freeing the release pool
     for (argc = 0; argc < sizeof(scls) / sizeof(*scls); argc++)
         if (scls[argc])
             MAC_FreeClass(scls[argc]);
+    curl_global_cleanup();
+    CRYPTO_set_locking_callback(0);
+    CRYPTO_set_id_callback(0);
+    for (iter = 0; iter < cmtx; iter++)
+        pthread_mutex_destroy(&pmtx[iter]);
+    free(pmtx);
     return 0;
     #undef CLS_MAKE
 }

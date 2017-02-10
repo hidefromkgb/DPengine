@@ -22,6 +22,8 @@ Enable pixel buffers
 Useless on full opacity!
 Useless without GPU!
 Cannot initialize GPU!
+The animation base may be out of date. Check the Internet for updates? Warning: the duration largely depends on connection speed!
+Update
 Desktop Ponies
 Enable filters
 Exact matching
@@ -33,4 +35,5 @@ Add
 Copies
 Selected:
 Loaded:
+Updated:
 GO!

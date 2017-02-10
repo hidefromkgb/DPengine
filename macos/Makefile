@@ -5,13 +5,13 @@ CC = clang -m32 -mstackrealign -fno-stack-protector -fvisibility=hidden
 ifeq ($(MAC_OLD), true)
 CC += -no-integrated-as -DMAC_OLD
 endif
-CX = $(CC)
+CX = $(CC) -lcurl -lcrypto -framework AppKit
 
 OBJDIR = .obj
 EXEBASE = ../macos.app
 EXEPATH = $(EXEBASE)/Contents/MacOS
 
-LLIB = -framework OpenGL -framework AppKit
+LLIB = -framework OpenGL
 LINC =
 LCXFLAGS =
 LCFLAGS = -I../core -Wall -fPIC
@@ -20,7 +20,7 @@ LOBJ = $(OBJDIR)/core/core.o $(OBJDIR)/core/gif/gifstd.o $(OBJDIR)/core/ogl/ogls
 LOUT = ../libengine.dylib
 
 
-ELIB = -lengine -framework AppKit
+ELIB = -lengine
 EINC =
 ECXFLAGS = -L..
 ECFLAGS = -I../core -Wall
@@ -109,7 +109,6 @@ $(OBJDIR)/run.o: run.c
 
 jlink:
 	$(CX) $(ECXFLAGS) $(LOBJ) $(EOBJ) -o $(EOUT) $(LLIB)
-	if ! [ -h $(EXEPATH)/Ponies ]; then ln -s ../../../Ponies $(EXEPATH)/Ponies; fi
 
 llink: LCXFLAGS += -shared
 llink:

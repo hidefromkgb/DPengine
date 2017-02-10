@@ -7,7 +7,7 @@
 #define TXL_FAIL "[>>ERR<<]"
 #define TXL_DUPL "[--DUP--]"
 #define TXL_AEND "[==ANI==]"
-#define TXL_RGPU "[//GPU//]"
+#define TXL_RGPU "[##GPU##]"
 #define TXL_RSTD "[++CPU++]"
 
 /// AINF destination (to put one "physical" animation into multiple AINFs)
