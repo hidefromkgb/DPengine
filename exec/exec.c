@@ -638,7 +638,7 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
     if (engc->lcnt
     || !rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP], RMF_BTAD))
         return 0;
-    text = 0;
+    text = tail = 0;
     while ((desc = rMakeHTTPS(user, GIT_SAPI))) {
         temp = MakeGetQuery(0, "repos", DEF_DSEP,  auth, DEF_DSEP,
                                   proj, DEF_DSEP, "git", DEF_DSEP,

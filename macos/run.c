@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <dlfcn.h>
 #include <dirent.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -1411,6 +1412,11 @@ int main(int argc, char *argv[]) {
                  isPartialStringValid_newEditingString_errorDescription_(),
                  OnValidate)
     };
+    int  (*CNLK)() = dlsym(RTLD_DEFAULT, "CRYPTO_num_locks");
+    void (*CSIC)(pthread_t (*func)()) =
+        dlsym(RTLD_DEFAULT, "CRYPTO_set_id_callback");
+    void (*CSLC)(void (*func)(int, int, const char*, int)) =
+        dlsym(RTLD_DEFAULT, "CRYPTO_set_locking_callback");
     char *conf, *home;
     long iter, cmtx;
     CFStringRef path;
@@ -1418,11 +1424,13 @@ int main(int argc, char *argv[]) {
     CGFloat icon;
     CGRect dims;
 
-    pmtx = calloc(cmtx = CRYPTO_num_locks(), sizeof(*pmtx));
-    for (iter = 0; iter < cmtx; iter++)
-        pthread_mutex_init(&pmtx[iter], 0);
-    CRYPTO_set_id_callback((unsigned long (*)())pthread_self);
-    CRYPTO_set_locking_callback(lockfunc);
+    if (!MAC_10_07_PLUS) {
+        pmtx = calloc(cmtx = CNLK(), sizeof(*pmtx));
+        for (iter = 0; iter < cmtx; iter++)
+            pthread_mutex_init(&pmtx[iter], 0);
+        CSIC(pthread_self);
+        CSLC(lockfunc);
+    }
     curl_global_init(CURL_GLOBAL_DEFAULT);
     setActivationPolicy_(sharedApplication(NSApplication()),
                          NSApplicationActivationPolicyAccessory);
@@ -1455,11 +1463,13 @@ int main(int argc, char *argv[]) {
         if (scls[argc])
             MAC_FreeClass(scls[argc]);
     curl_global_cleanup();
-    CRYPTO_set_locking_callback(0);
-    CRYPTO_set_id_callback(0);
-    for (iter = 0; iter < cmtx; iter++)
-        pthread_mutex_destroy(&pmtx[iter]);
-    free(pmtx);
+    if (!MAC_10_07_PLUS) {
+        CSLC(0);
+        CSIC(0);
+        for (iter = 0; iter < cmtx; iter++)
+            pthread_mutex_destroy(&pmtx[iter]);
+        free(pmtx);
+    }
     return 0;
     #undef CLS_MAKE
 }
