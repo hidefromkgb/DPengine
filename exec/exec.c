@@ -141,21 +141,23 @@
 /** Useless without GPU!        **/ #define TXT_UWGL 20
 /** Cannot initialize GPU!      **/ #define TXT_CIGL 21
 /** The animation base <...>    **/ #define TXT_CTUP 22
-/** Update                      **/ #define TXT_CCUP 23
+/** Internet connection failure **/ #define TXT_INET 23
+/** Failed to create directory  **/ #define TXT_FDIR 24
+/** Update                      **/ #define TXT_CCUP 25
 
-/** Desktop Ponies              **/ #define TXT_CAPT 24
-/** Enable filters              **/ #define TXT_FLTR 25
-/** Exact matching              **/ #define TXT_EXAC 26
-/** [At least one:]             **/ #define TXT_OGRP 27
-/** [All at once:]              **/ #define TXT_AGRP 28
-/** Random selection:           **/ #define TXT_SRND 29
-/** Group selection:            **/ #define TXT_SGRP 30
-/** Add                         **/ #define TXT_BADD 31
-/** Copies                      **/ #define TXT_BDUP 32
-/** Selected:                   **/ #define TXT_SELE 33
-/** Loaded:                     **/ #define TXT_LOAD 34
-/** Updated:                    **/ #define TXT_UPTO 35
-/** GO!                         **/ #define TXT_GOGO 36
+/** Desktop Ponies              **/ #define TXT_CAPT 26
+/** Enable filters              **/ #define TXT_FLTR 27
+/** Exact matching              **/ #define TXT_EXAC 28
+/** [At least one:]             **/ #define TXT_OGRP 29
+/** [All at once:]              **/ #define TXT_AGRP 30
+/** Random selection:           **/ #define TXT_SRND 31
+/** Group selection:            **/ #define TXT_SGRP 32
+/** Add                         **/ #define TXT_BADD 33
+/** Copies                      **/ #define TXT_BDUP 34
+/** Selected:                   **/ #define TXT_SELE 35
+/** Loaded:                     **/ #define TXT_LOAD 36
+/** Updated:                    **/ #define TXT_UPTO 37
+/** GO!                         **/ #define TXT_GOGO 38
 
 /// /// /// /// /// /// /// /// /// ENGC.CTLS array indices
 /**                             **/ #define CTL_CAPT ctls[ 0]
@@ -290,6 +292,158 @@ struct ENGC {
              dims,  /// drawing area dimensions
              idim;  /// tray icon dimensions
 };
+
+
+
+float StrToFloat(char *data) {
+    char temp[32] = {};
+    double retn = 0.0;
+    long iter = 0;
+
+    while ((iter < 31) && *data) {
+        if ((*data != '.') && (*data != ',')) {
+            if ((retn > 0.0) && (*data >= '0') && (*data <= '9'))
+                retn *= 0.1;
+            temp[iter++] = *data;
+        }
+        else if (retn == 0.0)
+            retn = 1.0;
+        data++;
+    }
+    return ((retn > 0.0)? retn : 1.0) * strtol(temp, 0, 10);
+}
+
+
+
+#define Concatenate(retn, ...) _Concatenate(retn, ##__VA_ARGS__, (char*)0)
+char *_Concatenate(char **retn, ...) {
+    va_list list;
+    char *head, *temp;
+    long size = 1;
+
+    va_start(list, retn);
+    while ((temp = va_arg(list, typeof(temp))))
+        size += strlen(temp);
+    va_end(list);
+
+    if (!retn)
+        head = calloc(1, size);
+    else {
+        head = *retn;
+        head = realloc(head, size += (head)? strlen(head) : 0);
+        if (!*retn)
+            *head = 0;
+        *retn = head;
+    }
+
+    va_start(list, retn);
+    while ((temp = va_arg(list, typeof(temp))))
+        strcat(head, temp);
+    va_end(list);
+
+    return head;
+}
+
+
+
+/// [TODO:] make this mess UTF8-compliant
+char *ToLower(char *uppr, long size) {
+    long iter;
+
+    if (uppr) {
+        if (!size)
+            size = strlen(uppr);
+        for (iter = 0; iter < size; iter++)
+            uppr[iter] = tolower(uppr[iter]);
+    }
+    return uppr;
+}
+
+
+
+char *Dequote(char *quot) {
+    long size;
+
+    if (!quot || !(size = strlen(quot)))
+        return 0;
+
+    if (*quot == '"') {
+        quot++;
+        size--;
+    }
+    if (quot[size - 1] == '"')
+        quot[size - 1] = '\0';
+
+    return quot;
+}
+
+
+
+char *SkipCharUTF8(char *line) {
+    static char skip[] = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 6};
+    return line + ((*line & 0x80)? skip[((*line) >> 2) & 0x0F] : 1);
+}
+
+
+
+long WhitespaceUTF8(char *line) {
+    switch (line[0]) {
+        case '\x09':
+        case '\x20':
+            return ~0;
+        case '\xC2':
+            if (line[1] == '\xA0') return ~0; else break;
+        case '\xE1':
+            if (line[1] == '\x9A' && line[2] == '\x80') return ~0; else break;
+        case '\xE3':
+            if (line[1] == '\x80' && line[2] == '\x80') return ~0; else break;
+        case '\xEF':
+            if (line[1] == '\xBB' && line[2] == '\xBF') return ~0; else break;
+        case '\xE2':
+            switch (line[1]) {
+                case '\x81': if (line[2] == '\x9F') return ~0; else break;
+                case '\x80':
+                    switch (line[2]) {
+                        case '\x80': case '\x81': case '\x82': case '\x83':
+                        case '\x84': case '\x85': case '\x86': case '\x87':
+                        case '\x88': case '\x89': case '\x8A': case '\x8B':
+                        case '\xAF': return ~0;
+                    }
+            }
+    }
+    return 0;
+}
+
+
+
+char *SplitLine(char **tail, char tsep, long keep) {
+    char *retn, *temp, *iter = *tail;
+
+    if (*tail) {
+        while (WhitespaceUTF8(iter))
+            iter = SkipCharUTF8(iter);
+        if (*iter) {
+            if (!(*tail = strchr(iter, tsep)))
+                *tail = iter + strlen(iter);
+            temp = retn = iter;
+            while (iter < *tail) {
+                if (!WhitespaceUTF8(iter))
+                    temp = iter;
+                iter = SkipCharUTF8(iter);
+            }
+            *tail = (**tail)? *tail + 1 : 0;
+            if (*temp) {
+                if (*temp != tsep)
+                    temp++;
+                if (!keep)
+                    *temp = 0;
+            }
+            return retn;
+        }
+        *tail = 0;
+    }
+    return *tail;
+}
 
 
 
@@ -550,8 +704,11 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
                 for (temp = file + 1; (temp = strstr(temp, DEF_DSEP));) {
                     *temp = 0;
                     if (!rMakeDir(file)) {
-                        printf("[>>ERR<<] Cannot create \"%s\"!\n", file);
+                        path = Concatenate(0, engc->tran[TXT_FDIR], " ",
+                                              GIT_SFIN, file, GIT_SFIN);
+                        rMessage(path, engc->tran[TXT_CCUP], RMF_BTOK);
                         file = realloc(file, 0);
+                        path = realloc(path, 0);
                         path = 0;
                         break;
                     }
@@ -574,6 +731,8 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
         text = realloc(text, 0);
         rFreeHTTPS(desc);
     }
+    else /// do NOT invert if/else, since conditions have side-effects
+        rMessage(engc->tran[TXT_INET], engc->tran[TXT_CCUP], RMF_BTOK);
     return 1;
     #undef GIT_SAPI
     #undef GIT_SRAW
@@ -626,11 +785,6 @@ uint32_t PRNG(RNGS *seed) {
 
 
 
-/// String-oriented linear hash multiplier
-#define SLH_MULT 0xFBC5
-/// String-oriented linear hash shift
-#define SLH_PLUS 0x11
-
 uint32_t HashLine(char *line, long size) {
     uint32_t hash = 0;
 
@@ -639,7 +793,7 @@ uint32_t HashLine(char *line, long size) {
     if (!size)
         size--;
     while (*line && size--)
-        hash = SLH_PLUS + SLH_MULT * hash + *line++;
+        hash = 0x11 + 0xFBC5 * hash + *line++;
     return hash;
 }
 
@@ -648,158 +802,6 @@ uint32_t HashLine(char *line, long size) {
 static inline float ClampToBounds(float what, float bmin, float bmax) {
     what = (what > bmin)? what : bmin;
     return (what < bmax)? what : bmax;
-}
-
-
-
-float StrToFloat(char *data) {
-    char temp[32] = {};
-    double retn = 0.0;
-    long iter = 0;
-
-    while ((iter < 31) && *data) {
-        if ((*data != '.') && (*data != ',')) {
-            if ((retn > 0.0) && (*data >= '0') && (*data <= '9'))
-                retn *= 0.1;
-            temp[iter++] = *data;
-        }
-        else if (retn == 0.0)
-            retn = 1.0;
-        data++;
-    }
-    return ((retn > 0.0)? retn : 1.0) * strtol(temp, 0, 10);
-}
-
-
-
-#define Concatenate(retn, ...) _Concatenate(retn, ##__VA_ARGS__, (char*)0)
-char *_Concatenate(char **retn, ...) {
-    va_list list;
-    char *head, *temp;
-    long size = 1;
-
-    va_start(list, retn);
-    while ((temp = va_arg(list, typeof(temp))))
-        size += strlen(temp);
-    va_end(list);
-
-    if (!retn)
-        head = calloc(1, size);
-    else {
-        head = *retn;
-        head = realloc(head, size += (head)? strlen(head) : 0);
-        if (!*retn)
-            *head = 0;
-        *retn = head;
-    }
-
-    va_start(list, retn);
-    while ((temp = va_arg(list, typeof(temp))))
-        strcat(head, temp);
-    va_end(list);
-
-    return head;
-}
-
-
-
-/// [TODO:] make this mess UTF8-compliant
-char *ToLower(char *uppr, long size) {
-    long iter;
-
-    if (uppr) {
-        if (!size)
-            size = strlen(uppr);
-        for (iter = 0; iter < size; iter++)
-            uppr[iter] = tolower(uppr[iter]);
-    }
-    return uppr;
-}
-
-
-
-char *Dequote(char *quot) {
-    long size;
-
-    if (!quot || !(size = strlen(quot)))
-        return 0;
-
-    if (*quot == '"') {
-        quot++;
-        size--;
-    }
-    if (quot[size - 1] == '"')
-        quot[size - 1] = '\0';
-
-    return quot;
-}
-
-
-
-char *SkipCharUTF8(char *line) {
-    static char skip[] = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 6};
-    return line + ((*line & 0x80)? skip[((*line) >> 2) & 0x0F] : 1);
-}
-
-
-
-long WhitespaceUTF8(char *line) {
-    switch (line[0]) {
-        case '\x09':
-        case '\x20':
-            return ~0;
-        case '\xC2':
-            if (line[1] == '\xA0') return ~0; else break;
-        case '\xE1':
-            if (line[1] == '\x9A' && line[2] == '\x80') return ~0; else break;
-        case '\xE3':
-            if (line[1] == '\x80' && line[2] == '\x80') return ~0; else break;
-        case '\xEF':
-            if (line[1] == '\xBB' && line[2] == '\xBF') return ~0; else break;
-        case '\xE2':
-            switch (line[1]) {
-                case '\x81': if (line[2] == '\x9F') return ~0; else break;
-                case '\x80':
-                    switch (line[2]) {
-                        case '\x80': case '\x81': case '\x82': case '\x83':
-                        case '\x84': case '\x85': case '\x86': case '\x87':
-                        case '\x88': case '\x89': case '\x8A': case '\x8B':
-                        case '\xAF': return ~0;
-                    }
-            }
-    }
-    return 0;
-}
-
-
-
-char *SplitLine(char **tail, char tsep, long keep) {
-    char *retn, *temp, *iter = *tail;
-
-    if (*tail) {
-        while (WhitespaceUTF8(iter))
-            iter = SkipCharUTF8(iter);
-        if (*iter) {
-            if (!(*tail = strchr(iter, tsep)))
-                *tail = iter + strlen(iter);
-            temp = retn = iter;
-            while (iter < *tail) {
-                if (!WhitespaceUTF8(iter))
-                    temp = iter;
-                iter = SkipCharUTF8(iter);
-            }
-            *tail = (**tail)? *tail + 1 : 0;
-            if (*temp) {
-                if (*temp != tsep)
-                    temp++;
-                if (!keep)
-                    *temp = 0;
-            }
-            return retn;
-        }
-        *tail = 0;
-    }
-    return *tail;
 }
 
 
@@ -1686,23 +1688,23 @@ void MMH(MENU *item) {
             break;
 
         case TXT_CSLP:
-            rMessage("Not implemented yet!", "WIP", 0);
+            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
             break;
 
         case TXT_ASLP:
-            rMessage("Not implemented yet!", "WIP", 0);
+            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
             break;
 
         case TXT_TPL1:
-            rMessage("Not implemented yet!", "WIP", 0);
+            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
             break;
 
         case TXT_TPL2:
-            rMessage("Not implemented yet!", "WIP", 0);
+            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
             break;
 
         case TXT_OPTS:
-            rMessage("Not implemented yet!", "WIP", 0);
+            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
             break;
 
         case TXT_RGPU: {
@@ -1863,7 +1865,7 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
     if (!(flgs & COM_RGPU) && (engc->mctx[3].flgs & MFL_VCHK)) {
         /// this happens when the engine cannot activate
         /// the GPU, so the best reaction is to complain
-        rMessage(engc->tran[TXT_CIGL], 0, 0);
+        rMessage(engc->tran[TXT_CIGL], 0, RMF_BTOK);
     }
     #define FLAG(t, f) t = ((t) & ~MFL_VCHK) | ((flgs & (f))? MFL_VCHK : 0)
     FLAG(engc->mctx[3].flgs, COM_RGPU);
@@ -2294,7 +2296,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case TXT_OPTS:
-            rMessage("Not implemented yet!", "WIP", 0);
+            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
             break;
 
         case TXT_GOGO: {
