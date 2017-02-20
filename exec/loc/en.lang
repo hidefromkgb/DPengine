@@ -13,6 +13,7 @@ Show window
 Exit
 Use GPU for drawing
 [ none ]
+[ default ]
 Show console
 Use regions
 Enable BGRA
@@ -37,3 +38,23 @@ Selected:
 Loaded:
 Updated:
 GO!
+Update on next run
+Always on top
+Enable effects
+Enable interactions
+Enable speech
+React to cursor hover
+ runs between updates
+ % base scaling factor
+ % time dilation factor
+ % random speech chance
+ pix. cursor dodge radius
+Choose...
+Reload
+Reset
+GUI language: English
+Animation base directory:
+Moving the animation base
+Confirm saving the source directory in a new place:
+[ATTENTION:] On refusal, the source directory shall be deleted!
+Failed to move the source directory:

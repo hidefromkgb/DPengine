@@ -4,8 +4,11 @@
 
 #include <windows.h>
 #include <wininet.h>
+#include <commdlg.h>
 #include <commctrl.h>
+#include <shellapi.h>
 #include <shlobj.h>
+#include <ole2.h>
 
 #include "../exec/exec.h"
 
@@ -30,6 +33,13 @@ typedef struct {
     HINTERNET hnet, hcon;
 } NETC;
 
+/// the necessary evil:
+/// SH* functions, loaded from different DLLs on different Windows versions
+HRESULT APIENTRY (*SHGF)(HWND, int, HANDLE, DWORD, LPSTR) = 0;
+LPITEMIDLIST APIENTRY (*SHBF)(PBROWSEINFOA) = 0;
+BOOL APIENTRY (*SHGP)(LPCITEMIDLIST, LPSTR) = 0;
+int APIENTRY (*SHFO)(LPSHFILEOPSTRUCTA) = 0;
+
 
 
 static inline long OldWin32() {
@@ -38,6 +48,18 @@ static inline long OldWin32() {
     if (retn == 2)
         retn = ((GetVersion() & 0xFF) < 5)? 1 : 0;
     return retn;
+}
+
+
+
+char *BackReslash(char *conv) {
+    long iter;
+
+    if (conv)
+        for (iter = 0; conv[iter]; iter++)
+            if (conv[iter] == '/')
+                conv[iter] = '\\';
+    return conv;
 }
 
 
@@ -188,8 +210,8 @@ HMENU Submenu(MENU *menu, long *chld) {
         return 0;
 
     union {
-        MENUITEMINFOW w;
         MENUITEMINFOA a;
+        MENUITEMINFOW w;
     } pmii;
     long indx, oldw;
     HMENU retn;
@@ -315,13 +337,20 @@ void rFreeParallel(intptr_t user) {
 
 
 
+LRESULT APIENTRY DWP(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
+    return (OldWin32())? DefWindowProcA(hWnd, uMsg, wPrm, lPrm)
+                       : DefWindowProcW(hWnd, uMsg, wPrm, lPrm);
+}
+
+
+
 LRESULT APIENTRY TrayProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
     if (uMsg == WM_TRAY) {
         if (lPrm == WM_RBUTTONDOWN)
             rOpenContextMenu((MENU*)GetWindowLongPtr(hWnd, GWLP_USERDATA));
         return 0;
     }
-    return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
+    return DWP(hWnd, uMsg, wPrm, lPrm);
 }
 
 
@@ -384,6 +413,52 @@ long rSaveFile(char *name, char *data, long size) {
         return flen;
     }
     return 0;
+}
+
+
+
+long rMoveDir(char *dsrc, char *ddst) {
+    union {
+        SHFILEOPSTRUCTA a;
+        SHFILEOPSTRUCTW w;
+    } fops = {{.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI
+                       | FOF_NOCONFIRMMKDIR | FOF_SILENT}};
+    char *temp;
+    long size;
+
+    if (!ddst)
+        fops.a.wFunc = FO_DELETE;
+    else {
+        fops.a.wFunc = FO_MOVE;
+        ddst = rConvertUTF8(temp = BackReslash(strdup(ddst)));
+        free(temp);
+    }
+    dsrc = rConvertUTF8(temp = BackReslash(strdup(dsrc)));
+    free(temp);
+    if (OldWin32()) {
+        dsrc = realloc(dsrc, (size = strlen(dsrc)) + 2);
+        dsrc[size + 1] = 0;
+        fops.a.pFrom = dsrc;
+        if (ddst) {
+            ddst = realloc(ddst, (size = strlen(ddst)) + 2);
+            ddst[size + 1] = 0;
+            fops.a.pTo = ddst;
+        }
+    }
+    else {
+        dsrc = realloc(dsrc, (size = wcslen((LPWSTR)dsrc) * 2) + 4);
+        dsrc[size + 2] = dsrc[size + 3] = 0;
+        fops.w.pFrom = (LPWSTR)dsrc;
+        if (ddst) {
+            ddst = realloc(ddst, (size = wcslen((LPWSTR)ddst) * 2) + 4);
+            ddst[size + 2] = ddst[size + 3] = 0;
+            fops.w.pTo = (LPWSTR)ddst;
+        }
+    }
+    SHFO(&fops.a);
+    free(ddst);
+    free(dsrc);
+    return !fops.a.fAnyOperationsAborted;
 }
 
 
@@ -622,7 +697,7 @@ LRESULT APIENTRY IBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             return 0;
         }
     }
-    return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
+    return DWP(hWnd, uMsg, wPrm, lPrm);
 }
 
 
@@ -672,7 +747,7 @@ LRESULT APIENTRY ListProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             }
             break;
     }
-    return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
+    return DWP(hWnd, uMsg, wPrm, lPrm);
 }
 
 
@@ -776,7 +851,7 @@ LRESULT APIENTRY SBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             return 0;
         }
     }
-    return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
+    return DWP(hWnd, uMsg, wPrm, lPrm);
     #undef SCR_PLUS
 }
 
@@ -792,7 +867,7 @@ LRESULT APIENTRY SBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 ///  6:
 ///  7:
 LRESULT APIENTRY OptProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
-    CTRL *ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+    CTRL *ctrl;
 
     switch (uMsg) {
         case WM_COMMAND:
@@ -805,7 +880,7 @@ LRESULT APIENTRY OptProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             return 0;
 
         case WM_GETMINMAXINFO:
-            if (ctrl) {
+            if ((ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA))) {
                 ((MINMAXINFO*)lPrm)->ptMinTrackSize.x =
                     (uint16_t)(ctrl->priv[3]);
                 ((MINMAXINFO*)lPrm)->ptMinTrackSize.y =
@@ -814,11 +889,13 @@ LRESULT APIENTRY OptProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             return 0;
 
         case WM_CLOSE:
-        case WM_DESTROY:
-            PostQuitMessage(0);
+            ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+            if (ctrl->fc2e(ctrl, MSG_WEND, 0))
+                PostQuitMessage(0);
             return 0;
 
         case WM_SIZE:
+            ctrl = (CTRL*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
             ctrl->fc2e(ctrl, MSG_WSZC, lPrm);
             return 0;
 
@@ -826,8 +903,12 @@ LRESULT APIENTRY OptProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             if (((NMHDR*)lPrm)->code == UDN_DELTAPOS)
                 ProcessSpin(lPrm);
             break;
+
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            break;
     }
-    return DefWindowProc(hWnd, uMsg, wPrm, lPrm);
+    return DWP(hWnd, uMsg, wPrm, lPrm);
 }
 
 
@@ -926,6 +1007,21 @@ LRESULT APIENTRY PBarProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
 
 
+void AssignTextToControl(CTRL *ctrl, char *text) {
+    char *name;
+
+    if (ctrl->priv[0] && text) {
+        name = rConvertUTF8(text);
+        if (OldWin32())
+            SendMessageA((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
+        else
+            SendMessageW((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
+        free(name);
+    }
+}
+
+
+
 intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__SHW:
@@ -934,20 +1030,26 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 SetForegroundWindow((HWND)ctrl->priv[0]);
             break;
 
+        case MSG__TXT:
+            AssignTextToControl(ctrl, (char*)data);
+            break;
+
         case MSG_WSZC: {
+            LONG xfrm, yfrm;
             RECT rect;
 
             SystemParametersInfo(SPI_GETWORKAREA, 0, &rect, 0);
 
             rect.left += rect.right >> 1;
             rect.top += rect.bottom >> 1;
-
+            xfrm = (ctrl->flgs & FSW_SIZE)? SM_CXFRAME : SM_CXFIXEDFRAME;
+            yfrm = (ctrl->flgs & FSW_SIZE)? SM_CYFRAME : SM_CYFIXEDFRAME;
             rect.right  = (((uint16_t)(data)) + ctrl->xdim)
                         *   (uint16_t)(ctrl->priv[2])
-                        +   (GetSystemMetrics(SM_CXFRAME) << 1);
+                        +   (GetSystemMetrics(xfrm) << 1);
             rect.bottom = (((uint16_t)(data >> 16)) + ctrl->ydim)
                         *   (uint16_t)(ctrl->priv[2] >> 16)
-                        +   (GetSystemMetrics(SM_CYFRAME) << 1)
+                        +   (GetSystemMetrics(yfrm) << 1)
                         +    GetSystemMetrics(SM_CYCAPTION);
 
             rect.left -= rect.right >> 1;
@@ -955,8 +1057,10 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
             ctrl->priv[3] =  (uint16_t)rect.right
                           | ((uint32_t)rect.bottom << 16);
-            SetWindowPos((HWND)ctrl->priv[0], HWND_TOP, rect.left, rect.top,
-                         rect.right, rect.bottom, SWP_SHOWWINDOW);
+            SetWindowPos((HWND)ctrl->priv[0], HWND_TOP,
+                          rect.left, rect.top, rect.right, rect.bottom,
+                          IsWindowVisible((HWND)ctrl->priv[0])?
+                          SWP_SHOWWINDOW : SWP_HIDEWINDOW);
             break;
         }
     }
@@ -991,7 +1095,7 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             }
             break;
 
-        case MSG_PTXT:
+        case MSG__TXT:
             free((void*)ctrl->priv[2]);
             ctrl->priv[2] = (intptr_t)rConvertUTF8((char*)data);
             break;
@@ -1007,17 +1111,25 @@ intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             EnableWindow((HWND)ctrl->priv[0], !!data);
             break;
 
+        case MSG__TXT:
+            AssignTextToControl(ctrl, (char*)data);
+            break;
+
         case MSG_BGST:
-            return ((IsWindowEnabled((HWND)ctrl->priv[0]))?
-                     FCS_ENBL : 0)
-                 | ((SendMessage((HWND)ctrl->priv[0],
-                                 BM_GETCHECK, 0, 0) == BST_CHECKED)?
-                     FCS_MARK : 0);
+            data  = (IsWindowEnabled((HWND)ctrl->priv[0]))? FCS_ENBL : 0;
+            if ((ctrl->flgs & FCT_TTTT) == FCT_CBOX)
+                data |= (SendMessage((HWND)ctrl->priv[0],
+                                      BM_GETCHECK, 0, 0) == BST_CHECKED)?
+                         FCS_MARK : 0;
+            return data;
 
         case MSG_BCLK:
-            cmsg = SendMessage((HWND)ctrl->priv[0], BM_GETCHECK, 0, 0);
-            SendMessage((HWND)ctrl->priv[0], BM_SETCHECK,
-                        (data)? BST_CHECKED : BST_UNCHECKED, 0);
+            cmsg = ~BST_CHECKED;
+            if ((ctrl->flgs & FCT_TTTT) == FCT_CBOX) {
+                cmsg = SendMessage((HWND)ctrl->priv[0], BM_GETCHECK, 0, 0);
+                SendMessage((HWND)ctrl->priv[0], BM_SETCHECK,
+                            (data)? BST_CHECKED : BST_UNCHECKED, 0);
+            }
             return cmsg == BST_CHECKED;
     }
     return 0;
@@ -1026,26 +1138,22 @@ intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
-    LRESULT APIENTRY (*SMSG)(HWND, UINT, WPARAM, LPARAM);
-
     switch (cmsg) {
         case MSG__ENB:
             EnableWindow((HWND)ctrl->priv[0], !!data);
             break;
 
-        case MSG_LCOL: {
-            LVCOLUMN vcol = {LVCF_TEXT, 0, 0, rConvertUTF8((char*)data)};
+        case MSG__TXT: {
+            LVCOLUMN vcol = {LVCF_TEXT, 0, 0,
+                            .pszText = rConvertUTF8((char*)data)};
 
-            if (OldWin32()) {
-                SMSG = SendMessageA;
-                cmsg = LVM_SETCOLUMNA;
-            }
-            else {
-                SMSG = SendMessageW;
-                cmsg = LVM_SETCOLUMNW;
-            }
-            SMSG((HWND)ctrl->priv[0], cmsg, 0, (LPARAM)&vcol);
-            SMSG((HWND)ctrl->priv[0], LVM_REDRAWITEMS, 0, MAXWORD);
+            if (OldWin32())
+                SendMessageA((HWND)ctrl->priv[0],
+                              LVM_SETCOLUMNA, 0, (LPARAM)&vcol);
+            else
+                SendMessageW((HWND)ctrl->priv[0],
+                              LVM_SETCOLUMNW, 0, (LPARAM)&vcol);
+            SendMessageA((HWND)ctrl->priv[0], LVM_REDRAWITEMS, 0, MAXWORD);
             InvalidateRect((HWND)ctrl->priv[0], 0, FALSE);
             free(vcol.pszText);
             break;
@@ -1054,15 +1162,12 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             LVITEM item = {LVIF_TEXT, MAXWORD,
                           .pszText = rConvertUTF8((char*)data)};
 
-            if (OldWin32()) {
-                SMSG = SendMessageA;
-                cmsg = LVM_INSERTITEMA;
-            }
-            else {
-                SMSG = SendMessageW;
-                cmsg = LVM_INSERTITEMW;
-            }
-            SMSG((HWND)ctrl->priv[0], cmsg, 0, (LPARAM)&item);
+            if (OldWin32())
+                SendMessageA((HWND)ctrl->priv[0],
+                              LVM_INSERTITEMA, 0, (LPARAM)&item);
+            else
+                SendMessageW((HWND)ctrl->priv[0],
+                              LVM_INSERTITEMW, 0, (LPARAM)&item);
             free(item.pszText);
             break;
         }
@@ -1107,11 +1212,10 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG_NDIM:
-            ctrl->priv[2] = -(uint16_t)data;
+            ctrl->priv[2] = (int16_t)data;
             ctrl->priv[3] = (uint16_t)(data >> 16);
             SendMessage((HWND)ctrl->priv[1], UDM_SETRANGE32,
                         (WPARAM)ctrl->priv[2], (LPARAM)ctrl->priv[3]);
-            SendMessage((HWND)ctrl->priv[1], UDM_SETPOS32, 0, 0);
             break;
     }
     return 0;
@@ -1130,6 +1234,14 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         }
         case MSG__POS:
             MoveControl(ctrl, data);
+            break;
+
+        case MSG__TXT:
+            AssignTextToControl(ctrl, (char*)data);
+            break;
+
+        case MSG__ENB:
+            EnableWindow((HWND)ctrl->priv[0], !!data);
             break;
 
         case MSG__SHW:
@@ -1244,28 +1356,43 @@ void rFreeControl(CTRL *ctrl) {
 
 
 
-#define WC_MAINWND "W"
-#define WC_LISTROOT "L"
-#define WC_SIZEBOX "S"
-#define WC_IMGBOX "I"
-void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
+void RegClass(WNDCLASSEXA *wndc) {
+    WNDCLASSEXA test;
+    LPWSTR clas;
+
+    if (OldWin32()) {
+        if (!GetClassInfoExA(wndc->hInstance, wndc->lpszClassName, &test))
+            RegisterClassExA(wndc);
+    }
+    else {
+        clas = UTF16((LPSTR)wndc->lpszClassName);
+        if (!GetClassInfoExW(wndc->hInstance, clas, (WNDCLASSEXW*)&test))
+            RegisterClassExW((WNDCLASSEXW*)wndc);
+        free(clas);
+    }
+}
+
+void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
+    #define WC_MAINWND L"W"
+    #define WC_LISTROOT L"L"
+    #define WC_SIZEBOX L"S"
+    #define WC_IMGBOX L"I"
     static struct {
         LPSTR name;
         DWORD wsty;
-    } base[] =
-       {{WC_MAINWND,     WS_CLIPCHILDREN},
-        {WC_STATIC,      SS_CENTERIMAGE},
-        {WC_BUTTON,      BS_FLAT | BS_MULTILINE},
-        {WC_BUTTON,      BS_FLAT | BS_AUTOCHECKBOX},
-        {WC_BUTTON,      BS_FLAT | BS_AUTORADIOBUTTON},
-        {WC_EDIT,        ES_MULTILINE | ES_WANTRETURN | ES_AUTOHSCROLL},
-        {WC_LISTVIEW,    LVS_REPORT},
-        {PROGRESS_CLASS, PBS_SMOOTH},
-        {WC_SIZEBOX,     WS_CLIPCHILDREN | WS_VSCROLL},
-        {WC_IMGBOX,      WS_CLIPCHILDREN},
+    } base[] = {
+        {(LPSTR)WC_STATIC,      SS_CENTERIMAGE},
+        {(LPSTR)WC_BUTTON,      BS_FLAT | BS_MULTILINE},
+        {(LPSTR)WC_BUTTON,      BS_FLAT | BS_AUTOCHECKBOX},
+        {(LPSTR)WC_BUTTON,      BS_FLAT | BS_AUTORADIOBUTTON},
+        {(LPSTR)WC_EDIT,        ES_MULTILINE | ES_WANTRETURN | ES_AUTOHSCROLL},
+        {(LPSTR)WC_LISTVIEW,    LVS_REPORT},
+        {(LPSTR)PROGRESS_CLASS, PBS_SMOOTH},
+        {(LPSTR)WC_SIZEBOX,     WS_CLIPCHILDREN | WS_VSCROLL},
+        {(LPSTR)WC_IMGBOX,      WS_CLIPCHILDREN},
     };
-    WNDCLASSEX test, wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW,
-                             0, 0, 0, GetModuleHandle(0)};
+    WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW,
+                       0, 0, 0, GetModuleHandle(0)};
     LONG xsty, wsty, xpos, ypos, xdim, ydim, xspc, yspc;
     HANDLE cwnd;
     LPSTR name;
@@ -1289,12 +1416,13 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         wndc.hIcon = LoadIcon(wndc.hInstance, MAKEINTRESOURCE(1));
         wndc.hCursor = LoadCursor(0, IDC_ARROW);
         wndc.lpfnWndProc = OptProc;
-        wndc.lpszClassName = WC_MAINWND;
+        wndc.lpszClassName = (LPSTR)WC_MAINWND;
         wndc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-        if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
-            RegisterClassEx(&wndc);
-        cwnd = CreateWindowEx(0, WC_MAINWND, 0,
-                              WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+        RegClass(&wndc);
+        xsty = (ctrl->flgs & FSW_SIZE)? 0 : WS_EX_TOOLWINDOW;
+        wsty = WS_CLIPCHILDREN
+             | ((ctrl->flgs & FSW_SIZE)? WS_OVERLAPPEDWINDOW : WS_SYSMENU);
+        cwnd = CreateWindowEx(xsty, (LPSTR)WC_MAINWND, 0, wsty,
                               0, 0, 0, 0, 0, 0, wndc.hInstance, 0);
         SetWindowLongPtr(cwnd, GWLP_USERDATA, (LONG_PTR)ctrl);
         ctrl->fe2c = FE2CW;
@@ -1302,11 +1430,12 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
     else if (root) {
         xsty = 0;
         wsty = ctrl->flgs & FCT_TTTT;
-        name = base[wsty].name;
-        wsty = base[wsty].wsty | WS_CHILD | WS_VISIBLE
-                               | (((wsty == FCT_TEXT) ||
-                                   (wsty == FCT_PBAR) ||
-                                   (wsty == FCT_SBOX))? 0 : WS_TABSTOP);
+        name = base[wsty - 1].name;
+        wsty = base[wsty - 1].wsty
+             | WS_CHILD |  ((wsty != FCT_WNDW)? WS_VISIBLE : 0)
+                        | (((wsty == FCT_TEXT) ||
+                            (wsty == FCT_PBAR) ||
+                            (wsty == FCT_SBOX))? 0 : WS_TABSTOP);
         xdim = ((ctrl->prev->flgs & FCT_TTTT) != FCT_SBOX)? 0 : 7;
         cwnd = (HWND)ctrl->prev->priv[xdim];
 
@@ -1336,6 +1465,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
             case FCT_BUTN:
                 wsty |= (ctrl->flgs & FSB_DFLT)? BS_DEFPUSHBUTTON : 0;
+                ctrl->fe2c = FE2CX;
                 break;
 
             case FCT_CBOX:
@@ -1356,11 +1486,11 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             case FCT_LIST:
                 wndc.hCursor = LoadCursor(0, IDC_ARROW);
                 wndc.lpfnWndProc = ListProc;
-                wndc.lpszClassName = WC_LISTROOT;
+                wndc.lpszClassName = (LPSTR)WC_LISTROOT;
                 wndc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-                if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
-                    RegisterClassEx(&wndc);
-                cwnd = CreateWindowEx(0, WC_LISTROOT, 0, WS_CHILD | WS_VISIBLE,
+                RegClass(&wndc);
+                cwnd = CreateWindowEx(0, (LPSTR)WC_LISTROOT,
+                                      0, WS_CHILD | WS_VISIBLE,
                                       xpos * xspc, ypos * yspc, xdim, ydim,
                                       cwnd, (HMENU)ctrl->uuid, 0, ctrl);
                 xpos = ypos = 0;
@@ -1372,20 +1502,18 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
             case FCT_SBOX:
                 wndc.hCursor = LoadCursor(0, IDC_ARROW);
                 wndc.lpfnWndProc = SBoxProc;
-                wndc.lpszClassName = WC_SIZEBOX;
+                wndc.lpszClassName = (LPSTR)WC_SIZEBOX;
                 wndc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-                if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
-                    RegisterClassEx(&wndc);
+                RegClass(&wndc);
                 ctrl->fe2c = FE2CS;
                 break;
 
             case FCT_IBOX:
                 wndc.hCursor = LoadCursor(0, IDC_ARROW);
                 wndc.lpfnWndProc = IBoxProc;
-                wndc.lpszClassName = WC_IMGBOX;
+                wndc.lpszClassName = (LPSTR)WC_IMGBOX;
                 wndc.hbrBackground = (HBRUSH)COLOR_MENU;
-                if (!GetClassInfoEx(wndc.hInstance, wndc.lpszClassName, &test))
-                    RegisterClassEx(&wndc);
+                RegClass(&wndc);
                 ctrl->fe2c = FE2CI;
                 break;
 
@@ -1467,14 +1595,10 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         }
     }
     ctrl->priv[0] = (typeof(*ctrl->priv))cwnd;
-    if (ctrl->priv[0] && text) {
-        name = rConvertUTF8(text);
-        if (OldWin32())
-            SendMessageA((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
-        else
-            SendMessageW((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
-        free(name);
-    }
+    #undef WC_IMGBOX
+    #undef WC_SIZEBOX
+    #undef WC_LISTROOT
+    #undef WC_MAINWND
 }
 
 
@@ -1527,31 +1651,33 @@ intptr_t rFindMake(char *base) {
 
 char *rFindFile(intptr_t data) {
     FIND *find = (FIND*)data;
-    WIN32_FIND_DATAA dira;
-    WIN32_FIND_DATAW dirw;
+    union {
+        WIN32_FIND_DATAA a;
+        WIN32_FIND_DATAW w;
+    } fdir;
     char *retn;
 
     if (!find)
         return 0;
     if (!OldWin32()) {
         if (find->hdir == INVALID_HANDLE_VALUE)
-            find->hdir = FindFirstFileW((LPWSTR)find->base, &dirw);
-        else if (!FindNextFileW(find->hdir, &dirw)) {
+            find->hdir = FindFirstFileW((LPWSTR)find->base, &fdir.w);
+        else if (!FindNextFileW(find->hdir, &fdir.w)) {
             FindClose(find->hdir);
             find->hdir = INVALID_HANDLE_VALUE;
         }
         retn = (find->hdir != INVALID_HANDLE_VALUE)?
-                UTF8(dirw.cFileName) : 0;
+                UTF8(fdir.w.cFileName) : 0;
     }
     else {
         if (find->hdir == INVALID_HANDLE_VALUE)
-            find->hdir = FindFirstFileA(find->base, &dira);
-        else if (!FindNextFileA(find->hdir, &dira)) {
+            find->hdir = FindFirstFileA(find->base, &fdir.a);
+        else if (!FindNextFileA(find->hdir, &fdir.a)) {
             FindClose(find->hdir);
             find->hdir = INVALID_HANDLE_VALUE;
         }
         retn = (find->hdir != INVALID_HANDLE_VALUE)?
-                strdup(dira.cFileName) : 0;
+                strdup(fdir.a.cFileName) : 0;
     }
     if (!retn) {
         free(find->base);
@@ -1562,11 +1688,88 @@ char *rFindFile(intptr_t data) {
 
 
 
+int APIENTRY bCBP(HWND hWnd, UINT uMsg, LPARAM lPrm, LPARAM wPrm) {
+    if (uMsg == BFFM_INITIALIZED) {
+        if (OldWin32())
+            SendMessageA(hWnd, BFFM_SETSELECTIONA, TRUE, wPrm);
+        else
+            SendMessageW(hWnd, BFFM_SETSELECTIONW, TRUE, wPrm);
+    }
+    return 0;
+}
+
+char *rChooseDir(CTRL *root, char *base) {
+    char buff[(MAX_PATH + 2) * 2];
+    union {
+        BROWSEINFOA a;
+        BROWSEINFOW w;
+    } binf = {{(HWND)root->priv[0], 0, buff, 0,
+                BIF_DONTGOBELOWDOMAIN | BIF_EDITBOX
+              | BIF_RETURNONLYFSDIRS  | BIF_NEWDIALOGSTYLE, bCBP}};
+    LPITEMIDLIST retn;
+
+    binf.a.lParam = (LPARAM)rConvertUTF8(base = BackReslash(strdup(base)));
+    free(base);
+    base = 0;
+    buff[0] = buff[1] = 0;
+    if ((retn = SHBF(&binf.a))) {
+        SHGP(retn, buff);
+        CoTaskMemFree(retn);
+        base = (OldWin32())? strdup(buff) : UTF8((LPWSTR)buff);
+    }
+    free((PVOID)binf.a.lParam);
+    return base;
+}
+
+char *rChooseFile(CTRL *root, char *fext, char *file) {
+    union {
+        OPENFILENAMEA a;
+        OPENFILENAMEW w;
+    } hofn = {{sizeof(hofn), (HWND)root->priv[0],
+              .nMaxFile = MAX_PATH, .nFilterIndex = 1,
+              .Flags = OFN_HIDEREADONLY | OFN_FILEMUSTEXIST
+                     | OFN_ENABLESIZING | OFN_NONETWORKBUTTON}};
+    char *retn, *exts, extt[64];
+    long quit = 0;
+
+    retn = BackReslash(strdup(file));
+    sprintf(extt, "*.%s\n*.%s\n", fext, fext);
+    exts = rConvertUTF8(extt);
+    file = realloc(rConvertUTF8(retn), (MAX_PATH + 1) * 4);
+    free(retn);
+    retn = file;
+    if (OldWin32()) {
+        hofn.a.lpstrFile = retn;
+        hofn.a.lpstrFilter = exts;
+        for (quit = strlen(exts); quit > 0; quit--)
+            if (exts[quit] == '\n')
+                exts[quit] = 0;
+        quit = GetOpenFileNameA(&hofn.a);
+    }
+    else {
+        hofn.w.lpstrFile = (LPWSTR)retn;
+        hofn.w.lpstrFilter = (LPWSTR)exts;
+        for (quit = wcslen((LPWSTR)exts); quit > 0; quit--)
+            if (((LPWSTR)exts)[quit] == '\n')
+                ((LPWSTR)exts)[quit] = 0;
+        quit = GetOpenFileNameW(&hofn.w);
+        retn = UTF8((LPWSTR)(file = retn));
+        free(file);
+    }
+    if (!quit) {
+        free(retn);
+        retn = 0;
+    }
+    free(exts);
+    return retn;
+}
+
+
+
 int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
     RECT area = {MAXLONG, MAXLONG, MINLONG, MINLONG};
-    CHAR *conf = 0, path[4 * (MAX_PATH + 1)] = {};
-    HRESULT APIENTRY (*GFP)(HWND, int, HANDLE, DWORD, LPSTR);
+    CHAR *name, *conf = 0, path[(MAX_PATH + 2) * 2] = {};
     HMODULE hlib;
 
 //    if (flgs & FLG_CONS) {
@@ -1574,31 +1777,54 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
 //        freopen("CONOUT$", "wb", stdout);
 //    }
 
+    OleInitialize(0);
     InitCommonControlsEx(&icct);
     EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&area);
 
     hlib = LoadLibrary((OldWin32())? "shfolder" : "shell32");
-    GFP = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHGetFolderPathA"
-                                                  : "SHGetFolderPathW");
-    if (GFP(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
-            SHGFP_TYPE_CURRENT, path) == S_OK) {
+    SHGF = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHGetFolderPathA"
+                                                   : "SHGetFolderPathW");
+    SHFO = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHFileOperationA"
+                                                   : "SHFileOperationW");
+    SHBF = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHBrowseForFolderA"
+                                                   : "SHBrowseForFolderW");
+    SHGP = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHGetPathFromIDListA"
+                                                   : "SHGetPathFromIDListW");
+    if (SHGF(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
+             SHGFP_TYPE_CURRENT, path) == S_OK) {
         if (!OldWin32()) {
             strcpy(path, conf = UTF8((LPWSTR)path));
             free(conf);
         }
         if (rMakeDir(strcat(path, DEF_OPTS)))
-            conf = path;
+            conf = strdup(path);
         else {
             printf("WARNING: cannot create '%s'!", path);
             conf = 0;
         }
     }
-    FreeLibrary(hlib);
-    eExecuteEngine(conf, DEF_FLDR, GetSystemMetrics(SM_CXSMICON),
+    if (OldWin32()) {
+        GetModuleFileNameA(0, path, MAX_PATH);
+        name = BackReslash(strdup(path));
+    }
+    else {
+        GetModuleFileNameW(0, (LPWSTR)path, MAX_PATH);
+        name = BackReslash(UTF8((LPWSTR)path));
+    }
+    for (show = strlen(name) - 1; show >= 0; show--)
+        if (name[show] == '\\') {
+            name[show] = 0;
+            break;
+        }
+    eExecuteEngine(conf, name, GetSystemMetrics(SM_CXSMICON),
                    GetSystemMetrics(SM_CYSMICON),
                    area.left, area.top, area.right, area.bottom);
+    FreeLibrary(hlib);
+    OleUninitialize();
     fclose(stdout);
     FreeConsole();
+    free(name);
+    free(conf);
     exit(0);
     return 0;
 }

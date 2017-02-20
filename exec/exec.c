@@ -66,7 +66,8 @@
 /** horz + vert movement        **/ #define BHV_HNVM (BHV_HORM | BHV_VERM)
 /** horz + diag movement        **/ #define BHV_HNDM (BHV_HORM | BHV_DIAM)
 /** diag + vert movement        **/ #define BHV_DNVM (BHV_DIAM | BHV_VERM)
-/** horz + diag + vert          **/ #define BHV_ALLM (BHV_HORM | BHV_DIAM | BHV_VERM)
+/** horz + diag + vert          **/ #define BHV_ALLM (BHV_HORM | BHV_DIAM\
+                                                               | BHV_VERM)
 /** 'mouse-over' state          **/ #define BHV_OVRM (BHV_CTLM | BHV_HORM)
 /** 'dragged' state             **/ #define BHV_DRGM (BHV_CTLM | BHV_DIAM)
 /** 'sleep' state               **/ #define BHV_SLPM (BHV_CTLM | BHV_VERM)
@@ -99,11 +100,15 @@
 /** 'mirror'                    **/ #define FOT_MIRR 0x304E7075
 
 /// /// /// /// /// /// /// /// /// config file strings
+/** 'content'                   **/ #define CNF_BASE 0x6558329A
 /** 'language'                  **/ #define CNF_LANG 0x1644959C
-/** 'time'                      **/ #define CNF_TIME 0x8487AD87
+/** 'runstillupdate'            **/ #define CNF_RUNS 0x7ecc31be
+/** 'basescale'                 **/ #define CNF_SCAL 0x7a285de0
+/** 'timedilation'              **/ #define CNF_TDIL 0x338d79cf
+/** 'randomspeech'              **/ #define CNF_RSAY 0x0c4a8f7d
+/** 'cursordodge'               **/ #define CNF_PCDR 0xd00cab48
 /** 'flags'                     **/ #define CNF_FLGS 0x8ACE03CE
 /** 'render'                    **/ #define CNF_RNDR 0x3C9F6676
-/** 'effects'                   **/ #define CNF_EFCT 0xAB1F60DF
 /** 'draw'                      **/ #define CNF_DRAW 0xE7ABD6EE
 /** 'show'                      **/ #define CNF_SHOW 0x27D90DCD
 /** 'gpu'                       **/ #define CNF_RGPU 0x11927E83
@@ -111,69 +116,135 @@
 /** 'wbgra'                     **/ #define CNF_IBGR 0xABF3B1E8
 /** 'wpbo'                      **/ #define CNF_IPBO 0x78FE3880
 /** 'wregion'                   **/ #define CNF_IRGN 0xDE0DCCBE
+/** 'update'                    **/ #define CNF_UONR 0xE4895181
+/** 'topmost'                   **/ #define CNF_ETOP 0x0622A23D
+/** 'effects'                   **/ #define CNF_EEFF 0xAB1F60DF
+/** 'interaction'               **/ #define CNF_EINT 0x3CD837AB
+/** 'speech'                    **/ #define CNF_ESAY 0x5E664BA6
+/** 'hover'                     **/ #define CNF_ERCH 0x303621E9
 
 /// /// /// /// /// /// /// /// /// client specific flags
-/** behaviour effects are on    **/ #define CSF_EFCT (1 <<  0)
+/** update the animation base   **/ #define CSF_UONR (1 <<  0)
+/** engine window is top-most   **/ #define CSF_ETOP (1 <<  1)
+/** behaviour effects are on    **/ #define CSF_EEFF (1 <<  2)
+/** interactions are on         **/ #define CSF_EINT (1 <<  3)
+/** speech bubbles are on       **/ #define CSF_ESAY (1 <<  4)
+/** cursor hover reaction is on **/ #define CSF_ERCH (1 <<  5)
 
 /// /// /// /// /// /// /// /// /// localized text constants
-/** Remove character            **/ #define TXT_CDEL  0
-/** Remove all similar          **/ #define TXT_ADEL  1
-/** Sleep/pause                 **/ #define TXT_CSLP  2
-/** Sleep/pause all similar     **/ #define TXT_ASLP  3
-/** Take control: Player 1      **/ #define TXT_TPL1  4
-/** Take control: Player 2      **/ #define TXT_TPL2  5
-/** Show options...             **/ #define TXT_OPTS  6
+enum {
+/** Remove character            **/ TXT_CDEL = 0,
+/** Remove all similar          **/ TXT_ADEL,
+/** Sleep/pause                 **/ TXT_CSLP,
+/** Sleep/pause all similar     **/ TXT_ASLP,
+/** Take control: Player 1      **/ TXT_TPL1,
+/** Take control: Player 2      **/ TXT_TPL2,
+/** More options...             **/ TXT_OPTS,
 
-/** [ Desktop Ponies Engine ]   **/ #define TXT_HEAD  7
-/** OS specific options         **/ #define TXT_SPEC  8
-/** Disable transparency        **/ #define TXT_OPAQ  9
-/** Play animation              **/ #define TXT_DRAW 10
-/** Show window                 **/ #define TXT_SHOW 11
-/** Exit                        **/ #define TXT_EXIT 12
-/** Use GPU for drawing         **/ #define TXT_RGPU 13
-/** [ none ]                    **/ #define TXT_NONE 14
+/** [ Desktop Ponies Engine ]   **/ TXT_HEAD,
+/** OS specific options         **/ TXT_SPEC,
+/** Disable transparency        **/ TXT_OPAQ,
+/** Play animation              **/ TXT_DRAW,
+/** Show window                 **/ TXT_SHOW,
+/** Exit                        **/ TXT_EXIT,
+/** Use GPU for drawing         **/ TXT_RGPU,
+/** [ none ]                    **/ TXT_NONE,
+/** [ default ]                 **/ TXT_DFLT,
 
-/** Show console                **/ #define TXT_CONS 15
-/** Use regions                 **/ #define TXT_IRGN 16
-/** Enable BGRA                 **/ #define TXT_IBGR 17
-/** Enable pixel buffers        **/ #define TXT_IPBO 18
-/** Useless on full opacity!    **/ #define TXT_UOFO 19
-/** Useless without GPU!        **/ #define TXT_UWGL 20
-/** Cannot initialize GPU!      **/ #define TXT_CIGL 21
-/** The animation base <...>    **/ #define TXT_CTUP 22
-/** Internet connection failure **/ #define TXT_INET 23
-/** Failed to create directory  **/ #define TXT_FDIR 24
-/** Update                      **/ #define TXT_CCUP 25
+/** Show console                **/ TXT_CONS,
+/** Use regions                 **/ TXT_IRGN,
+/** Enable BGRA                 **/ TXT_IBGR,
+/** Enable pixel buffers        **/ TXT_IPBO,
+/** Useless on full opacity!    **/ TXT_UOFO,
+/** Useless without GPU!        **/ TXT_UWGL,
+/** Cannot initialize GPU!      **/ TXT_CIGL,
+/** The animation base <...>    **/ TXT_CTUP,
+/** Internet connection failure **/ TXT_INET,
+/** Failed to create directory  **/ TXT_FDIR,
+/** Update                      **/ TXT_CCUP,
 
-/** Desktop Ponies              **/ #define TXT_CAPT 26
-/** Enable filters              **/ #define TXT_FLTR 27
-/** Exact matching              **/ #define TXT_EXAC 28
-/** [At least one:]             **/ #define TXT_OGRP 29
-/** [All at once:]              **/ #define TXT_AGRP 30
-/** Random selection:           **/ #define TXT_SRND 31
-/** Group selection:            **/ #define TXT_SGRP 32
-/** Add                         **/ #define TXT_BADD 33
-/** Copies                      **/ #define TXT_BDUP 34
-/** Selected:                   **/ #define TXT_SELE 35
-/** Loaded:                     **/ #define TXT_LOAD 36
-/** Updated:                    **/ #define TXT_UPTO 37
-/** GO!                         **/ #define TXT_GOGO 38
+/** Desktop Ponies              **/ TXT_CAPT,
+/** Enable filters              **/ TXT_FLTR,
+/** Exact matching              **/ TXT_EXAC,
+/** [At least one:]             **/ TXT_OGRP,
+/** [All at once:]              **/ TXT_AGRP,
+/** Random selection:           **/ TXT_SRND,
+/** Group selection:            **/ TXT_SGRP,
+/** Add                         **/ TXT_BADD,
+/** Copies                      **/ TXT_BDUP,
+/** Selected:                   **/ TXT_SELE,
+/** Loaded:                     **/ TXT_LOAD,
+/** Updated:                    **/ TXT_UPTO,
+/** GO!                         **/ TXT_GOGO,
 
-/// /// /// /// /// /// /// /// /// ENGC.CTLS array indices
-/**                             **/ #define CTL_CAPT ctls[ 0]
-/**                             **/ #define CTL_FLTR ctls[ 1]
-/**                             **/ #define CTL_EXAC ctls[ 2]
-/**                             **/ #define CTL_OGRP ctls[ 3]
-/**                             **/ #define CTL_SGRP ctls[ 4]
-/**                             **/ #define CTL_SPEC ctls[ 5]
-/**                             **/ #define CTL_BADD ctls[ 6]
-/**                             **/ #define CTL_SRND ctls[ 7]
-/**                             **/ #define CTL_RGPU ctls[ 8]
-/**                             **/ #define CTL_BDUP ctls[ 9]
-/**                             **/ #define CTL_SELE ctls[10]
-/**                             **/ #define CTL_OPTS ctls[11]
-/**                             **/ #define CTL_GOGO ctls[12]
-/**                             **/ #define CTL_CHAR ctls[13]
+/** Update on next run          **/ TXT_UONR,
+/** Always on top               **/ TXT_ETOP,
+/** Enable effects              **/ TXT_EEFF,
+/** Enable interactions         **/ TXT_EINT,
+/** Enable speech               **/ TXT_ESAY,
+/** React to cursor hover       **/ TXT_ERCH,
+
+/**  runs between updates       **/ TXT_RUNS,
+/**  % base scaling factor      **/ TXT_SCAL,
+/**  % time dilation factor     **/ TXT_TDIL,
+/**  % random speech chance     **/ TXT_RSAY,
+/**  pix. cursor dodge radius   **/ TXT_PCDR,
+
+/** Choose...                   **/ TXT_CHOO,
+/** Reload                      **/ TXT_RELO,
+/** Reset                       **/ TXT_RESE,
+/** GUI language: English       **/ TXT_LGUI,
+/** Animation base directory:   **/ TXT_BDIR,
+/** Moving the animation base   **/ TXT_BMOV,
+/** Confirm saving the <...>    **/ TXT_BSAV,
+/** On refusal, the source <...>**/ TXT_BDEL,
+/** Failed to move the <...>    **/ TXT_BERR,
+};
+
+/// /// /// /// /// /// /// /// /// ENGC.MCTL array indices
+/**                             **/ #define MCT_CAPT mctl[ 0]
+/**                             **/ #define MCT_FLTR mctl[ 1]
+/**                             **/ #define MCT_EXAC mctl[ 2]
+/**                             **/ #define MCT_OGRP mctl[ 3]
+/**                             **/ #define MCT_SGRP mctl[ 4]
+/**                             **/ #define MCT_SPEC mctl[ 5]
+/**                             **/ #define MCT_BADD mctl[ 6]
+/**                             **/ #define MCT_SRND mctl[ 7]
+/**                             **/ #define MCT_RGPU mctl[ 8]
+/**                             **/ #define MCT_BDUP mctl[ 9]
+/**                             **/ #define MCT_SELE mctl[10]
+/**                             **/ #define MCT_OPTS mctl[11]
+/**                             **/ #define MCT_GOGO mctl[12]
+/**                             **/ #define MCT_CHAR mctl[13]
+
+/// /// /// /// /// /// /// /// /// ENGC.OCTL array indices
+/**                             **/ #define OCT_OPTS octl[ 0]
+/**                             **/ #define OCT_UONR octl[ 1]
+/**                             **/ #define OCT_ETOP octl[ 2]
+/**                             **/ #define OCT_EEFF octl[ 3]
+/**                             **/ #define OCT_EINT octl[ 4]
+/**                             **/ #define OCT_ESAY octl[ 5]
+/**                             **/ #define OCT_ERCH octl[ 6]
+/**                             **/ #define OCT_NRUN octl[ 7]
+/**                             **/ #define OCT_TRUN octl[ 8]
+/**                             **/ #define OCT_NSCA octl[ 9]
+/**                             **/ #define OCT_TSCA octl[10]
+/**                             **/ #define OCT_NDIL octl[11]
+/**                             **/ #define OCT_TDIL octl[12]
+/**                             **/ #define OCT_NSAY octl[13]
+/**                             **/ #define OCT_TSAY octl[14]
+/**                             **/ #define OCT_NCDR octl[15]
+/**                             **/ #define OCT_TCDR octl[16]
+/**                             **/ #define OCT_LCHO octl[19]
+/**                             **/ #define OCT_LREL octl[20]
+/**                             **/ #define OCT_LRES octl[21]
+/**                             **/ #define OCT_LGUI octl[22]
+/**                             **/ #define OCT_BCHO octl[25]
+/**                             **/ #define OCT_BREL octl[26]
+/**                             **/ #define OCT_BRES octl[27]
+/**                             **/ #define OCT_BDIR octl[28]
+/**                             **/ #define OCT_FREL octl[30]
+/**                             **/ #define OCT_FRES octl[31]
 
 /// behaviour/effect unit info (write-once, read-only)
 typedef struct _BINF {
@@ -264,11 +335,26 @@ typedef struct _PICT {
                     ///      prohibit respawn if parity differs
 } PICT;
 
+/// client configuration
+typedef struct {
+    char    *lang,  /// name of the language file
+            *base;  /// path to the animation base
+    uint32_t flgs;  /// client-specific flags, e.g. effects +/- (CSF_ prefix)
+    int16_t nrun[3],/// \.
+            nsca[3],/// |.
+            ndil[3],/// |.
+            nsay[3],/// |. spinbox limits: [0] = min, [1] = pos, [2] = max
+            ncdr[3],/// |.
+            spec[3],/// |.
+            rgpu[3];/// /
+} CONF;
+
 /// engine data (client side)
 struct ENGC {
     MENU    *mspr,  /// per-sprite context menu
             *mctx;  /// engine`s main context menu
-    CTRL    *ctls;  /// GUI controls array
+    CTRL    *mctl,  /// GUI controls array (main window)
+            *octl;  /// GUI controls array (options window)
     T4FV    *data;  /// main display sequence passed to the renderer
     ENGD    *engd;  /// rendering engine handle
     LINF    *libs;  /// sprite libraries linked list
@@ -278,19 +364,22 @@ struct ENGC {
            **parr,  /// on-screen sprite pointers array
            **elem;  /// pointer buffer for SortByY()
     char   **tran,  /// localized text array (ASCIIZ; last item is also 0)
-            *lang,  /// name of the loaded language file
-            *conf;  /// name of the main configuration file
+            *cfnm;  /// name of the main configuration file
+    double   tacc;  /// partial timestamp accumulator
+    uint64_t tcur,  /// current, dilation-adjusted timestamp
+             tpre;  /// previous raw timestamp
     uint32_t lcnt,  /// libraries count
              ccnt,  /// categories count
              pcnt,  /// on-screen sprites count (may differ every frame)
              pmax,  /// max. PARR capacity (realloc on exceed)
-             flgs,  /// client-specific flags, e.g. effects +/- (CSF_ prefix)
              ftmp;  /// temporary storage for engine flags
-    float    tdil;  /// time dilation coeff (faster is > 1, slower is < 1)
     T3IV     ppos;  /// mouse pointer position (z = flags)
     T2IV     dpos,  /// drawing area position
              dims,  /// drawing area dimensions
              idim;  /// tray icon dimensions
+    CONF     cdef,  /// default configuration
+             ccur,  /// current configuration
+             cini;  /// initial configuration read on the start
 };
 
 
@@ -357,6 +446,18 @@ char *ToLower(char *uppr, long size) {
             uppr[iter] = tolower(uppr[iter]);
     }
     return uppr;
+}
+
+
+
+char *Reslash(char *conv) {
+    long iter;
+
+    if (conv)
+        for (iter = 0; conv[iter]; iter++)
+            if (conv[iter] == '\\')
+                conv[iter] = '/';
+    return conv;
 }
 
 
@@ -452,9 +553,9 @@ void SetProgress(ENGC *engc, long tran, long frac, long full) {
 
     text = malloc(32 + strlen(engc->tran[tran]));
     sprintf(text, "%s %ld / %ld", engc->tran[tran], frac, full);
-    RUN_FE2C(engc->CTL_SELE, MSG_PTXT, (intptr_t)text);
-    RUN_FE2C(engc->CTL_SELE, MSG_PLIM, full);
-    RUN_FE2C(engc->CTL_SELE, MSG_PPOS, frac);
+    RUN_FE2C(engc->MCT_SELE, MSG__TXT, (intptr_t)text);
+    RUN_FE2C(engc->MCT_SELE, MSG_PLIM, full);
+    RUN_FE2C(engc->MCT_SELE, MSG_PPOS, frac);
     free(text);
 }
 
@@ -528,10 +629,12 @@ void MakeSHA1(uint32_t *curr, char *text, uint32_t size,
                          head[2] = SHA_R(head[2], 30); head--;} while (0)
 
     uint32_t iter, indx, pack, *head, temp[5];
+    #pragma pack(push, 1)
     union {
         uint32_t l[16];
         uint8_t b[64];
     } data;
+    #pragma pack(pop)
 
     pack = size - ((size + 1) & 0x3F) +
                 ((((size + 1) & 0x3F) > 0x38)? 0x80 : 0x40);
@@ -659,7 +762,7 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
             tail[0] = 0;
             tail = 0;
             if ((temp = strstr(temp, GIT_SAPI))) {
-                temp += sizeof(GIT_SAPI); /** no -1 to skip the slash **/
+                temp += sizeof(GIT_SAPI); /** no -1: skipping the slash **/
                 temp = MakeGetQuery(0, temp, "?recursive=1");
                 rLoadHTTPS(desc, temp, &tail);
                 temp = realloc(temp, 0);
@@ -1487,7 +1590,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t attr) {
     ChooseDirection(engc, pict);
     /// now spawning effects for the behaviour, if any
     /// (and only if this is not the first spawn and effects are enabled)
-    if (time && (engc->flgs & CSF_EFCT)) {
+    if (time && (engc->ccur.flgs & CSF_EEFF)) {
         lbgn = pict->ulib->barr[pict->indx >> 1].ieff - 1;
         for (lend = pict->ulib->barr[pict->indx >> 1].neff; lend; lend--)
             SpawnEffect(&engc->parr[engc->pcnt++], pict,
@@ -1642,10 +1745,10 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
 
 
 void MMH(MENU *item) {
+    uint32_t indx, flgs = 0;
     PICT *pict;
     LINF *ulib;
     ENGC *engc;
-    long indx;
 
     switch (item->uuid) {
         case TXT_CDEL:
@@ -1671,20 +1774,20 @@ void MMH(MENU *item) {
         case TXT_ADEL:
             ulib = ((PICT*)item->data)->ulib;
             engc = ulib->engc;
-            for (indx = 0; indx < engc->pcnt; indx++) {
+            for (indx = 0; indx < engc->pcnt; indx++)
+                if (engc->parr[indx]->boss
+                && (engc->parr[indx]->boss->ulib == ulib)) {
+                    /// some character has been connected to
+                    /// one of the removed; disconnecting.
+                    engc->parr[indx]->boss = 0;
+                }
+            for (indx = 0; indx < engc->pcnt; indx++)
                 if (engc->parr[indx]->ulib == ulib) {
                     /// purging all similar characters and all
                     /// their effects, including those reserved.
                     free(engc->parr[indx]);
                     engc->parr[indx] = 0;
                 }
-                else if (engc->parr[indx]->boss
-                     && (engc->parr[indx]->boss->ulib == ulib)) {
-                    /// some character has been connected to
-                    /// one of the removed; disconnecting.
-                    engc->parr[indx]->boss = 0;
-                }
-            }
             break;
 
         case TXT_CSLP:
@@ -1704,13 +1807,11 @@ void MMH(MENU *item) {
             break;
 
         case TXT_OPTS:
-            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
+            RUN_FE2C(((ENGC*)item->data)->OCT_OPTS, MSG__SHW, 1);
             break;
 
-        case TXT_RGPU: {
-            ENGC *engc = (ENGC*)item->data;
-            uint32_t flgs;
-
+        case TXT_RGPU:
+            engc = (ENGC*)item->data;
             cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&flgs);
             if (item->flgs & MFL_VCHK)
                 flgs |= COM_RGPU;
@@ -1718,22 +1819,21 @@ void MMH(MENU *item) {
                 flgs &= ~COM_RGPU;
             cEngineCallback(engc->engd, ECB_SFLG, flgs);
             break;
-        }
+
         case TXT_SHOW:
         case TXT_DRAW:
-        case TXT_OPAQ: {
-            ENGC *engc = (ENGC*)item->data;
-            uint32_t flag = (item->uuid != TXT_OPAQ)? (item->uuid != TXT_DRAW)?
-                             COM_SHOW : COM_DRAW : COM_OPAQ, flgs;
-
+        case TXT_OPAQ:
+            engc = (ENGC*)item->data;
+            indx = (item->uuid != TXT_OPAQ)? (item->uuid != TXT_DRAW)?
+                    COM_SHOW : COM_DRAW : COM_OPAQ;
             cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&flgs);
             if (item->flgs & MFL_VCHK)
-                flgs |= flag;
+                flgs |= indx;
             else
-                flgs &= ~flag;
+                flgs &= ~indx;
             cEngineCallback(engc->engd, ECB_SFLG, flgs);
             break;
-        }
+
         case TXT_EXIT:
             cEngineCallback(((ENGC*)item->data)->engd, ECB_QUIT, ~0);
             break;
@@ -1880,10 +1980,11 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
 
 
 /** ==== NOTES ====
- 1. Effects may count on the fact that BOSS is valid, as the only way to
-    invalidate it is to delete the sprite. Behaviour changing occurs at
-    times that are known at the start, so all effects can know when to
-    invalidate themselves.
+ 1. Effects may count on the fact that non-zero BOSS values are valid
+    pointers, as the only way to invalidate them is to delete sprites,
+    and sprite deletion process implies zeroing all respective BOSSes.
+    Behaviour changing occurs at times that are known at the start,
+    so all effects can know when to invalidate themselves.
  2. Effects are in charge of respawning themselves, as they have different
     respawn times but belong to one parent, making it very hard for him to
     handle them all.
@@ -1906,7 +2007,11 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
 //    /// here you can add new sprites!
 //    cEngineCallback(engd, ECB_LOAD, 0);
 
-    curr = (long double)time * (long double)engc->tdil;
+    curr = (engc->tacc += 0.01 * engc->ccur.ndil[1] * (time - engc->tpre));
+    engc->tacc -= curr;
+    curr = (engc->tcur += curr);
+    engc->tpre = time;
+
     /// watch out for reserved-s (they shouldn`t be in [0; ISEL], though)
     if ((attr & UFR_MOUS) && ((isel >= 0) || pict)) {
         if (!pict && ((engc->ppos.z ^ attr) & UFR_LBTN)) {
@@ -2047,6 +2152,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
 void Relocalize(ENGC *engc, char *lang) {
     INCBIN("../exec/loc/en.lang", DefaultLanguage);
 
+    CTRL *retn, *ctls[] = {engc->mctl, engc->octl};
     char *data;
     long size;
 
@@ -2058,8 +2164,8 @@ void Relocalize(ENGC *engc, char *lang) {
         LoadLocalization(&engc->tran, data, size);
         free(data);
     }
-    free(engc->lang);
-    engc->lang = (data)? strdup(lang) : 0;
+    free(engc->ccur.lang);
+    engc->ccur.lang = (data)? strdup(lang) : 0;
 
     MENU *spec,
 
@@ -2109,6 +2215,30 @@ void Relocalize(ENGC *engc, char *lang) {
     engc->mctx = MenuFromTemplate(mctx);
     engc->mctx[2].chld = ((spec = rOSSpecificMenu(engc)))?
                            spec : MenuFromTemplate(none);
+
+    for (size = 0; size < sizeof(ctls) / sizeof(*ctls); size++)
+        for (retn = ctls[size]; retn->xdim | retn->ydim; retn++) {
+            data = (((retn->flgs & FCT_TTTT) == FCT_WNDW) ||
+                    ((retn->flgs & FCT_TTTT) == FCT_TEXT) ||
+                    ((retn->flgs & FCT_TTTT) == FCT_BUTN) ||
+                    ((retn->flgs & FCT_TTTT) == FCT_CBOX) ||
+                    ((retn->flgs & FCT_TTTT) == FCT_RBOX))?
+                      engc->tran[retn->uuid] : 0;
+            if (((retn->flgs & FCT_TTTT) == FCT_TEXT)
+            &&   (retn->flgs & FST_SUNK))
+                data = 0;
+            if (data)
+                retn->fe2c(retn, MSG__TXT, (intptr_t)data);
+        }
+    RUN_FE2C(engc->MCT_OGRP, MSG__TXT,
+            (intptr_t)engc->tran[(RUN_FE2C(engc->MCT_EXAC,
+                                           MSG_BGST, 0) & FCS_MARK)?
+                                  TXT_AGRP : TXT_OGRP]);
+    RUN_FE2C(engc->OCT_LGUI, MSG__TXT, (intptr_t)((engc->ccur.lang)?
+             engc->ccur.lang : engc->tran[TXT_DFLT]));
+    RUN_FE2C(engc->OCT_BDIR, MSG__TXT, (intptr_t)((engc->ccur.base
+          && strcmp(engc->ccur.base, engc->cdef.base))?
+             engc->ccur.base : engc->tran[TXT_DFLT]));
 }
 
 
@@ -2143,7 +2273,7 @@ void CategorizePreviews(ENGC *engc) {
     long iter, indx, flgs;
     CTGS temp, *elem;
 
-    flgs = RUN_FE2C(engc->CTL_EXAC, MSG_BGST, 0);
+    flgs = RUN_FE2C(engc->MCT_EXAC, MSG_BGST, 0);
     flgs = (flgs & FCS_ENBL)? (flgs & FCS_MARK)? 2 : 1 : 0;
     for (elem = 0, indx = 0; indx < engc->lcnt; indx++) {
         for (iter = 0; iter < engc->ccnt; iter++)
@@ -2160,12 +2290,143 @@ void CategorizePreviews(ENGC *engc) {
             -engc->libs[indx].icnt - 1 : engc->libs[indx].icnt;
     }
     RecountSelectedLibs(engc);
-    RUN_FE2C(engc->CTL_CHAR, MSG_WSZC, 0);
+    RUN_FE2C(engc->MCT_CHAR, MSG_WSZC, 0);
 }
 
 
 
-intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+void UpdateOptionControls(ENGC *engc, long main) {
+    static uint32_t
+        uCSF[] = {CSF_ETOP,        CSF_ERCH,        CSF_EINT,
+                  CSF_ESAY,        CSF_EEFF,        CSF_UONR};
+    CTRL *uCTX[] = {
+           &engc->OCT_ETOP, &engc->OCT_ERCH, &engc->OCT_EINT,
+           &engc->OCT_ESAY, &engc->OCT_EEFF, &engc->OCT_UONR,
+           &engc->MCT_FLTR, &engc->MCT_EXAC, &engc->MCT_SRND, &engc->MCT_BDUP
+    };
+    CTRL *uCTN[] = {
+           &engc->OCT_NRUN, &engc->OCT_NSCA, &engc->OCT_NDIL,
+           &engc->OCT_NSAY, &engc->OCT_NCDR, &engc->MCT_SPEC, &engc->MCT_RGPU
+    };
+    int16_t *nctl, flag, indx;
+
+    for (indx = countof(uCTX) - ((main)? 1 : 5); indx >= 0; indx--) {
+        flag = (indx < countof(uCSF))? !(engc->ccur.flgs & uCSF[indx]) : 1;
+        uCTX[indx]->fe2c(uCTX[indx], MSG_BCLK, !flag);
+        uCTX[indx]->fc2e(uCTX[indx], MSG_BCLK, !flag);
+    }
+    for (indx = countof(uCTN) - ((main)? 1 : 3); indx >= 0; indx--) {
+        nctl = (int16_t*)uCTN[indx]->data;
+        uCTN[indx]->fe2c(uCTN[indx], MSG_NDIM,
+                        ((uint32_t)nctl[2] << 16) | (uint16_t)nctl[0]);
+        uCTN[indx]->fe2c(uCTN[indx], MSG_NSET, nctl[1]);
+    }
+}
+
+
+
+intptr_t FC2EO(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    static uint32_t uCSF[] = {CSF_UONR, CSF_ETOP, CSF_EEFF,
+                              CSF_EINT, CSF_ESAY, CSF_ERCH};
+    uint32_t indx = 0;
+    char *temp;
+    ENGC *engc;
+
+    switch (ctrl->uuid) {
+        case TXT_OPTS:
+            if (cmsg == MSG_WEND)
+                ctrl->fe2c(ctrl, MSG__SHW, 0);
+            break;
+
+        case TXT_ERCH: indx++;
+        case TXT_ESAY: indx++;
+        case TXT_EINT: indx++;
+        case TXT_EEFF: indx++;
+        case TXT_ETOP: indx++;
+        case TXT_UONR:
+            if (cmsg != MSG_BCLK)
+                break;
+            engc = (ENGC*)ctrl->data;
+            engc->ccur.flgs = (!data)? engc->ccur.flgs & ~uCSF[indx]
+                                     : engc->ccur.flgs |  uCSF[indx];
+            if (ctrl->uuid == TXT_ESAY) {
+                RUN_FE2C(engc->OCT_NSAY, MSG__ENB, data);
+                RUN_FE2C(engc->OCT_TSAY, MSG__ENB, data);
+            }
+            else if (ctrl->uuid == TXT_ERCH) {
+                RUN_FE2C(engc->OCT_NCDR, MSG__ENB, data);
+                RUN_FE2C(engc->OCT_TCDR, MSG__ENB, data);
+            }
+            break;
+
+        case TXT_RUNS:
+        case TXT_SCAL:
+        case TXT_TDIL:
+        case TXT_RSAY:
+        case TXT_PCDR:
+            if (cmsg == MSG_NSET)
+                ((int16_t*)ctrl->data)[1] =
+                    ClampToBounds(data, ((int16_t*)ctrl->data)[0],
+                                        ((int16_t*)ctrl->data)[2]);
+            break;
+
+        case TXT_CHOO:
+        case TXT_RELO:
+        case TXT_RESE:
+            if (cmsg != MSG_BCLK)
+                break;
+            engc = (ENGC*)ctrl->data;
+            if ((ctrl == &engc->OCT_FREL) || (ctrl == &engc->OCT_FRES)) {
+                CTRL *lctl, *bctl;
+
+                if (ctrl->uuid == TXT_RELO) {
+                    lctl = &engc->OCT_LREL;
+                    bctl = &engc->OCT_BREL;
+                    engc->ccur = engc->cini;
+                    engc->ccur.base = engc->ccur.lang = 0;
+                }
+                else {
+                    lctl = &engc->OCT_LRES;
+                    bctl = &engc->OCT_BRES;
+                    engc->ccur = engc->cdef;
+                    engc->ccur.base = engc->ccur.lang = 0;
+                }
+                lctl->fc2e(lctl, MSG_BCLK, 0);
+                bctl->fc2e(bctl, MSG_BCLK, 0);
+                UpdateOptionControls(engc, 0);
+                break;
+            }
+            if ((ctrl == &engc->OCT_LCHO)
+            ||  (ctrl == &engc->OCT_LREL) || (ctrl == &engc->OCT_LRES)) {
+                if ((temp = (ctrl->uuid == TXT_RELO)? engc->cini.lang : 0))
+                    temp = strdup(temp);
+                if ((ctrl->uuid != TXT_CHOO)
+                ||  (temp = Reslash(rChooseFile(ctrl, "lang",
+                                               (engc->ccur.lang)?
+                                                engc->ccur.lang : ""))))
+                    Relocalize(engc, temp);
+            }
+            else {
+                if ((temp = (ctrl->uuid == TXT_RELO)? engc->cini.base : 0))
+                    temp = strdup(temp);
+                if ((ctrl->uuid != TXT_CHOO)
+                ||  (temp = Reslash(rChooseDir(ctrl, engc->ccur.base)))) {
+                    free(engc->ccur.base);
+                    engc->ccur.base = (temp)? strdup(temp) : 0;
+                    RUN_FE2C(engc->OCT_BDIR, MSG__TXT,
+                            (intptr_t)((temp && strcmp(temp, engc->cdef.base))?
+                                        temp : engc->tran[TXT_DFLT]));
+                }
+            }
+            free(temp);
+            break;
+    }
+    return 0;
+}
+
+
+
+intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     INCBIN("../exec/icon.gif", MainIcon);
 
     switch (ctrl->uuid) {
@@ -2227,7 +2488,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         }
         case TXT_OGRP:
             if (cmsg == MSG_LGST) {
-                cmsg = RUN_FE2C(((ENGC*)ctrl->data)->CTL_EXAC, MSG_BGST, 0);
+                cmsg = RUN_FE2C(((ENGC*)ctrl->data)->MCT_EXAC, MSG_BGST, 0);
                 cmsg = (cmsg & FCS_MARK)? 2 : 1;
                 return (((ENGC*)ctrl->data)->ctgs[data].flgs & cmsg)? 1 : 0;
             }
@@ -2235,7 +2496,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 ENGC *engc = (ENGC*)ctrl->data;
                 intptr_t prev;
 
-                cmsg = RUN_FE2C(engc->CTL_EXAC, MSG_BGST, 0);
+                cmsg = RUN_FE2C(engc->MCT_EXAC, MSG_BGST, 0);
                 cmsg = (cmsg & FCS_MARK)? 2 : 1;
                 prev = (engc->ctgs[data >> 1].flgs & cmsg)? 1 : 0;
                 engc->ctgs[data >> 1].flgs &= ~cmsg;
@@ -2250,7 +2511,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 ENGC *engc = (ENGC*)ctrl->data;
                 long spin;
 
-                data = RUN_FE2C(engc->CTL_SPEC, MSG_NGET, 0);
+                data = RUN_FE2C(engc->MCT_SPEC, MSG_NGET, 0);
                 for (cmsg = 0; cmsg < engc->lcnt; cmsg++)
                     if (engc->libs[cmsg].icnt >= 0) {
                         spin = RUN_FE2C(engc->libs[cmsg].spin, MSG_NGET, 0);
@@ -2262,15 +2523,17 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case TXT_CAPT:
-            if (cmsg == MSG_WSZC)
-                RUN_FE2C(((ENGC*)ctrl->data)->CTL_CHAR, cmsg, data);
+            if (cmsg == MSG_WEND)
+                return 1;
+            if ((cmsg == MSG_WSZC) && (((ENGC*)ctrl->data)->mctl))
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_CHAR, cmsg, data);
             break;
 
         case TXT_FLTR:
             if (cmsg == MSG_BCLK) {
-                RUN_FE2C(((ENGC*)ctrl->data)->CTL_EXAC, MSG__ENB, data);
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_EXAC, MSG__ENB, data);
                 CategorizePreviews(((ENGC*)ctrl->data));
-                RUN_FE2C(((ENGC*)ctrl->data)->CTL_OGRP, MSG__ENB, data);
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_OGRP, MSG__ENB, data);
             }
             break;
 
@@ -2279,15 +2542,15 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 ENGC *engc = (ENGC*)ctrl->data;
 
                 CategorizePreviews(engc);
-                RUN_FE2C(engc->CTL_OGRP, MSG_LCOL,
+                RUN_FE2C(engc->MCT_OGRP, MSG__TXT,
                         (intptr_t)engc->tran[(data)? TXT_AGRP : TXT_OGRP]);
             }
             break;
 
         case TXT_SRND:
             if (cmsg == MSG_BCLK) {
-                RUN_FE2C(((ENGC*)ctrl->data)->CTL_RGPU, MSG__ENB, data);
-                RUN_FE2C(((ENGC*)ctrl->data)->CTL_BDUP, MSG__ENB, data);
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_RGPU, MSG__ENB, data);
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_BDUP, MSG__ENB, data);
             }
             break;
 
@@ -2296,7 +2559,8 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case TXT_OPTS:
-            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
+            if (cmsg == MSG_BCLK)
+                RUN_FE2C(((ENGC*)ctrl->data)->OCT_OPTS, MSG__SHW, 1);
             break;
 
         case TXT_GOGO: {
@@ -2313,13 +2577,13 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             iput = calloc(engc->lcnt, sizeof(*iput));
 
             /// checking if random choice is enabled
-            if ((cmsg = RUN_FE2C(engc->CTL_BDUP, MSG_BGST, 0)) & FCS_ENBL) {
+            if ((cmsg = RUN_FE2C(engc->MCT_BDUP, MSG_BGST, 0)) & FCS_ENBL) {
                 /// indexing random-capable libraries
                 for (ilen = icon = 0; icon < engc->lcnt; icon++)
                     if (engc->libs[icon].icnt == 0)
                         iput[ilen++] = icon;
                 /// iterating over the requested random sprites count
-                for (icon = RUN_FE2C(engc->CTL_RGPU, MSG_NGET, 0);
+                for (icon = RUN_FE2C(engc->MCT_RGPU, MSG_NGET, 0);
                     (icon > 0) && ilen; icon--) {
                     irnd[iput[data = PRNG(engc->seed) % ilen]]++;
                     if ((~cmsg & FCS_MARK) && (data < --ilen))
@@ -2351,7 +2615,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 if (engc->libs[icon].icnt > 0) {
                     LoadLib(&engc->libs[icon], engc->engd);
                     SetProgress(engc, TXT_LOAD, ++data, cmsg);
-                    RUN_FE2C(engc->CTL_SELE, MSG_PPOS, data);
+                    RUN_FE2C(engc->MCT_SELE, MSG_PPOS, data);
                 }
             cEngineLoadAnimAsync(engc->engd, (uint8_t*)"/Icon/",
                                 (uint8_t*)MainIcon, &igif);
@@ -2378,7 +2642,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
                                  igif.time, igif.xdim, igif.ydim);
             free(igif.time);
-            RUN_FE2C(engc->CTL_CAPT, MSG__SHW, 0);
+            RUN_FE2C(engc->MCT_CAPT, MSG__SHW, 0);
             engc->data = (engc->pmax)? calloc(engc->pmax,
                                               sizeof(*engc->data)) : 0;
             cEngineRunMainLoop(engc->engd, engc->dpos.x, engc->dpos.y,
@@ -2397,7 +2661,7 @@ intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
             /// finally showing the window
             RecountSelectedLibs(engc);
-            RUN_FE2C(engc->CTL_CAPT, MSG__SHW, ~0);
+            RUN_FE2C(engc->MCT_CAPT, MSG__SHW, ~0);
             break;
         }
     }
@@ -2419,9 +2683,9 @@ intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
                 if (!!libs->icnt ^ !!data)
                     SetProgress(libs->engc, TXT_SELE,
-                                RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 0)
+                                RUN_FE2C(libs->engc->MCT_SELE, MSG_PGET, 0)
                              + ((!libs->icnt && data)? 1 : -1),
-                                RUN_FE2C(libs->engc->CTL_SELE, MSG_PGET, 1));
+                                RUN_FE2C(libs->engc->MCT_SELE, MSG_PGET, 1));
                 libs->icnt = data;
             }
             break;
@@ -2431,61 +2695,141 @@ intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 
+void FreeWindow(CTRL **wndw) {
+    long indx = 0;
+
+    while ((*wndw)[indx].xdim | (*wndw)[indx].ydim)
+        rFreeControl(&(*wndw)[indx++]);
+    free(*wndw);
+    *wndw = 0;
+}
+
+CTRL *MakeWindow(CTRL *tmpl, long size) {
+    long indx, xmax, ymax, xoff, yoff;
+    CTRL *retn;
+
+    xmax = ymax = xoff = yoff = 0;
+    retn = calloc(size + 1, sizeof(*retn));
+    for (indx = 0; indx < size; indx++) {
+        retn[indx] = tmpl[indx];
+        if (indx)
+            retn[indx].prev = &retn[0];
+        rMakeControl(&retn[indx], &xoff, &yoff);
+        xmax = (xmax > xoff)? xmax : xoff;
+        ymax = (ymax > yoff)? ymax : yoff;
+    }
+    /// resizing and showing the window
+    RUN_FE2C(retn[0], MSG_WSZC, (uint16_t)xmax | ((uint32_t)ymax << 16));
+    return retn;
+}
+
+
+
 int linfcmp(const void *a, const void *b) {
     return strcmp(((LINF*)a)->name, ((LINF*)b)->name);
 }
 
 void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
-                    long xpos, long ypos, ulong xdim, ulong ydim) {
+                    long  xpos, long  ypos, ulong xdim, ulong ydim) {
     #define DEF_ENDL "\r\n"
     static uint32_t
         uCNR[] = {CNF_RGPU, CNF_SHOW, CNF_IPBO,
                   CNF_IBGR, CNF_OPAQ, CNF_IRGN, CNF_DRAW},
         uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
                   WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW},
-        uCNF[] = {CNF_EFCT},
-        uCSF[] = {CSF_EFCT};
+        uCNF[] = {CNF_ETOP, CNF_ERCH, CNF_EINT,
+                  CNF_ESAY, CNF_EEFF, CNF_UONR},
+        uCSF[] = {CSF_ETOP, CSF_ERCH, CSF_EINT,
+                  CSF_ESAY, CSF_EEFF, CSF_UONR};
     static char
        *uSTR[] = {"GPU",    "Show",   "wPBO",
                   "wBGRA",  "Opaque", "wRegion","Draw"},
-       *uSTF[] = {"Effects"};
-    char *file, *fptr, *conf, *temp, *tran = DEF_CORE;
-    long indx, xmax, ymax, xoff, yoff;
+       *uSTF[] = {"Topmost","Hover",  "Interaction",
+                  "Speech", "Effects","Update"};
+    char *file, *fptr, *conf, *temp;
     uint32_t elem, *iter; /// for IF_BIN_FIND and InitPRNG
     uint64_t *fram;
-    intptr_t find;
+    intptr_t indx;
+    int16_t runs = 0;
 
-    ENGC engc = {};
+    ENGC engc = {.tcur = 1, .ftmp = COM_SHOW | COM_DRAW | COM_RGPU};
 
-    /// default options
-    engc.ftmp = COM_SHOW | COM_DRAW | COM_RGPU;
-    engc.flgs = CSF_EFCT;
-    engc.tdil = 1.0;
-    if (!fcnf)
-        tran = 0;
-    else {
-        engc.conf = Concatenate(0, fcnf, tran);
-        tran = 0;
-        fptr = file = rLoadFile(engc.conf, 0);
+    engc.cini = engc.cdef = (CONF){0, strdup(base), CSF_EEFF,
+    /** runs between updates  **/ {   0,   5,           1000},
+    /** base scaling factor   **/ {  25, 100,            300},
+    /** time dilation factor  **/ {  10, 100,           1000},
+    /** random speech chance  **/ {   0,  50,            100},
+    /** cursor dodge radius   **/ {   0,   0,           1000},
+    /** group selection       **/ {-100,   0,            100},
+    /** random selection      **/ {   0,   0, (int16_t)50000}};
+    engc.cdef.base = Reslash(engc.cdef.base);
+    engc.cini.base = strdup(engc.cini.base);
+    if (fcnf) {
+        engc.cfnm = Concatenate(0, fcnf, DEF_CORE);
+        fptr = file = rLoadFile(engc.cfnm, 0);
         while ((conf = GetNextLine(&fptr))) {
             switch (DetermineType(&conf)) {
                 case CNF_LANG:
                     GET_TEMP(&conf);
-                    free(tran);
-                    if (!(tran = (temp)? strdup(Dequote(temp)) : 0))
+                    free(engc.cini.lang);
+                    if (!(engc.cini.lang = (temp)?
+                          strdup(Reslash(Dequote(temp))) : 0))
                         break;
-                    if ((temp = rLoadFile(tran, 0)))
+                    if ((temp = rLoadFile(engc.cini.lang, 0)))
                         free(temp);
                     else {
-                        temp = Concatenate(0, fcnf, DEF_DSEP, tran);
-                        free(tran);
-                        tran = temp;
+                        temp = Concatenate(0, fcnf, DEF_DSEP, engc.cini.lang);
+                        free(engc.cini.lang);
+                        engc.cini.lang = temp;
                     }
                     break;
 
-                case CNF_TIME:
+                case CNF_BASE:
+                    GET_TEMP(&conf);
+                    free(engc.cini.base);
+                    if (!(engc.cini.base = (temp)?
+                          strdup(Reslash(Dequote(temp)))
+                        : strdup(engc.cdef.base)))
+                        break;
+                    break;
+
+                case CNF_RUNS:
                     if (TRY_TEMP(&conf))
-                        engc.tdil = ClampToBounds(StrToFloat(temp), 0.1, 4.0);
+                        engc.cini.nrun[1] = ClampToBounds(StrToFloat(temp),
+                                                          engc.cini.nrun[0],
+                                                          engc.cini.nrun[2]);
+                    if (TRY_TEMP(&conf))
+                        runs = ClampToBounds(StrToFloat(temp),
+                                             engc.cini.nrun[0],
+                                             engc.cini.nrun[2]) + 1;
+                    break;
+
+                case CNF_SCAL:
+                    if (TRY_TEMP(&conf))
+                        engc.cini.nsca[1] = ClampToBounds(StrToFloat(temp),
+                                                          engc.cini.nsca[0],
+                                                          engc.cini.nsca[2]);
+                    break;
+
+                case CNF_TDIL:
+                    if (TRY_TEMP(&conf))
+                        engc.cini.ndil[1] = ClampToBounds(StrToFloat(temp),
+                                                          engc.cini.ndil[0],
+                                                          engc.cini.ndil[2]);
+                    break;
+
+                case CNF_RSAY:
+                    if (TRY_TEMP(&conf))
+                        engc.cini.nsay[1] = ClampToBounds(StrToFloat(temp),
+                                                          engc.cini.nsay[0],
+                                                          engc.cini.nsay[2]);
+                    break;
+
+                case CNF_PCDR:
+                    if (TRY_TEMP(&conf))
+                        engc.cini.ncdr[1] = ClampToBounds(StrToFloat(temp),
+                                                          engc.cini.ncdr[0],
+                                                          engc.cini.ncdr[2]);
                     break;
 
                 case CNF_RNDR:
@@ -2497,87 +2841,135 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                     break;
 
                 case CNF_FLGS:
-                    engc.flgs = 0;
+                    engc.cini.flgs = 0;
                     while (conf) {
                         IF_BIN_FIND(elem, uCNF, &conf)
-                            engc.flgs |= uCSF[elem - 1];
+                            engc.cini.flgs |= uCSF[elem - 1];
                     }
                     break;
             }
         }
         free(file);
     }
-    Relocalize(&engc, tran);
-    free(tran);
+    if (!engc.cini.nrun[1])
+        runs = 0;
+    else if (runs >= engc.cini.nrun[1]) {
+        engc.cini.flgs |= CSF_UONR;
+        runs = 0;
+    }
+    engc.ccur = engc.cini;
+    engc.ccur.flgs &= ~CSF_UONR;
+    engc.ccur.base = strdup(engc.ccur.base);
+    engc.ccur.lang = 0;
 
     engc.idim = (T2IV){{xico, yico}};
     engc.dpos = (T2IV){{xpos, ypos}};
     engc.dims = (T2IV){{xdim - engc.dpos.x, ydim - engc.dpos.y}};
     engc.elem = calloc(engc.dims.y << 1, sizeof(*engc.elem));
+    indx = (intptr_t)&engc;
 
     /// primary initialization complete, now creating GUI
-    ///  0. [ FIRST AND FOREMOST! ] do not forget to edit the appropriate CTL_
+    ///  0. [ FIRST AND FOREMOST! ] do not forget to edit the appropriate *CT_
     ///     constants after swapping or adding controls
     ///  1. main window`s "dimensions" are just spaces to leave between window
     ///     edges and actual controls
-    CTRL ctls[] =
-   {{0, 0, TXT_CAPT,            FCT_WNDW           , 1,  1,  1,  1, FC2E},
-    {0, 0, TXT_FLTR,            FCT_CBOX           , 0,  0, 19,  2, FC2E},
-    {0, 0, TXT_EXAC, FCP_VERT | FCT_CBOX           , 0,  0, 19,  2, FC2E},
-    {0, 0, TXT_OGRP, FCP_VERT | FCT_LIST           , 0,  0, 19, 16, FC2E},
-    {0, 0, TXT_SGRP, FCP_VERT | FCT_TEXT           , 0,  1, 19,  2, 0   },
-    {0, 0, TXT_SPEC, FCP_VERT | FCT_SPIN           , 0,  0,  9,  3, FC2E},
-    {0, 0, TXT_BADD, FCP_BOTH | FCT_BUTN           , 1, -3,  9,  3, FC2E},
-    {0, 0, TXT_SRND, FCP_VERT | FCT_CBOX | FSX_LEFT, 0,  1, 19,  2, FC2E},
-    {0, 0, TXT_RGPU, FCP_VERT | FCT_SPIN           , 0,  0,  9,  3, FC2E},
-    {0, 0, TXT_BDUP, FCP_BOTH | FCT_CBOX           , 1, -3,  9,  3, FC2E},
-    {0, 0, TXT_SELE, FCP_VERT | FCT_PBAR           , 0,  1, 19,  3, 0   },
-    {0, 0, TXT_OPTS, FCP_VERT | FCT_BUTN           , 0,  1,  9,  6, FC2E},
-    {0, 0, TXT_GOGO, FCP_BOTH | FCT_BUTN | FSB_DFLT, 1, -6,  9,  6, FC2E},
-    {0, 0, TXT_HEAD, FCP_HORZ | FCT_SBOX           , 0,  0, 41, 43, 0   },
-    {}};
+    CTRL
+    mctl[] = {
+        {0, indx, TXT_CAPT, FSW_SIZE | FCT_WNDW,  1,  1,  1,  1, FC2EM},
+        {0, indx, TXT_FLTR,            FCT_CBOX,  0,  0, 19,  2, FC2EM},
+        {0, indx, TXT_EXAC, FCP_VERT | FCT_CBOX,  0,  0, 19,  2, FC2EM},
+        {0, indx, TXT_OGRP, FCP_VERT | FCT_LIST,  0,  0, 19, 16, FC2EM},
+        {0, indx, TXT_SGRP, FCP_VERT | FCT_TEXT,  0,  1, 19,  2, FC2EM},
+        {0, (intptr_t)engc.ccur.spec,
+                  TXT_SPEC, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2EM},
+        {0, indx, TXT_BADD, FCP_BOTH | FCT_BUTN,  1, -3,  9,  3, FC2EM},
+        {0, indx, TXT_SRND, FCP_VERT | FCT_CBOX
+                                     | FSX_LEFT,  0,  1, 19,  2, FC2EM},
+        {0, (intptr_t)engc.ccur.rgpu,
+                  TXT_RGPU, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2EM},
+        {0, indx, TXT_BDUP, FCP_BOTH | FCT_CBOX,  1, -3,  9,  3, FC2EM},
+        {0, indx, TXT_SELE, FCP_VERT | FCT_PBAR,  0,  1, 19,  3, FC2EM},
+        {0, indx, TXT_OPTS, FCP_VERT | FCT_BUTN,  0,  1,  9,  6, FC2EM},
+        {0, indx, TXT_GOGO, FCP_BOTH | FCT_BUTN
+                                     | FSB_DFLT,  1, -6,  9,  6, FC2EM},
+        {0, indx, TXT_HEAD, FCP_HORZ | FCT_SBOX,  0,  0, 41, 43, FC2EM},
+    },
+    octl[] = {
+        {0, indx, TXT_OPTS,            FCT_WNDW,  1,  1,  1,  1, FC2EO},
 
-    xmax = ymax = xoff = yoff = 0;
-    engc.ctls = calloc(1, sizeof(ctls));
-    for (indx = 0; indx < countof(ctls) - 1; indx++) {
-        engc.ctls[indx] = ctls[indx];
-        engc.ctls[indx].data = (intptr_t)&engc;
-        if (indx)
-            engc.ctls[indx].prev = &engc.ctls[0];
-        rMakeControl(&engc.ctls[indx], &xoff, &yoff,
-                   (((engc.ctls[indx].flgs & FCT_TTTT) == FCT_WNDW) ||
-                    ((engc.ctls[indx].flgs & FCT_TTTT) == FCT_TEXT) ||
-                    ((engc.ctls[indx].flgs & FCT_TTTT) == FCT_BUTN) ||
-                    ((engc.ctls[indx].flgs & FCT_TTTT) == FCT_CBOX) ||
-                    ((engc.ctls[indx].flgs & FCT_TTTT) == FCT_RBOX))?
-                      engc.tran[engc.ctls[indx].uuid] : 0);
-        xmax = (xmax > xoff)? xmax : xoff;
-        ymax = (ymax > yoff)? ymax : yoff;
-    }
-    RUN_FE2C(engc.CTL_SPEC, MSG_NDIM, (100 << 16) | 100);
-    RUN_FE2C(engc.CTL_RGPU, MSG_NDIM, 50000 << 16);
-    RUN_FE2C(engc.CTL_FLTR, MSG_BCLK, 0);
-    RUN_FC2E(engc.CTL_EXAC, MSG_BCLK, 0);
-    RUN_FC2E(engc.CTL_SRND, MSG_BCLK, 0);
-    RUN_FC2E(engc.CTL_BDUP, MSG_BCLK, 0);
+        {0, indx, TXT_UONR,            FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {0, indx, TXT_ETOP, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {0, indx, TXT_EEFF, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {0, indx, TXT_EINT, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {0, indx, TXT_ESAY, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {0, indx, TXT_ERCH, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
 
-    /// resizing and showing the main window
-    RUN_FE2C(engc.CTL_CAPT, MSG_WSZC,
-            (uint16_t)xmax | ((uint32_t)ymax << 16));
+        {0, (intptr_t)engc.ccur.nrun,
+                  TXT_RUNS,            FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {0, indx, TXT_RUNS, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
+        {0, (intptr_t)engc.ccur.nsca,
+                  TXT_SCAL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {0, indx, TXT_SCAL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
+        {0, (intptr_t)engc.ccur.ndil,
+                  TXT_TDIL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {0, indx, TXT_TDIL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
+        {0, (intptr_t)engc.ccur.nsay,
+                  TXT_RSAY, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {0, indx, TXT_RSAY, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
+        {0, (intptr_t)engc.ccur.ncdr,
+                  TXT_PCDR, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {0, indx, TXT_PCDR, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
 
-    xmax = 0;
+        {0, indx, TXT_OPTS, FCP_VERT | FCT_TEXT
+                                     | FST_SUNK,  0,  1, 49, -2, FC2EO},
+
+        {0, indx, TXT_LGUI, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2EO},
+        {0, indx, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2EO},
+        {0, indx, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+        {0, indx, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+        {0, indx, TXT_DFLT, FCP_VERT | FCT_TEXT
+                                     | FST_CNTR,  0,  0, 49,  2, FC2EO},
+
+        {0, indx, TXT_OPTS, FCP_VERT | FCT_TEXT
+                                     | FST_SUNK,  0,  1, 49, -2, FC2EO},
+
+        {0, indx, TXT_BDIR, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2EO},
+        {0, indx, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2EO},
+        {0, indx, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+        {0, indx, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+        {0, indx, TXT_DFLT, FCP_VERT | FCT_TEXT
+                                     | FST_CNTR,  0,  0, 49,  2, FC2EO},
+
+        {0, indx, TXT_OPTS, FCP_VERT | FCT_TEXT
+                                     | FST_SUNK,  0,  1, 49, -2, FC2EO},
+
+        {0, indx, TXT_RELO, FCP_VERT | FCT_BUTN, 29,  0, 10,  3, FC2EO},
+        {0, indx, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+    };
+
+    engc.octl = MakeWindow(octl, sizeof(octl) / sizeof(*octl));
+    engc.mctl = MakeWindow(mctl, sizeof(mctl) / sizeof(*mctl));
+    RUN_FC2E(engc.OCT_LREL, MSG_BCLK, 0); /// relocalize!
+    UpdateOptionControls(&engc, 1);
+    RUN_FE2C(engc.MCT_CAPT, MSG__SHW, 1);
+
+    fptr = Concatenate(0, engc.cini.base, DEF_DSEP, DEF_FLDR);
+    ypos = !!(engc.cini.flgs & CSF_UONR);
+    xpos = 0;
     do {
-        if (1 /** [TODO:] add the negation of need-to-update condition **/) {
-            find = rFindMake(file = Concatenate(0, base, DEF_DSEP, "Ponies"));
-            while ((temp = rFindFile(find))) {
+        if (~engc.cini.flgs & CSF_UONR) {
+            indx = rFindMake(file = Concatenate(0, fptr, DEF_DSEP, "Ponies"));
+            while ((temp = rFindFile(indx))) {
                 AppendLib(&engc, DEF_CONF, file, temp);
                 free(temp);
             }
             free(file);
         }
-    } while (!xmax++ && TryGetFromGithub(&engc, "DPE", "RoosterDragon",
-                                         "Desktop-Ponies", "master",
-                                         "Content", base));
+        engc.cini.flgs &= ~CSF_UONR;
+    } while (!xpos++ && (TryGetFromGithub(&engc, "DPE", "RoosterDragon",
+                                          "Desktop-Ponies", "master",
+                                          "Content", fptr) || ypos));
+    free(fptr);
     /// sort engine`s libraries by name, initialize the rendering engine
     qsort(engc.libs, engc.lcnt, sizeof(*engc.libs), linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc.engd);
@@ -2589,58 +2981,81 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     cEngineCallback(engc.engd, ECB_LOAD, ~0);
 
     /// hiding the scroll window
-    engc.CTL_CHAR.fc2e = FC2E;
-    RUN_FE2C(engc.CTL_CHAR, MSG__SHW, 0);
+    engc.MCT_CHAR.fc2e = FC2EM;
+    RUN_FE2C(engc.MCT_CHAR, MSG__SHW, 0);
 
     SetProgress(&engc, TXT_SELE, 0, engc.lcnt);
-    RUN_FE2C(engc.CTL_SELE, MSG_PPOS, 0);
+    RUN_FE2C(engc.MCT_SELE, MSG_PPOS, 0);
     for (indx = 0; indx < engc.ccnt; indx++)
-        RUN_FE2C(engc.CTL_OGRP, MSG_LADD, (intptr_t)engc.ctgs[indx].name);
-    RUN_FE2C(engc.CTL_OGRP, MSG_LCOL, (intptr_t)engc.tran[TXT_OGRP]);
+        RUN_FE2C(engc.MCT_OGRP, MSG_LADD, (intptr_t)engc.ctgs[indx].name);
+    RUN_FE2C(engc.MCT_OGRP, MSG__TXT, (intptr_t)engc.tran[TXT_OGRP]);
 
     /// getting minimal width for a preview from one of the spin controls
-    xico = (uint16_t)RUN_FE2C(engc.CTL_SPEC, MSG__GSZ, 0);
+    xico = (uint16_t)RUN_FE2C(engc.MCT_SPEC, MSG__GSZ, 0);
     /// constructing previews
     /// barr[0] should be barr[linf->prev], but barr is still unsorted here
     for (indx = 0; indx < engc.lcnt; indx++) {
-        xmax = engc.libs[indx].barr[0].unit[0].xdim;
-        xmax = (xico > xmax)? xico : xmax;
+        xpos = engc.libs[indx].barr[0].unit[0].xdim;
+        xpos = (xico > xpos)? xico : xpos;
         engc.libs[indx].pict =
-            (CTRL){&engc.CTL_CHAR, (intptr_t)engc.engd, indx,
-                    FCT_IBOX, 0, 0, -xmax,
+            (CTRL){&engc.MCT_CHAR, (intptr_t)engc.engd, indx,
+                    FCT_IBOX, 0, 0, -xpos,
                     (engc.libs[indx].barr[0].unit[0].ydim)?
                    -(long)engc.libs[indx].barr[0].unit[0].ydim : -1, FC2EI};
         engc.libs[indx].spin =
-            (CTRL){&engc.CTL_CHAR, (intptr_t)&engc.libs[indx], indx,
-                    FCT_SPIN, 0, 0, -xmax, 3, FC2EI};
+            (CTRL){&engc.MCT_CHAR, (intptr_t)&engc.libs[indx], indx,
+                    FCT_SPIN, 0, 0, -xpos, 3, FC2EI};
         engc.libs[indx].capt =
-            (CTRL){&engc.CTL_CHAR, (intptr_t)&engc.libs[indx], indx,
-                    FCT_TEXT | FST_CNTR, 0, 0, -xmax, 2, FC2EI};
-        rMakeControl(&engc.libs[indx].pict, 0, 0, 0);
-        rMakeControl(&engc.libs[indx].spin, 0, 0, 0);
-        rMakeControl(&engc.libs[indx].capt, 0, 0, engc.libs[indx].name);
+            (CTRL){&engc.MCT_CHAR, (intptr_t)&engc.libs[indx], indx,
+                    FCT_TEXT | FST_CNTR, 0, 0, -xpos, 2, FC2EI};
+        rMakeControl(&engc.libs[indx].pict, 0, 0);
+        rMakeControl(&engc.libs[indx].spin, 0, 0);
+        rMakeControl(&engc.libs[indx].capt, 0, 0);
         RUN_FE2C(engc.libs[indx].spin, MSG_NDIM, 50000 << 16);
+        RUN_FE2C(engc.libs[indx].capt, MSG__TXT,
+                (intptr_t)engc.libs[indx].name);
     }
-    RUN_FC2E(engc.CTL_FLTR, MSG_BCLK, 0);
+    RUN_FC2E(engc.MCT_FLTR, MSG_BCLK, 0);
     engc.seed = InitPRNG(elem = time(0));
 
-    printf("[((RNG))] seed = 0x%08X\n[**INI**] %s\n", elem, engc.conf);
+    printf("[((RNG))] seed = 0x%08X\n[**INI**] %s\n", elem, engc.cfnm);
 
     fram = calloc(sizeof(*fram), engc.lcnt * 2 + 1);
     fram[0] = (uintptr_t)&engc;
-    rInternalMainLoop(&engc.ctls[0], FRM_WAIT, UpdPreview, (intptr_t)fram);
+    rInternalMainLoop(&engc.mctl[0], FRM_WAIT, UpdPreview, (intptr_t)fram);
     free(fram);
 
-    RUN_FE2C(engc.CTL_CHAR, MSG__SHW, 0);
+    RUN_FE2C(engc.MCT_CHAR, MSG__SHW, 0);
     for (indx = 0; indx < engc.lcnt; indx++) {
         rFreeControl(&engc.libs[indx].pict);
         rFreeControl(&engc.libs[indx].spin);
         rFreeControl(&engc.libs[indx].capt);
     }
-    for (indx = countof(ctls) - 2; indx >= 0; indx--)
-        rFreeControl(&engc.ctls[indx]);
-    free(engc.ctls);
-
+    /// trying to write the animation base to its new location
+    if (engc.cini.base && engc.ccur.base) {
+        fptr = strdup(engc.ccur.base);
+        file = Concatenate(0, engc.cini.base, DEF_DSEP, DEF_FLDR);
+        temp = Concatenate(0, engc.tran[TXT_BSAV], "\n\n", file,
+                              "\n==>\n", fptr, "\n\n", engc.tran[TXT_BDEL]);
+        if (strcmp(engc.cini.base, engc.ccur.base)) {
+            if (!rMessage(temp, engc.tran[TXT_BMOV], RMF_BTAD)) {
+                free(fptr);
+                fptr = 0;
+            }
+            if (!rMoveDir(file, fptr)) {
+                free(temp);
+                temp = Concatenate(0, engc.tran[TXT_BERR], "\n\n", file,
+                                      "\n==>\n", (fptr)? fptr : "[X]");
+                rMessage(temp, engc.tran[TXT_BMOV], RMF_BTOK);
+            }
+        }
+        free(temp);
+        free(fptr);
+        free(file);
+    }
+    /// discarding windows, menus and translations
+    FreeWindow(&engc.mctl);
+    FreeWindow(&engc.octl);
     FreeMenu(&engc.mspr);
     FreeMenu(&engc.mctx);
     FreeLocalization(&engc.tran);
@@ -2658,23 +3073,39 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     /// now saving configs and exiting
     conf = 0;
     temp = calloc(1, 128);
-    sprintf(temp, "%0.2f", engc.tdil);
-    Concatenate(&conf, "Language,", engc.lang);
-    Concatenate(&conf, DEF_ENDL, "Time,", temp);
+    Concatenate(&conf, "Content,",
+               (engc.ccur.base && strcmp(engc.cdef.base, engc.ccur.base))?
+                engc.ccur.base : 0);
+    Concatenate(&conf, DEF_ENDL, "Language,", engc.ccur.lang);
+    sprintf(temp, "%hd,%hd", engc.ccur.nrun[1], runs);
+    Concatenate(&conf, DEF_ENDL, "RunsTillUpdate,", temp);
+    sprintf(temp, "%hd", engc.ccur.nsca[1]);
+    Concatenate(&conf, DEF_ENDL, "BaseScale,", temp);
+    sprintf(temp, "%hd", engc.ccur.ndil[1]);
+    Concatenate(&conf, DEF_ENDL, "TimeDilation,", temp);
+    sprintf(temp, "%hd", engc.ccur.nsay[1]);
+    Concatenate(&conf, DEF_ENDL, "RandomSpeech,", temp);
+    sprintf(temp, "%hd", engc.ccur.ncdr[1]);
+    Concatenate(&conf, DEF_ENDL, "CursorDodge,", temp);
     Concatenate(&conf, DEF_ENDL, "Render,");
     for (indx = 0; indx < countof(uCOM); indx++)
         if (engc.ftmp & uCOM[indx])
             Concatenate(&conf, uSTR[indx], ",");
     Concatenate(&conf, DEF_ENDL, "Flags,");
     for (indx = 0; indx < countof(uCSF); indx++)
-        if (engc.flgs & uCSF[indx])
+        if (engc.ccur.flgs & uCSF[indx])
             Concatenate(&conf, uSTF[indx], ",");
     Concatenate(&conf, DEF_ENDL);
-    rSaveFile(engc.conf, conf, strlen(conf));
+    rSaveFile(engc.cfnm, conf, strlen(conf));
     FreePRNG(&engc.seed);
+    free(engc.cdef.lang);
+    free(engc.ccur.lang);
+    free(engc.cini.lang);
+    free(engc.cdef.base);
+    free(engc.ccur.base);
+    free(engc.cini.base);
     free(engc.elem);
-    free(engc.lang);
-    free(engc.conf);
+    free(engc.cfnm);
     free(temp);
     free(conf);
     #undef DEF_ENDL

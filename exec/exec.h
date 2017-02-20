@@ -45,6 +45,7 @@
 /** Control is marked           **/ #define FCS_MARK 0x02
 
 /// /// /// /// /// /// /// /// /// Flags for Style of W (FCT_WNDW)
+/** Resize/minimize/restore on  **/ #define FSW_SIZE 0x040
 
 /// /// /// /// /// /// /// /// /// Flags for Style of T (FCT_TEXT)
 /** Sunken edge                 **/ #define FST_SUNK 0x040
@@ -68,26 +69,29 @@
 /// /// /// /// /// /// /// /// /// Flags for Style of S (FCT_SBOX)
 
 /// /// /// /// /// /// /// /// /// controls` messages
-/** enable or disable anything  **/ #define MSG__ENB  1
-/** show or hide anything       **/ #define MSG__SHW  2
-/** get pixel size of anything  **/ #define MSG__GSZ  3
-/** set position  of anything   **/ #define MSG__POS  4
-/** resize & center wnd/sizebox **/ #define MSG_WSZC  5
-/** click button/checkbox/radio **/ #define MSG_BCLK  6
-/** get b/x/r (see above) state **/ #define MSG_BGST  7
-/** get spin position           **/ #define MSG_NGET  8
-/** set spin position           **/ #define MSG_NSET  9
-/** set spin limits & reset pos **/ #define MSG_NDIM 10
-/** set progressbar text        **/ #define MSG_PTXT 11
-/** set progressbar upper limit **/ #define MSG_PLIM 13
-/** set progressbar position    **/ #define MSG_PPOS 14
-/** get progressbar properties  **/ #define MSG_PGET 15
-/** set scrollbox internal dims **/ #define MSG_SMAX 16
-/** rename listbox column       **/ #define MSG_LCOL 17
-/** add item to listbox         **/ #define MSG_LADD 18
-/** get listbox item state      **/ #define MSG_LGST 19
-/** set listbox item state      **/ #define MSG_LSST 20
-/** imagebox update frame       **/ #define MSG_IFRM 21
+enum {
+/** empty message; does nothing **/ MSG__NUL = 0,
+/** enable or disable anything  **/ MSG__ENB,
+/** show or hide anything       **/ MSG__SHW,
+/** get pixel size of anything  **/ MSG__GSZ,
+/** set position of anything    **/ MSG__POS,
+/** set title text of anything  **/ MSG__TXT,
+/** close the container window  **/ MSG_WEND,
+/** resize & center wnd/sizebox **/ MSG_WSZC,
+/** click button/checkbox/radio **/ MSG_BCLK,
+/** get b/x/r (see above) state **/ MSG_BGST,
+/** get spin control position   **/ MSG_NGET,
+/** set spin control position   **/ MSG_NSET,
+/** set spin control limits     **/ MSG_NDIM,
+/** set progressbar upper limit **/ MSG_PLIM,
+/** set progressbar position    **/ MSG_PPOS,
+/** get progressbar properties  **/ MSG_PGET,
+/** set scrollbox internal dims **/ MSG_SMAX,
+/** add item to listbox         **/ MSG_LADD,
+/** get listbox item state      **/ MSG_LGST,
+/** set listbox item state      **/ MSG_LSST,
+/** imagebox update frame       **/ MSG_IFRM,
+};
 
 /// /// /// /// /// /// /// /// /// message box flags
 /** "OK" button only            **/ #define RMF_BTOK   0
@@ -136,24 +140,27 @@ void  eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
 
 
 /// external functions, have to be implemented or imported
-long  rMessage(char *text, char *head, uint32_t flgs);
-void  rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data);
-void  rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text);
-void  rFreeControl(CTRL *ctrl);
-void  rFreeHTTPS(intptr_t user);
-void  rFreeParallel(intptr_t user);
-void  rLoadParallel(intptr_t user, intptr_t data);
 intptr_t rMakeParallel(UPRE func, long size);
 intptr_t rFindMake(char *base);
 intptr_t rMakeHTTPS(char *user, char *serv);
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim);
-void  rFreeTrayIcon(intptr_t icon);
-void  rOpenContextMenu(MENU *menu);
-MENU *rOSSpecificMenu(void *engc);
-char *rConvertUTF8(char *utf8);
-char *rFindFile(intptr_t data);
-char *rLoadFile(char *name, long *size);
+long  rMessage(char *text, char *head, uint32_t flgs);
 long  rSaveFile(char *name, char *data, long size);
 long  rLoadHTTPS(intptr_t user, char *page, char **dest);
+long  rMoveDir(char *dsrc, char *ddst);
 long  rMakeDir(char *name);
+void  rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data);
+void  rMakeControl(CTRL *ctrl, long *xoff, long *yoff);
+void  rFreeControl(CTRL *ctrl);
+void  rFreeHTTPS(intptr_t user);
+void  rFreeParallel(intptr_t user);
+void  rLoadParallel(intptr_t user, intptr_t data);
+void  rFreeTrayIcon(intptr_t icon);
+void  rOpenContextMenu(MENU *menu);
+char *rConvertUTF8(char *utf8);
+char *rChooseDir(CTRL *root, char *base);
+char *rChooseFile(CTRL *root, char *fext, char *file);
+char *rFindFile(intptr_t data);
+char *rLoadFile(char *name, long *size);
+MENU *rOSSpecificMenu(void *engc);
