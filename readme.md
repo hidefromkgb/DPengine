@@ -10,7 +10,19 @@ N.B.: to be able to build on Windows using Code::Blocks, go to Settings → Comp
 
 ## Release notes
 
-All three major desktop operating systems (Windows, Linux and OS X) finally got their native GUI frameworks, and now it\`s high time to add the remaining DP functionality missing from DPE!
+All three major desktop operating systems (Windows, Linux and OS X) finally got their native GUI frameworks, and now it\`s high time to add the remaining DP functionality missing from DPE:
+
+1. Extended behaviours
+1. Interactions
+1. Speech
+1. Games
+1. Profiles
+1. Screensaver
+1. Screen movement restriction (tab 2)
+1. [!DP] Parallelize sprite processing in frontend
+1. [!DP] Move rendering options from tray menu to tab 3
+1. [!DP] Add OS-specific options to tab 3
+1. [!DP] Do something with networking on Win9x and WinXP
 
 ## License
 
