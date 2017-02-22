@@ -2221,8 +2221,7 @@ void Relocalize(ENGC *engc, char *lang) {
             data = (((retn->flgs & FCT_TTTT) == FCT_WNDW) ||
                     ((retn->flgs & FCT_TTTT) == FCT_TEXT) ||
                     ((retn->flgs & FCT_TTTT) == FCT_BUTN) ||
-                    ((retn->flgs & FCT_TTTT) == FCT_CBOX) ||
-                    ((retn->flgs & FCT_TTTT) == FCT_RBOX))?
+                    ((retn->flgs & FCT_TTTT) == FCT_CBOX))?
                       engc->tran[retn->uuid] : 0;
             if (((retn->flgs & FCT_TTTT) == FCT_TEXT)
             &&   (retn->flgs & FST_SUNK))

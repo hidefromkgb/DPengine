@@ -409,6 +409,7 @@ long rSaveFile(char *name, char *data, long size) {
     free(name);
     if (file != INVALID_HANDLE_VALUE) {
         WriteFile(file, data, size, &flen, 0);
+        SetEndOfFile(file);
         CloseHandle(file);
         return flen;
     }
@@ -1325,9 +1326,6 @@ void rFreeControl(CTRL *ctrl) {
         case FCT_CBOX:
             break;
 
-        case FCT_RBOX:
-            break;
-
         case FCT_SPIN:
             DestroyWindow((HWND)ctrl->priv[1]); /// the very spin control
             break;
@@ -1384,7 +1382,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
         {(LPSTR)WC_STATIC,      SS_CENTERIMAGE},
         {(LPSTR)WC_BUTTON,      BS_FLAT | BS_MULTILINE},
         {(LPSTR)WC_BUTTON,      BS_FLAT | BS_AUTOCHECKBOX},
-        {(LPSTR)WC_BUTTON,      BS_FLAT | BS_AUTORADIOBUTTON},
         {(LPSTR)WC_EDIT,        ES_MULTILINE | ES_WANTRETURN | ES_AUTOHSCROLL},
         {(LPSTR)WC_LISTVIEW,    LVS_REPORT},
         {(LPSTR)PROGRESS_CLASS, PBS_SMOOTH},
@@ -1471,10 +1468,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
             case FCT_CBOX:
                 wsty |= (ctrl->flgs & FSX_LEFT)? BS_LEFTTEXT : 0;
                 ctrl->fe2c = FE2CX;
-                break;
-
-            case FCT_RBOX:
-                wsty |= (ctrl->flgs & FSR_NGRP)? WS_GROUP : 0;
                 break;
 
             case FCT_SPIN:

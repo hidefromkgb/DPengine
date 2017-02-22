@@ -27,12 +27,11 @@
 /** Simple label                **/ #define FCT_TEXT 0x001
 /** Button (may be checkable)   **/ #define FCT_BUTN 0x002
 /** Check box                   **/ #define FCT_CBOX 0x003
-/** Radio box                   **/ #define FCT_RBOX 0x004
-/** Spin counter                **/ #define FCT_SPIN 0x005
-/** List box (with checkboxes)  **/ #define FCT_LIST 0x006
-/** Progress bar                **/ #define FCT_PBAR 0x007
-/** Scroll box                  **/ #define FCT_SBOX 0x008
-/** Image box                   **/ #define FCT_IBOX 0x009
+/** Spin counter                **/ #define FCT_SPIN 0x004
+/** List box (with checkboxes)  **/ #define FCT_LIST 0x005
+/** Progress bar                **/ #define FCT_PBAR 0x006
+/** Scroll box                  **/ #define FCT_SBOX 0x007
+/** Image box                   **/ #define FCT_IBOX 0x008
 /** [extractor]                 **/ #define FCT_TTTT 0x00F
 
 /// /// /// /// /// /// /// /// /// Flags for Controls` Position inheriting
@@ -57,9 +56,6 @@
 /// /// /// /// /// /// /// /// /// Flags for Style of X (FCT_CBOX)
 /** Checkbox text on the left   **/ #define FSX_LEFT 0x040
 
-/// /// /// /// /// /// /// /// /// Flags for Style of R (FCT_RBOX)
-/** New radio group             **/ #define FSR_NGRP 0x040
-
 /// /// /// /// /// /// /// /// /// Flags for Style of N (FCT_SPIN)
 
 /// /// /// /// /// /// /// /// /// Flags for Style of L (FCT_LIST)
@@ -78,8 +74,8 @@ enum {
 /** set title text of anything  **/ MSG__TXT,
 /** close the container window  **/ MSG_WEND,
 /** resize & center wnd/sizebox **/ MSG_WSZC,
-/** click button/checkbox/radio **/ MSG_BCLK,
-/** get b/x/r (see above) state **/ MSG_BGST,
+/** click button or checkbox    **/ MSG_BCLK,
+/** get button/checkbox state   **/ MSG_BGST,
 /** get spin control position   **/ MSG_NGET,
 /** set spin control position   **/ MSG_NSET,
 /** set spin control limits     **/ MSG_NDIM,

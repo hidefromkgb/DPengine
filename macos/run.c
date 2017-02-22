@@ -277,6 +277,7 @@ long rSaveFile(char *name, char *data, long size) {
 
     if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {
         size = write(file, data, size);
+        ftruncate(file);
         close(file);
         return size;
     }

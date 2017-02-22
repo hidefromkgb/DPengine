@@ -227,6 +227,7 @@ long rSaveFile(char *name, char *data, long size) {
 
     if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {
         size = write(file, data, size);
+        ftruncate(file, size);
         close(file);
         return size;
     }
@@ -237,6 +238,78 @@ long rSaveFile(char *name, char *data, long size) {
 
 long rMakeDir(char *name) {
     return !mkdir(name, 0755) || (errno == EEXIST);
+}
+
+
+
+long rMoveDir(char *dsrc, char *ddst) {
+    __attribute__((aligned(32))) volatile long retn, iter;
+    char *pcmd, *ptmp, *dtmp, *dddd[] = {(ddst)? ddst : dsrc, dsrc};
+
+    ptmp = pcmd = calloc(1, 128 + 4 * (strlen(dddd[0]) + strlen(dddd[1])));
+    strncpy(ptmp, (ddst)? "mv  -f '" : "rm -rf '",
+            retn = sizeof("mv  -f '") - 1);
+    ptmp += retn;
+    for (iter = (ddst)? 1 : 0; iter >= 0; iter--) {
+        while ((dtmp = strchr(dddd[iter], '\''))) {
+            strncpy(ptmp, dddd[iter], retn = dtmp - dddd[iter]);
+            ptmp += retn;
+            strncpy(ptmp, "'\\''", retn = sizeof("'\\''") - 1);
+            ptmp += retn;
+            dddd[iter] = dtmp + 1;
+        }
+        strncpy(ptmp, dddd[iter], retn = strlen(dddd[iter]));
+        ptmp += retn;
+        dtmp = (iter)? "' '" : "'";
+        strncpy(ptmp, dtmp, retn = strlen(dtmp));
+        ptmp += retn;
+    }
+    retn = !system(pcmd);
+    free(pcmd);
+    return retn;
+}
+
+
+
+char *ChooseFileDir(CTRL *root, GtkFileChooserAction gfca,
+                    char *file, char *fext) {
+    GtkFileFilter *fltr;
+    GtkWidget *wdlg;
+    char *temp;
+
+    while (root->prev)
+        root = root->prev;
+    wdlg = gtk_file_chooser_dialog_new
+               ("", GTK_WINDOW(root->priv[0]), gfca,
+                GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+                GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT, (char*)0);
+    if (fext) {
+        fltr = gtk_file_filter_new();
+        temp = realloc(strdup("*."), sizeof("*.") + strlen(fext) + 1);
+        gtk_file_filter_add_pattern(fltr, strcat(temp, fext));
+        gtk_file_filter_set_name(fltr, temp);
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(wdlg), fltr);
+        free(temp);
+    }
+    if (file)
+        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(wdlg), file);
+    if (gtk_dialog_run(GTK_DIALOG(wdlg)) != GTK_RESPONSE_ACCEPT)
+        temp = 0;
+    else {
+        fext = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(wdlg));
+        temp = strdup(fext);
+        g_free(fext);
+    }
+    gtk_widget_destroy(wdlg);
+    return temp;
+}
+
+char *rChooseDir(CTRL *root, char *base) {
+    return ChooseFileDir(root, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, base, 0);
+}
+
+char *rChooseFile(CTRL *root, char *fext, char *file) {
+    return ChooseFileDir(root, GTK_FILE_CHOOSER_ACTION_OPEN, file, fext);
 }
 
 
@@ -475,6 +548,16 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
 
 
 
+gboolean OptQuit(GtkWidget *gwnd, GdkEvent *ewcl, gpointer data) {
+    if (((CTRL*)data)->fc2e((CTRL*)data, MSG_WEND, 0)) {
+        gtk_main_quit();
+        return FALSE;
+    }
+    return TRUE;
+}
+
+
+
 gboolean OptResize(GtkWidget *gwnd, GdkEventConfigure *ecnf, gpointer data) {
     CTRL *ctrl = (CTRL*)data;
 
@@ -504,6 +587,10 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                    : gtk_widget_hide)(GTK_WIDGET(ctrl->priv[0]));
             break;
 
+        case MSG__TXT:
+            gtk_window_set_title(GTK_WINDOW(ctrl->priv[0]), (char*)data);
+            break;
+
         case MSG_WSZC: {
             GtkWidget *gwnd = GTK_WIDGET(ctrl->priv[0]);
             long xdim, ydim;
@@ -513,10 +600,8 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             ydim = (((uint16_t)(data >> 16)) + ctrl->ydim)
                  *   (uint16_t)(ctrl->priv[2] >> 16);
             ctrl->priv[1] = (uint16_t)xdim | ((uint32_t)ydim << 16);
-            gtk_widget_hide(gwnd);
             gtk_widget_set_size_request(gwnd, xdim, ydim);
             gtk_window_set_position(GTK_WINDOW(gwnd), GTK_WIN_POS_CENTER);
-            gtk_widget_show(gwnd);
             break;
         }
     }
@@ -546,7 +631,7 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             gtk_main_iteration_do(0);
             break;
         }
-        case MSG_PTXT:
+        case MSG__TXT:
             gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctrl->priv[0]),
                                      (char*)data);
             break;
@@ -564,27 +649,35 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 /// PRIV:
-///  0: GtkWidget
+///  0: GtkWidget (container)
 ///  1:
 ///  2:
 ///  3:
 ///  4:
 ///  5:
 ///  6:
-///  7:
+///  7: GtkWidget (text)
 intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__ENB:
             gtk_widget_set_sensitive(GTK_WIDGET(ctrl->priv[0]), !!data);
             break;
 
+        case MSG__TXT:
+            gtk_label_set_text(GTK_LABEL(ctrl->priv[7]), (char*)data);
+            break;
+
         case MSG_BGST:
             data = ctrl->priv[0];
-            return ((gtk_widget_get_sensitive(GTK_WIDGET(data)))? FCS_ENBL : 0)
-                 | ((gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(data)))?
-                     FCS_MARK : 0);
+            cmsg = (((ctrl->flgs & FCT_TTTT) == FCT_CBOX)
+                   && gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(data)))?
+                      FCS_MARK : 0;
+            cmsg |= (gtk_widget_get_sensitive(GTK_WIDGET(data)))? FCS_ENBL : 0;
+            return cmsg;
 
         case MSG_BCLK:
+            if ((ctrl->flgs & FCT_TTTT) != FCT_CBOX)
+                return 0;
             cmsg =
                 gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(ctrl->priv[0]));
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ctrl->priv[0]),
@@ -611,7 +704,7 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             gtk_widget_set_sensitive(GTK_WIDGET(ctrl->priv[0]), !!data);
             break;
 
-        case MSG_LCOL:
+        case MSG__TXT:
             gtk_tree_view_column_set_title
                 (GTK_TREE_VIEW_COLUMN(ctrl->priv[3]), (char*)data);
             gtk_tree_model_foreach(GTK_TREE_MODEL(ctrl->priv[2]),
@@ -686,14 +779,14 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 /// PRIV:
-///  0: GtkWidget
+///  0: GtkWidget (container)
 ///  1:
 ///  2:
 ///  3:
 ///  4:
 ///  5:
 ///  6:
-///  7:
+///  7: GtkWidget (text)
 intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__GSZ: {
@@ -705,6 +798,14 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         }
         case MSG__POS:
             MoveControl(ctrl, data);
+            break;
+
+        case MSG__TXT:
+            gtk_label_set_text(GTK_LABEL(ctrl->priv[7]), (char*)data);
+            break;
+
+        case MSG__ENB:
+            gtk_widget_set_sensitive(GTK_WIDGET(ctrl->priv[0]), !!data);
             break;
 
         case MSG__SHW:
@@ -813,9 +914,6 @@ void rFreeControl(CTRL *ctrl) {
         case FCT_CBOX:
             break;
 
-        case FCT_RBOX:
-            break;
-
         case FCT_SPIN:
             break;
 
@@ -839,8 +937,7 @@ void rFreeControl(CTRL *ctrl) {
 
 
 
-void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
-    static GSList *lgrp = 0;
+void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
     GtkWidget *gwnd;
     CTRL *root;
 
@@ -855,7 +952,12 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         gtk_widget_set_app_paintable(gwnd, TRUE);
         gtk_window_set_resizable(GTK_WINDOW(gwnd), TRUE);
         gtk_window_set_decorated(GTK_WINDOW(gwnd), TRUE);
-        gtk_window_set_title(GTK_WINDOW(gwnd), text);
+        if (~ctrl->flgs & FSW_SIZE) {
+            gtk_window_set_skip_taskbar_hint(GTK_WINDOW(gwnd), TRUE);
+            gtk_window_set_resizable(GTK_WINDOW(gwnd), FALSE);
+            gtk_window_set_type_hint(GTK_WINDOW(gwnd),
+                                     GDK_WINDOW_TYPE_HINT_DIALOG);
+        }
         gtk_container_set_border_width(GTK_CONTAINER(gwnd), 0);
 
         fmet = pango_context_get_metrics(gtk_widget_get_pango_context(gwnd),
@@ -868,9 +970,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
 
         g_signal_connect(G_OBJECT(gwnd), "configure-event",
                          G_CALLBACK(OptResize), ctrl);
-        /// [TODO:] DEL ME
-        g_signal_connect(G_OBJECT(gwnd), "destroy",
-                         G_CALLBACK(gtk_main_quit), 0);
+        g_signal_connect(G_OBJECT(gwnd), "delete-event",
+                         G_CALLBACK(OptQuit), ctrl);
 
         ctrl->priv[7] = (intptr_t)gtk_fixed_new();
         gtk_container_add(GTK_CONTAINER(gwnd), GTK_WIDGET(ctrl->priv[7]));
@@ -898,31 +999,33 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                   + ((ctrl->ydim < 0)? 1 - ctrl->ydim / yspc : ctrl->ydim);
 
         switch (ctrl->flgs & FCT_TTTT) {
-            case FCT_TEXT: {
-                GtkLabel *capt = GTK_LABEL(gtk_label_new(text));
-
-                ctrl->fe2c = FE2CT;
+            case FCT_TEXT:
                 gwnd = gtk_frame_new(0);
-                gtk_widget_show(GTK_WIDGET(capt));
-                gtk_misc_set_alignment(GTK_MISC(capt),
+                ctrl->fe2c = FE2CT;
+                ctrl->priv[7] = (intptr_t)gtk_label_new(0);
+                gtk_widget_show(GTK_WIDGET(ctrl->priv[7]));
+                gtk_misc_set_alignment(GTK_MISC(ctrl->priv[7]),
                                       (ctrl->flgs & FST_CNTR)? 0.5 : 0.0, 0.5);
-                gtk_container_add(GTK_CONTAINER(gwnd), GTK_WIDGET(capt));
+                gtk_container_add(GTK_CONTAINER(gwnd),
+                                  GTK_WIDGET(ctrl->priv[7]));
                 gtk_frame_set_shadow_type(GTK_FRAME(gwnd),
                                          (ctrl->flgs & FST_SUNK)?
                                           GTK_SHADOW_ETCHED_IN :
                                           GTK_SHADOW_NONE);
                 break;
-            }
-            case FCT_BUTN: {
-                GtkLabel *capt = GTK_LABEL(gtk_label_new(text));
 
+            case FCT_BUTN:
                 gwnd = gtk_button_new();
-                gtk_widget_show(GTK_WIDGET(capt));
-                gtk_label_set_line_wrap(capt, TRUE);
-                gtk_label_set_justify(capt, GTK_JUSTIFY_CENTER);
-                gtk_container_add(GTK_CONTAINER(gwnd), GTK_WIDGET(capt));
+                ctrl->fe2c = FE2CX;
+                ctrl->priv[7] = (intptr_t)gtk_label_new(0);
+                gtk_widget_show(GTK_WIDGET(ctrl->priv[7]));
+                gtk_label_set_line_wrap(GTK_LABEL(ctrl->priv[7]), TRUE);
+                gtk_label_set_justify(GTK_LABEL(ctrl->priv[7]),
+                                      GTK_JUSTIFY_CENTER);
+                gtk_container_add(GTK_CONTAINER(gwnd),
+                                  GTK_WIDGET(ctrl->priv[7]));
                 g_signal_connect(G_OBJECT(gwnd), "size-allocate",
-                                 G_CALLBACK(ButtonSize), capt);
+                                 G_CALLBACK(ButtonSize), (void*)ctrl->priv[7]);
                 g_signal_connect(G_OBJECT(gwnd), "clicked",
                                  G_CALLBACK(ButtonSwitch), ctrl);
                 if (ctrl->flgs & FSB_DFLT) {
@@ -931,18 +1034,20 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                                            gwnd);
                 }
                 break;
-            }
+
             case FCT_CBOX: {
-                GtkLabel *capt = GTK_LABEL(gtk_label_new(text));
                 GtkTextDirection gdir;
 
-                ctrl->fe2c = FE2CX;
                 gwnd = gtk_check_button_new();
-                gtk_widget_show(GTK_WIDGET(capt));
-                gtk_widget_set_size_request(GTK_WIDGET(capt), INT16_MAX, -1);
-                gtk_container_add(GTK_CONTAINER(gwnd), GTK_WIDGET(capt));
+                ctrl->fe2c = FE2CX;
+                ctrl->priv[7] = (intptr_t)gtk_label_new(0);
+                gtk_widget_show(GTK_WIDGET(ctrl->priv[7]));
+                gtk_widget_set_size_request(GTK_WIDGET(ctrl->priv[7]),
+                                            INT16_MAX, -1);
+                gtk_container_add(GTK_CONTAINER(gwnd),
+                                  GTK_WIDGET(ctrl->priv[7]));
                 gdir = gtk_widget_get_direction(gwnd);
-                gtk_misc_set_alignment(GTK_MISC(capt),
+                gtk_misc_set_alignment(GTK_MISC(ctrl->priv[7]),
                                     !!(gdir == GTK_TEXT_DIR_RTL), 0.5);
                 if (ctrl->flgs & FSX_LEFT)
                     gdir = (gdir == GTK_TEXT_DIR_RTL)?
@@ -952,15 +1057,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                                  G_CALLBACK(ButtonSwitch), ctrl);
                 break;
             }
-            case FCT_RBOX:
-                if (ctrl->flgs & FSR_NGRP)
-                    lgrp = 0;
-                gwnd = gtk_radio_button_new_with_label(lgrp, text);
-                lgrp = gtk_radio_button_get_group(GTK_RADIO_BUTTON(gwnd));
-                g_signal_connect(G_OBJECT(gwnd), "toggled",
-                                 G_CALLBACK(ButtonSwitch), ctrl);
-                break;
-
             case FCT_SPIN:
                 ctrl->fe2c = FE2CN;
                 ctrl->priv[1] = 0;
@@ -1076,15 +1172,15 @@ void _start() {
     conf = calloc(strlen(home) + size, sizeof(*conf));
     strcat(conf, home);
     strcat(conf, "/.config");
-    mkdir(conf, 0700);
+    rMakeDir(conf);
     strcat(conf, DEF_OPTS);
-    if (!(home = (mkdir(conf, 0755))? (errno != EEXIST)? 0 : conf : conf))
+    if (!rMakeDir(conf))
         printf("WARNING: cannot create '%s'!", conf);
 
     gtk_init(0, 0);
     gscr = gdk_screen_get_default();
     gtk_icon_size_lookup(GTK_ICON_SIZE_DIALOG, &xdim, &ydim);
-    eExecuteEngine(conf, DEF_FLDR, xdim, ydim, 0, 0,
+    eExecuteEngine(conf, conf, xdim, ydim, 0, 0,
                    gdk_screen_get_width(gscr), gdk_screen_get_height(gscr));
     free(conf);
     curl_global_cleanup();

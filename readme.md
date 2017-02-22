@@ -19,6 +19,7 @@ All three major desktop operating systems (Windows, Linux and OS X) finally got 
 1. Profiles
 1. Screensaver
 1. Screen movement restriction (tab 2)
+1. [!DP] Port Win32 file dialogs to Win9x
 1. [!DP] Parallelize sprite processing in frontend
 1. [!DP] Move rendering options from tray menu to tab 3
 1. [!DP] Add OS-specific options to tab 3
