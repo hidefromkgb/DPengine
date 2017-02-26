@@ -6,7 +6,6 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <curl/curl.h>
-#include <openssl/err.h>
 
 #include "../exec/exec.h"
 #include "load/mac_load.h"
@@ -676,21 +675,41 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__TXT: {
+            CFDictionaryRef dict;
             CFStringRef capt;
+            CGRect rect;
+            CGSize dims;
+            NSFont *font;
             char *temp;
-            long size;
+            long prev, size, iter;
 
             if ((ctrl->flgs & FCT_TTTT) != FCT_BUTN)
                 capt = MAC_MakeString((char*)data);
             else {
-                /// a very simple hack to force multiline text wrapping
-                temp = malloc(size = strlen((char*)data) + 3);
-                temp[0] = '\n';
-                temp[1] = '\0';
-                strcat(temp, (char*)data);
-                temp[size - 2] = '\n';
-                temp[size - 1] = '\0';
+                font = systemFontOfSize_(NSFont(), systemFontSize(NSFont()));
+                dict = MAC_MakeDict(kCTFontAttributeName, font);
+                rect = frame((NSButton*)ctrl->priv[0]);
+                size = strlen((char*)data);
+                strcpy(temp = calloc(1, 2 + size), (char*)data);
+                temp[size] = ' ';
+                for (prev = size = iter = 0; temp[iter]; iter++)
+                    if (temp[iter] == ' ') {
+                        temp[iter] = 0;
+                        capt = MAC_MakeString(&temp[prev]);
+                        dims = sizeWithAttributes_((NSObject*)capt, dict);
+                        MAC_FreeString(capt);
+                        temp[iter] = ' ';
+                        if (size + dims.width >= rect.size.width) {
+                            if (prev)
+                                temp[prev] = '\n';
+                            size = 0;
+                        }
+                        prev = iter;
+                        size += dims.width;
+                    }
+                temp[iter - 1] = 0;
                 capt = MAC_MakeString(temp);
+                MAC_FreeDict(dict);
                 free(temp);
             }
             setTitle_((NSButton*)ctrl->priv[0], capt);
@@ -1178,14 +1197,11 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
     root = ctrl->prev;
     if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
         NSInteger flgs;
-        CGPoint fadv;
         CGFloat ffsz;
 
         ctrl->fe2c = FE2CW;
-        ffsz = systemFontSize(NSFont());
-        gwnd = systemFontOfSize_(NSFont(), ffsz);
-        fadv = maximumAdvancement(gwnd);
-        ctrl->priv[2] =  (uint16_t)round(0.45 * fadv.x)
+        gwnd = systemFontOfSize_(NSFont(), ffsz = systemFontSize(NSFont()));
+        ctrl->priv[2] =  (uint16_t)round(0.45 * maximumAdvancement(gwnd).width)
                       | ((uint32_t)round(0.60 * ffsz) << 16);
 
         ctrl->priv[6] = (intptr_t)(scls = calloc(1, sizeof(*scls)));
@@ -1288,7 +1304,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
 
             case FCT_SPIN: {
                 CGRect temp = {};
-                CGPoint spin;
+                CGSize spin;
 
                 ctrl->fe2c = FE2CN;
                 gwnd = init(alloc(NSView()));
@@ -1299,7 +1315,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 MAC_SetIvar((NSTextField*)ctrl->priv[7], VAR_CTRL, ctrl);
                 spin = cellSize(cell((NSStepper*)ctrl->priv[6]));
                 temp.size = dims.size;
-                temp.size.width -= spin.x;
+                temp.size.width -= spin.width;
                 setFrame_((NSTextField*)ctrl->priv[7], temp);
                 setSendsActionOnEndEditing_
                     (cell((NSTextField*)ctrl->priv[7]), true);
@@ -1311,7 +1327,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                            (NSTextField*)ctrl->priv[7]);
                 setAction_((NSTextField*)ctrl->priv[7], ActionSelector());
                 temp.origin.x = temp.size.width;
-                temp.size.width = spin.x;
+                temp.size.width = spin.width;
                 setFrame_((NSStepper*)ctrl->priv[6], temp);
                 setValueWraps_((NSStepper*)ctrl->priv[6], false);
                 setTarget_((NSStepper*)ctrl->priv[6],
@@ -1442,7 +1458,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
 
 
 void lockfunc(int mode, int indx, const char *file, int line) {
-    if (mode & CRYPTO_LOCK)
+    if (mode & 0x01 /** = CRYPTO_LOCK **/)
         pthread_mutex_lock(&pmtx[indx]);
     else
         pthread_mutex_unlock(&pmtx[indx]);
