@@ -146,18 +146,25 @@ char *rConvertUTF8(char *utf8) {
 
 
 
-long rMessage(char *text, char *head, uint32_t flgs) {
+long rMessage(char *text, char *head, char *byes, char *bnay) {
     CFStringRef tttt, hhhh;
-    CFOptionFlags retn;
+    NSAlert *mbox;
+    long retn;
 
-    /** [TODO:] internationalize "Cancel" **/
-    CFUserNotificationDisplayAlert
-         (0, kCFUserNotificationNoteAlertLevel, 0, 0, 0,
-          hhhh = MAC_MakeString(head), tttt = MAC_MakeString(text), 0,
-         (flgs & RMF_BTAD)? CFSTR("Cancel") : 0, 0, &retn);
+    setAlertStyle_(mbox = init(alloc(NSAlert())), NSInformationalAlertStyle);
+    addButtonWithTitle_(mbox, tttt = MAC_MakeString(byes));
+    MAC_FreeString(tttt);
+    if (bnay) {
+        addButtonWithTitle_(mbox, tttt = MAC_MakeString(bnay));
+        MAC_FreeString(tttt);
+    }
+    setMessageText_(mbox, hhhh = MAC_MakeString(head));
+    setInformativeText_(mbox, tttt = MAC_MakeString(text));
+    retn = (runModal(mbox) == NSAlertFirstButtonReturn);
+    release(mbox);
     MAC_FreeString(tttt);
     MAC_FreeString(hhhh);
-    return !retn;
+    return retn;
 }
 
 
@@ -277,7 +284,7 @@ long rSaveFile(char *name, char *data, long size) {
 
     if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {
         size = write(file, data, size);
-        ftruncate(file);
+        ftruncate(file, size);
         close(file);
         return size;
     }
@@ -288,6 +295,63 @@ long rSaveFile(char *name, char *data, long size) {
 
 long rMakeDir(char *name) {
     return !mkdir(name, 0755) || (errno == EEXIST);
+}
+
+
+
+long rMoveDir(char *dsrc, char *ddst) {
+    char *pcmd, *ptmp, *dtmp, *dddd[] = {(ddst)? ddst : dsrc, dsrc};
+    long retn, iter;
+
+    ptmp = pcmd = calloc(1, 128 + 4 * (strlen(dddd[0]) + strlen(dddd[1])));
+    strncpy(ptmp, (ddst)? "mv -f '" : "rm -r '", retn = sizeof("mv -f '") - 1);
+    ptmp += retn;
+    for (iter = (ddst)? 1 : 0; iter >= 0; iter--) {
+        while ((dtmp = strchr(dddd[iter], '\''))) {
+            strncpy(ptmp, dddd[iter], retn = dtmp - dddd[iter]);
+            ptmp += retn;
+            strncpy(ptmp, "'\\''", retn = sizeof("'\\''") - 1);
+            ptmp += retn;
+            dddd[iter] = dtmp + 1;
+        }
+        strncpy(ptmp, dddd[iter], retn = strlen(dddd[iter]));
+        ptmp += retn;
+        dtmp = (iter)? "' '" : "'";
+        strncpy(ptmp, dtmp, retn = strlen(dtmp));
+        ptmp += retn;
+    }
+    retn = !system(pcmd);
+    free(pcmd);
+    return retn;
+}
+
+
+
+char *ChooseFileDir(CTRL *root, char *file, char *fext) {
+    NSOpenPanel *cfdp;
+    CFStringRef path;
+
+    setAllowsMultipleSelection_(cfdp = openPanel(NSOpenPanel()), false);
+    setCanChooseDirectories_(cfdp, !fext);
+    setCanChooseFiles_(cfdp, !!fext);
+    if (fext) {
+    }
+    fext = 0;
+    if (runModal(cfdp) == NSFileHandlingPanelOKButton) {
+        path = CFURLCopyFileSystemPath(CFArrayGetValueAtIndex(URLs(cfdp), 0),
+                                       kCFURLPOSIXPathStyle);
+        fext = MAC_LoadString(path);
+        MAC_FreeString(path);
+    }
+    return fext;
+}
+
+char *rChooseDir(CTRL *root, char *base) {
+    return ChooseFileDir(root, base, 0);
+}
+
+char *rChooseFile(CTRL *root, char *fext, char *file) {
+    return ChooseFileDir(root, file, fext);
 }
 
 
@@ -521,10 +585,18 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if (!data)
                 orderOut_((NSWindow*)ctrl->priv[0], thrd);
             else {
-                activateIgnoringOtherApps_
-                    (sharedApplication(NSApplication()), true);
+                activateIgnoringOtherApps_(thrd, true);
                 orderFront_((NSWindow*)ctrl->priv[0], thrd);
+                makeKeyWindow((NSWindow*)ctrl->priv[0]);
             }
+            break;
+        }
+        case MSG__TXT: {
+            CFStringRef capt;
+
+            capt = MAC_MakeString((char*)data);
+            setTitle_((NSWindow*)ctrl->priv[0], capt);
+            MAC_FreeString(capt);
             break;
         }
         case MSG_WSZC: {
@@ -545,8 +617,6 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             setFrame_display_animate_((NSWindow*)ctrl->priv[0],
                                       area, true, false);
             setMinSize_((NSWindow*)ctrl->priv[0], area.size);
-            orderFront_((NSWindow*)ctrl->priv[0],
-                         sharedApplication(NSApplication()));
             break;
         }
     }
@@ -574,7 +644,7 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
             break;
 
-        case MSG_PTXT:
+        case MSG__TXT:
             if (ctrl->priv[3])
                 MAC_FreeString((CFStringRef)ctrl->priv[3]);
             ctrl->priv[3] = (intptr_t)MAC_MakeString(data);
@@ -605,6 +675,28 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 ///  7:
 intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
+        case MSG__TXT: {
+            CFStringRef capt;
+            char *temp;
+            long size;
+
+            if ((ctrl->flgs & FCT_TTTT) != FCT_BUTN)
+                capt = MAC_MakeString((char*)data);
+            else {
+                /// a very simple hack to force multiline text wrapping
+                temp = malloc(size = strlen((char*)data) + 3);
+                temp[0] = '\n';
+                temp[1] = '\0';
+                strcat(temp, (char*)data);
+                temp[size - 2] = '\n';
+                temp[size - 1] = '\0';
+                capt = MAC_MakeString(temp);
+                free(temp);
+            }
+            setTitle_((NSButton*)ctrl->priv[0], capt);
+            MAC_FreeString(capt);
+            break;
+        }
         case MSG__ENB:
             setEnabled_((NSButton*)ctrl->priv[0], !!data);
             break;
@@ -645,7 +737,7 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                     setEnabled_(((NSView**)ctrl->priv[2])[cmsg], !!data);
             break;
 
-        case MSG_LCOL:
+        case MSG__TXT:
             setStringValue_(headerCell((NSTableColumn*)ctrl->priv[6]),
                             capt = MAC_MakeString(data));
             MAC_FreeString(capt);
@@ -733,12 +825,10 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG_NDIM:
-            ctrl->priv[1] = -(uint16_t)data;
+            ctrl->priv[1] = (int16_t)data;
             ctrl->priv[2] = (uint16_t)(data >> 16);
             setMinValue_((NSStepper*)ctrl->priv[6], ctrl->priv[1]);
             setMaxValue_((NSStepper*)ctrl->priv[6], ctrl->priv[2]);
-            setDoubleValue_((NSStepper*)ctrl->priv[6], 0);
-            OnSpin((NSStepper*)ctrl->priv[6], 0);
             break;
     }
     return 0;
@@ -764,8 +854,20 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             return (uint16_t)rect.size.width
                 | ((uint32_t)rect.size.height << 16);
         }
+        case MSG__TXT: {
+            CFStringRef capt;
+
+            capt = MAC_MakeString((char*)data);
+            setStringValue_((NSTextField*)ctrl->priv[0], capt);
+            MAC_FreeString(capt);
+            break;
+        }
         case MSG__POS:
             MoveControl(ctrl, data);
+            break;
+
+        case MSG__ENB:
+            setEnabled_((NSTextField*)ctrl->priv[0], !!data);
             break;
 
         case MSG__SHW:
@@ -880,9 +982,6 @@ void rFreeControl(CTRL *ctrl) {
             break;
 
         case FCT_CBOX:
-            break;
-
-        case FCT_RBOX:
             break;
 
         case FCT_SPIN:
@@ -1041,13 +1140,16 @@ bool MAC_Handler(OnTrue) {
 }
 
 bool MAC_Handler(OnClose) {
+    bool retn = false;
     CTRL *ctrl = 0;
 
     MAC_GetIvar(self, VAR_CTRL, &ctrl);
-    ctrl->priv[2] = 0; /// requesting a halt, or just crashing if CTRL is 0
-                       /// (the program is stopping anyway)
-    stop_(sharedApplication(NSApplication()), self);
-    return true;
+    if (ctrl->fc2e(ctrl, MSG_WEND, 0)) {
+        retn = true;
+        ctrl->priv[2] = 0;
+        stop_(sharedApplication(NSApplication()), self);
+    }
+    return retn;
 }
 
 void MAC_Handler(OnSize) {
@@ -1065,7 +1167,7 @@ void MAC_Handler(OnSize) {
     ctrl->fc2e(ctrl, MSG_WSZC, ctrl->priv[1]);
 }
 
-void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
+void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
     CTRL *root;
     SCLS *scls;
     CFStringRef capt;
@@ -1075,7 +1177,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
     gwnd = 0;
     root = ctrl->prev;
     if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
-        NSApplication *thrd;
+        NSInteger flgs;
         CGPoint fadv;
         CGFloat ffsz;
 
@@ -1106,23 +1208,17 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
         setPartialStringValidationEnabled_((NSNumberFormatter*)ctrl->priv[5],
                                             true);
         dims = (CGRect){};
+        flgs = NSClosableWindowMask | NSTitledWindowMask
+             | ((ctrl->flgs & FSW_SIZE)? NSMiniaturizableWindowMask
+                                       | NSResizableWindowMask : 0);
         gwnd = initWithContentRect_styleMask_backing_defer_
-                   (alloc(NSWindow()), dims, NSTitledWindowMask
-                                           | NSClosableWindowMask
-                                           | NSResizableWindowMask
-                                           | NSMiniaturizableWindowMask,
+                   (alloc(NSWindow()), dims, flgs,
                     kCGBackingStoreBuffered, false);
 
         ctrl->priv[7] = (intptr_t)init(alloc(scls->wndw));
         setContentView_(gwnd, (NSView*)ctrl->priv[7]);
         setDelegate_(gwnd, (NSView*)ctrl->priv[7]);
-        setTitle_(gwnd, capt = MAC_MakeString(text));
-        MAC_FreeString(capt);
         MAC_SetIvar((NSView*)ctrl->priv[7], VAR_CTRL, ctrl);
-        makeKeyWindow(gwnd);
-        thrd = sharedApplication(NSApplication());
-        activateIgnoringOtherApps_(thrd, true);
-        orderFront_(gwnd, thrd);
     }
     else if (root) {
         long xspc, yspc, xpos, ypos, xdim, ydim;
@@ -1151,7 +1247,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 ctrl->fe2c = FE2CT;
                 gwnd = init(alloc(scls->text));
                 MAC_SetIvar(gwnd, VAR_CTRL, 0);
-                setStringValue_(gwnd, capt = MAC_MakeString(text));
                 setAlignment_(gwnd, (ctrl->flgs & FST_CNTR)?
                                      NSCenterTextAlignment :
                                      NSLeftTextAlignment);
@@ -1159,22 +1254,11 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 setSelectable_(gwnd, false);
                 setEditable_(gwnd, false);
                 setBordered_(gwnd, false);
-                setBezeled_(gwnd, false);
-                MAC_FreeString(capt);
+                setBezeled_(gwnd, !!(ctrl->flgs & FST_SUNK));
                 break;
 
             case FCT_BUTN: {
-                char *temp;
-                long size;
-
-                /// a very simple hack to force multiline text wrapping
-                temp = malloc(size = strlen(text) + 3);
-                temp[0] = '\n';
-                temp[1] = '\0';
-                strcat(temp, text);
-                temp[size - 2] = '\n';
-                temp[size - 1] = '\0';
-
+                ctrl->fe2c = FE2CX;
                 gwnd = init(alloc(scls->butn));
                 MAC_SetIvar(gwnd, VAR_CTRL, ctrl);
                 MAC_SetIvar(gwnd, VAR_DATA, nil);
@@ -1189,9 +1273,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                     setDefaultButtonCell_((NSWindow*)ctrl->prev->priv[0],
                                           (NSButtonCell*)cell(gwnd));
                 }
-                setTitle_(gwnd, capt = MAC_MakeString(temp));
-                MAC_FreeString(capt);
-                free(temp);
                 break;
             }
             case FCT_CBOX:
@@ -1203,12 +1284,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff, char *text) {
                 setButtonType_(gwnd, NSSwitchButton);
                 setImagePosition_(gwnd, (ctrl->flgs & FSX_LEFT)?
                                          NSImageRight : NSImageLeft);
-                setTitle_(gwnd, capt = MAC_MakeString(text));
-                MAC_FreeString(capt);
-                break;
-
-            case FCT_RBOX:
-                /// [TODO:] do we really need radio boxes?
                 break;
 
             case FCT_SPIN: {
@@ -1413,17 +1488,20 @@ int main(int argc, char *argv[]) {
                  isPartialStringValid_newEditingString_errorDescription_(),
                  OnValidate)
     };
-    int  (*CNLK)() = dlsym(RTLD_DEFAULT, "CRYPTO_num_locks");
     void (*CSIC)(pthread_t (*func)()) =
         dlsym(RTLD_DEFAULT, "CRYPTO_set_id_callback");
     void (*CSLC)(void (*func)(int, int, const char*, int)) =
         dlsym(RTLD_DEFAULT, "CRYPTO_set_locking_callback");
+    int  (*CNLK)() = dlsym(RTLD_DEFAULT, "CRYPTO_num_locks");
     char *conf, *home;
     long iter, cmtx;
     CFStringRef path;
     CFArrayRef urls;
     CGFloat icon;
     CGRect dims;
+
+//    setBool_forKey_(standardUserDefaults(NSUserDefaults()),
+//                    false, CFSTR("NSShowNonLocalizedStrings"));
 
     if (!MAC_10_07_PLUS) {
         pmtx = calloc(cmtx = CNLK(), sizeof(*pmtx));
@@ -1436,15 +1514,13 @@ int main(int argc, char *argv[]) {
     setActivationPolicy_(sharedApplication(NSApplication()),
                          NSApplicationActivationPolicyAccessory);
     home = MAC_LoadString(bundlePath(mainBundle(NSBundle())));
-    strcat(home = realloc(home, 64 + strlen(home)),
-           "/Contents/Resources/"DEF_FLDR);
+    strcat(home = realloc(home, 64 + strlen(home)), "/Contents/Resources");
 
     urls = URLsForDirectory_inDomains_(defaultManager(NSFileManager()),
                                        NSApplicationSupportDirectory,
                                        NSUserDomainMask);
-    path = CFURLCopyFileSystemPath
-               (CFArrayGetValueAtIndex((CFArrayRef)urls, 0),
-                                        kCFURLPOSIXPathStyle);
+    path = CFURLCopyFileSystemPath(CFArrayGetValueAtIndex(urls, 0),
+                                   kCFURLPOSIXPathStyle);
     conf = MAC_LoadString(path);
     if (!rMakeDir(strcat(conf = realloc(conf, 64 + strlen(conf)), DEF_OPTS)))
         printf("WARNING: cannot create '%s'!", conf);

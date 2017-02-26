@@ -199,6 +199,8 @@ enum {
 /** Confirm saving the <...>    **/ TXT_BSAV,
 /** On refusal, the source <...>**/ TXT_BDEL,
 /** Failed to move the <...>    **/ TXT_BERR,
+/** OK                          **/ TXT_BYES,
+/** Cancel                      **/ TXT_BNAY,
 };
 
 /// /// /// /// /// /// /// /// /// ENGC.MCTL array indices
@@ -739,7 +741,8 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
     PARA *tmpl;
 
     if (engc->lcnt
-    || !rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP], RMF_BTAD))
+    || !rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP],
+                 engc->tran[TXT_BYES], engc->tran[TXT_BNAY]))
         return 0;
     text = tail = 0;
     while ((desc = rMakeHTTPS(user, GIT_SAPI))) {
@@ -809,7 +812,8 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
                     if (!rMakeDir(file)) {
                         path = Concatenate(0, engc->tran[TXT_FDIR], " ",
                                               GIT_SFIN, file, GIT_SFIN);
-                        rMessage(path, engc->tran[TXT_CCUP], RMF_BTOK);
+                        rMessage(path, engc->tran[TXT_CCUP],
+                                 engc->tran[TXT_BYES], 0);
                         file = realloc(file, 0);
                         path = realloc(path, 0);
                         path = 0;
@@ -835,7 +839,8 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
         rFreeHTTPS(desc);
     }
     else /// do NOT invert if/else, since conditions have side-effects
-        rMessage(engc->tran[TXT_INET], engc->tran[TXT_CCUP], RMF_BTOK);
+        rMessage(engc->tran[TXT_INET], engc->tran[TXT_CCUP],
+                 engc->tran[TXT_BYES], 0);
     return 1;
     #undef GIT_SAPI
     #undef GIT_SRAW
@@ -1791,19 +1796,19 @@ void MMH(MENU *item) {
             break;
 
         case TXT_CSLP:
-            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
+            rMessage("Not implemented yet!", "WIP", "OK", 0);
             break;
 
         case TXT_ASLP:
-            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
+            rMessage("Not implemented yet!", "WIP", "OK", 0);
             break;
 
         case TXT_TPL1:
-            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
+            rMessage("Not implemented yet!", "WIP", "OK", 0);
             break;
 
         case TXT_TPL2:
-            rMessage("Not implemented yet!", "WIP", RMF_BTOK);
+            rMessage("Not implemented yet!", "WIP", "OK", 0);
             break;
 
         case TXT_OPTS:
@@ -1965,7 +1970,7 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
     if (!(flgs & COM_RGPU) && (engc->mctx[3].flgs & MFL_VCHK)) {
         /// this happens when the engine cannot activate
         /// the GPU, so the best reaction is to complain
-        rMessage(engc->tran[TXT_CIGL], 0, RMF_BTOK);
+        rMessage(engc->tran[TXT_CIGL], 0, engc->tran[TXT_BYES], 0);
     }
     #define FLAG(t, f) t = ((t) & ~MFL_VCHK) | ((flgs & (f))? MFL_VCHK : 0)
     FLAG(engc->mctx[3].flgs, COM_RGPU);
@@ -2522,8 +2527,39 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case TXT_CAPT:
-            if (cmsg == MSG_WEND)
+            if (cmsg == MSG_WEND) {
+                ENGC *engc = (ENGC*)ctrl->data;
+                char *fptr, *file, *temp;
+
+                /// trying to write the animation base to its new location
+                if (engc->cini.base && engc->ccur.base) {
+                    fptr = strdup(engc->ccur.base);
+                    file = Concatenate(0, engc->cini.base, DEF_DSEP, DEF_FLDR);
+                    temp = Concatenate(0, engc->tran[TXT_BSAV],
+                                          "\n\n", file, "\n==>\n",
+                                          fptr, "\n\n", engc->tran[TXT_BDEL]);
+                    if (strcmp(engc->cini.base, engc->ccur.base)) {
+                        if (!rMessage(temp, engc->tran[TXT_BMOV],
+                                            engc->tran[TXT_BYES],
+                                            engc->tran[TXT_BNAY])) {
+                            free(fptr);
+                            fptr = 0;
+                        }
+                        if (!rMoveDir(file, fptr)) {
+                            free(temp);
+                            temp = Concatenate(0, engc->tran[TXT_BERR],
+                                                  "\n\n", file, "\n==>\n",
+                                                  (fptr)? fptr : "[X]");
+                            rMessage(temp, engc->tran[TXT_BMOV],
+                                           engc->tran[TXT_BYES], 0);
+                        }
+                    }
+                    free(temp);
+                    free(fptr);
+                    free(file);
+                }
                 return 1;
+            }
             if ((cmsg == MSG_WSZC) && (((ENGC*)ctrl->data)->mctl))
                 RUN_FE2C(((ENGC*)ctrl->data)->MCT_CHAR, cmsg, data);
             break;
@@ -3011,13 +3047,14 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
         rMakeControl(&engc.libs[indx].spin, 0, 0);
         rMakeControl(&engc.libs[indx].capt, 0, 0);
         RUN_FE2C(engc.libs[indx].spin, MSG_NDIM, 50000 << 16);
+        RUN_FE2C(engc.libs[indx].spin, MSG_NSET, 0);
         RUN_FE2C(engc.libs[indx].capt, MSG__TXT,
                 (intptr_t)engc.libs[indx].name);
     }
     RUN_FC2E(engc.MCT_FLTR, MSG_BCLK, 0);
     engc.seed = InitPRNG(elem = time(0));
 
-    printf("[((RNG))] seed = 0x%08X\n[**INI**] %s\n", elem, engc.cfnm);
+    printf("[((RNG))] seed = 0x%08X\n[[[INI]]] %s\n", elem, engc.cfnm);
 
     fram = calloc(sizeof(*fram), engc.lcnt * 2 + 1);
     fram[0] = (uintptr_t)&engc;
@@ -3029,28 +3066,6 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
         rFreeControl(&engc.libs[indx].pict);
         rFreeControl(&engc.libs[indx].spin);
         rFreeControl(&engc.libs[indx].capt);
-    }
-    /// trying to write the animation base to its new location
-    if (engc.cini.base && engc.ccur.base) {
-        fptr = strdup(engc.ccur.base);
-        file = Concatenate(0, engc.cini.base, DEF_DSEP, DEF_FLDR);
-        temp = Concatenate(0, engc.tran[TXT_BSAV], "\n\n", file,
-                              "\n==>\n", fptr, "\n\n", engc.tran[TXT_BDEL]);
-        if (strcmp(engc.cini.base, engc.ccur.base)) {
-            if (!rMessage(temp, engc.tran[TXT_BMOV], RMF_BTAD)) {
-                free(fptr);
-                fptr = 0;
-            }
-            if (!rMoveDir(file, fptr)) {
-                free(temp);
-                temp = Concatenate(0, engc.tran[TXT_BERR], "\n\n", file,
-                                      "\n==>\n", (fptr)? fptr : "[X]");
-                rMessage(temp, engc.tran[TXT_BMOV], RMF_BTOK);
-            }
-        }
-        free(temp);
-        free(fptr);
-        free(file);
     }
     /// discarding windows, menus and translations
     FreeWindow(&engc.mctl);

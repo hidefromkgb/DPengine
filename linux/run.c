@@ -115,13 +115,17 @@ char *rConvertUTF8(char *utf8) {
 
 
 
-long rMessage(char *text, char *head, uint32_t flgs) {
+long rMessage(char *text, char *head, char *byes, char *bnay) {
     GtkWidget *hdlg;
     long retn;
 
     hdlg = gtk_message_dialog_new(0, GTK_DIALOG_MODAL, GTK_MESSAGE_OTHER,
-                                 (flgs & RMF_BTAD)? GTK_BUTTONS_OK_CANCEL
-                                                  : GTK_BUTTONS_OK, text);
+                                     GTK_BUTTONS_NONE, text);
+    gtk_dialog_add_buttons(GTK_DIALOG(hdlg), byes,
+                          (char*)GTK_RESPONSE_OK, (char*)0);
+    if (bnay)
+        gtk_dialog_add_buttons(GTK_DIALOG(hdlg), bnay,
+                              (char*)GTK_RESPONSE_CANCEL, (char*)0);
     if (head)
         gtk_window_set_title(GTK_WINDOW(hdlg), head);
 
@@ -247,8 +251,7 @@ long rMoveDir(char *dsrc, char *ddst) {
     char *pcmd, *ptmp, *dtmp, *dddd[] = {(ddst)? ddst : dsrc, dsrc};
 
     ptmp = pcmd = calloc(1, 128 + 4 * (strlen(dddd[0]) + strlen(dddd[1])));
-    strncpy(ptmp, (ddst)? "mv  -f '" : "rm -rf '",
-            retn = sizeof("mv  -f '") - 1);
+    strncpy(ptmp, (ddst)? "mv -f '" : "rm -r '", retn = sizeof("mv -f '") - 1);
     ptmp += retn;
     for (iter = (ddst)? 1 : 0; iter >= 0; iter--) {
         while ((dtmp = strchr(dddd[iter], '\''))) {
@@ -271,8 +274,7 @@ long rMoveDir(char *dsrc, char *ddst) {
 
 
 
-char *ChooseFileDir(CTRL *root, GtkFileChooserAction gfca,
-                    char *file, char *fext) {
+char *ChooseFileDir(CTRL *root, char *file, char *fext) {
     GtkFileFilter *fltr;
     GtkWidget *wdlg;
     char *temp;
@@ -280,7 +282,9 @@ char *ChooseFileDir(CTRL *root, GtkFileChooserAction gfca,
     while (root->prev)
         root = root->prev;
     wdlg = gtk_file_chooser_dialog_new
-               ("", GTK_WINDOW(root->priv[0]), gfca,
+               ("", GTK_WINDOW(root->priv[0]),
+               (fext)? GTK_FILE_CHOOSER_ACTION_OPEN
+                     : GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
                 GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
                 GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT, (char*)0);
     if (fext) {
@@ -305,11 +309,11 @@ char *ChooseFileDir(CTRL *root, GtkFileChooserAction gfca,
 }
 
 char *rChooseDir(CTRL *root, char *base) {
-    return ChooseFileDir(root, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, base, 0);
+    return ChooseFileDir(root, base, 0);
 }
 
 char *rChooseFile(CTRL *root, char *fext, char *file) {
-    return ChooseFileDir(root, GTK_FILE_CHOOSER_ACTION_OPEN, file, fext);
+    return ChooseFileDir(root, file, fext);
 }
 
 

@@ -102,21 +102,78 @@ char *rConvertUTF8(char *utf8) {
 
 
 
-long rMessage(char *text, char *head, uint32_t flgs) {
-    char *tttt = rConvertUTF8(text),
-         *hhhh = rConvertUTF8(head);
+void AssignTextToControl(CTRL *ctrl, char *text) {
+    char *name;
 
+    if (ctrl->priv[0] && text) {
+        name = rConvertUTF8(text);
+        if (OldWin32())
+            SendMessageA((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
+        else
+            SendMessageW((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
+        free(name);
+    }
+}
+
+
+
+LRESULT APIENTRY MessageBtnRename(int code, WPARAM wPrm, LPARAM lPrm) {
+    CWPRETSTRUCT *retn = (CWPRETSTRUCT*)lPrm;
+    CTRL ctrl;
+    intptr_t addr;
+    char **data, clas[32];
+
+    /// well... if THIS isn`t ugly, then I don`t know what is
+    if ((code >= 0) && (retn->message == WM_INITDIALOG)) {
+        clas[0] = clas[sizeof(clas) - 1] = 0;
+        GetClassName(retn->hwnd, clas, sizeof(clas) - 1);
+        if (!strcmp(clas, "#32770")) {
+            addr = 0;
+            clas[0] = clas[sizeof(clas) - 1] = 0;
+            GetWindowText(retn->hwnd, clas, sizeof(clas) - 1);
+            for (code = 0; clas[code]; code++)
+                addr |= (clas[code] - '0') << (code << 2);
+            data = (char**)addr;
+            ctrl.priv[0] = (intptr_t)retn->hwnd;
+            AssignTextToControl(&ctrl, (data[0])? data[0] : "");
+            if (!data[2])
+                ctrl.priv[0] = (intptr_t)FindWindowEx(retn->hwnd, 0,
+                                                      WC_BUTTON, 0);
+            else {
+                ctrl.priv[0] = (intptr_t)GetDlgItem(retn->hwnd, IDCANCEL);
+                AssignTextToControl(&ctrl, data[2]);
+                ctrl.priv[0] = (intptr_t)GetDlgItem(retn->hwnd, IDOK);
+            }
+            AssignTextToControl(&ctrl, data[1]);
+        }
+    }
+    return CallNextHookEx(0, code, wPrm, lPrm);
+}
+
+long rMessage(char *text, char *head, char *byes, char *bnay) {
+    char hptr[32] = {}, *data[] = {head, byes, bnay};
     union {
         MSGBOXPARAMSA a;
         MSGBOXPARAMSW w;
-    } msgp = {{sizeof(msgp), 0, GetModuleHandle(0), tttt, hhhh,
-             ((flgs & RMF_BTAD)? MB_OKCANCEL : MB_OK)
-             | MB_TASKMODAL | MB_USERICON, (LPSTR)1}};
+    } msgp = {{sizeof(msgp), 0, GetModuleHandle(0), rConvertUTF8(text), 0,
+             ((bnay)? MB_OKCANCEL : MB_OK) | MB_TASKMODAL | MB_USERICON,
+             (LPSTR)1}};
+    intptr_t retn, addr;
+    HHOOK hook;
 
-    long retn = (OldWin32())? MessageBoxIndirectA(&msgp.a)
-                            : MessageBoxIndirectW(&msgp.w);
-    free(tttt);
-    free(hhhh);
+    addr = (intptr_t)data;
+    for (retn = 0; retn < 16; retn++) {
+        hptr[retn] = '0' + (addr & 0xF);
+        addr >>= 4;
+    }
+    msgp.a.lpszCaption = rConvertUTF8(hptr);
+    hook = SetWindowsHookEx(WH_CALLWNDPROCRET, MessageBtnRename,
+                            0, GetCurrentThreadId());
+    retn = (OldWin32())? MessageBoxIndirectA(&msgp.a)
+                       : MessageBoxIndirectW(&msgp.w);
+    free((LPSTR)msgp.a.lpszCaption);
+    free((LPSTR)msgp.a.lpszText);
+    UnhookWindowsHookEx(hook);
     return !!(retn == IDOK);
 }
 
@@ -1004,21 +1061,6 @@ LRESULT APIENTRY PBarProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             return retn;
     }
     return CallWindowProc((WNDPROC)ctrl->priv[7], hWnd, uMsg, wPrm, lPrm);
-}
-
-
-
-void AssignTextToControl(CTRL *ctrl, char *text) {
-    char *name;
-
-    if (ctrl->priv[0] && text) {
-        name = rConvertUTF8(text);
-        if (OldWin32())
-            SendMessageA((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
-        else
-            SendMessageW((HWND)ctrl->priv[0], WM_SETTEXT, 0, (LPARAM)name);
-        free(name);
-    }
 }
 
 

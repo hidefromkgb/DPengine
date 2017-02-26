@@ -89,10 +89,6 @@ enum {
 /** imagebox update frame       **/ MSG_IFRM,
 };
 
-/// /// /// /// /// /// /// /// /// message box flags
-/** "OK" button only            **/ #define RMF_BTOK   0
-/** "Accept" and "Deny" buttons **/ #define RMF_BTAD  (1 << 0)
-
 /// preview updater function
 typedef void (*UPRE)(intptr_t data, uint64_t time);
 
@@ -141,7 +137,7 @@ intptr_t rFindMake(char *base);
 intptr_t rMakeHTTPS(char *user, char *serv);
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim);
-long  rMessage(char *text, char *head, uint32_t flgs);
+long  rMessage(char *text, char *head, char *byes, char *bnay);
 long  rSaveFile(char *name, char *data, long size);
 long  rLoadHTTPS(intptr_t user, char *page, char **dest);
 long  rMoveDir(char *dsrc, char *ddst);

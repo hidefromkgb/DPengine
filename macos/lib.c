@@ -40,13 +40,13 @@ void lRestartEngine(ENGD *engd) {
     NSApplication *thrd = sharedApplication(NSApplication());
     NSEvent *post;
 
-    stop_(thrd, 0);
     /// if called from inside a timer context, bump an event to the loop
     /// to ensure that it did process the stop notification we just sent;
     /// if not in a timer context, a dummy event will be rejected anyway
     post = otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2_
                (NSEvent(), NSApplicationDefined, (CGPoint){},
                            NSApplicationDefined, 0, 0, 0, 0, 0, 0);
+    stop_(thrd, post);
     postEvent_atStart_(thrd, post, true);
 }
 
@@ -165,7 +165,7 @@ bool OnOpaq() {
 
 
 
-void OnFPS(CFRunLoopTimerRef tmrp, void *user) {
+void OnFPS(CFRunLoopTimerRef runp, void *user) {
     char fout[128];
 
     cOutputFPS((ENGD*)user, fout);
@@ -174,7 +174,7 @@ void OnFPS(CFRunLoopTimerRef tmrp, void *user) {
 
 
 
-void OnCalc(CFRunLoopTimerRef tmrp, void *user) {
+void OnCalc(CFRunLoopObserverRef runp, CFRunLoopActivity acti, void *user) {
     CGPoint dptr;
     uint32_t attr;
     intptr_t *data;
@@ -252,7 +252,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
 
     NSApplication *thrd;
     NSAutoreleasePool *pool;
-    CFRunLoopTimerRef tmrf, tmrd;
+    CFRunLoopObserverRef idl1, idl2;
+    CFRunLoopTimerRef tmrf;
     CFStringRef scib;
     CGRect dims;
     Class view;
@@ -323,13 +324,18 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     setHasShadow_(draw.hwnd, false);
     setOpaque_(draw.hwnd, false);
 
-    tmrf = MAC_MakeTimer(1000, OnFPS,  engd),
-    tmrd = MAC_MakeTimer(   1, OnCalc, engd);
+    tmrf = MAC_MakeTimer(1000, OnFPS, engd);
+    /// duplicate idle functions are a dirty hack to prevent blocking on
+    /// context menu, as we will soon have two runloop levels running...
+    /// [TODO:] resolve this
+    idl1 = MAC_MakeIdleFunc(OnCalc, engd);
+    idl2 = MAC_MakeIdleFunc(OnCalc, engd);
     orderFront_(draw.hwnd, thrd);
 
     run(thrd);
 
-    MAC_FreeTimer(tmrd);
+    MAC_FreeIdleFunc(idl2);
+    MAC_FreeIdleFunc(idl1);
     MAC_FreeTimer(tmrf);
 
     cDeallocFrame(engd, 0);
