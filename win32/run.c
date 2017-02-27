@@ -118,62 +118,65 @@ void AssignTextToControl(CTRL *ctrl, char *text) {
 
 
 LRESULT APIENTRY MessageBtnRename(int code, WPARAM wPrm, LPARAM lPrm) {
-    CWPRETSTRUCT *retn = (CWPRETSTRUCT*)lPrm;
+    CWPRETSTRUCT *cwpr = (CWPRETSTRUCT*)lPrm;
     CTRL ctrl;
-    intptr_t addr;
-    char **data, clas[32];
+    intptr_t retn, addr;
+    char sptr[32], **data;
 
     /// well... if THIS isn`t ugly, then I don`t know what is
-    if ((code >= 0) && (retn->message == WM_INITDIALOG)) {
-        clas[0] = clas[sizeof(clas) - 1] = 0;
-        GetClassName(retn->hwnd, clas, sizeof(clas) - 1);
-        if (!strcmp(clas, "#32770")) {
+    if ((code >= 0) && (cwpr->message == WM_INITDIALOG)) {
+        sptr[0] = sptr[sizeof(sptr) - 1] = 0;
+        GetClassName(cwpr->hwnd, sptr, sizeof(sptr) - 1);
+        if (!strcmp(sptr, "#32770")) {
             addr = 0;
-            clas[0] = clas[sizeof(clas) - 1] = 0;
-            GetWindowText(retn->hwnd, clas, sizeof(clas) - 1);
-            for (code = 0; clas[code]; code++)
-                addr |= (clas[code] - '0') << (code << 2);
+            sptr[0] = sptr[sizeof(sptr) - 1] = 0;
+            GetWindowText(cwpr->hwnd, sptr, sizeof(sptr) - 1);
+            for (retn = 0; sptr[retn]; retn++)
+                addr |= (sptr[retn] - '0') << (retn << 2);
             data = (char**)addr;
-            ctrl.priv[0] = (intptr_t)retn->hwnd;
-            AssignTextToControl(&ctrl, (data[0])? data[0] : "");
-            if (!data[2])
-                ctrl.priv[0] = (intptr_t)FindWindowEx(retn->hwnd, 0,
+            ctrl.priv[0] = (intptr_t)cwpr->hwnd;
+            AssignTextToControl(&ctrl, (data[1])? data[1] : "");
+            if (!data[3])
+                ctrl.priv[0] = (intptr_t)FindWindowEx(cwpr->hwnd, 0,
                                                       WC_BUTTON, 0);
             else {
-                ctrl.priv[0] = (intptr_t)GetDlgItem(retn->hwnd, IDCANCEL);
-                AssignTextToControl(&ctrl, data[2]);
-                ctrl.priv[0] = (intptr_t)GetDlgItem(retn->hwnd, IDOK);
+                ctrl.priv[0] = (intptr_t)GetDlgItem(cwpr->hwnd, IDCANCEL);
+                AssignTextToControl(&ctrl, data[3]);
+                ctrl.priv[0] = (intptr_t)GetDlgItem(cwpr->hwnd, IDOK);
             }
-            AssignTextToControl(&ctrl, data[1]);
+            AssignTextToControl(&ctrl, data[2]);
+            /// our work here is done, let`s remove the hook
+            UnhookWindowsHookEx((HHOOK)data[0]);
+            data[0] = 0;
         }
     }
     return CallNextHookEx(0, code, wPrm, lPrm);
 }
 
 long rMessage(char *text, char *head, char *byes, char *bnay) {
-    char hptr[32] = {}, *data[] = {head, byes, bnay};
+    char sptr[32], *data[] = {0, head, byes, bnay, 0, rConvertUTF8(text)};
     union {
         MSGBOXPARAMSA a;
         MSGBOXPARAMSW w;
-    } msgp = {{sizeof(msgp), 0, GetModuleHandle(0), rConvertUTF8(text), 0,
+    } msgp = {{sizeof(msgp), 0, GetModuleHandle(0), data[5], 0,
              ((bnay)? MB_OKCANCEL : MB_OK) | MB_TASKMODAL | MB_USERICON,
              (LPSTR)1}};
-    intptr_t retn, addr;
-    HHOOK hook;
+    intptr_t retn = 0, addr = (intptr_t)data;
 
-    addr = (intptr_t)data;
-    for (retn = 0; retn < 16; retn++) {
-        hptr[retn] = '0' + (addr & 0xF);
+    while (addr) {
+        sptr[retn++] = '0' + (addr & 0xF);
         addr >>= 4;
     }
-    msgp.a.lpszCaption = rConvertUTF8(hptr);
-    hook = SetWindowsHookEx(WH_CALLWNDPROCRET, MessageBtnRename,
-                            0, GetCurrentThreadId());
+    sptr[retn] = 0;
+    msgp.a.lpszCaption = data[4] = rConvertUTF8(sptr);
+    data[0] = (HHOOK)SetWindowsHookEx(WH_CALLWNDPROCRET, MessageBtnRename,
+                                      0, GetCurrentThreadId());
     retn = (OldWin32())? MessageBoxIndirectA(&msgp.a)
                        : MessageBoxIndirectW(&msgp.w);
-    free((LPSTR)msgp.a.lpszCaption);
-    free((LPSTR)msgp.a.lpszText);
-    UnhookWindowsHookEx(hook);
+    if (data[0])
+        UnhookWindowsHookEx((HHOOK)data[0]);
+    free(data[4]);
+    free(data[5]);
     return !!(retn == IDOK);
 }
 
@@ -1760,7 +1763,7 @@ char *rChooseFile(CTRL *root, char *fext, char *file) {
     union {
         OPENFILENAMEA a;
         OPENFILENAMEW w;
-    } hofn = {{sizeof(hofn), (HWND)root->priv[0],
+    } hofn = {{(OldWin32())? 76 : 88, (HWND)root->priv[0],
               .nMaxFile = MAX_PATH, .nFilterIndex = 1,
               .Flags = OFN_HIDEREADONLY | OFN_FILEMUSTEXIST
                      | OFN_ENABLESIZING | OFN_NONETWORKBUTTON}};
@@ -1805,7 +1808,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     INITCOMMONCONTROLSEX icct = {sizeof(icct), ICC_STANDARD_CLASSES};
     RECT area = {MAXLONG, MAXLONG, MINLONG, MINLONG};
     CHAR *name, *conf = 0, path[(MAX_PATH + 2) * 2] = {};
-    HMODULE hlib;
+    HMODULE hlsh, hlsf;
 
 //    if (flgs & FLG_CONS) {
 //        AllocConsole();
@@ -1816,15 +1819,20 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     InitCommonControlsEx(&icct);
     EnumDisplayMonitors(0, 0, CalcScreen, (LPARAM)&area);
 
-    hlib = LoadLibrary((OldWin32())? "shfolder" : "shell32");
-    SHGF = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHGetFolderPathA"
-                                                   : "SHGetFolderPathW");
-    SHFO = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHFileOperationA"
-                                                   : "SHFileOperationW");
-    SHBF = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHBrowseForFolderA"
-                                                   : "SHBrowseForFolderW");
-    SHGP = (PVOID)GetProcAddress(hlib, (OldWin32())? "SHGetPathFromIDListA"
-                                                   : "SHGetPathFromIDListW");
+    hlsh = LoadLibrary("shell32");
+    hlsf = LoadLibrary("shfolder");
+    SHGF = (PVOID)GetProcAddress((hlsf)? hlsf : hlsh,
+                                (OldWin32())? "SHGetFolderPathA"
+                                            : "SHGetFolderPathW");
+    SHFO = (PVOID)GetProcAddress(hlsh,
+                                (OldWin32())? "SHFileOperationA"
+                                            : "SHFileOperationW");
+    SHBF = (PVOID)GetProcAddress(hlsh,
+                                (OldWin32())? "SHBrowseForFolderA"
+                                            : "SHBrowseForFolderW");
+    SHGP = (PVOID)GetProcAddress(hlsh,
+                                (OldWin32())? "SHGetPathFromIDListA"
+                                            : "SHGetPathFromIDListW");
     if (SHGF(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL,
              SHGFP_TYPE_CURRENT, path) == S_OK) {
         if (!OldWin32()) {
@@ -1840,13 +1848,13 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     }
     if (OldWin32()) {
         GetModuleFileNameA(0, path, MAX_PATH);
-        name = BackReslash(strdup(path));
+        name = strdup(path);
     }
     else {
         GetModuleFileNameW(0, (LPWSTR)path, MAX_PATH);
-        name = BackReslash(UTF8((LPWSTR)path));
+        name = UTF8((LPWSTR)path);
     }
-    for (show = strlen(name) - 1; show >= 0; show--)
+    for (show = strlen(BackReslash(name)) - 1; show >= 0; show--)
         if (name[show] == '\\') {
             name[show] = 0;
             break;
@@ -1854,7 +1862,8 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     eExecuteEngine(conf, name, GetSystemMetrics(SM_CXSMICON),
                    GetSystemMetrics(SM_CYSMICON),
                    area.left, area.top, area.right, area.bottom);
-    FreeLibrary(hlib);
+    FreeLibrary(hlsf);
+    FreeLibrary(hlsh);
     OleUninitialize();
     fclose(stdout);
     FreeConsole();
