@@ -137,8 +137,8 @@
 enum {
 /** Remove character            **/ TXT_CDEL = 0,
 /** Remove all similar          **/ TXT_ADEL,
-/** Sleep/pause                 **/ TXT_CSLP,
-/** Sleep/pause all similar     **/ TXT_ASLP,
+/** Sleep / wake up             **/ TXT_CSLP,
+/** Sleep / wake up all similar **/ TXT_ASLP,
 /** Take control: Player 1      **/ TXT_TPL1,
 /** Take control: Player 2      **/ TXT_TPL2,
 /** More options...             **/ TXT_OPTS,
@@ -335,9 +335,7 @@ typedef struct _PICT {
              tmov,  /// BHV: next movement, msec
                     /// EFF: next respawn, msec (LLONG_MAX if respawned)
              tbhv;  /// BHV: next behaviour, msec
-                    ///      flgs::PIF_PAIR is inverted on behaviour change
                     /// EFF: expected deletion, msec
-                    ///      prohibit respawn if flgs::PIF_PAIR differs
 } PICT;
 
 /// client configuration
@@ -1542,10 +1540,9 @@ long SpawnEffect(PICT **retn, PICT *from, RNGS *seed,
 
 
 void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
-    long seed, lbgn, lend;
+    long seed, lbgn, lend, prev = pict->indx;
     LINF *ulib = pict->ulib;
     BINF *binf;
-    AINF *anim;
 
     if (pict->flgs & PIF_EFCT)
         return;
@@ -1581,26 +1578,31 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
     pict->tbhv = time + binf->dmin;
     if (binf->dmax > binf->dmin)
         pict->tbhv += PRNG(engc->seed) % (binf->dmax - binf->dmin);
-    if (!time) {
+    if (time) {
+        /// re-center the upcoming sprite based on the previous center
+        pict->offs.x += pict->ulib->barr[prev >> 1].cntr[prev & 1].x
+                     -  binf->cntr[pict->indx & 1].x;
+        pict->offs.y -= pict->ulib->barr[prev >> 1].cntr[prev & 1].y
+                     -  binf->cntr[pict->indx & 1].y;
+    }
+    else {
         /// this is the first time this sprite appears; let`s put it somewhere
-        anim = &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
-        pict->offs.x = PRNG(engc->seed) % (engc->dims.x - anim->xdim);
-        pict->offs.y = PRNG(engc->seed) % (engc->dims.y - anim->ydim)
-                                                        + anim->ydim;
+        lbgn = binf->cntr[pict->indx & 1].x << 1;
+        lend = binf->cntr[pict->indx & 1].y << 1;
+        pict->offs.x = PRNG(engc->seed) % (engc->dims.x - lbgn);
+        pict->offs.y = PRNG(engc->seed) % (engc->dims.y - lend) + lend;
     }
     ChooseDirection(engc, pict);
     /// now spawning effects for the behaviour, if any
     /// (and only if this is not the first spawn and effects are enabled)
-    if (time && (engc->ccur.flgs & CSF_EEFF)) {
-        lbgn = pict->ulib->barr[pict->indx >> 1].ieff - 1;
-        for (lend = pict->ulib->barr[pict->indx >> 1].neff; lend; lend--)
+    if (time && (engc->ccur.flgs & CSF_EEFF))
+        for (lend = binf->neff; lend; lend--)
             SpawnEffect(&engc->parr[engc->pcnt++], pict,
-                         engc->seed, lbgn + lend, time);
-    }
+                         engc->seed, lend + binf->ieff - 1, time);
 }
 
 void SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
-    uint64_t time = engc->tcur;
+    uint64_t indx, time = engc->tcur;
     LINF *ulib = pict->ulib;
 
     if (pict->flgs & PIF_EFCT)
@@ -1619,19 +1621,21 @@ void SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
 
         case BHV_SLPM:
             if (pict->flgs & PIF_ASLP) {
-                pict->indx = pict->ipre;
+                indx = pict->ipre >> 1;
                 pict->flgs &= ~PIF_ASLP;
             }
             else {
                 time = LLONG_MAX;
                 pict->ipre = pict->indx;
-                pict->indx = (ulib->bslp[PRNG(engc->seed) % ulib->nslp]
-                             - ulib->barr) << 1;
+                indx = ulib->bslp[PRNG(engc->seed) % ulib->nslp] - ulib->barr;
                 pict->flgs |= PIF_ASLP;
             }
             break;
+
+        default:
+            return;
     }
-    ChooseBehaviour(engc, pict, time, pict->indx);
+    ChooseBehaviour(engc, pict, time, indx << 1);
 }
 
 
