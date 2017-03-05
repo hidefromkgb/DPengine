@@ -2189,6 +2189,8 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         if (engc->tcur - pict->tmov >= FRM_WAIT) {
             if (BoundCrossed(pict->move.x, pict->offs.x + anim->xdim,
                              anim->xdim, engc->dims.x)) {
+                pict->offs.x += binf->cntr[ pict->indx & 1].x
+                             -  binf->cntr[~pict->indx & 1].x;
                 pict->move.x = -pict->move.x;
                 pict->indx ^= 1;
             }
