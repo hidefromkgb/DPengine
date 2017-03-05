@@ -73,7 +73,6 @@
 /** 'sleep' state               **/ #define BHV_SLPM (BHV_CTLM | BHV_VERM)
 /** [extractor]                 **/ #define BHV_MMMM (BHV_CTLM | BHV_ALLM)
 
-/** can be executed at random   **/ #define BHV_EXEC (1 << 27)
 /** [yet to be understood]      **/ #define BHV_____ (1 << 28)
 /** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 29)
 
@@ -91,9 +90,12 @@
 /** random centerless alignment **/ #define EFF_RCLA 0xA
 /** [extractor]                 **/ #define EFF_AAAA 0xF
 
-/** do not follow parent        **/ #define EFF_STAY (1 << 29)
-/** animation can be looped     **/ #define FLG_LOOP (1 << 30)
-/** this item is an effect      **/ #define FLG_EFCT (1 << 31)
+/** do not follow parent        **/ #define EFF_STAY (1 << 30)
+/** animation can be looped     **/ #define ANI_LOOP (1 << 31)
+
+/** this sprite is an effect    **/ #define PIF_EFCT (1 <<  0)
+/** inactive reserved sprite    **/ #define PIF_IRES (1 <<  1)
+/** this sprite is "asleep"     **/ #define PIF_ASLP (1 <<  2)
 
 /// /// /// /// /// /// /// /// /// follow offset type values
 /** 'fixed'                     **/ #define FOT_FIXD 0x9A8F97BD
@@ -102,11 +104,11 @@
 /// /// /// /// /// /// /// /// /// config file strings
 /** 'content'                   **/ #define CNF_BASE 0x6558329A
 /** 'language'                  **/ #define CNF_LANG 0x1644959C
-/** 'runstillupdate'            **/ #define CNF_RUNS 0x7ecc31be
-/** 'basescale'                 **/ #define CNF_SCAL 0x7a285de0
-/** 'timedilation'              **/ #define CNF_TDIL 0x338d79cf
-/** 'randomspeech'              **/ #define CNF_RSAY 0x0c4a8f7d
-/** 'cursordodge'               **/ #define CNF_PCDR 0xd00cab48
+/** 'runstillupdate'            **/ #define CNF_RUNS 0x7ECC31BE
+/** 'basescale'                 **/ #define CNF_SCAL 0x7A285DE0
+/** 'timedilation'              **/ #define CNF_TDIL 0x338D79CF
+/** 'randomspeech'              **/ #define CNF_RSAY 0x0C4A8F7D
+/** 'cursordodge'               **/ #define CNF_PCDR 0xD00CAB48
 /** 'flags'                     **/ #define CNF_FLGS 0x8ACE03CE
 /** 'render'                    **/ #define CNF_RNDR 0x3C9F6676
 /** 'draw'                      **/ #define CNF_DRAW 0xE7ABD6EE
@@ -249,7 +251,7 @@ enum {
 /**                             **/ #define OCT_FRES octl[31]
 
 /// behaviour/effect unit info (write-once, read-only)
-typedef struct _BINF {
+typedef struct {
     AINF  unit[2];  /// image pair
     T2IV  cntr[2];  /// image centers
     T2IV  ptgt;     /// follow target relative coords
@@ -267,7 +269,7 @@ typedef struct _BINF {
 } BINF;
 
 /// library categories (name string and its hash)
-typedef struct _CTGS {
+typedef struct {
     uint32_t hash, flgs;
     char    *name;
 } CTGS;
@@ -290,7 +292,7 @@ typedef struct ENGC ENGC;
 /// [TODO:] (priority 1) behaviours
 /// [TODO:] (priority 2) interactions
 /// [TODO:] (priority 3) speech
-typedef struct _LINF {
+typedef struct {
     CTRL     pict,  /// image box control to preview the sprite
              capt,  /// character name just below the image box
              spin;  /// spin control to set ICNT
@@ -298,12 +300,14 @@ typedef struct _LINF {
     CTGS    *ctgs;  /// library categories (hashed and sorted)
     BINF    *barr,  /// available behaviours ordered by name hash
             *earr,  /// available effects ordered by parent bhv. name hash
+           **bslp,  /// sleep behaviours extracted from BARR
            **bgrp;  /// nonzero-probability BARR elements ordered by bhv. group
     char   **bimp,  /// image paths for behaviours (0 if loaded)
            **eimp,  /// image paths for effects (0 if loaded)
             *path,  /// the folder from which the library was built
             *name;  /// human-readable name (may differ from PATH!)
     long    *ngrp,  /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
+             nslp,  /// number of sleep behaviours
              prev,  /// preview index in sorted BARR
              ccnt,  /// categories count
              gcnt,  /// behaviour groups count
@@ -313,8 +317,7 @@ typedef struct _LINF {
              icnt;  /// number of on-screen bhv. sprites from the library
 } LINF;
 
-/// actual on-screen sprite, opaque outside the module (TMR_PAIR: parity flag)
-#define TMR_PAIR (1ULL << 63)
+/// actual on-screen sprite, opaque outside the module
 typedef struct _PICT {
     struct
     _PICT   *next,  /// linked list support for SortByY(), only used there
@@ -322,19 +325,19 @@ typedef struct _PICT {
     LINF    *ulib;  /// unit library which the sprite belongs to
     T2FV     move,  /// movement direction (or parent offset for effects)
              offs;  /// position of the unit`s lower-left corner
-    uint32_t indx,  /// behaviour index, direction (lowest bit), effect flag
-             fram;  /// current frame
-                    /// timestamps; all are given in msec
-    uint64_t tfrm,  /// BHV: next frame
-                    /// EFF: next frame
-             tmov,  /// BHV: next movement (no flags allowed, see SortByY)
-                    /// EFF: next respawn (LLONG_MAX if already respawned,
-                    ///                    highest bit = parity flag)
-                    ///      parity enabled means "inactive sprite, skip it"
-             tbhv;  /// BHV: next behaviour (highest bit = parity flag)
-                    ///      parity is inverted on behaviour change
-                    /// EFF: expected deletion (highest bit = parity flag)
-                    ///      prohibit respawn if parity differs
+    uint32_t fram,  /// current frame
+             flgs,  /// unit-specific flags
+             indx,  /// behaviour direction (lowest bit) and index
+             ipre;  /// BHV: behaviour before entering a special mode
+                    /// EFF: behaviour of the parent
+    uint64_t tfrm,  /// BHV: next frame, msec
+                    /// EFF: next frame, msec
+             tmov,  /// BHV: next movement, msec
+                    /// EFF: next respawn, msec (LLONG_MAX if respawned)
+             tbhv;  /// BHV: next behaviour, msec
+                    ///      flgs::PIF_PAIR is inverted on behaviour change
+                    /// EFF: expected deletion, msec
+                    ///      prohibit respawn if flgs::PIF_PAIR differs
 } PICT;
 
 /// client configuration
@@ -988,7 +991,7 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
 
     /// defaults         (neff, ieff, igrp)----v--v--v
     *retn = (BINF){{}, {}, {}, 0, 5000, 15000, 0, 0, 0, 0.1 * FRM_WAIT, 0,
-                   BHV_ALLM | BHV_EXEC | BHV_____ | FLG_LOOP, 0, 0};
+                   BHV_ALLM | BHV_____ | ANI_LOOP, 0, 0};
 
     /// behaviour name......................................................... !def
     retn->name = HashLine(Dequote(GET_TEMP(conf)), 0);
@@ -1016,6 +1019,11 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
     /// possible movement directions...........................................  def = All
     IF_BIN_FIND(elem, uBMT, conf)
         retn->flgs = uBHV[elem - 1] | (retn->flgs & ~BHV_MMMM);
+    /// enforcing (!move && !(flgs & BHV_CTLM)) <=> (flgs == BHV_NONM)
+    if (!retn->move && !(retn->flgs & BHV_CTLM))
+        retn->flgs = BHV_NONM | (retn->flgs & ~BHV_MMMM);
+    if ((retn->flgs & BHV_MMMM) == BHV_NONM)
+        retn->move = 0.0;
 
     /// linked behaviour name..................................................  def = ""
     if (TRY_TEMP(conf))
@@ -1029,9 +1037,10 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
     /// speech said on behaviour end...........................................  def = ""
     if (TRY_TEMP(conf)) {};
 
-    /// flag to never exec this behaviour at random............................  def = False
+    /// flag to never execute this behaviour at random.........................  def = False
     if (TRY_TEMP(conf))
-        SET_FLAG(retn->flgs, temp, VAL_FALS, BHV_EXEC);
+        if (HashLine(ToLower(temp, 0), 0) == VAL_TRUE)
+            retn->prob = 0;
 
     /// X target to follow.....................................................  def = 0
     if (TRY_TEMP(conf))
@@ -1070,7 +1079,7 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
     }
     /// flag to prevent animation looping......................................  def = False
     if (TRY_TEMP(conf))
-        SET_FLAG(retn->flgs, temp, VAL_FALS, FLG_LOOP);
+        SET_FLAG(retn->flgs, temp, VAL_FALS, ANI_LOOP);
 
     /// behaviour group index..................................................  def = 0
     if (TRY_TEMP(conf)) {
@@ -1093,7 +1102,7 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
 
     /// defaults     (neff, ieff, igrp)----v--v--v
     *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0,
-                   FLG_EFCT | FLG_LOOP | EFF_STAY | (EFF_RNDA * 0x1111), 0, 0};
+                   ANI_LOOP | EFF_STAY | (EFF_RNDA * 0x1111), 0, 0};
 
     /// effect name (skipped intentionally).................................... !def
     if (TRY_TEMP(conf)) {};
@@ -1135,7 +1144,7 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
 
     /// flag to prevent animation looping......................................  def = False
     if (TRY_TEMP(conf))
-        SET_FLAG(retn->flgs, temp, VAL_FALS, FLG_LOOP);
+        SET_FLAG(retn->flgs, temp, VAL_FALS, ANI_LOOP);
 }
 
 void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
@@ -1285,6 +1294,7 @@ void FreeLib(LINF *elem) {
     free(elem->name);
     free(elem->barr);
     free(elem->earr);
+    free(elem->bslp);
     free(elem->bgrp);
     free(elem->ngrp);
 }
@@ -1354,7 +1364,7 @@ void SortByY(ENGC *engc) {
         else {
             ytmp = temp->offs.y - ymin + 1;
             if ((ytmp < 0) || (temp->offs.y >= ydim)
-            || (temp->tmov & TMR_PAIR)) /// reserved ones go to the very end
+            || (temp->flgs & PIF_IRES)) /// reserved ones go to the very end
                 ytmp = 0;
             temp->next = engc->elem[ytmp];
             engc->elem[ytmp] = temp;
@@ -1382,12 +1392,11 @@ void MoveToParent(PICT *pict, RNGS *seed) {
     if (seed) {
         /// parent behaviour animation
         anim[0] = &pict->boss->ulib->barr[pict->boss->indx >> 1].
-                                     unit[pict->boss->indx & 1];
+                                     unit[pict->boss->indx &  1];
         /// effect animation
-        anim[1] = &pict->ulib->earr[(pict->indx & ~FLG_EFCT) >> 1].
-                               unit[pict->indx & 1];
+        anim[1] = &pict->ulib->earr[pict->indx >> 1].unit[pict->indx & 1];
         /// read centering and placement for the current effect
-        desc = pict->ulib->earr[(pict->indx & ~FLG_EFCT) >> 1].flgs
+        desc = pict->ulib->earr[pict->indx >> 1].flgs
              >> ((pict->indx & 1) << 3); /// direction was inherited from BOSS
         #define CALC(d) ((d[desc & EFF_AAAA] >= 0.0)? d[desc & EFF_AAAA] \
                        : (float)(PRNG(seed) & 0xFFF) * 0.000244140625)   \
@@ -1416,7 +1425,7 @@ long BoundCrossed(float move, float offs, long bmin, long bmax) {
 
 
 void ChooseDirection(ENGC *engc, PICT *pict) {
-    if (pict->indx & FLG_EFCT)
+    if (pict->flgs & PIF_EFCT)
         return;
 
     BINF *bhvr = &pict->ulib->barr[pict->indx >> 1];
@@ -1492,15 +1501,16 @@ long SpawnEffect(PICT **retn, PICT *from, RNGS *seed,
                  ulong indx, uint64_t time) {
     BINF *binf;
 
-    if (from->tmov == LLONG_MAX)
+    if (from->tmov >= LLONG_MAX)
         return 0;  /// no more self-replicating for this effect; exiting
 
-    if (~from->indx & FLG_EFCT) {
+    if (~from->flgs & PIF_EFCT) {
         /// parent = behaviour
         *retn = calloc(1, sizeof(**retn));
         (*retn)->boss = from;
         (*retn)->ulib = from->ulib;
-        (*retn)->indx = (indx << 1) | (from->indx & 1) | FLG_EFCT;
+        (*retn)->indx = (indx << 1) | (from->indx & 1);
+        (*retn)->flgs |= PIF_EFCT;
     }
     else if (*retn != from) {
         /// parent = effect that needs to be copied to RETN
@@ -1511,7 +1521,7 @@ long SpawnEffect(PICT **retn, PICT *from, RNGS *seed,
     /// ^^^^ along these there is a third way, when an effect gets reused,
     /// and no new effects are created; this keeps sprite count in bounds
 
-    binf = &(*retn)->ulib->earr[((*retn)->indx & ~FLG_EFCT) >> 1];
+    binf = &(*retn)->ulib->earr[(*retn)->indx >> 1];
     (*retn)->fram = -1; /// this means:
     (*retn)->tfrm =  0; /// "update me to 0-th frame ASAP!"
     /// effect respawn time; DMAX = 0 means "do not respawn"
@@ -1520,9 +1530,9 @@ long SpawnEffect(PICT **retn, PICT *from, RNGS *seed,
     /// if the effect duration is longer than that of the behaviour, and
     /// also it doesn`t respawn, then trim it
     (*retn)->tbhv = (*retn)->boss->tbhv;
-    if (binf->dmin &&
-       (binf->dmax || (time + binf->dmin < ((*retn)->tbhv & ~TMR_PAIR))))
-        (*retn)->tbhv = (time + binf->dmin) | ((*retn)->tbhv & TMR_PAIR);
+    (*retn)->ipre = (*retn)->boss->indx;
+    if (binf->dmin && (binf->dmax || (time + binf->dmin < (*retn)->tbhv)))
+        (*retn)->tbhv = time + binf->dmin;
     /// re-adjusting turn, as it may have changed
     (*retn)->indx = ((*retn)->indx & ~1) | ((*retn)->boss->indx & 1);
     MoveToParent(*retn, seed);
@@ -1531,16 +1541,18 @@ long SpawnEffect(PICT **retn, PICT *from, RNGS *seed,
 
 
 
-void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t attr) {
+void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
     long seed, lbgn, lend;
     LINF *ulib = pict->ulib;
     BINF *binf;
     AINF *anim;
 
-    if (pict->indx & FLG_EFCT)
+    if (pict->flgs & PIF_EFCT)
         return;
 
-    if (!attr) {
+    if (~next)
+        pict->indx = next & ~1;
+    else {
         if (ulib->barr[pict->indx >> 1].link)
             pict->indx = (ulib->barr[pict->indx >> 1].link - 1) << 1;
         else {
@@ -1563,26 +1575,10 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t attr) {
             pict->indx = (ulib->bgrp[lbgn] - ulib->barr) << 1;
         }
     }
-    else {
-        /// compared to the search above, these are excruciatingly slow;
-        /// however, we can afford it since any of them may be executed
-        /// once per frame at most
-        if (attr & UFR_LBTN) {
-            return; /// [TODO:] del me
-        }
-        if (attr & UFR_MOUS) {
-            /// no point in updating the behaviour if it`s already current
-            if (((ulib->barr[pict->indx >> 1].flgs & BHV_OVRM) == BHV_OVRM)
-            ||  !(ulib->barr[pict->indx >> 1].flgs & BHV_ALLM))
-                return;
-            return; /// [TODO:] del me
-        }
-        return;
-    }
     binf = &pict->ulib->barr[pict->indx >> 1];
     pict->fram = -1; /// this means:
     pict->tfrm =  0; /// "update me to 0-th frame ASAP!"
-    pict->tbhv = (time + binf->dmin) | (~pict->tbhv & TMR_PAIR);
+    pict->tbhv = time + binf->dmin;
     if (binf->dmax > binf->dmin)
         pict->tbhv += PRNG(engc->seed) % (binf->dmax - binf->dmin);
     if (!time) {
@@ -1601,6 +1597,41 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t attr) {
             SpawnEffect(&engc->parr[engc->pcnt++], pict,
                          engc->seed, lbgn + lend, time);
     }
+}
+
+void SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
+    uint64_t time = engc->tcur;
+    LINF *ulib = pict->ulib;
+
+    if (pict->flgs & PIF_EFCT)
+        return;
+
+    switch (flgs & BHV_MMMM) {
+        case BHV_OVRM:
+        case BHV_OVRM ^ BHV_CTLM:
+            time = LLONG_MAX;
+            return;
+
+        case BHV_DRGM:
+        case BHV_DRGM ^ BHV_CTLM:
+            time = LLONG_MAX;
+            return;
+
+        case BHV_SLPM:
+            if (pict->flgs & PIF_ASLP) {
+                pict->indx = pict->ipre;
+                pict->flgs &= ~PIF_ASLP;
+            }
+            else {
+                time = LLONG_MAX;
+                pict->ipre = pict->indx;
+                pict->indx = (ulib->bslp[PRNG(engc->seed) % ulib->nslp]
+                             - ulib->barr) << 1;
+                pict->flgs |= PIF_ASLP;
+            }
+            break;
+    }
+    ChooseBehaviour(engc, pict, time, pict->indx);
 }
 
 
@@ -1719,6 +1750,32 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                 elem->bgrp[turn]->prob += elem->bgrp[turn - 1]->prob;
             turn = elem->ngrp[indx];
         }
+
+        /// extracting sleep behaviours
+        for (elem->nslp = qmax = turn = indx = 0; indx < elem->bcnt; indx++) {
+            if (elem->barr[indx].move < elem->barr[qmax].move)
+                qmax = indx;
+            if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
+                elem->nslp++;
+            else if (elem->barr[indx].prob
+                 && !elem->barr[indx].trgt && !elem->barr[indx].move)
+                turn++;
+        }
+        elem->bslp = calloc((!elem->nslp)? (!turn)? 1 : turn : elem->nslp,
+                              sizeof(*elem->bslp));
+        if (elem->nslp)
+            for (elem->nslp = indx = 0; indx < elem->bcnt; indx++) {
+                if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
+                    elem->bslp[elem->nslp++] = &elem->barr[indx];
+            }
+        else if (turn)
+            for (elem->nslp = indx = 0; indx < elem->bcnt; indx++) {
+                if (elem->barr[indx].prob
+                && !elem->barr[indx].trgt && !elem->barr[indx].move)
+                    elem->bslp[elem->nslp++] = &elem->barr[indx];
+            }
+        else
+            elem->bslp[(elem->nslp = 1) - 1] = &elem->barr[qmax];
     }
 
     if (elem->icnt <= 0)
@@ -1742,7 +1799,7 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         engc->pcnt++;
         engc->parr[engc->pcnt - 1] = calloc(1, sizeof(**engc->parr));
         engc->parr[engc->pcnt - 1]->ulib = elem;
-        ChooseBehaviour(engc, engc->parr[engc->pcnt - 1], 0, 0);
+        ChooseBehaviour(engc, engc->parr[engc->pcnt - 1], 0, ~0);
     }
     return elem->icnt + 1;
 }
@@ -1761,7 +1818,7 @@ void MMH(MENU *item) {
             engc = pict->ulib->engc;
             for (indx = 0; indx < engc->pcnt; indx++) {
                 if ((engc->parr[indx] == pict)
-                || ((engc->parr[indx]->indx & FLG_EFCT)
+                || ((engc->parr[indx]->flgs & PIF_EFCT)
                 &&  (engc->parr[indx]->boss == pict))) {
                     /// purging the character and all its
                     /// effects, including those reserved.
@@ -1796,11 +1853,16 @@ void MMH(MENU *item) {
             break;
 
         case TXT_CSLP:
-            rMessage("Not implemented yet!", "WIP", "OK", 0);
+            pict = (PICT*)item->data;
+            SpecialBehaviour(pict->ulib->engc, pict, BHV_SLPM);
             break;
 
         case TXT_ASLP:
-            rMessage("Not implemented yet!", "WIP", "OK", 0);
+            ulib = ((PICT*)item->data)->ulib;
+            engc = ulib->engc;
+            for (indx = 0; indx < engc->pcnt; indx++)
+                if (engc->parr[indx]->ulib == ulib)
+                    SpecialBehaviour(engc, engc->parr[indx], BHV_SLPM);
             break;
 
         case TXT_TPL1:
@@ -2013,34 +2075,36 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
 //    cEngineCallback(engd, ECB_LOAD, 0);
 
     curr = (engc->tacc += 0.01 * engc->ccur.ndil[1] * (time - engc->tpre));
-    engc->tacc -= curr;
-    curr = (engc->tcur += curr);
     engc->tpre = time;
+    engc->tacc -= curr;
+    engc->tcur += curr;
 
     /// watch out for reserved-s (they shouldn`t be in [0; ISEL], though)
     if ((attr & UFR_MOUS) && ((isel >= 0) || pict)) {
         if (!pict && ((engc->ppos.z ^ attr) & UFR_LBTN)) {
             pict = engc->pcur = engc->parr[isel];
-            if (pict->indx & FLG_EFCT)
+            if (pict->flgs & PIF_EFCT)
                 pict = engc->pcur = pict->boss;
             printf("[GRABBED] %s\n", pict->ulib->name);
             engc->ppos.x = xptr - pict->offs.x;
             engc->ppos.y = yptr - pict->offs.y;
-            ChooseBehaviour(engc, pict, curr, UFR_LBTN);
+            SpecialBehaviour(engc, pict, BHV_DRGM);
         }
         if (pict && (attr & UFR_LBTN)) {
             pict->offs.x = xptr - engc->ppos.x;
             pict->offs.y = yptr - engc->ppos.y;
         }
         else {
-            if (pict)
+            if (pict) {
                 printf("[DROPPED] %s\n", pict->ulib->name);
+                SpecialBehaviour(engc, pict, BHV_DRGM ^ BHV_CTLM);
+            }
             pict = engc->pcur = 0;
         }
         if (~attr & engc->ppos.z & UFR_RBTN) {
             if (!pict)
                 pict = engc->parr[isel];
-            if (pict->indx & FLG_EFCT)
+            if (pict->flgs & PIF_EFCT)
                 pict = pict->boss;
             temp = malloc(32 + strlen(pict->ulib->name));
             sprintf(temp, "[ %s ]", pict->ulib->name);
@@ -2048,17 +2112,19 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             engc->mspr[0].text = rConvertUTF8(temp);
             free(temp);
             /// setting data for "remove character", "remove all",
-            /// "pause", "pause all", "player 1", "player 2"
+            /// "sleep", "sleep all", "player 1", "player 2"
             engc->mspr[2].data = engc->mspr[3].data =
             engc->mspr[5].data = engc->mspr[6].data =
             engc->mspr[8].data = engc->mspr[9].data = (intptr_t)pict;
+            engc->mspr[5].flgs &= ~MFL_VCHK;
+            engc->mspr[5].flgs |= (pict->flgs & PIF_ASLP)? MFL_VCHK : 0;
             rOpenContextMenu(engc->mspr);
         }
         if (!pict && (isel >= 0) && engc->parr[isel]) {
             /// we`ve got a simple mouseover situation here
-            if (~engc->parr[isel]->indx & FLG_EFCT) {
+            if (~engc->parr[isel]->flgs & PIF_EFCT) {
                 /// effects shall not react to mouseover
-                ChooseBehaviour(engc, engc->parr[isel], curr, UFR_MOUS);
+                SpecialBehaviour(engc, engc->parr[isel], BHV_OVRM);
             }
         }
         engc->ppos.z = attr;
@@ -2066,27 +2132,28 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
     for (indx = 0; indx < engc->pcnt; indx++) {
         if (!(pict = engc->parr[indx]))
             continue;
-        binf = (~pict->indx & FLG_EFCT)? &pict->ulib->barr[pict->indx >> 1]
-             : &pict->ulib->earr[(pict->indx & ~FLG_EFCT) >> 1];
+        binf = (pict->flgs & PIF_EFCT)? &pict->ulib->earr[pict->indx >> 1]
+                                      : &pict->ulib->barr[pict->indx >> 1];
         anim = &binf->unit[pict->indx & 1];
-        if (pict->indx & FLG_EFCT) {
+        if (pict->flgs & PIF_EFCT) {
             /// effect
             if (~binf->flgs & EFF_STAY)
                 MoveToParent(pict, 0);   /// follow the parent
-            if ((~(pict->tbhv ^ pict->boss->tbhv) & TMR_PAIR) /// same bhv.
-            && (curr >= (pict->tmov & ~TMR_PAIR))) {
-                pict->tmov &= ~TMR_PAIR; /// drop the reserved state, if any
-                if (curr >= (pict->tbhv & ~TMR_PAIR))
+            if ((engc->tcur >= pict->tmov)               /// time to wake up
+            &&!((pict->ipre ^ pict->boss->indx) & ~1)) { /// same behaviour
+                pict->flgs &= ~PIF_IRES; /// drop the reserved state, if any
+                if (engc->tcur >= pict->tbhv)
                     elem = indx;         /// PICT expired, let`s edit inplace
                 else
                     engc->parr[elem = engc->pcnt++] = 0;
-                SpawnEffect(&engc->parr[elem], pict, engc->seed, 0, curr);
+                SpawnEffect(&engc->parr[elem], pict,
+                             engc->seed, 0, engc->tcur);
             }
-            else if (curr >= (pict->tbhv & ~TMR_PAIR)) {
+            else if (engc->tcur >= pict->tbhv) {
                 /// if (respawn > runtime) and same behaviour
                 if (binf->dmin && binf->dmax && (binf->dmax > binf->dmin)
-                && (~(pict->tbhv ^ pict->boss->tbhv) & TMR_PAIR))
-                    pict->tmov |= TMR_PAIR; /// reserved, waiting for respawn
+                &&!((pict->ipre ^ pict->boss->indx) & ~1))
+                    pict->flgs |= PIF_IRES; /// reserved, waiting for respawn
                 else {
                     free(pict);             /// either the run time is up or
                     engc->parr[indx] = 0;   /// parent behaviour has changed
@@ -2094,28 +2161,28 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                 }
             }
         }
-        else if ((curr >= (pict->tbhv & ~TMR_PAIR))
-             || ((pict->fram >= anim->fcnt) && !(binf->flgs & FLG_LOOP))) {
+        else if ((engc->tcur >= pict->tbhv)
+             || ((pict->fram >= anim->fcnt) && !(binf->flgs & ANI_LOOP))) {
             /// behaviour that needs being changed
-            ChooseBehaviour(engc, pict, curr, 0);
+            ChooseBehaviour(engc, pict, engc->tcur, ~0);
             binf = &pict->ulib->barr[pict->indx >> 1];
             anim = &binf->unit[pict->indx & 1];
         }
         /// update the current frame, both for effects and behaviours;
         /// has to be precisely in this place, don`t move it elsewhere
-        while (curr >= pict->tfrm) {
+        while (engc->tcur >= pict->tfrm) {
             pict->fram =
-                (pict->fram + 1 >= anim->fcnt)? (binf->flgs & FLG_LOOP)?
+                (pict->fram + 1 >= anim->fcnt)? (binf->flgs & ANI_LOOP)?
                  0 : pict->fram : pict->fram + 1;
-            pict->tfrm = ((pict->tfrm)? pict->tfrm : curr)
+            pict->tfrm = ((pict->tfrm)? pict->tfrm : engc->tcur)
                        + anim->time[pict->fram];
-            if (!anim->time[pict->fram] || (~binf->flgs & FLG_LOOP))
+            if (!anim->time[pict->fram] || (~binf->flgs & ANI_LOOP))
                 break;
         }
-        if (pict->indx & FLG_EFCT)
+        if (pict->flgs & PIF_EFCT)
             continue;
         /// only behaviours beyond this point!
-        if (curr - pict->tmov >= FRM_WAIT) {
+        if (engc->tcur - pict->tmov >= FRM_WAIT) {
             if (BoundCrossed(pict->move.x, pict->offs.x + anim->xdim,
                              anim->xdim, engc->dims.x)) {
                 pict->move.x = -pict->move.x;
@@ -2127,7 +2194,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
 
             pict->offs.x += pict->move.x;
             pict->offs.y += pict->move.y;
-            pict->tmov = curr;
+            pict->tmov = engc->tcur;
         }
     }
     SortByY(engc);
@@ -2135,15 +2202,13 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
     /// ELEM is the number of sprites skipped, multiplied by -1
     /// (like those with respawn > runtime staying in reserve)
     for (elem = indx = 0; indx < engc->pcnt; indx++)
-        if ((pict = engc->parr[indx])->tmov & TMR_PAIR)
+        if ((pict = engc->parr[indx])->flgs & PIF_IRES)
             elem--; /// this works only because reserved-s are put among
                     /// the sprites which cannot be selected with mouse
         else {
-            curr = pict->indx & ~FLG_EFCT;
-            if (pict->indx & FLG_EFCT)
-                anim = &pict->ulib->earr[curr >> 1].unit[curr & 1];
-            else
-                anim = &pict->ulib->barr[curr >> 1].unit[curr & 1];
+            anim = (pict->flgs & PIF_EFCT)?
+                   &pict->ulib->earr[pict->indx >> 1].unit[pict->indx & 1]
+                 : &pict->ulib->barr[pict->indx >> 1].unit[pict->indx & 1];
             engc->data[indx + elem] = (T4FV){{pict->offs.x, pict->offs.y,
                                               pict->fram, anim->uuid}};
         }
@@ -2181,7 +2246,8 @@ void Relocalize(ENGC *engc, char *lang) {
     {.text = engc->tran[TXT_CDEL], .uuid = TXT_CDEL, .func = MMH},
     {.text = engc->tran[TXT_ADEL], .uuid = TXT_ADEL, .func = MMH},
     {.text = ""},
-    {.text = engc->tran[TXT_CSLP], .uuid = TXT_CSLP, .func = MMH},
+    {.text = engc->tran[TXT_CSLP], .uuid = TXT_CSLP, .func = MMH,
+     .flgs = MFL_CCHK},
     {.text = engc->tran[TXT_ASLP], .uuid = TXT_ASLP, .func = MMH},
     {.text = ""},
     {.text = engc->tran[TXT_TPL1], .uuid = TXT_TPL1, .func = MMH},
