@@ -93,9 +93,20 @@
 /** do not follow parent        **/ #define EFF_STAY (1 << 30)
 /** animation can be looped     **/ #define ANI_LOOP (1 << 31)
 
-/** this sprite is an effect    **/ #define PIF_EFCT (1 <<  0)
-/** inactive reserved sprite    **/ #define PIF_IRES (1 <<  1)
-/** this sprite is "asleep"     **/ #define PIF_ASLP (1 <<  2)
+/** this sprite is...           **/
+/** ...an effect                **/ #define PIF_EFCT (1 <<  0)
+/** ...inactive, but reserved   **/ #define PIF_IRES (1 <<  1)
+/** ..."asleep"                 **/ #define PIF_SLPM (1 <<  2)
+/** ...dragged                  **/ #define PIF_DRGM (1 <<  3)
+/** ...under cursor             **/ #define PIF_OVRM (1 <<  4)
+/** ...controlled by Player 1   **/ #define PIF_TPL1 (1 <<  5)
+/** ...controlled by Player 2   **/ #define PIF_TPL2 (1 <<  6)
+/** [special modes` extractor]  **/ #define PIF_SPEC (PIF_SLPM \
+                                                    | PIF_DRGM \
+                                                    | PIF_OVRM)
+/** ["busy" sprites extractor]  **/ #define PIF_BUSY (PIF_SPEC \
+                                                    | PIF_TPL1 \
+                                                    | PIF_TPL2)
 
 /// /// /// /// /// /// /// /// /// follow offset type values
 /** 'fixed'                     **/ #define FOT_FIXD 0x9A8F97BD
@@ -300,13 +311,17 @@ typedef struct {
     CTGS    *ctgs;  /// library categories (hashed and sorted)
     BINF    *barr,  /// available behaviours ordered by name hash
             *earr,  /// available effects ordered by parent bhv. name hash
-           **bslp,  /// sleep behaviours extracted from BARR
-           **bgrp;  /// nonzero-probability BARR elements ordered by bhv. group
+           **bgrp,  /// nonzero-probability BARR elements ordered by bhv. group
+           **bovr,  /// mouseover behaviours extracted from BARR
+           **bdrg,  /// drag behaviours extracted from BARR
+           **bslp;  /// sleep behaviours extracted from BARR
     char   **bimp,  /// image paths for behaviours (0 if loaded)
            **eimp,  /// image paths for effects (0 if loaded)
             *path,  /// the folder from which the library was built
             *name;  /// human-readable name (may differ from PATH!)
     long    *ngrp,  /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
+            *novr,  /// bounds of behaviour groups in BOVR: [0~~)[G0~~~)[G1...
+            *ndrg,  /// bounds of behaviour groups in BDRG: [0~~)[G0~~~)[G1...
              nslp,  /// number of sleep behaviours
              prev,  /// preview index in sorted BARR
              ccnt,  /// categories count
@@ -364,6 +379,7 @@ struct ENGC {
     CTGS    *ctgs;  /// categories array
     RNGS    *seed;  /// random number generator seed
     PICT    *pcur,  /// the sprite currently picked
+            *povr,  /// the sprite with cursor over it
            **parr,  /// on-screen sprite pointers array
            **elem;  /// pointer buffer for SortByY()
     char   **tran,  /// localized text array (ASCIIZ; last item is also 0)
@@ -1293,6 +1309,10 @@ void FreeLib(LINF *elem) {
     free(elem->barr);
     free(elem->earr);
     free(elem->bslp);
+    free(elem->bdrg);
+    free(elem->ndrg);
+    free(elem->bovr);
+    free(elem->novr);
     free(elem->bgrp);
     free(elem->ngrp);
 }
@@ -1602,40 +1622,54 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
 }
 
 void SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
-    uint64_t indx, time = engc->tcur;
     LINF *ulib = pict->ulib;
+    uint64_t time, indx = 0;
 
-    if (pict->flgs & PIF_EFCT)
+    if ((pict->flgs & PIF_EFCT) || (flgs & (flgs - 1)) || !(flgs & PIF_SPEC))
         return;
 
-    switch (flgs & BHV_MMMM) {
-        case BHV_OVRM:
-        case BHV_OVRM ^ BHV_CTLM:
-            time = LLONG_MAX;
-            return;
 
-        case BHV_DRGM:
-        case BHV_DRGM ^ BHV_CTLM:
-            time = LLONG_MAX;
-            return;
 
-        case BHV_SLPM:
-            if (pict->flgs & PIF_ASLP) {
-                indx = pict->ipre >> 1;
-                pict->flgs &= ~PIF_ASLP;
-            }
-            else {
-                time = LLONG_MAX;
-                pict->ipre = pict->indx;
-                indx = ulib->bslp[PRNG(engc->seed) % ulib->nslp] - ulib->barr;
-                pict->flgs |= PIF_ASLP;
-            }
-            break;
+    /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME
+    if (flgs == PIF_DRGM)
+        return;
 
-        default:
-            return;
+
+
+    if (pict->flgs & flgs) {
+        indx = pict->ipre;
+        pict->flgs &= ~flgs;
+        time = engc->tcur;
+        if (pict->flgs & PIF_SPEC)
+            return SpecialBehaviour(engc, pict, pict->flgs);
     }
-    ChooseBehaviour(engc, pict, time, indx << 1);
+    else {
+        switch (flgs) {
+            case PIF_OVRM:
+                indx = ulib->novr[time = ulib->barr[pict->indx >> 1].igrp];
+                time = (time)? ulib->novr[time - 1] : 0;
+                indx = (ulib->bovr[PRNG(engc->seed) % (indx - time) + time]
+                     -  ulib->barr) << 1;
+                break;
+
+            case PIF_DRGM:
+                indx = ulib->ndrg[time = ulib->barr[pict->indx >> 1].igrp];
+                time = (time)? ulib->ndrg[time - 1] : 0;
+                indx = (ulib->bdrg[PRNG(engc->seed) % (indx - time) + time]
+                     -  ulib->barr) << 1;
+                break;
+
+            case PIF_SLPM:
+                indx = (ulib->bslp[PRNG(engc->seed) % ulib->nslp]
+                     -  ulib->barr) << 1;
+                break;
+        }
+        if (!(pict->flgs & PIF_SPEC))
+            pict->ipre = pict->indx;
+        pict->flgs |= flgs;
+        time = LLONG_MAX;
+    }
+    ChooseBehaviour(engc, pict, time, indx);
 }
 
 
@@ -1664,7 +1698,7 @@ long TruncateAndSort(BINF **base, long *rcnt) {
 ///   1: all good, 0 sprites on the screen
 ///  >1: all good, (return) - 1 sprites on the screen
 long AppendSpriteArr(LINF *elem, ENGC *engc) {
-    long indx, turn, qmax;
+    long indx, turn, qmax, *fill;
     BINF temp, *iter;
 
     if (elem->bimp || elem->eimp) {
@@ -1780,6 +1814,53 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             }
         else
             elem->bslp[(elem->nslp = 1) - 1] = &elem->barr[qmax];
+
+        /// extracting mouseover behaviours
+        fill = calloc(elem->gcnt, sizeof(*fill));
+        elem->novr = calloc(elem->gcnt, sizeof(*elem->novr));
+        for (qmax = indx = 0; indx < elem->bcnt; indx++) {
+            if (elem->barr[indx].move < elem->barr[qmax].move)
+                qmax = indx;
+            if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_OVRM)
+                elem->novr[elem->barr[indx].igrp]++;
+            else if (elem->barr[indx].prob
+                 && !elem->barr[indx].trgt && !elem->barr[indx].move)
+                fill[elem->barr[indx].igrp]--;
+        }
+        for (indx = 0; indx < elem->gcnt; indx++) {
+            if (elem->novr[indx] > 0)
+                fill[indx] = elem->novr[indx];
+            else
+                elem->novr[indx] = -fill[indx];
+            if (!elem->novr[indx])
+                elem->novr[indx] = fill[indx] =
+                    (elem->novr[0])? elem->novr[0] : 1;
+            elem->novr[indx] += (indx)? elem->novr[indx - 1] : 0;
+            fill[indx] = (fill[indx] > 0)?
+                          elem->novr[indx] : -elem->novr[indx];
+        }
+        elem->bovr = calloc(elem->novr[elem->gcnt - 1], sizeof(*elem->bovr));
+        elem->bovr[0] = &elem->barr[qmax];
+        for (indx = 0; indx < elem->bcnt; indx++) {
+            qmax = fill[elem->barr[indx].igrp];
+            if (((qmax > 0) &&
+                ((elem->barr[indx].flgs & BHV_MMMM) == BHV_OVRM))
+            ||  ((qmax < 0) && elem->barr[indx].prob &&
+                 !elem->barr[indx].trgt && !elem->barr[indx].move)) {
+                elem->bovr[((qmax > 0)? qmax : -qmax) - 1] = &elem->barr[indx];
+                fill[elem->barr[indx].igrp] = qmax - ((qmax > 0)? 1 : -1);
+            }
+        }
+        qmax = 0;
+        for (indx = elem->novr[0]; indx < elem->novr[elem->gcnt - 1]; indx++)
+            if (!elem->bovr[indx]) {
+                elem->bovr[indx] = elem->bovr[qmax];
+                qmax = (qmax + 1) % elem->novr[0];
+            }
+        free(fill);
+
+        /// extracting 'dragged' behaviours
+        elem->ndrg = calloc(elem->gcnt, sizeof(*elem->ndrg));
     }
 
     if (elem->icnt <= 0)
@@ -1820,6 +1901,8 @@ void MMH(MENU *item) {
         case TXT_CDEL:
             pict = (PICT*)item->data;
             engc = pict->ulib->engc;
+            if (engc->povr == pict)
+                engc->povr = 0;
             for (indx = 0; indx < engc->pcnt; indx++) {
                 if ((engc->parr[indx] == pict)
                 || ((engc->parr[indx]->flgs & PIF_EFCT)
@@ -1840,6 +1923,8 @@ void MMH(MENU *item) {
         case TXT_ADEL:
             ulib = ((PICT*)item->data)->ulib;
             engc = ulib->engc;
+            if (engc->povr && (engc->povr->ulib == ulib))
+                engc->povr = 0;
             for (indx = 0; indx < engc->pcnt; indx++)
                 if (engc->parr[indx]->boss
                 && (engc->parr[indx]->boss->ulib == ulib)) {
@@ -1858,7 +1943,7 @@ void MMH(MENU *item) {
 
         case TXT_CSLP:
             pict = (PICT*)item->data;
-            SpecialBehaviour(pict->ulib->engc, pict, BHV_SLPM);
+            SpecialBehaviour(pict->ulib->engc, pict, PIF_SLPM);
             break;
 
         case TXT_ASLP:
@@ -1866,7 +1951,7 @@ void MMH(MENU *item) {
             engc = ulib->engc;
             for (indx = 0; indx < engc->pcnt; indx++)
                 if (engc->parr[indx]->ulib == ulib)
-                    SpecialBehaviour(engc, engc->parr[indx], BHV_SLPM);
+                    SpecialBehaviour(engc, engc->parr[indx], PIF_SLPM);
             break;
 
         case TXT_TPL1:
@@ -2089,10 +2174,12 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             pict = engc->pcur = engc->parr[isel];
             if (pict->flgs & PIF_EFCT)
                 pict = engc->pcur = pict->boss;
-            printf("[GRABBED] %s\n", pict->ulib->name);
             engc->ppos.x = xptr - pict->offs.x;
             engc->ppos.y = yptr - pict->offs.y;
-            SpecialBehaviour(engc, pict, BHV_DRGM);
+            printf("[GRABBED] %s\n", pict->ulib->name);
+            /// 'sleeping' sprites shall ignore the dragged state
+            if (~pict->flgs & PIF_SLPM)
+                SpecialBehaviour(engc, pict, PIF_DRGM);
         }
         if (pict && (attr & UFR_LBTN)) {
             pict->offs.x = xptr - engc->ppos.x;
@@ -2101,7 +2188,9 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         else {
             if (pict) {
                 printf("[DROPPED] %s\n", pict->ulib->name);
-                SpecialBehaviour(engc, pict, BHV_DRGM ^ BHV_CTLM);
+                /// 'sleeping' sprites shall ignore the dragged state
+                if (~pict->flgs & PIF_SLPM)
+                    SpecialBehaviour(engc, pict, PIF_DRGM);
             }
             pict = engc->pcur = 0;
         }
@@ -2121,17 +2210,25 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             engc->mspr[5].data = engc->mspr[6].data =
             engc->mspr[8].data = engc->mspr[9].data = (intptr_t)pict;
             engc->mspr[5].flgs &= ~MFL_VCHK;
-            engc->mspr[5].flgs |= (pict->flgs & PIF_ASLP)? MFL_VCHK : 0;
+            engc->mspr[5].flgs |= (pict->flgs & PIF_SLPM)? MFL_VCHK : 0;
             rOpenContextMenu(engc->mspr);
         }
-        if (!pict && (isel >= 0) && engc->parr[isel]) {
-            /// we`ve got a simple mouseover situation here
-            if (~engc->parr[isel]->flgs & PIF_EFCT) {
-                /// effects shall not react to mouseover
-                SpecialBehaviour(engc, engc->parr[isel], BHV_OVRM);
-            }
-        }
         engc->ppos.z = attr;
+    }
+    if ((engc->ccur.flgs & CSF_ERCH) && (attr & UFR_MOUS) && !pict) {
+        if (engc->povr && ((isel < 0) || (engc->parr[isel] != engc->povr))) {
+            /// mouseover finish
+            SpecialBehaviour(engc, engc->povr, PIF_OVRM);
+            printf("[UNHOVER] %s\n", engc->povr->ulib->name);
+            engc->povr = 0;
+        }
+        if (!engc->povr && (isel >= 0) && engc->parr[isel]
+        && !(engc->parr[isel]->flgs & (PIF_EFCT | PIF_SLPM))) {
+            /// effects and 'sleeping' sprites shall ignore mouseover
+            engc->povr = engc->parr[isel];
+            SpecialBehaviour(engc, engc->povr, PIF_OVRM);
+            printf("[HOVERED] %s\n", engc->povr->ulib->name);
+        }
     }
     for (indx = 0; indx < engc->pcnt; indx++) {
         if (!(pict = engc->parr[indx]))
