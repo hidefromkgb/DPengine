@@ -1442,78 +1442,6 @@ long BoundCrossed(float move, float offs, long bmin, long bmax) {
 
 
 
-void ChooseDirection(ENGC *engc, PICT *pict) {
-    if (pict->flgs & PIF_EFCT)
-        return;
-
-    BINF *bhvr = &pict->ulib->barr[pict->indx >> 1];
-    float angl;
-    long flag;
-
-    if (!(bhvr->flgs & BHV_CTLM) && (bhvr->flgs & BHV_ALLM)) {
-        flag = PRNG(engc->seed);
-        switch (bhvr->flgs & BHV_ALLM) {
-            /// horizontal + diagonal + vertical movement
-            case BHV_ALLM:
-                flag %= 3;
-                flag = (flag)? (flag != 1)? BHV_HORM : BHV_DIAM : BHV_VERM;
-                break;
-
-            /// horizontal + vertical movement
-            case BHV_HNVM:
-                flag = (flag & 1)? BHV_HORM : BHV_VERM;
-                break;
-
-            /// horizontal + diagonal movement
-            case BHV_HNDM:
-                flag = (flag & 1)? BHV_HORM : BHV_DIAM;
-                break;
-
-            /// diagonal + vertical movement
-            case BHV_DNVM:
-                flag = (flag & 1)? BHV_DIAM : BHV_VERM;
-                break;
-
-            /// separate movement
-            default:
-                flag = bhvr->flgs;
-                break;
-        }
-        switch (flag) {
-            case BHV_DIAM:
-                flag = (((bhvr->flgs & BHV_HNVM) == BHV_HNVM) ||
-                        !(bhvr->flgs & BHV_HNVM))? 61 : 31;
-                angl =  ((bhvr->flgs & BHV_HNVM) == BHV_VERM)? 45.0 : 15.0;
-                angl = (angl + PRNG(engc->seed) % flag) * DTR_CONV;
-                break;
-
-            case BHV_VERM:
-                angl = 0.5 * M_PI;
-                break;
-
-            default:
-                angl = 0.0;
-                break;
-        }
-        pict->move = (T2FV){{cos(angl), sin(angl)}};
-    }
-    else
-        pict->move = (T2FV){{0.0, 0.0}};
-
-    pict->move.x *= bhvr->move;
-    pict->move.y *= bhvr->move;
-
-    pict->indx = (pict->indx & -2) | (PRNG(engc->seed) & 1);
-    if (!bhvr->unit[pict->indx & 1].uuid)
-        pict->indx ^= 1;
-    if (pict->indx & 1)
-        pict->move.x = -pict->move.x;
-    if (PRNG(engc->seed) & 1)
-        pict->move.y = -pict->move.y;
-}
-
-
-
 /// INDX is not used if FROM is an effect, as all we need is stored there
 long SpawnEffect(PICT **retn, PICT *from, RNGS *seed,
                  ulong indx, uint64_t time) {
@@ -1563,12 +1491,13 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
     long seed, lbgn, lend, prev = pict->indx;
     LINF *ulib = pict->ulib;
     BINF *binf;
+    float angl;
 
     if (pict->flgs & PIF_EFCT)
         return;
 
     if (~next)
-        pict->indx = next & ~1;
+        pict->indx = next;
     else {
         if (ulib->barr[pict->indx >> 1].link)
             pict->indx = (ulib->barr[pict->indx >> 1].link - 1) << 1;
@@ -1612,7 +1541,66 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
         pict->offs.x = PRNG(engc->seed) % (engc->dims.x - lbgn);
         pict->offs.y = PRNG(engc->seed) % (engc->dims.y - lend) + lend;
     }
-    ChooseDirection(engc, pict);
+    /// now choosing sprite direction
+    if (!(binf->flgs & BHV_CTLM) && (binf->flgs & BHV_ALLM)) {
+        prev = PRNG(engc->seed);
+        switch (binf->flgs & BHV_ALLM) {
+            /// horizontal + diagonal + vertical movement
+            case BHV_ALLM:
+                prev %= 3;
+                prev = (prev)? (prev != 1)? BHV_HORM : BHV_DIAM : BHV_VERM;
+                break;
+
+            /// horizontal + vertical movement
+            case BHV_HNVM:
+                prev = (prev & 1)? BHV_HORM : BHV_VERM;
+                break;
+
+            /// horizontal + diagonal movement
+            case BHV_HNDM:
+                prev = (prev & 1)? BHV_HORM : BHV_DIAM;
+                break;
+
+            /// diagonal + vertical movement
+            case BHV_DNVM:
+                prev = (prev & 1)? BHV_DIAM : BHV_VERM;
+                break;
+
+            /// separate movement
+            default:
+                prev = binf->flgs;
+                break;
+        }
+        switch (prev) {
+            case BHV_DIAM:
+                prev = (((binf->flgs & BHV_HNVM) == BHV_HNVM) ||
+                        !(binf->flgs & BHV_HNVM))? 61 : 31;
+                angl =  ((binf->flgs & BHV_HNVM) == BHV_VERM)? 45.0 : 15.0;
+                angl = (angl + PRNG(engc->seed) % prev) * DTR_CONV;
+                break;
+
+            case BHV_VERM:
+                angl = 0.5 * M_PI;
+                break;
+
+            default:
+                angl = 0.0;
+                break;
+        }
+        pict->move = (T2FV){{cos(angl) * binf->move, sin(angl) * binf->move}};
+    }
+    else
+        pict->move = (T2FV){{0.0, 0.0}};
+
+    if (!~next)
+        pict->indx = (pict->indx & -2) | (PRNG(engc->seed) & 1);
+    if (!binf->unit[pict->indx & 1].uuid)
+        pict->indx ^= 1;
+    if (pict->indx & 1)
+        pict->move.x = -pict->move.x;
+    if (PRNG(engc->seed) & 1)
+        pict->move.y = -pict->move.y;
+
     /// now spawning effects for the behaviour, if any
     /// (and only if this is not the first spawn and effects are enabled)
     if (time && (engc->ccur.flgs & CSF_EEFF))
@@ -1628,40 +1616,30 @@ void SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
     if ((pict->flgs & PIF_EFCT) || (flgs & (flgs - 1)) || !(flgs & PIF_SPEC))
         return;
 
-
-
-    /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME /// DEL ME
-    if (flgs == PIF_DRGM)
-        return;
-
-
-
     if (pict->flgs & flgs) {
-        indx = pict->ipre;
+        indx = pict->ipre >> 1;
         pict->flgs &= ~flgs;
         time = engc->tcur;
-        if (pict->flgs & PIF_SPEC)
-            return SpecialBehaviour(engc, pict, pict->flgs);
     }
     else {
         switch (flgs) {
             case PIF_OVRM:
                 indx = ulib->novr[time = ulib->barr[pict->indx >> 1].igrp];
                 time = (time)? ulib->novr[time - 1] : 0;
-                indx = (ulib->bovr[PRNG(engc->seed) % (indx - time) + time]
-                     -  ulib->barr) << 1;
+                indx = ulib->bovr[PRNG(engc->seed) % (indx - time) + time]
+                     - ulib->barr;
                 break;
 
             case PIF_DRGM:
                 indx = ulib->ndrg[time = ulib->barr[pict->indx >> 1].igrp];
                 time = (time)? ulib->ndrg[time - 1] : 0;
-                indx = (ulib->bdrg[PRNG(engc->seed) % (indx - time) + time]
-                     -  ulib->barr) << 1;
+                indx = ulib->bdrg[PRNG(engc->seed) % (indx - time) + time]
+                     - ulib->barr;
                 break;
 
             case PIF_SLPM:
-                indx = (ulib->bslp[PRNG(engc->seed) % ulib->nslp]
-                     -  ulib->barr) << 1;
+                indx = ulib->bslp[PRNG(engc->seed) % ulib->nslp]
+                     - ulib->barr;
                 break;
         }
         if (!(pict->flgs & PIF_SPEC))
@@ -1669,7 +1647,7 @@ void SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
         pict->flgs |= flgs;
         time = LLONG_MAX;
     }
-    ChooseBehaviour(engc, pict, time, indx);
+    ChooseBehaviour(engc, pict, time, (indx << 1) | (pict->indx & 1));
 }
 
 
@@ -1815,8 +1793,9 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         else
             elem->bslp[(elem->nslp = 1) - 1] = &elem->barr[qmax];
 
-        /// extracting mouseover behaviours
         fill = calloc(elem->gcnt, sizeof(*fill));
+
+        /// extracting mouseover behaviours
         elem->novr = calloc(elem->gcnt, sizeof(*elem->novr));
         for (qmax = indx = 0; indx < elem->bcnt; indx++) {
             if (elem->barr[indx].move < elem->barr[qmax].move)
@@ -1857,10 +1836,44 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                 elem->bovr[indx] = elem->bovr[qmax];
                 qmax = (qmax + 1) % elem->novr[0];
             }
-        free(fill);
 
-        /// extracting 'dragged' behaviours
+        /// extracting 'dragged' behaviours (uses mouseovers!)
         elem->ndrg = calloc(elem->gcnt, sizeof(*elem->ndrg));
+        for (indx = 0; indx < elem->gcnt; indx++)
+            fill[indx] = 0;
+        for (indx = 0; indx < elem->bcnt; indx++)
+            if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_DRGM)
+                elem->ndrg[elem->barr[indx].igrp]++;
+            else if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
+                fill[elem->barr[indx].igrp]--;
+        for (indx = 0; indx < elem->gcnt; indx++) {
+            if (elem->ndrg[indx] > 0)
+                fill[indx] = elem->ndrg[indx];
+            else
+                elem->ndrg[indx] = -fill[indx];
+            if (!elem->ndrg[indx])
+                elem->ndrg[indx] =
+                    elem->novr[indx] - ((indx)? elem->novr[indx - 1] : 0);
+            elem->ndrg[indx] += (indx)? elem->ndrg[indx - 1] : 0;
+        }
+        elem->bdrg = calloc(elem->ndrg[elem->gcnt - 1], sizeof(*elem->bdrg));
+        for (indx = 0; indx < elem->gcnt; indx++)
+            if (!fill[indx]) {
+                qmax = (indx)? elem->ndrg[indx - 1] : 0;
+                turn = (indx)? elem->novr[indx - 1] : 0;
+                for (; qmax < elem->ndrg[indx];)
+                    elem->bdrg[qmax++] = elem->bovr[turn++];
+            }
+        for (indx = 0; indx < elem->bcnt; indx++)
+            if ((fill[qmax = elem->barr[indx].igrp] > 0)
+            &&  (elem->barr[indx].flgs & BHV_MMMM) == BHV_DRGM)
+                elem->bdrg[elem->ndrg[qmax] - --fill[qmax] - 1] =
+                    &elem->barr[indx];
+            else if ((fill[qmax] < 0)
+                 &&  (elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
+                elem->bdrg[elem->ndrg[qmax] + ++fill[qmax] - 1] =
+                    &elem->barr[indx];
+        free(fill);
     }
 
     if (elem->icnt <= 0)
