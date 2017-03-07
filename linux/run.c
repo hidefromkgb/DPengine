@@ -770,11 +770,10 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case MSG_NDIM:
-            ctrl->priv[1] = -(uint16_t)data;
+            ctrl->priv[1] = (int16_t)data;
             ctrl->priv[2] = (uint16_t)(data >> 16);
             gtk_spin_button_set_range(GTK_SPIN_BUTTON(ctrl->priv[0]),
                                       ctrl->priv[1], ctrl->priv[2]);
-            gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->priv[0]), 0);
             break;
     }
     return 0;

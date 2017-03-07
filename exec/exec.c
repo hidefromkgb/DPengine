@@ -1609,12 +1609,14 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
                          engc->seed, lend + binf->ieff - 1, time);
 }
 
-void SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
-    LINF *ulib = pict->ulib;
+long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
     uint64_t time, indx = 0;
+    LINF *ulib = pict->ulib;
+    PICT temp;
+    AINF anim;
 
     if ((pict->flgs & PIF_EFCT) || (flgs & (flgs - 1)) || !(flgs & PIF_SPEC))
-        return;
+        return 0;
 
     if (pict->flgs & flgs) {
         indx = pict->ipre >> 1;
@@ -1628,6 +1630,16 @@ void SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
                 time = (time)? ulib->novr[time - 1] : 0;
                 indx = ulib->bovr[PRNG(engc->seed) % (indx - time) + time]
                      - ulib->barr;
+                temp = *pict;
+                ChooseBehaviour(engc, &temp, LLONG_MAX,
+                               (indx << 1) | (temp.indx & 1));
+                anim = (AINF){temp.ulib->barr[temp.indx >> 1].
+                                         unit[temp.indx &  1].uuid,
+                              engc->ppos.x - temp.offs.x,
+                              engc->ppos.y - temp.offs.y, 0};
+                cEngineCallback(engc->engd, ECB_TEST, (intptr_t)&anim);
+                if (!anim.fcnt)
+                    return 0;
                 break;
 
             case PIF_DRGM:
@@ -1648,6 +1660,7 @@ void SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
         time = LLONG_MAX;
     }
     ChooseBehaviour(engc, pict, time, (indx << 1) | (pict->indx & 1));
+    return 1;
 }
 
 
@@ -2205,6 +2218,10 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                 if (~pict->flgs & PIF_SLPM)
                     SpecialBehaviour(engc, pict, PIF_DRGM);
             }
+            else {
+                engc->ppos.x = xptr;
+                engc->ppos.y = yptr;
+            }
             pict = engc->pcur = 0;
         }
         if (~attr & engc->ppos.z & UFR_RBTN) {
@@ -2238,9 +2255,11 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         if (!engc->povr && (isel >= 0) && engc->parr[isel]
         && !(engc->parr[isel]->flgs & (PIF_EFCT | PIF_SLPM))) {
             /// effects and 'sleeping' sprites shall ignore mouseover
-            engc->povr = engc->parr[isel];
-            SpecialBehaviour(engc, engc->povr, PIF_OVRM);
-            printf("[HOVERED] %s\n", engc->povr->ulib->name);
+            if (SpecialBehaviour(engc, engc->parr[isel], PIF_OVRM)) {
+                /// the mouseover actually affected the sprite; reacting
+                engc->povr = engc->parr[isel];
+                printf("[HOVERED] %s\n", engc->povr->ulib->name);
+            }
         }
     }
     for (indx = 0; indx < engc->pcnt; indx++) {
@@ -2503,9 +2522,11 @@ void UpdateOptionControls(ENGC *engc, long main) {
     }
     for (indx = countof(uCTN) - ((main)? 1 : 3); indx >= 0; indx--) {
         nctl = (int16_t*)uCTN[indx]->data;
+        flag = nctl[1];
+        /// this call may change nctl[1], so its value has to be saved
         uCTN[indx]->fe2c(uCTN[indx], MSG_NDIM,
                         ((uint32_t)nctl[2] << 16) | (uint16_t)nctl[0]);
-        uCTN[indx]->fe2c(uCTN[indx], MSG_NSET, nctl[1]);
+        uCTN[indx]->fe2c(uCTN[indx], MSG_NSET, flag);
     }
 }
 
@@ -2553,7 +2574,7 @@ intptr_t FC2EO(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if (cmsg == MSG_NSET)
                 ((int16_t*)ctrl->data)[1] =
                     ClampToBounds(data, ((int16_t*)ctrl->data)[0],
-                                        ((int16_t*)ctrl->data)[2]);
+                                        ((uint16_t*)ctrl->data)[2]);
             break;
 
         case TXT_CHOO:

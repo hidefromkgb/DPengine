@@ -924,6 +924,14 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
                 }
             break;
         }
+        case ECB_TEST: {
+            AINF *ainf = (AINF*)data;
+            T4FV test = {{-(int32_t)ainf->xdim, -(int32_t)ainf->ydim,
+                          ainf->fcnt, ainf->uuid}};
+
+            ainf->fcnt = SelectUnit(engd->uarr, &test, 1, 0, 0) + 1;
+            break;
+        }
         case ECB_LOAD:
             StopThreads(engd);
             if (data) {

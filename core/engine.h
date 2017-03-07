@@ -55,19 +55,21 @@
 
 
 
-#define ECB_INIT   0
-#define ECB_GUSR   1
-#define ECB_GFLG   2
-#define ECB_SFLG   3
-#define ECB_DRAW   4
-#define ECB_LOAD   5
-#define ECB_QUIT   6
-
+enum {
+    ECB_INIT = 0,
+    ECB_GUSR,
+    ECB_GFLG,
+    ECB_SFLG,
+    ECB_DRAW,
+    ECB_TEST,
+    ECB_LOAD,
+    ECB_QUIT,
+};
 #define COM_RGPU  (1 << 31)
 #define COM_DRAW  (1 << 30)
 #define COM_SHOW  (1 << 29)
 #define COM_OPAQ  (1 << 28)
-#define COM_DDDD  COM_RGPU  /** deferred flags mask **/
+#define COM_DDDD  (COM_RGPU)  /** deferred flags mask **/
 
 #define WIN_IBGR  (1 << 0)
 #define WIN_IPBO  (1 << 1)
