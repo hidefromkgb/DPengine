@@ -325,7 +325,6 @@ typedef struct {
              nslp,  /// number of sleep behaviours
              prev,  /// preview index in sorted BARR
              ccnt,  /// categories count
-             gcnt,  /// behaviour groups count
              zcnt,  /// nonzero probability behaviours count
              bcnt,  /// total behaviours count
              ecnt,  /// total effects count
@@ -955,7 +954,7 @@ char *GetNextLine(char **file) {
 
 
 int igrpcmp(const void *a, const void *b) {
-    int64_t retn = (int64_t)(*(BINF**)b)->igrp - (int64_t)(*(BINF**)a)->igrp;
+    int64_t retn = (int64_t)(*(BINF**)a)->igrp - (int64_t)(*(BINF**)b)->igrp;
     return (retn)? (retn < 0)? -1 : 1 : 0;
 }
 
@@ -1628,8 +1627,8 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
             case PIF_OVRM:
                 indx = ulib->novr[time = ulib->barr[pict->indx >> 1].igrp];
                 time = (time)? ulib->novr[time - 1] : 0;
-                indx = ulib->bovr[PRNG(engc->seed) % (indx - time) + time]
-                     - ulib->barr;
+                time = time + PRNG(engc->seed) % (ulong)(indx - time);
+                indx = ulib->bovr[time] - ulib->barr;
                 temp = *pict;
                 ChooseBehaviour(engc, &temp, LLONG_MAX,
                                (indx << 1) | (temp.indx & 1));
@@ -1645,13 +1644,12 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
             case PIF_DRGM:
                 indx = ulib->ndrg[time = ulib->barr[pict->indx >> 1].igrp];
                 time = (time)? ulib->ndrg[time - 1] : 0;
-                indx = ulib->bdrg[PRNG(engc->seed) % (indx - time) + time]
-                     - ulib->barr;
+                time = time + PRNG(engc->seed) % (ulong)(indx - time);
+                indx = ulib->bdrg[time] - ulib->barr;
                 break;
 
             case PIF_SLPM:
-                indx = ulib->bslp[PRNG(engc->seed) % ulib->nslp]
-                     - ulib->barr;
+                indx = ulib->bslp[PRNG(engc->seed) % ulib->nslp] - ulib->barr;
                 break;
         }
         if (!(pict->flgs & PIF_SPEC))
@@ -1689,7 +1687,7 @@ long TruncateAndSort(BINF **base, long *rcnt) {
 ///   1: all good, 0 sprites on the screen
 ///  >1: all good, (return) - 1 sprites on the screen
 long AppendSpriteArr(LINF *elem, ENGC *engc) {
-    long indx, turn, qmax, *fill;
+    long indx, turn, qmax, gcnt, *fill;
     BINF temp, *iter;
 
     if (elem->bimp || elem->eimp) {
@@ -1750,31 +1748,38 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                                                iter->unit[turn].ydim >> 1}};
         }
 
-        /// populating BGRP with nonzero-probability behaviours, ZCNT := len
         elem->bgrp = malloc(elem->bcnt * sizeof(*elem->bgrp));
+        /// populating BGRP with all behaviours and sorting by group number
+        for (indx = 0; indx < elem->bcnt; indx++)
+            elem->bgrp[indx] = &elem->barr[indx];
+        qsort(elem->bgrp, elem->bcnt, sizeof(*elem->bgrp), igrpcmp);
+        /// counting groups + normalizing their indices to [0; GCNT) interval
+        for (gcnt = turn = indx = 0; indx < elem->bcnt; indx++) {
+            if (elem->bgrp[indx]->igrp != turn) {
+                turn = elem->bgrp[indx]->igrp;
+                gcnt++;
+            }
+            elem->bgrp[indx]->igrp = gcnt;
+        }
+        gcnt++;
+        /// populating BGRP with nonzero-probability behaviours, ZCNT := len
         for (elem->zcnt = indx = 0; indx < elem->bcnt; indx++)
             if (elem->barr[indx].prob)
                 elem->bgrp[elem->zcnt++] = &elem->barr[indx];
         elem->bgrp = realloc(elem->bgrp, elem->zcnt * sizeof(*elem->bgrp));
-        /// sorting BGRP by group number
+        /// sorting BGRP by normalized group index
         qsort(elem->bgrp, elem->zcnt, sizeof(*elem->bgrp), igrpcmp);
 
-        /// counting groups + normalizing their indices to [0; GCNT) interval
-        for (elem->gcnt = turn = indx = 0; indx < elem->zcnt; indx++) {
-            if (elem->bgrp[indx]->igrp != turn) {
-                turn = elem->bgrp[indx]->igrp;
-                elem->gcnt++;
-            }
-            elem->bgrp[indx]->igrp = elem->gcnt;
-        }
-        elem->gcnt++;
-
         /// filling NGRP with behaviour group boundaries
-        elem->ngrp = calloc(elem->gcnt, sizeof(*elem->ngrp));
+        elem->ngrp = calloc(gcnt, sizeof(*elem->ngrp));
         for (turn = indx = 0; indx < elem->zcnt; indx++)
             elem->ngrp[elem->bgrp[indx]->igrp] = indx + 1;
+        /// adjusting groups with no members of nonzero probability
+        for (indx = 1; indx < gcnt; indx++)
+            if (!elem->ngrp[indx])
+                elem->ngrp[indx] = elem->ngrp[indx - 1];
         /// turning probabilities into integral probabilities
-        for (turn = indx = 0; indx < elem->gcnt; indx++) {
+        for (turn = indx = 0; indx < gcnt; indx++) {
             for (++turn; turn < elem->ngrp[indx]; ++turn)
                 elem->bgrp[turn]->prob += elem->bgrp[turn - 1]->prob;
             turn = elem->ngrp[indx];
@@ -1806,10 +1811,10 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         else
             elem->bslp[(elem->nslp = 1) - 1] = &elem->barr[qmax];
 
-        fill = calloc(elem->gcnt, sizeof(*fill));
+        fill = calloc(gcnt, sizeof(*fill));
 
         /// extracting mouseover behaviours
-        elem->novr = calloc(elem->gcnt, sizeof(*elem->novr));
+        elem->novr = calloc(gcnt, sizeof(*elem->novr));
         for (qmax = indx = 0; indx < elem->bcnt; indx++) {
             if (elem->barr[indx].move < elem->barr[qmax].move)
                 qmax = indx;
@@ -1819,7 +1824,7 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                  && !elem->barr[indx].trgt && !elem->barr[indx].move)
                 fill[elem->barr[indx].igrp]--;
         }
-        for (indx = 0; indx < elem->gcnt; indx++) {
+        for (indx = 0; indx < gcnt; indx++) {
             if (elem->novr[indx] > 0)
                 fill[indx] = elem->novr[indx];
             else
@@ -1831,7 +1836,7 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             fill[indx] = (fill[indx] > 0)?
                           elem->novr[indx] : -elem->novr[indx];
         }
-        elem->bovr = calloc(elem->novr[elem->gcnt - 1], sizeof(*elem->bovr));
+        elem->bovr = calloc(elem->novr[gcnt - 1], sizeof(*elem->bovr));
         elem->bovr[0] = &elem->barr[qmax];
         for (indx = 0; indx < elem->bcnt; indx++) {
             qmax = fill[elem->barr[indx].igrp];
@@ -1844,22 +1849,22 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             }
         }
         qmax = 0;
-        for (indx = elem->novr[0]; indx < elem->novr[elem->gcnt - 1]; indx++)
+        for (indx = elem->novr[0]; indx < elem->novr[gcnt - 1]; indx++)
             if (!elem->bovr[indx]) {
                 elem->bovr[indx] = elem->bovr[qmax];
                 qmax = (qmax + 1) % elem->novr[0];
             }
 
         /// extracting 'dragged' behaviours (uses mouseovers!)
-        elem->ndrg = calloc(elem->gcnt, sizeof(*elem->ndrg));
-        for (indx = 0; indx < elem->gcnt; indx++)
+        elem->ndrg = calloc(gcnt, sizeof(*elem->ndrg));
+        for (indx = 0; indx < gcnt; indx++)
             fill[indx] = 0;
         for (indx = 0; indx < elem->bcnt; indx++)
             if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_DRGM)
                 elem->ndrg[elem->barr[indx].igrp]++;
             else if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
                 fill[elem->barr[indx].igrp]--;
-        for (indx = 0; indx < elem->gcnt; indx++) {
+        for (indx = 0; indx < gcnt; indx++) {
             if (elem->ndrg[indx] > 0)
                 fill[indx] = elem->ndrg[indx];
             else
@@ -1869,8 +1874,8 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                     elem->novr[indx] - ((indx)? elem->novr[indx - 1] : 0);
             elem->ndrg[indx] += (indx)? elem->ndrg[indx - 1] : 0;
         }
-        elem->bdrg = calloc(elem->ndrg[elem->gcnt - 1], sizeof(*elem->bdrg));
-        for (indx = 0; indx < elem->gcnt; indx++)
+        elem->bdrg = calloc(elem->ndrg[gcnt - 1], sizeof(*elem->bdrg));
+        for (indx = 0; indx < gcnt; indx++)
             if (!fill[indx]) {
                 qmax = (indx)? elem->ndrg[indx - 1] : 0;
                 turn = (indx)? elem->novr[indx - 1] : 0;
@@ -1886,6 +1891,7 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                  &&  (elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
                 elem->bdrg[elem->ndrg[qmax] + ++fill[qmax] - 1] =
                     &elem->barr[indx];
+
         free(fill);
     }
 
