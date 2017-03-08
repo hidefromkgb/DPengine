@@ -329,11 +329,41 @@ long rMoveDir(char *dsrc, char *ddst) {
 char *ChooseFileDir(CTRL *root, char *file, char *fext) {
     NSOpenPanel *cfdp;
     CFStringRef path;
+    CFArrayRef type;
+    CFURLRef idir;
 
+    file = strdup(file);
     setAllowsMultipleSelection_(cfdp = openPanel(NSOpenPanel()), false);
     setCanChooseDirectories_(cfdp, !fext);
     setCanChooseFiles_(cfdp, !!fext);
     if (fext) {
+        path = MAC_MakeString(fext);
+        type = CFArrayCreate(kCFAllocatorDefault, (const void**)&path, 1,
+                            &kCFTypeArrayCallBacks);
+        setAllowedFileTypes_(cfdp, type);
+        CFRelease(type);
+        MAC_FreeString(path);
+        for (fext = file + strlen(file);
+            (fext != file) && (*fext != '/'); fext--);
+        if (fext != file)
+            *fext++ = 0;
+        else {
+            free(file);
+            file = 0;
+        }
+    }
+    if (file) {
+        path = MAC_MakeString(file);
+        idir = CFURLCreateWithFileSystemPath(kCFAllocatorDefault, path,
+                                             kCFURLPOSIXPathStyle, true);
+        setDirectoryURL_(cfdp, idir);
+        CFRelease(idir);
+        MAC_FreeString(path);
+        if (fext) {
+            setNameFieldStringValue_(cfdp, path = MAC_MakeString(fext));
+            MAC_FreeString(path);
+        }
+        free(file);
     }
     fext = 0;
     if (runModal(cfdp) == NSFileHandlingPanelOKButton) {
