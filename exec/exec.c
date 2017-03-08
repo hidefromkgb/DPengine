@@ -93,7 +93,7 @@
 /** do not follow parent        **/ #define EFF_STAY (1 << 30)
 /** animation can be looped     **/ #define ANI_LOOP (1 << 31)
 
-/** this sprite is...           **/
+/// /// /// /// /// /// /// /// /// this sprite is...
 /** ...an effect                **/ #define PIF_EFCT (1 <<  0)
 /** ...inactive, but reserved   **/ #define PIF_IRES (1 <<  1)
 /** ..."asleep"                 **/ #define PIF_SLPM (1 <<  2)
@@ -107,6 +107,12 @@
 /** ["busy" sprites extractor]  **/ #define PIF_BUSY (PIF_SPEC \
                                                     | PIF_TPL1 \
                                                     | PIF_TPL2)
+
+/// /// /// /// /// /// /// /// /// flags for ChooseBehaviour
+/** first spawn of a sprite     **/ #define CBF_INIT (1 <<  0)
+/** select a pre-set behaviour  **/ #define CBF_NEXT (1 <<  1)
+/** do not spawn effects        **/ #define CBF_DNSE (1 <<  2)
+/** spawn a long-lasting sprite **/ #define CBF_LONG (1 <<  3)
 
 /// /// /// /// /// /// /// /// /// follow offset type values
 /** 'fixed'                     **/ #define FOT_FIXD 0x9A8F97BD
@@ -1486,7 +1492,7 @@ long SpawnEffect(PICT **retn, PICT *from, RNGS *seed,
 
 
 
-void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
+void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
     long seed, lbgn, lend, prev = pict->indx;
     LINF *ulib = pict->ulib;
     BINF *binf;
@@ -1495,7 +1501,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
     if (pict->flgs & PIF_EFCT)
         return;
 
-    if (~next)
+    if (flgs & CBF_NEXT)
         pict->indx = next;
     else {
         if (ulib->barr[pict->indx >> 1].link)
@@ -1523,22 +1529,22 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
     binf = &pict->ulib->barr[pict->indx >> 1];
     pict->fram = -1; /// this means:
     pict->tfrm =  0; /// "update me to 0-th frame ASAP!"
-    pict->tbhv = time + binf->dmin;
+    pict->tbhv = (flgs & CBF_LONG)? LLONG_MAX : engc->tcur + binf->dmin;
     if (binf->dmax > binf->dmin)
         pict->tbhv += PRNG(engc->seed) % (binf->dmax - binf->dmin);
-    if (time) {
-        /// re-center the upcoming sprite based on the previous center
-        pict->offs.x += pict->ulib->barr[prev >> 1].cntr[prev & 1].x
-                     -  binf->cntr[pict->indx & 1].x;
-        pict->offs.y -= pict->ulib->barr[prev >> 1].cntr[prev & 1].y
-                     -  binf->cntr[pict->indx & 1].y;
-    }
-    else {
+    if (flgs & CBF_INIT) {
         /// this is the first time this sprite appears; let`s put it somewhere
         lbgn = binf->cntr[pict->indx & 1].x << 1;
         lend = binf->cntr[pict->indx & 1].y << 1;
         pict->offs.x = PRNG(engc->seed) % (engc->dims.x - lbgn);
         pict->offs.y = PRNG(engc->seed) % (engc->dims.y - lend) + lend;
+    }
+    else {
+        /// re-center the upcoming sprite based on the previous center
+        pict->offs.x += pict->ulib->barr[prev >> 1].cntr[prev & 1].x
+                     -  binf->cntr[pict->indx & 1].x;
+        pict->offs.y -= pict->ulib->barr[prev >> 1].cntr[prev & 1].y
+                     -  binf->cntr[pict->indx & 1].y;
     }
     /// now choosing sprite direction
     if (!(binf->flgs & BHV_CTLM) && (binf->flgs & BHV_ALLM)) {
@@ -1591,7 +1597,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
     else
         pict->move = (T2FV){{0.0, 0.0}};
 
-    if (!~next)
+    if (~flgs & CBF_NEXT)
         pict->indx = (pict->indx & -2) | (PRNG(engc->seed) & 1);
     if (!binf->unit[pict->indx & 1].uuid)
         pict->indx ^= 1;
@@ -1600,38 +1606,40 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint64_t time, uint32_t next) {
     if (PRNG(engc->seed) & 1)
         pict->move.y = -pict->move.y;
 
-    /// now spawning effects for the behaviour, if any
-    /// (and only if this is not the first spawn and effects are enabled)
-    if (time && (engc->ccur.flgs & CSF_EEFF))
+    /// now spawning effects for the behaviour, if any (and if allowed to)
+    if ((~flgs & CBF_DNSE) && (engc->ccur.flgs & CSF_EEFF))
         for (lend = binf->neff; lend; lend--)
             SpawnEffect(&engc->parr[engc->pcnt++], pict,
-                         engc->seed, lend + binf->ieff - 1, time);
+                         engc->seed, lend + binf->ieff - 1,
+                        (flgs & CBF_LONG)? LLONG_MAX : engc->tcur);
 }
 
-long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
-    uint64_t time, indx = 0;
+long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
+    uint32_t flgs, indx = 0;
     LINF *ulib = pict->ulib;
     PICT temp;
     AINF anim;
 
-    if ((pict->flgs & PIF_EFCT) || (flgs & (flgs - 1)) || !(flgs & PIF_SPEC))
+    if ((pict->flgs & PIF_EFCT) || (mode & (mode - 1)) || !(mode & PIF_SPEC))
         return 0;
 
-    if (pict->flgs & flgs) {
+    if (pict->flgs & mode) {
         indx = pict->ipre >> 1;
-        pict->flgs &= ~flgs;
-        time = engc->tcur;
+        pict->flgs &= ~mode;
+        flgs = CBF_NEXT;
+        if (pict->flgs & PIF_SLPM)
+            return 0;
     }
     else {
-        switch (flgs) {
+        switch (mode) {
             case PIF_OVRM:
-                indx = ulib->novr[time = ulib->barr[pict->indx >> 1].igrp];
-                time = (time)? ulib->novr[time - 1] : 0;
-                time = time + PRNG(engc->seed) % (ulong)(indx - time);
-                indx = ulib->bovr[time] - ulib->barr;
+                indx = ulib->novr[flgs = ulib->barr[pict->indx >> 1].igrp];
+                flgs = (flgs)? ulib->novr[flgs - 1] : 0;
+                flgs = flgs + PRNG(engc->seed) % (indx - flgs);
+                indx = ulib->bovr[flgs] - ulib->barr;
                 temp = *pict;
-                ChooseBehaviour(engc, &temp, LLONG_MAX,
-                               (indx << 1) | (temp.indx & 1));
+                ChooseBehaviour(engc, &temp, (indx << 1) | (temp.indx & 1),
+                                CBF_NEXT | CBF_DNSE);
                 anim = (AINF){temp.ulib->barr[temp.indx >> 1].
                                          unit[temp.indx &  1].uuid,
                               engc->ppos.x - temp.offs.x,
@@ -1642,10 +1650,10 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
                 break;
 
             case PIF_DRGM:
-                indx = ulib->ndrg[time = ulib->barr[pict->indx >> 1].igrp];
-                time = (time)? ulib->ndrg[time - 1] : 0;
-                time = time + PRNG(engc->seed) % (ulong)(indx - time);
-                indx = ulib->bdrg[time] - ulib->barr;
+                indx = ulib->ndrg[flgs = ulib->barr[pict->indx >> 1].igrp];
+                flgs = (flgs)? ulib->ndrg[flgs - 1] : 0;
+                flgs = flgs + PRNG(engc->seed) % (indx - flgs);
+                indx = ulib->bdrg[flgs] - ulib->barr;
                 break;
 
             case PIF_SLPM:
@@ -1654,10 +1662,13 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t flgs) {
         }
         if (!(pict->flgs & PIF_SPEC))
             pict->ipre = pict->indx;
-        pict->flgs |= flgs;
-        time = LLONG_MAX;
+        pict->flgs |= mode;
+        flgs = CBF_NEXT | CBF_LONG;
     }
-    ChooseBehaviour(engc, pict, time, (indx << 1) | (pict->indx & 1));
+    /// do not duplicate effects if the behaviour stays the same
+    if ((indx ^ pict->indx) & ~1)
+        flgs |= CBF_DNSE;
+    ChooseBehaviour(engc, pict, (indx << 1) | (pict->indx & 1), flgs);
     return 1;
 }
 
@@ -1746,6 +1757,9 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                 if (!(iter->cntr[turn].x | iter->cntr[turn].y))
                     iter->cntr[turn] = (T2IV){{iter->unit[turn].xdim >> 1,
                                                iter->unit[turn].ydim >> 1}};
+                else
+                    iter->cntr[turn].y = (long)iter->unit[turn].ydim
+                                       -       iter->cntr[turn].y;
         }
 
         elem->bgrp = malloc(elem->bcnt * sizeof(*elem->bgrp));
@@ -1916,7 +1930,8 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         engc->pcnt++;
         engc->parr[engc->pcnt - 1] = calloc(1, sizeof(**engc->parr));
         engc->parr[engc->pcnt - 1]->ulib = elem;
-        ChooseBehaviour(engc, engc->parr[engc->pcnt - 1], 0, ~0);
+        ChooseBehaviour(engc, engc->parr[engc->pcnt - 1],
+                        0, CBF_INIT | CBF_DNSE);
     }
     return elem->icnt + 1;
 }
@@ -2206,12 +2221,12 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             pict = engc->pcur = engc->parr[isel];
             if (pict->flgs & PIF_EFCT)
                 pict = engc->pcur = pict->boss;
-            engc->ppos.x = xptr - pict->offs.x;
-            engc->ppos.y = yptr - pict->offs.y;
             printf("[GRABBED] %s\n", pict->ulib->name);
             /// 'sleeping' sprites shall ignore the dragged state
             if (~pict->flgs & PIF_SLPM)
                 SpecialBehaviour(engc, pict, PIF_DRGM);
+            engc->ppos.x = xptr - pict->offs.x;
+            engc->ppos.y = yptr - pict->offs.y;
         }
         if (pict && (attr & UFR_LBTN)) {
             pict->offs.x = xptr - engc->ppos.x;
@@ -2276,6 +2291,13 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         anim = &binf->unit[pict->indx & 1];
         if (pict->flgs & PIF_EFCT) {
             /// effect
+            if (engc->povr && (pict->boss == engc->povr)
+            && (pict->ipre != engc->povr->indx)) {
+                /// on mouseover, previously bound effects are to be purged
+                free(pict);
+                engc->parr[indx] = 0;
+                continue;
+            }
             if (~binf->flgs & EFF_STAY)
                 MoveToParent(pict, 0);   /// follow the parent
             if ((engc->tcur >= pict->tmov)               /// time to wake up
@@ -2303,7 +2325,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         else if ((engc->tcur >= pict->tbhv)
              || ((pict->fram >= anim->fcnt) && !(binf->flgs & ANI_LOOP))) {
             /// behaviour that needs being changed
-            ChooseBehaviour(engc, pict, engc->tcur, ~0);
+            ChooseBehaviour(engc, pict, 0, 0);
             binf = &pict->ulib->barr[pict->indx >> 1];
             anim = &binf->unit[pict->indx & 1];
         }
@@ -2998,7 +3020,8 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
 
     ENGC engc = {.tcur = 1, .ftmp = COM_SHOW | COM_DRAW | COM_RGPU};
 
-    engc.cini = engc.cdef = (CONF){0, strdup(base), CSF_EEFF,
+    engc.cini = engc.cdef = (CONF){0, strdup(base),
+                                   CSF_EEFF | CSF_EINT | CSF_ERCH,
     /** runs between updates  **/ {   0,   5,           1000},
     /** base scaling factor   **/ {  25, 100,            300},
     /** time dilation factor  **/ {  10, 100,           1000},

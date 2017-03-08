@@ -289,7 +289,7 @@ char *ChooseFileDir(CTRL *root, char *file, char *fext) {
                 GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT, (char*)0);
     if (fext) {
         fltr = gtk_file_filter_new();
-        temp = realloc(strdup("*."), sizeof("*.") + strlen(fext) + 1);
+        temp = realloc(strdup("*."), sizeof("*.") + strlen(fext));
         gtk_file_filter_add_pattern(fltr, strcat(temp, fext));
         gtk_file_filter_set_name(fltr, temp);
         gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(wdlg), fltr);
