@@ -1259,7 +1259,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
         case MSG_NDIM:
             ctrl->priv[2] = (int16_t)data;
-            ctrl->priv[3] = (uint16_t)(data >> 16);
+            ctrl->priv[3] = (int16_t)(data >> 16);
             SendMessage((HWND)ctrl->priv[1], UDM_SETRANGE32,
                         (WPARAM)ctrl->priv[2], (LPARAM)ctrl->priv[3]);
             break;
@@ -1810,10 +1810,8 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     CHAR *name, *conf = 0, path[(MAX_PATH + 2) * 2] = {};
     HMODULE hlsh, hlsf;
 
-//    if (flgs & FLG_CONS) {
-//        AllocConsole();
-//        freopen("CONOUT$", "wb", stdout);
-//    }
+//    AllocConsole();
+//    freopen("CONOUT$", "wb", stdout);
 
     OleInitialize(0);
     InitCommonControlsEx(&icct);

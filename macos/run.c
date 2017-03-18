@@ -875,7 +875,7 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
         case MSG_NDIM:
             ctrl->priv[1] = (int16_t)data;
-            ctrl->priv[2] = (uint16_t)(data >> 16);
+            ctrl->priv[2] = (int16_t)(data >> 16);
             setMinValue_((NSStepper*)ctrl->priv[6], ctrl->priv[1]);
             setMaxValue_((NSStepper*)ctrl->priv[6], ctrl->priv[2]);
             break;
