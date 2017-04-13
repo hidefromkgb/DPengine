@@ -16,7 +16,7 @@ N.B.: to be able to build on Windows using Code::Blocks, go to Settings → Comp
 
 All three major desktop operating systems (Windows, Linux and OS X) finally got their native GUI frameworks, and now it\`s high time to add the remaining DP functionality missing from DPE:
 
-1. ~~Extended behaviours~~ __DONE (some directional follow glitches left)__
+1. ~~Extended behaviours~~ __DONE__
 1. Interactions
 1. Speech
 1. Games
