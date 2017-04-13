@@ -1460,11 +1460,17 @@ void FollowParent(ENGC *engc, PICT *pict) {
     barr = &pict->boss->ulib->barr[pict->boss->indx >> 1];
     for (iter = 0; iter <= 1; iter++) {
         oarr = &pict->ulib->barr[(pict->iovr >> (iter << 4)) & 0xFFFF];
-        dest.x = pict->boss->offs.x + barr->cntr[pict->boss->indx & 1].x
-            + (((parr->flgs & BHV_MIRR) && (pict->boss->indx & 1))?
-                -parr->ptgt.x : parr->ptgt.x) - oarr->cntr[pict->indx & 1].x;
-        dest.y = pict->boss->offs.y - barr->cntr[pict->boss->indx & 1].y
-               + parr->ptgt.y + oarr->cntr[pict->indx & 1].y;
+        dest.x = ClampToBounds(pict->boss->offs.x
+                             + barr->cntr[pict->boss->indx & 1].x
+                          + (((parr->flgs & BHV_MIRR)
+                           && (pict->boss->indx & 1))?
+                              -parr->ptgt.x : parr->ptgt.x)
+                             - oarr->cntr[pict->indx & 1].x, 0,
+                               engc->dims.x - oarr->unit[pict->indx & 1].xdim);
+        dest.y = ClampToBounds(pict->boss->offs.y
+                             - barr->cntr[pict->boss->indx & 1].y
+                             + parr->ptgt.y + oarr->cntr[pict->indx & 1].y,
+                               oarr->unit[pict->indx & 1].ydim, engc->dims.y);
         if ((dist = (dest.x - pict->offs.x) * (dest.x - pict->offs.x)
                   + (dest.y - pict->offs.y) * (dest.y - pict->offs.y)) == 0.0)
             break;
@@ -1810,8 +1816,8 @@ long TruncateAndSort(BINF **base, long *rcnt) {
 
 
 
-void ExtractSM(LINF *elem, BINF ***bout,
-               long **nout, long *fill, long gcnt, long move) {
+void ExtractStaMov(LINF *elem, BINF ***bout,
+                   long **nout, long *fill, long gcnt, long move) {
     long *narr, indx;
     BINF **barr;
 
@@ -1830,10 +1836,10 @@ void ExtractSM(LINF *elem, BINF ***bout,
         if ((elem->barr[indx].move == 0.0) ^ move)
             barr[narr[elem->barr[indx].igrp] - fill[elem->barr[indx].igrp]--] =
             &elem->barr[indx];
-    /// if there are absolutely no elements in group 0, choose randomly:
-    /// it can not get any worse now
+    /// if there are absolutely no elements in group 0, assign the preview:
+    /// it can not get any worse now, anyway
     if (!barr[0])
-        barr[0] = &elem->barr[PRNG(elem->engc->seed) % elem->bcnt];
+        barr[0] = &elem->barr[elem->prev];
     for (--gcnt; gcnt; gcnt--)
         if (!barr[narr[gcnt - 1]])
             for (indx = 0; indx < narr[0]; indx++)
@@ -1963,8 +1969,8 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         fill = calloc(gcnt, sizeof(*fill));
 
         /// extracting stationary and moving behaviours
-        ExtractSM(elem, &elem->bsta, &elem->nsta, fill, gcnt, 0);
-        ExtractSM(elem, &elem->bmov, &elem->nmov, fill, gcnt, 1);
+        ExtractStaMov(elem, &elem->bsta, &elem->nsta, fill, gcnt, 0);
+        ExtractStaMov(elem, &elem->bmov, &elem->nmov, fill, gcnt, 1);
 
         /// extracting sleep behaviours
         for (elem->nslp = qmax = turn = indx = 0; indx < elem->bcnt; indx++) {
@@ -2471,7 +2477,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                 continue;
             }
             if (~binf->flgs & EFF_STAY)
-                MoveToParent(pict, 0);   /// follow the parent
+                MoveToParent(pict, 0);   /// teleport next to the parent
             if ((engc->tcur >= pict->tmov)               /// time to wake up
             &&!((pict->ipre ^ pict->boss->indx) & ~1)) { /// same behaviour
                 pict->flgs &= ~PIF_IRES; /// drop the reserved state, if any
