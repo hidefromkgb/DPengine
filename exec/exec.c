@@ -446,6 +446,22 @@ float StrToFloat(char *data) {
 
 
 
+char *ExtractLastDirs(char *path, long dcnt) {
+    long iter;
+
+    if (path && ((iter = strlen(path)) > 0)) {
+        while (--iter)
+            if ((path[iter] == '/') && !--dcnt) {
+                ++iter;
+                break;
+            }
+        path += iter;
+    }
+    return path;
+}
+
+
+
 #define Concatenate(retn, ...) _Concatenate(retn, ##__VA_ARGS__, (char*)0)
 char *_Concatenate(char **retn, ...) {
     va_list list;
@@ -1363,9 +1379,9 @@ void LoadLib(LINF *elem, ENGD *engd) {
         ncnt = ((indx)? elem->ecnt : elem->bcnt) * 2;
         for (iter = 0; iter < ncnt; iter++)
             if (nimp[iter]) {
-                cEngineLoadAnimAsync(engd, (uint8_t*)nimp[iter], 0,
-                                    &narr[iter >> 1].unit[iter & 1]);
-                free(nimp[iter]);
+                cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
+                                    (uint8_t*)ExtractLastDirs(nimp[iter], 2),
+                                     nimp[iter], ELA_DISK, free);
                 nimp[iter] = 0;
             }
     }
@@ -3072,8 +3088,8 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                     SetProgress(engc, TXT_LOAD, ++data, cmsg);
                     RUN_FE2C(engc->MCT_SELE, MSG_PPOS, data);
                 }
-            cEngineLoadAnimAsync(engc->engd, (uint8_t*)"/Icon/",
-                                (uint8_t*)MainIcon, &igif);
+            cEngineLoadAnimAsync(engc->engd, &igif, (uint8_t*)"/Icon/",
+                                 MainIcon, ELA_LOAD, 0);
             cEngineCallback(engc->engd, ECB_LOAD, 0);
 
             for (libs = engc->libs, icon = 0; icon < engc->lcnt; icon++)
@@ -3434,9 +3450,10 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     for (indx = 0; indx < engc.lcnt; indx++) {
         /// now constructing previews
         if (engc.libs[indx].bimp && engc.libs[indx].bimp[0]) {
-            cEngineLoadAnimAsync(engc.engd, (uint8_t*)engc.libs[indx].bimp[0],
-                                 0, &engc.libs[indx].barr[0].unit[0]);
-            free(engc.libs[indx].bimp[0]);
+            temp = ExtractLastDirs(engc.libs[indx].bimp[0], 2);
+            cEngineLoadAnimAsync(engc.engd, &engc.libs[indx].barr[0].unit[0],
+                                (uint8_t*)temp, engc.libs[indx].bimp[0],
+                                 ELA_DISK, free);
             engc.libs[indx].bimp[0] = 0;
         }
         /// and resolving follow targets for all behaviours in this library

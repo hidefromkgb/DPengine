@@ -46,6 +46,7 @@ struct THRD {
     ulong loop;
     SEM_TYPE uuid;
     ENGD *orig;
+    void (*udis)(void*);
     void (*func)(THRD*);
     union {
         struct {
@@ -53,7 +54,8 @@ struct THRD {
         };
         struct {
             TREE *elem;
-            char *path, *load;
+            void *data;
+            long  flgs;
         };
     };
 };
@@ -268,22 +270,6 @@ uint64_t HashLine64(char *line) {
     while (*line)
         hash = SLH_PLUS + SLH_MULT * hash + *line++;
     return hash;
-}
-
-
-
-char *ExtractLastDirs(char *path, long dcnt) {
-    long iter;
-
-    if (path && ((iter = strlen(path)) > 0)) {
-        while (--iter)
-            if ((path[iter] == '/') && !--dcnt) {
-                ++iter;
-                break;
-            }
-        path += iter;
-    }
-    return path;
 }
 
 
@@ -562,46 +548,42 @@ THR_FUNC cThrdFunc(THRD *data) {
 
 
 void LTHR(THRD *data) {
-    char *name, *path, *file;
-    long indx, size;
+    char *name, *file;
+    long  size;
     ASTD *retn;
     TREE *elem;
 
+    if (!data->data)
+        return;
+
     retn = 0;
-    path = data->path;
     elem = data->elem;
-    if (path) {
-        indx = strlen(path);
-        if (data->load
-        || (((path[indx - 3] == 'g') || (path[indx - 3] == 'G'))
-        &&  ((path[indx - 2] == 'i') || (path[indx - 2] == 'I'))
-        &&  ((path[indx - 1] == 'f') || (path[indx - 1] == 'F')))) {
-            if (data->load)
-                retn = MakeAnimStd(data->load, LONG_MAX);
-            else {
-                file = lLoadFile(path, &size);
-                retn = MakeAnimStd(file, size);
-                free(file);
-            }
-            if (retn) {
-                name = strdup(path);
-                name[indx - 3] = 'a';
-                name[indx - 2] = 'r';
-                name[indx - 1] = 't';
-                file = (data->load)? 0 : lLoadFile(name, &size);
-                elem->epix->ainf = (AINF){0, retn->xdim, retn->ydim,
-                                             retn->fcnt, retn->time};
-                elem->epix->tran = RecolorPalette(retn->bpal, file, size);
-                elem->epix->scal = DownsampleAnimStd(retn, &elem->epix->xoff,
-                                                           &elem->epix->yoff);
-                elem->epix->hash = HashAnimStd(retn, &indx);
-                elem->turn = indx & 3;
-                free(file);
-                free(name);
-            }
-        }
-        elem->epix->anim = retn;
+    switch (data->flgs) {
+        case ELA_LOAD: retn = MakeAnimStd(data->data, LONG_MAX);   break;
+        case ELA_DISK: file = lLoadFile((char*)data->data, &size);
+                       retn = MakeAnimStd(file, size); free(file); break;
     }
+    if (retn) {
+        elem->epix->ainf = (AINF){0, retn->xdim, retn->ydim,
+                                     retn->fcnt, retn->time};
+        elem->epix->scal = DownsampleAnimStd(retn, &elem->epix->xoff,
+                                                   &elem->epix->yoff);
+        elem->epix->hash = HashAnimStd(retn, &size);
+        elem->turn = size & 3;
+
+        if (data->flgs == ELA_DISK) {
+            name = strdup((char*)data->data);
+            size = strlen((char*)data->data);
+            name[size - 3] = 'a';
+            name[size - 2] = 'r';
+            name[size - 1] = 't';
+            file = lLoadFile(name, &size);
+            elem->epix->tran = RecolorPalette(retn->bpal, file, size);
+            free(file);
+            free(name);
+        }
+    }
+    elem->epix->anim = retn;
 }
 
 
@@ -694,7 +676,7 @@ long SwitchThreads(ENGD *engd, long draw) {
 
         temp = (engd->dims.ydim / engd->ncpu) + 1;
         for (iter = 0; iter < engd->ncpu; iter++) {
-            engd->thrd[iter] = (THRD){1, 1 << iter, engd, PTHR,
+            engd->thrd[iter] = (THRD){1, 1 << iter, engd, 0, PTHR,
                                     {{temp * iter, temp * (iter + 1)}}};
             lMakeThread(&engd->thrd[iter]);
         }
@@ -702,7 +684,7 @@ long SwitchThreads(ENGD *engd, long draw) {
     }
     else
         for (iter = 0; iter < engd->ncpu; iter++) {
-            engd->thrd[iter] = (THRD){1, 1 << iter, engd, LTHR};
+            engd->thrd[iter] = (THRD){1, 1 << iter, engd, 0, LTHR};
             lMakeThread(&engd->thrd[iter]);
         }
     return 0;
@@ -775,41 +757,37 @@ void cDeallocFrame(ENGD *engd, FRBO **surf) {
 
 
 
-void cEngineLoadAnimAsync(ENGD *engd,
-                          uint8_t *path, uint8_t *load, AINF *ainf) {
+void cEngineLoadAnimAsync(ENGD *engd, AINF *ainf, uint8_t *name,
+                          void *data, uint32_t flgs, void (*udis)(void*)) {
     TREE *estr, *retn;
     DEST *dest;
-    char *ptrn;
 
     SEM_TYPE curr;
     uint64_t hash;
 
-    if (!engd)
+    if (!engd || !ainf || !name)
         return;
-    ptrn = ExtractLastDirs((char*)path, 2);
-    hash = (path)? HashLine64(ptrn) : 0;
-    estr = (path)? TreeFind(engd->hstr, hash) : 0;
+    estr = TreeFind(engd->hstr, hash = HashLine64((char*)name));
     while (estr) {
-        if (!strcmp(estr->path, ptrn))
+        if (!strcmp(estr->path, (char*)name))
             break;
         estr = estr->next[2];
     }
     if (!estr) {
-        if (path) {
-            estr = calloc(1, sizeof(*estr));
-            estr->hash = hash;
-            estr->path = strdup(ptrn);
-            estr->epix = calloc(1, sizeof(*estr->epix));
-            estr->dest = calloc(1, sizeof(*estr->dest));
-            estr->dest->ainf = ainf;
-            TreeAdd(&engd->hstr, estr);
-        }
+        estr = calloc(1, sizeof(*estr));
+        estr->hash = hash;
+        estr->path = strdup((char*)name);
+        estr->epix = calloc(1, sizeof(*estr->epix));
+        estr->dest = calloc(1, sizeof(*estr->dest));
+        estr->dest->ainf = ainf;
+        TreeAdd(&engd->hstr, estr);
         curr = cFindBit(lWaitSemaphore(engd->osem, SEM_NULL));
         retn = engd->thrd[curr].elem;
         engd->thrd[curr].elem = estr;
-        free(engd->thrd[curr].path);
-        engd->thrd[curr].load = (char*)load;
-        engd->thrd[curr].path = strdup((char*)path);
+        if (engd->thrd[curr].udis)
+            engd->thrd[curr].udis(engd->thrd[curr].data);
+        engd->thrd[curr].udis = udis;
+        engd->thrd[curr].data = data;
         lPickSemaphore(engd->osem, engd->isem, 1 << curr);
         TryUpdatePixTree(engd, retn);
     }
@@ -905,7 +883,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
             long x, y, xcoe, ycoe, xdim = ainf->xdim, ydim = ainf->ydim;
             uint8_t *bptr;
 
-            if ((ainf->fcnt >= anim->fcnt)
+            if ((!anim) || (ainf->fcnt >= anim->fcnt)
             || (anim->xdim > xdim) || (anim->ydim > ydim))
                 break;
             xcoe = xdim / anim->xdim;
@@ -943,8 +921,10 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
                 engd->flgs &= ~COM_DRAW;
                 for (ecba = 0; ecba < engd->ncpu; ecba++) {
                     TryUpdatePixTree(engd, engd->thrd[ecba].elem);
-                    free(engd->thrd[ecba].path);
-                    engd->thrd[ecba].path = 0;
+                    if (engd->thrd[ecba].udis)
+                        engd->thrd[ecba].udis(engd->thrd[ecba].data);
+                    engd->thrd[ecba].udis = 0;
+                    engd->thrd[ecba].data = 0;
                 }
                 if (engd->hstr) {
                     FillDest(engd->hstr);

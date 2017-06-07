@@ -65,6 +65,11 @@ enum {
     ECB_LOAD,
     ECB_QUIT,
 };
+enum {
+    ELA_DISK = 0,
+    ELA_LOAD,
+    ELA_AINF,
+};
 #define COM_RGPU  (1 << 31)
 #define COM_DRAW  (1 << 30)
 #define COM_SHOW  (1 << 29)
@@ -156,11 +161,11 @@ typedef union {
 
 /// animation unit info
 typedef struct {
-    uint32_t uuid,   /// unique animation identifier
-             xdim,   /// frame width (actual, non-modified)
+    intptr_t uuid;   /// unique animation identifier (or data)
+    uint32_t xdim,   /// frame width (actual, non-modified)
              ydim,   /// frame height (actual, non-modified)
              fcnt,   /// number of animation`s frames
-            *time;   /// frame delays array, managed by the engine
+            *time;   /// frame delays array, managed by the creator
 } AINF;
 #pragma pack(pop)
 
@@ -224,12 +229,19 @@ LIB_OPEN void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data);
     AINF::UUID will contain a positive integer on success, 0 on error.
     _________________________________________________________________________
     ENGD: handle of the engine object the call refers to
-    PATH: full path to the loaded animation in UTF8 format
-    LOAD: preloaded GIF data (if any), 0 otherwise
-    AINF: pointer to the struxture to receive animation properties
+    AINF: pointer to the structure to receive animation properties
+    NAME: unique animation identifier; must be a string
+    DATA: data structure pointer; see FLGS
+    FLGS: data types in DATA:
+          ELA_DISK: full path to the animation in UTF8 format
+          ELA_LOAD: preloaded GIF file data
+          ELA_AINF: AINF structure, with AINF::UUID as a linearized BGRA
+                    frame buffer, AINF::XDIM x (AINF::YDIM * AINF::FCNT)
+    UDIS: data discarder function; usually just free()
  **/
-LIB_OPEN void cEngineLoadAnimAsync(ENGD *engd,
-                                   uint8_t *path, uint8_t *load, AINF *ainf);
+LIB_OPEN void cEngineLoadAnimAsync(ENGD *engd, AINF *ainf,
+                                   uint8_t *name, void *data, uint32_t flgs,
+                                   void (*udis)(void*));
 
 /** _________________________________________________________________________
     Executes the main loop.
