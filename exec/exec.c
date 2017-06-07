@@ -1646,8 +1646,9 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
     /// now choosing sprite direction
     if (binf->trgt && !(binf->flgs & BHV_CTLM)
     && (prev = engc->blgp[binf->trgt] - engc->blgp[binf->trgt - 1])) {
-        pict->boss = engc->parr[PRNG(engc->seed) % prev
-                              + engc->blgp[binf->trgt - 1]];
+        if (~flgs & CBF_INIT) /// not all sprites are ready yet!
+            pict->boss = engc->parr[PRNG(engc->seed) % prev
+                                  + engc->blgp[binf->trgt - 1]];
         for (pict->iovr = prev = 0; prev <= 1; prev++) {
             if (binf->obfm[prev])
                 oinf = &pict->ulib->barr[binf->obfm[prev] - 1];
