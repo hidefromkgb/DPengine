@@ -421,7 +421,7 @@ struct ENGC {
               idim; /// tray icon dimensions
     CONF      cdef, /// default configuration
               ccur, /// current configuration
-              cini; /// initial configuration read on the start
+              cini; /// initial configuration read at the start
 };
 
 

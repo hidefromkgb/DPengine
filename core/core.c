@@ -547,6 +547,52 @@ THR_FUNC cThrdFunc(THRD *data) {
 
 
 
+int pixlcmp(const void *a, const void *b) {
+    return (((BGRA*)a)->bgra  > ((BGRA*)b)->bgra)? 1 :
+           (((BGRA*)a)->bgra == ((BGRA*)b)->bgra)? 0 : -1;
+}
+
+ASTD *ConvertAnim(AINF *asrc) {
+    ASTD *retn = 0;
+    uint64_t *temp;
+    uint32_t iter, indx;
+
+    if (!asrc || !asrc->xdim || !asrc->ydim
+    ||  !asrc->fcnt || !asrc->time || !asrc->uuid)
+        return 0;
+
+    retn = calloc(1, sizeof(*retn));
+    *retn = (ASTD){calloc(asrc->fcnt, asrc->xdim * asrc->ydim),
+                   asrc->xdim, asrc->ydim, asrc->fcnt,
+                   calloc(asrc->fcnt, sizeof(uint32_t)),
+                   calloc(256, sizeof(BGRA))};
+    memcpy(retn->time, asrc->time, asrc->fcnt * sizeof(uint32_t));
+    temp = calloc(asrc->fcnt * sizeof(uint64_t), asrc->xdim * asrc->ydim);
+    iter = asrc->fcnt * asrc->xdim * asrc->ydim;
+    while (iter--)
+        temp[iter] = ((uint64_t)iter << 32) | ((BGRA*)asrc->uuid)[iter].bgra;
+    qsort(temp, asrc->fcnt * asrc->xdim * asrc->ydim,
+          sizeof(uint64_t), pixlcmp);
+
+    /// assuming that the picture contains no more than 256 colors.
+    /// [TODO:] add dithering to fix this!
+
+    indx = 0;
+    iter = asrc->fcnt * asrc->xdim * asrc->ydim - 1;
+    /// the first index is zero; we don`t explicitly set
+    /// it, as retn->bptr is already filled with zeroes
+    retn->bpal[indx].bgra = temp[iter];
+    while (iter--) {
+        if ((uint32_t)temp[iter + 1] != (uint32_t)temp[iter])
+            retn->bpal[++indx].bgra = temp[iter];
+        retn->bptr[temp[iter] >> 32] = indx;
+    }
+    free(temp);
+    return retn;
+}
+
+
+
 void LTHR(THRD *data) {
     char *name, *file;
     long  size;
@@ -559,6 +605,7 @@ void LTHR(THRD *data) {
     retn = 0;
     elem = data->elem;
     switch (data->flgs) {
+        case ELA_AINF: retn = ConvertAnim((AINF*)data->data);      break;
         case ELA_LOAD: retn = MakeAnimStd(data->data, LONG_MAX);   break;
         case ELA_DISK: file = lLoadFile((char*)data->data, &size);
                        retn = MakeAnimStd(file, size); free(file); break;
@@ -788,6 +835,7 @@ void cEngineLoadAnimAsync(ENGD *engd, AINF *ainf, uint8_t *name,
             engd->thrd[curr].udis(engd->thrd[curr].data);
         engd->thrd[curr].udis = udis;
         engd->thrd[curr].data = data;
+        engd->thrd[curr].flgs = flgs;
         lPickSemaphore(engd->osem, engd->isem, 1 << curr);
         TryUpdatePixTree(engd, retn);
     }
