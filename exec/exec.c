@@ -289,15 +289,6 @@ typedef struct {
                     /// ([0] = static, [1] = moving)
 } BINF;
 
-/// speech unit info (write-once, read-only)
-typedef struct {
-    uint32_t name,  /// name hash
-             flgs,  /// flags
-             igrp;  /// behaviour group index
-    char    *text,  /// speech text
-            *wave;  /// sound file data
-} SINF;
-
 /// library categories (name string and its hash)
 typedef struct {
     uint32_t hash, flgs;
@@ -1204,6 +1195,10 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
         SET_FLAG(retn->flgs, temp, VAL_FALS, ANI_LOOP);
 }
 
+void ParsePhrase(BINF *retn, char *path, char **imgp, char **conf) {
+    /// phrases are nothing more than additional effect sprites!
+}
+
 void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
     char *file, *fptr, *conf, *temp;
     long bcnt, ecnt, ccnt = 0;
@@ -1226,12 +1221,13 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
         libs->bcnt = libs->ecnt = 0;
         while ((conf = SplitLine(&fptr, '\n', 1)))
             switch (DetermineType(&conf)) {
-                case SVT_BHVR:
-                    libs->bcnt++;
-                    break;
-
+//                case SVT_PHRS:
                 case SVT_EFCT:
                     libs->ecnt++;
+                    break;
+
+                case SVT_BHVR:
+                    libs->bcnt++;
                     break;
             }
 
@@ -1258,6 +1254,12 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     libs->name = strdup(GET_TEMP(&conf));
                     break;
 
+                case SVT_PHRS:
+                    ParsePhrase(&libs->earr[ecnt], libs->path,
+                                &libs->eimp[ecnt * 2], &conf);
+//                    ecnt++;
+                    break;
+
                 case SVT_EFCT:
                     ParseEffect(&libs->earr[ecnt], libs->path,
                                 &libs->eimp[ecnt * 2], &conf);
@@ -1272,9 +1274,6 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
 
                 case SVT_BGRP:
                     /// doesn`t help much, skipping
-                    break;
-
-                case SVT_PHRS:
                     break;
 
                 case SVT_CTGS:

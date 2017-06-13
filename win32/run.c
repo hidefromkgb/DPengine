@@ -742,16 +742,23 @@ LRESULT APIENTRY IBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
             AINF anim = {(ctrl->priv[7] >> 10) & 0x3FFFFF,
                          (int16_t)ctrl->priv[4], (int32_t)ctrl->priv[4] >> 16,
                           ctrl->priv[7] & 0x3FF, (uint32_t*)ctrl->priv[3]};
+            uint32_t b_r_, _g_a, mult, iter;
             PAINTSTRUCT pstr;
-            HBRUSH btnf;
-            RECT rect;
             HDC devc;
 
-            btnf = GetSysColorBrush(COLOR_BTNFACE);
+            mult = GetSysColor(COLOR_BTNFACE);
+            _g_a = (mult & 0xFF00FF00) >> 8;
+            b_r_ = ((mult >> 16) & 0x000000FF) | ((mult << 16) & 0x00FF0000);
+
             devc = BeginPaint(hWnd, &pstr);
-            rect = (RECT){0, 0, anim.xdim, anim.ydim};
-            FillRect((HDC)ctrl->priv[1], &rect, btnf);
+            BitBlt((HDC)ctrl->priv[1], 0, 0, anim.xdim, anim.ydim,
+                    devc, 0, 0, BLACKNESS);
             ctrl->fc2e(ctrl, MSG_IFRM, (intptr_t)&anim);
+            iter = anim.xdim * anim.ydim;
+            while (iter--)
+                if ((mult = 0x100 - (anim.time[iter] >> 24)) > 1)
+                    anim.time[iter] += (((mult * b_r_) >> 8) & 0x00FF00FF)
+                                     | (((mult * _g_a) >> 0) & 0xFF00FF00);
             BitBlt(devc, 0, 0, anim.xdim, anim.ydim,
                   (HDC)ctrl->priv[1], 0, 0, SRCCOPY);
             EndPaint(hWnd, &pstr);

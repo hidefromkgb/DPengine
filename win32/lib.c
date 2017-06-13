@@ -287,7 +287,6 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         BOOL  fTransition; /// dwFlags | 0x04 (DWM_BB_TRANSITIONONMAXIMIZED)
     } blur = {0x03, TRUE, CreateRectRgn(0, 0, 1, 1), TRUE};
     SIZE dims = {xdim - xpos, ydim - ypos};
-    RECT scrr = {0, 0, dims.cx, dims.cy};
     POINT cpos, mpos, zpos = {};
     MSG pmsg = {};
 
@@ -386,7 +385,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         if (attr & PFR_HALT)
             continue;
         if (~flgs & COM_RGPU)
-            FillRect(devc, &scrr, GetStockObject(BLACK_BRUSH));
+            BitBlt(devc, 0, 0, dims.cx, dims.cy, mwdc, 0, 0, BLACKNESS);
         cOutputFrame(engd, (!EBW)? &surf : 0);
         if (!EBW)
             ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bfun, opts);

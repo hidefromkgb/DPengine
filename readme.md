@@ -25,6 +25,8 @@ All three major desktop operating systems (Windows, Linux and OS X) finally got 
 1. Screen movement restriction (tab 2)
 1. ~~[!DP] Port Win32 file dialogs to Win9x~~ __DONE__
 1. [!DP] Parallelize sprite processing in frontend
+1. [!DP] Convert APAL into sampler3d
+1. [!DP] Implement the "alias method" for behaviours
 1. [!DP] Move rendering options from tray menu to tab 3
 1. [!DP] Add OS-specific options to tab 3
 1. [!DP] Do something with networking on Win9x and WinXP
