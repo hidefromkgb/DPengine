@@ -60,7 +60,41 @@ struct FRBO {
                  z = CA palette U-pos in texture + 0.5
                  w = CA palette V-pos in texture + 0.5
  **/
-INCBIN("../core/ogl/shad/vert.glsl", MainVertexShader);
+char *MainVertexShader =
+"attribute vec3 vert;"
+
+"uniform sampler2D data;"
+"uniform sampler2D dims;"
+"uniform sampler2D bank;"
+"uniform vec4 disz;"
+"uniform vec4 hitd;"
+
+"varying vec4 vtex;"
+"varying vec4 voff;"
+
+"const vec4 orts = vec4(-1.0, 1.0, 0.5, 0.0);"
+"const vec4 coef = vec4(-0.125, 0.250, 0.500, 0.000);"
+
+"void main() {"
+    "vec4 vdat = texture2D(data, vec2(hitd.z, disz.z) *"
+                               "(floor(vert.zz * hitd.wz) + orts.zz));"
+    "vec4 indx = vdat.wwww * orts.wwzw + hitd.wzww * (orts.zzxw * 2.0)"
+              "* floor(vdat.wwww * coef.yyyy + orts.xxww);"
+    "vec2 offs = vec2(hitd.z, disz.w) * (floor(indx.xy) + orts.zz);"
+    "vec4 vdim = texture2D(dims, offs);"
+    "vec4 vbnk = texture2D(bank, offs);"
+    "vtex = (orts.xzzw * 4.0) * vdim.zwzw *"
+          "((floor(indx.zzww) * orts.yxww + indx.zwww - coef.yzww) *"
+           "(vert.xyzz - coef.zzww) + coef.xyzw);"
+    "indx = floor(vec4(vdat.z * vdim.z * vdim.w, indx.wxy * 256.0))"
+         "+ vbnk.yxww * orts.yyww + orts.wwzz;"
+    "voff = (indx.x < vbnk.z)? indx.xyzw : indx.xyzw"
+         "+ floor((indx.xxxx - vbnk.zzzz) / vbnk.wwww)"
+         "* (vbnk.wwww * orts.xwww + orts.wyww)"
+         "+ (vbnk.zzzz * orts.xwww + orts.wyww);"
+    "gl_Position = (orts.yyww * vert.xyzz  * vdim.zwxx * vdim.xyzw"
+                "-  orts.xyzw * vdat.xyyy) * disz.xyyy + orts.xyyy;"
+"}";
 
 
 
@@ -89,7 +123,23 @@ INCBIN("../core/ogl/shad/vert.glsl", MainVertexShader);
     T1FV <atex>: FB array, each layer is an FB with palette indices; see above
     T4FV <apal>: palette texture
  **/
-INCBIN("../core/ogl/shad/pixl.glsl", MainPixelShader);
+char *MainPixelShader =
+"uniform sampler3D atex;"
+"uniform sampler3D apal;"
+"uniform vec4 hitd;"
+
+"varying vec4 vtex;"
+"varying vec4 voff;"
+
+"const vec4 coef = vec4(1.0, 0.0, 0.5, 255.0);"
+
+"void main() {"
+    "vec4 pixl = floor(vtex);"
+    "pixl = texture3D(atex, (floor((pixl.yyw * pixl.zzw + pixl.xxw + voff.xxy)"
+                                 "* hitd.wzw) + coef.zzz) * hitd.zzx);"
+    "if (pixl.x == coef.x) discard;"
+    "gl_FragColor = texture3D(apal, vec3(hitd.zy * (pixl.xx * coef.wy + voff.zw), 0.5));"
+"}";
 
 
 
@@ -225,7 +275,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
     /// allocate the palette texture
     *OGL_BindTex(retn->surf, 3, OGL_TEX_NSET) =
-        OGL_MakeTex(mtex, phei, 0, GL_TEXTURE_2D,
+        OGL_MakeTex(mtex, phei, 1, GL_TEXTURE_3D,
                     GL_REPEAT, GL_NEAREST, GL_NEAREST, GL_UNSIGNED_BYTE,
                     GL_RGBA8, (rgba)? GL_RGBA : GL_BGRA, apal);
     free(apal);
