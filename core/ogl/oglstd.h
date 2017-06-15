@@ -1,5 +1,11 @@
 #include <core.h>
 
+/// renderer data, defined externally
+typedef struct RNDR RNDR;
+
+/// renderbuffer-based framebuffer object, defined externally
+typedef struct FRBO FRBO;
+
 
 
 long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,

@@ -112,7 +112,6 @@
 /** first spawn of a sprite     **/ #define CBF_INIT (1 <<  0)
 /** select a pre-set behaviour  **/ #define CBF_NEXT (1 <<  1)
 /** do not spawn effects        **/ #define CBF_DNSE (1 <<  2)
-/** spawn a long-lasting sprite **/ #define CBF_LONG (1 <<  3)
 
 /// /// /// /// /// /// /// /// /// follow offset type values
 /** 'fixed'                     **/ #define FOT_FIXD 0x9A8F97BD
@@ -1464,41 +1463,51 @@ void SortByY(ENGC *engc) {
 
 
 
-void FollowParent(ENGC *engc, PICT *pict) {
+void FollowParent(ENGC *engc, PICT *pict, T2IV *move) {
     BINF *barr, *parr, *oarr;
     T2IV dest;
     long iter;
     float dist;
 
     /// pict->boss and pict->iovr are guaranteed to be nonzero here
-    parr = &pict->ulib->barr[pict->indx >> 1];
-    barr = &pict->boss->ulib->barr[pict->boss->indx >> 1];
-    for (iter = 0; iter <= 1; iter++) {
-        oarr = &pict->ulib->barr[(pict->iovr >> (iter << 4)) & 0xFFFF];
-        dest.x = ClampToBounds(pict->boss->offs.x
-                             + barr->cntr[pict->boss->indx & 1].x
-                          + (((parr->flgs & BHV_MIRR)
-                           && (pict->boss->indx & 1))?
-                              -parr->ptgt.x : parr->ptgt.x)
-                             - oarr->cntr[pict->indx & 1].x, 0,
-                               engc->dims.x - oarr->unit[pict->indx & 1].xdim);
-        dest.y = ClampToBounds(pict->boss->offs.y
-                             - barr->cntr[pict->boss->indx & 1].y
-                             + parr->ptgt.y + oarr->cntr[pict->indx & 1].y,
-                               oarr->unit[pict->indx & 1].ydim, engc->dims.y);
-        if ((dist = (dest.x - pict->offs.x) * (dest.x - pict->offs.x)
-                  + (dest.y - pict->offs.y) * (dest.y - pict->offs.y)) == 0.0)
-            break;
+    if (move) {
+        dest.x = pict->offs.x + move->x;
+        dest.y = pict->offs.y + move->y;
+        dist = (move->x | move->y)? 1.0 : 0.0;
+    }
+    else {
+        parr = &pict->ulib->barr[pict->indx >> 1];
+        barr = &pict->boss->ulib->barr[pict->boss->indx >> 1];
+        for (iter = 0; iter <= 1; iter++) {
+            oarr = &pict->ulib->barr[(pict->iovr >> (iter << 4)) & 0xFFFF];
+            dest.x = ClampToBounds(pict->boss->offs.x
+                                 + barr->cntr[pict->boss->indx & 1].x
+                              - (((parr->flgs & BHV_MIRR)
+                               && (pict->boss->indx & 1))?
+                                   parr->ptgt.x : -parr->ptgt.x)
+                                 - oarr->cntr[pict->indx & 1].x, 0,
+                                   engc->dims.x
+                                 - oarr->unit[pict->indx & 1].xdim);
+            dest.y = ClampToBounds(pict->boss->offs.y
+                                 - barr->cntr[pict->boss->indx & 1].y
+                                 + parr->ptgt.y + oarr->cntr[pict->indx & 1].y,
+                                   oarr->unit[pict->indx & 1].ydim,
+                                   engc->dims.y);
+            dist = (dest.x - pict->offs.x) * (dest.x - pict->offs.x)
+                 + (dest.y - pict->offs.y) * (dest.y - pict->offs.y);
+            if (dist == 0.0)
+                break;
+        }
+        if (dist > parr->move * parr->move)
+            dist = parr->move / sqrt(dist);
+        else {
+            pict->offs.x = dest.x;
+            pict->offs.y = dest.y;
+        }
     }
     iter = (dist == 0.0) ^ !!(pict->flgs & PIF_STOP);
     pict->flgs = (dist == 0.0)? (pict->flgs |  PIF_STOP)
                               : (pict->flgs & ~PIF_STOP);
-    if (dist > parr->move * parr->move)
-        dist = parr->move / sqrt(dist);
-    else {
-        pict->offs.x = dest.x;
-        pict->offs.y = dest.y;
-    }
     pict->move = (T2FV){{dist * (dest.x - pict->offs.x),
                          dist * (dest.y - pict->offs.y)}};
     if (pict->move.x != 0.0)
@@ -1609,7 +1618,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
     if (pict->flgs & PIF_EFCT)
         return;
 
-    prev = (pict->boss)?
+    prev = (pict->boss || (pict->flgs & (PIF_TPL1 | PIF_TPL2)))?
          (((pict->iovr >> ((pict->flgs & PIF_STOP)? 0 : 16)) & 0xFFFF) << 1)
          + (pict->indx & 1) : pict->indx;
     pict->boss = 0;
@@ -1655,13 +1664,14 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
     }
     pict->fram = -1; /// this means:
     pict->tfrm =  0; /// "update me to 0-th frame ASAP!"
-    pict->tbhv = (flgs & CBF_LONG)? LLONG_MAX : engc->tcur + binf->dmin;
+    pict->tbhv = (pict->flgs & PIF_BUSY)? LLONG_MAX : engc->tcur + binf->dmin;
     if (binf->dmax > binf->dmin)
         pict->tbhv += PRNG(engc->seed) % (binf->dmax - binf->dmin);
     /// now choosing sprite direction
-    if (binf->trgt && !(binf->flgs & BHV_CTLM)
-    && (prev = engc->blgp[binf->trgt] - engc->blgp[binf->trgt - 1])) {
-        if (~flgs & CBF_INIT) /// not all sprites are ready yet!
+    if ((pict->flgs & (PIF_TPL1 | PIF_TPL2))
+    ||  (binf->trgt && !(binf->flgs & BHV_CTLM)
+    &&  (prev = engc->blgp[binf->trgt] - engc->blgp[binf->trgt - 1]))) {
+        if (!(flgs & CBF_INIT) && !(pict->flgs & (PIF_TPL1 | PIF_TPL2)))
             pict->boss = engc->parr[PRNG(engc->seed) % prev
                                   + engc->blgp[binf->trgt - 1]];
         for (pict->iovr = prev = 0; prev <= 1; prev++) {
@@ -1751,16 +1761,16 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
         for (lend = binf->neff; lend; lend--)
             SpawnEffect(&engc->parr[engc->pcnt++], pict,
                          engc->seed, lend + binf->ieff - 1,
-                        (flgs & CBF_LONG)? LLONG_MAX : engc->tcur);
+                        (pict->tbhv >= LLONG_MAX)? LLONG_MAX : engc->tcur);
 }
 
 long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
-    uint32_t flgs, indx = 0;
+    uint32_t flgs = 0, indx = 0;
     LINF *ulib = pict->ulib;
     PICT temp;
     AINF anim;
 
-    if ((pict->flgs & PIF_EFCT) || (mode & (mode - 1)) || !(mode & PIF_SPEC))
+    if ((pict->flgs & PIF_EFCT) || (mode & (mode - 1)))
         return 0;
 
     if (pict->flgs & mode) {
@@ -1799,14 +1809,18 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
             case PIF_SLPM:
                 indx = ulib->bslp[PRNG(engc->seed) % ulib->nslp] - ulib->barr;
                 break;
+
+            case PIF_TPL1:
+            case PIF_TPL2:
+                indx = pict->indx >> 1;
+                break;
         }
-        if (!(pict->flgs & PIF_SPEC))
-            pict->ipre = pict->indx;
+        flgs = CBF_NEXT;
         pict->flgs |= mode;
-        flgs = CBF_NEXT | CBF_LONG;
+        pict->ipre = pict->indx;
     }
     /// do not duplicate effects if the behaviour stays the same
-    if ((indx ^ pict->indx) & ~1)
+    if (indx == (pict->indx >> 1))
         flgs |= CBF_DNSE;
     ChooseBehaviour(engc, pict, (indx << 1) | (pict->indx & 1), flgs);
     return 1;
@@ -2177,6 +2191,16 @@ void MMH(MENU *item) {
                 }
             break;
 
+        case TXT_TPL1:
+            pict = (PICT*)item->data;
+            SpecialBehaviour(pict->ulib->engc, pict, PIF_TPL1);
+            break;
+
+        case TXT_TPL2:
+            pict = (PICT*)item->data;
+            SpecialBehaviour(pict->ulib->engc, pict, PIF_TPL2);
+            break;
+
         case TXT_CSLP:
             pict = (PICT*)item->data;
             SpecialBehaviour(pict->ulib->engc, pict, PIF_SLPM);
@@ -2188,14 +2212,6 @@ void MMH(MENU *item) {
             for (indx = 0; indx < engc->pcnt; indx++)
                 if (engc->parr[indx]->ulib == ulib)
                     SpecialBehaviour(engc, engc->parr[indx], PIF_SLPM);
-            break;
-
-        case TXT_TPL1:
-            rMessage("Not implemented yet!", "WIP", "OK", 0);
-            break;
-
-        case TXT_TPL2:
-            rMessage("Not implemented yet!", "WIP", "OK", 0);
             break;
 
         case TXT_OPTS:
@@ -2387,9 +2403,10 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                    uint64_t time, intptr_t user, uint32_t attr,
                    int32_t xptr, int32_t yptr, int32_t isel) {
     ENGC *engc = (ENGC*)user;
-    PICT *pict = engc->pcur;
+    PICT *pict;
     BINF *binf;
     AINF *anim;
+    T2IV  bmov;
 
     char *temp;
     long  indx, elem;
@@ -2400,6 +2417,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
 //    cEngineCallback(engd, ECB_LOAD, 0);
 
     curr = (engc->tacc += 0.01 * engc->ccur.ndil[1] * (time - engc->tpre));
+    pict = engc->pcur;
     engc->tpre = time;
     engc->tacc -= curr;
     engc->tcur += curr;
@@ -2457,7 +2475,6 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             engc->mspr[9].flgs |= (pict->flgs & PIF_TPL2)? MFL_VCHK : 0;
             rOpenContextMenu(engc->mspr);
         }
-        engc->ppos.z = attr;
     }
     if ((engc->ccur.flgs & CSF_ERCH) && (attr & UFR_MOUS) && !pict) {
         if (engc->povr && ((isel < 0) || (engc->parr[isel] != engc->povr))) {
@@ -2467,8 +2484,9 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             engc->povr = 0;
         }
         if (!engc->povr && (isel >= 0) && engc->parr[isel]
-        && !(engc->parr[isel]->flgs & (PIF_EFCT | PIF_SLPM))) {
-            /// effects and 'sleeping' sprites shall ignore mouseover
+        && !(engc->parr[isel]->flgs & (PIF_EFCT | PIF_SLPM
+                                     | PIF_TPL1 | PIF_TPL2))) {
+            /// effects, 'sleeping' and controlled sprites shall ignore mouse
             if (SpecialBehaviour(engc, engc->parr[isel], PIF_OVRM)) {
                 /// the mouseover actually affected the sprite; reacting
                 engc->povr = engc->parr[isel];
@@ -2524,9 +2542,25 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         }
         /// correcting BINF in case it has overrides
         /// (either got them from ChooseBehaviour() or from the start)
-        if (binf->trgt) {
-            if (pict->boss && (~pict->flgs & PIF_EFCT))
-                FollowParent(engc, pict);
+        if (binf->trgt || (pict->flgs & (PIF_TPL1 | PIF_TPL2))) {
+            bmov = (T2IV){{}};
+            elem = 0.125 * curr;
+            if (pict->flgs & PIF_TPL1) {
+                bmov.x += ((attr & UFR_PL1D)? elem : 0)
+                       -  ((attr & UFR_PL1A)? elem : 0);
+                bmov.y += ((attr & UFR_PL1S)? elem : 0)
+                       -  ((attr & UFR_PL1W)? elem : 0);
+            }
+            if (pict->flgs & PIF_TPL2) {
+                bmov.x += ((attr & UFR_PL2D)? elem : 0)
+                       -  ((attr & UFR_PL2A)? elem : 0);
+                bmov.y += ((attr & UFR_PL2S)? elem : 0)
+                       -  ((attr & UFR_PL2W)? elem : 0);
+            }
+            if ((pict->boss || ((engc->ppos.z ^ attr) & UFR_KEYB))
+            && (~pict->flgs & PIF_EFCT))
+                FollowParent(engc, pict,
+                            ((engc->ppos.z ^ attr) & UFR_KEYB)? &bmov : 0);
             elem = pict->iovr >> ((pict->flgs & PIF_STOP)? 0 : 16);
             binf = &pict->ulib->barr[elem & 0xFFFF];
         }
@@ -2563,6 +2597,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         }
     }
     SortByY(engc);
+    engc->ppos.z = attr;
 
     /// ELEM is the number of sprites skipped, multiplied by -1
     /// (like those with respawn > runtime staying in reserve)
@@ -2570,14 +2605,19 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         if ((pict = engc->parr[indx])->flgs & PIF_IRES)
             elem--; /// this works only because reserved-s are put among
                     /// the sprites which cannot be selected with mouse
-        else
+        else {
+            if (pict->flgs & PIF_EFCT)
+                binf = &pict->ulib->earr[pict->indx >> 1];
+            else {
+                attr = (pict->boss || (pict->flgs & (PIF_TPL1 | PIF_TPL2)))?
+                       (pict->iovr >> ((pict->flgs & PIF_STOP)? 0 : 16))
+                     : (pict->indx >> 1);
+                binf = &pict->ulib->barr[attr & 0xFFFF];
+            }
             engc->data[indx + elem] =
                 (T4FV){{pict->offs.x, pict->offs.y, pict->fram,
-                      ((pict->flgs & PIF_EFCT)?
-                       &pict->ulib->earr[pict->indx >> 1].unit[pict->indx & 1]
-                     : &pict->ulib->barr[(!pict->boss)? (pict->indx >> 1) :
-             (uint16_t)(pict->iovr >> ((pict->flgs & PIF_STOP)? 0 : 16))].
-                        unit[pict->indx & 1])->uuid}};
+                        binf->unit[pict->indx & 1].uuid}};
+        }
     *data = engc->data;
     *size = (engc->pcnt | elem)? engc->pmax : 0;
     return engc->pcnt + elem;

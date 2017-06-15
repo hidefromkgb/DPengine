@@ -1,6 +1,8 @@
 #include <ogl/oglstd.h>
 #include <core.h>
 
+
+
 #define SEM_NULL 0
 #define SEM_FULL ~SEM_NULL
 
@@ -10,6 +12,11 @@
 #define TXL_RGPU "[##GPU##]"
 #define TXL_RSTD "[++CPU++]"
 
+/// internal options (see ENGD::IFLG)
+#define IFL_HALT (1 << 0)
+
+
+
 /// AINF destination (to put one "physical" animation into multiple AINFs)
 typedef struct _DEST {
     struct _DEST *next;
@@ -17,8 +24,8 @@ typedef struct _DEST {
 } DEST;
 
 /// AVL hash tree, opaque outside the module
-struct TREE {
-    TREE *next[3]; /// NEXT[2] is used for collisions
+typedef struct _TREE {
+    struct _TREE *next[3]; /// NEXT[2] is used for collisions
     long diff;
     uint64_t hash;
     union {
@@ -33,21 +40,21 @@ struct TREE {
             typeof(((AINF*)0)->uuid) turn;
             char *path;
             DEST *dest;
-            TREE *epix;
+            struct _TREE *epix;
         };
     };
-};
+} TREE;
 
 /// AVL hash tree iterator
 typedef void (*ITER)(TREE*);
 
 /// thread data, opaque outside the module
-struct THRD {
+typedef struct _THRD {
     ulong loop;
     SEM_TYPE uuid;
     ENGD *orig;
     void (*udis)(void*);
-    void (*func)(THRD*);
+    void (*func)(struct _THRD*);
     union {
         struct {
             long ymin, ymax;
@@ -58,19 +65,19 @@ struct THRD {
             long  flgs;
         };
     };
-};
+} THRD;
 
 /// engine data, opaque outside the module
 struct ENGD {
     uint32_t flgs,    /// options
              dflg,    /// deferred options (those which are set upon restart)
+             iflg,    /// internal runtime options (halt flag, etc.)
              size,    /// current length of the main display list
              smax,    /// maximum capacity of the main display list
              fram,    /// FPS counter
              msec,    /// frame delay
              ncpu,    /// number of CPU cores the engine is allowed to occupy
-             uniq,    /// number of unique animations
-             halt;    /// halt flag (must NOT be in external-writable flags)
+             uniq;    /// number of unique animations
     uint64_t tfrm,    /// timestamp for the previous frame
              tfps;    /// timestamp for the previous FPS count
     UFRM     ufrm;    /// callback to update the state of a frame
@@ -79,7 +86,8 @@ struct ENGD {
     UNIT    *uarr;    /// unique animations source in array form
     T4FV    *data;    /// main display list (updated every frame; FOREIGN!)
     THRD    *thrd;    /// thread data array
-    RNDR    *rndr;    /// additional renderer (the exact type may vary)
+    FRBO    *surf;    /// supplementary renderbuffer
+    RNDR    *rndr;    /// supplementary renderer (the exact type may vary)
     TREE    *hstr,    /// AVL tree for animation filename hashes & HPIX links
             *hpix;    /// AVL tree for animation pixel data (including hashes)
     SEMD    *isem,    /// incoming semaphore
@@ -532,7 +540,9 @@ long SelectUnit(UNIT *uarr, T4FV *data, long size, long xptr, long yptr) {
 
 
 
-THR_FUNC cThrdFunc(THRD *data) {
+THR_FUNC cThrdFunc(void *user) {
+    THRD *data = (THRD*)user;
+
     while (!0) {
         lWaitSemaphore(data->orig->isem, data->uuid);
         if (!data->loop)
@@ -761,26 +771,26 @@ uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t attr) {
 
 
 
-void cOutputFrame(ENGD *engd, FRBO **surf) {
+void cOutputFrame(ENGD *engd, long frbo) {
     if (engd->flgs & COM_RGPU) {
-        if (!MakeRendererOGL(&engd->rndr, !!surf && !(engd->flgs & WIN_IBGR),
+        if (!MakeRendererOGL(&engd->rndr, !!frbo && !(engd->flgs & WIN_IBGR),
                               engd->uarr, engd->uniq, engd->smax,
                               engd->dims.xdim - engd->dims.xpos,
                               engd->dims.ydim - engd->dims.ypos)) {
             cEngineCallback(engd, ECB_SFLG, engd->flgs & ~COM_RGPU);
             return;
         }
-        if (surf) {
-            if (!*surf)
-                *surf = MakeRBO(engd->dims.xdim - engd->dims.xpos,
-                                engd->dims.ydim - engd->dims.ypos);
-            ReadRBO(*surf, engd->bptr, engd->flgs);
-            BindRBO(*surf, 1);
+        if (!!frbo) {
+            if (!engd->surf)
+                engd->surf = MakeRBO(engd->dims.xdim - engd->dims.xpos,
+                                     engd->dims.ydim - engd->dims.ypos);
+            ReadRBO(engd->surf, engd->bptr, engd->flgs);
+            BindRBO(engd->surf, 1);
         }
         DrawRendererOGL(engd->rndr, engd->uarr, engd->data,
                         engd->size, engd->flgs & COM_OPAQ);
-        if (surf)
-            BindRBO(*surf, 0);
+        if (!!frbo)
+            BindRBO(engd->surf, 0);
     }
     else {
         SwitchThreads(engd, 1);
@@ -792,13 +802,13 @@ void cOutputFrame(ENGD *engd, FRBO **surf) {
 
 
 
-void cDeallocFrame(ENGD *engd, FRBO **surf) {
+void cDeallocFrame(ENGD *engd, long frbo) {
     if (~engd->flgs & COM_RGPU)
         StopThreads(engd);
     else {
         FreeRendererOGL(&engd->rndr);
-        if (surf)
-            FreeRBO(surf);
+        if (!!frbo)
+            FreeRBO(&engd->surf);
     }
 }
 
@@ -876,7 +886,7 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
             lRunMainLoop(engd, engd->dims.xpos, engd->dims.ypos,
                          engd->dims.xdim, engd->dims.ydim,
                         &engd->bptr, engd->user, engd->flgs);
-        } while (!engd->halt);
+        } while (~engd->iflg & IFL_HALT);
     }
     else
         printf(TXL_FAIL" No animation base found! Exiting...\n");
@@ -915,7 +925,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
             if ((data ^ temp) & COM_DDDD) {
                 /// we have received a deferred flag, restart needed!
                 engd->dflg = data;
-                engd->halt = 0;
+                engd->iflg &= ~IFL_HALT; /// do not halt on restart!
                 lRestartEngine(engd);
             }
             /// deferred flags are not to be set until restart!
@@ -986,7 +996,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
             break;
 
         case ECB_QUIT:
-            engd->halt = ~0;
+            engd->iflg |= IFL_HALT;
             lRestartEngine(engd);
             if (data)
                 break;

@@ -54,7 +54,7 @@ char *lLoadFile(char *name, long *size) {
 
 
 
-void lMakeThread(THRD *thrd) {
+void lMakeThread(void *thrd) {
     DWORD retn;
 
     CreateThread(0, 0, (LPTHREAD_START_ROUTINE)cThrdFunc, thrd, 0, &retn);
@@ -303,10 +303,8 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     HGLRC mwrc;
     HWND hwnd;
     BOOL comp;
-    FRBO *surf;
 
     mwrc = 0;
-    surf = 0;
     devc = CreateCompatibleDC(0);
     bmpi.bmiHeader.biWidth = dims.cx;
     bmpi.bmiHeader.biHeight = (~flgs & COM_RGPU)? -dims.cy : dims.cy;
@@ -373,10 +371,18 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         }
         GetCursorPos(&cpos);
         ScreenToClient(hwnd, &cpos);
-        attr = ((GetAsyncKeyState(VK_LBUTTON))? UFR_LBTN : 0)
+        attr = ((GetActiveWindow() == hwnd)?    UFR_MOUS : 0)
+             | ((GetAsyncKeyState(VK_LBUTTON))? UFR_LBTN : 0)
              | ((GetAsyncKeyState(VK_MBUTTON))? UFR_MBTN : 0)
              | ((GetAsyncKeyState(VK_RBUTTON))? UFR_RBTN : 0)
-             | ((GetActiveWindow() == hwnd)?    UFR_MOUS : 0);
+             | ((GetAsyncKeyState(VK_UP     ))? UFR_PL1W : 0)
+             | ((GetAsyncKeyState(VK_DOWN   ))? UFR_PL1S : 0)
+             | ((GetAsyncKeyState(VK_LEFT   ))? UFR_PL1A : 0)
+             | ((GetAsyncKeyState(VK_RIGHT  ))? UFR_PL1D : 0)
+             | ((GetAsyncKeyState('W'       ))? UFR_PL2W : 0)
+             | ((GetAsyncKeyState('S'       ))? UFR_PL2S : 0)
+             | ((GetAsyncKeyState('A'       ))? UFR_PL2A : 0)
+             | ((GetAsyncKeyState('D'       ))? UFR_PL2D : 0);
         attr = cPrepareFrame(engd, cpos.x, cpos.y, attr);
         if (attr & PFR_SKIP)
             Sleep(1);
@@ -386,7 +392,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
             continue;
         if (~flgs & COM_RGPU)
             BitBlt(devc, 0, 0, dims.cx, dims.cy, mwdc, 0, 0, BLACKNESS);
-        cOutputFrame(engd, (!EBW)? &surf : 0);
+        cOutputFrame(engd, !EBW);
         if (!EBW)
             ULW(hwnd, mwdc, &mpos, &dims, devc, &zpos, 0, bfun, opts);
         else {
@@ -398,7 +404,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                                                WS_EX_TRANSPARENT | EXT_ATTR);
         }
     }
-    cDeallocFrame(engd, (!EBW)? &surf : 0);
+    cDeallocFrame(engd, !EBW);
     if (flgs & COM_RGPU) {
         wglMakeCurrent(0, 0);
         wglDeleteContext(mwrc);

@@ -81,15 +81,20 @@ enum {
 #define WIN_IRGN  (1 << 2)
 
 /// UFRM flags
-
-/// left mouse button
-#define UFR_LBTN  (1 << 0)
-/// middle mouse button
-#define UFR_MBTN  (1 << 1)
-/// right mouse button
-#define UFR_RBTN  (1 << 2)
-/// mouse input enabled
-#define UFR_MOUS  (1 << 3)
+#define UFR_LBTN  (1 <<  0)   /** left mouse button   **/
+#define UFR_MBTN  (1 <<  1)   /** middle mouse button **/
+#define UFR_RBTN  (1 <<  2)   /** right mouse button  **/
+#define UFR_MOUS  (1 <<  3)   /** mouse input enabled **/
+#define UFR_PL1W  (1 <<  4)   /** player #1 pressed W **/
+#define UFR_PL1S  (1 <<  5)   /** player #1 pressed S **/
+#define UFR_PL1A  (1 <<  6)   /** player #1 pressed A **/
+#define UFR_PL1D  (1 <<  7)   /** player #1 pressed D **/
+#define UFR_PL2W  (1 <<  8)   /** player #2 pressed W **/
+#define UFR_PL2S  (1 <<  9)   /** player #2 pressed S **/
+#define UFR_PL2A  (1 << 10)   /** player #2 pressed A **/
+#define UFR_PL2D  (1 << 11)   /** player #2 pressed D **/
+#define UFR_KEYB  (UFR_PL1W | UFR_PL1S | UFR_PL1A | UFR_PL1D \
+                 | UFR_PL2W | UFR_PL2S | UFR_PL2A | UFR_PL2D)
 
 
 

@@ -11,6 +11,8 @@
 #include <engine.h>
 #include <gif/gifstd.h>
 
+
+
 #ifdef _WIN32
     #include <windows.h>
     #define THR_EXIT TRUE
@@ -27,27 +29,16 @@
 #define PFR_SKIP (1 << 30)
 #define PFR_PICK (1 << 29)
 
-#define SEM_TYPE uint64_t
 
 
+/// semaphore control type
+typedef uint64_t SEM_TYPE;
 
 /// semaphore data, defined externally
 typedef struct SEMD SEMD;
 
-/// thread data, opaque outside the module
-typedef struct THRD THRD;
-
-/// AVL hash tree, opaque outside the module
-typedef struct TREE TREE;
-
-/// renderer data, defined externally
-typedef struct RNDR RNDR;
-
-/// renderbuffer-based framebuffer object, defined externally
-typedef struct FRBO FRBO;
-
 /// elementary animation unit
-typedef struct _UNIT {
+typedef struct {
     void *anim;    /// animation data (the format may vary)
     ulong scal;    /// scaling factor in powers of 2
     ulong tran;    /// number of semi-transparent pixels
@@ -57,11 +48,11 @@ typedef struct _UNIT {
 
 
 uint32_t cPrepareFrame(ENGD *engd, long xptr, long yptr, uint32_t attr);
-void cOutputFrame(ENGD *engd, FRBO **surf);
-void cDeallocFrame(ENGD *engd, FRBO **surf);
+void cOutputFrame(ENGD *engd, long frbo);
+void cDeallocFrame(ENGD *engd, long frbo);
 void cOutputFPS(ENGD *engd, char retn[]);
 SEM_TYPE cFindBit(SEM_TYPE inpt);
-THR_FUNC cThrdFunc(THRD *data);
+THR_FUNC cThrdFunc(void *user);
 
 
 
@@ -69,7 +60,7 @@ THR_FUNC cThrdFunc(THRD *data);
 long lCountCPUs();
 uint64_t lTimeFunc();
 char *lLoadFile(char *name, long *size);
-void lMakeThread(THRD *thrd);
+void lMakeThread(void *thrd);
 void lRestartEngine(ENGD *engd);
 void lShowMainWindow(ENGD *engd, long show);
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
