@@ -28,7 +28,7 @@ RelJoined: LCXFLAGS += -s -flto -Wl,--build-id=none
 RelJoined: jlink
 RelJoined:
 	strip -R .eh_frame -R .gnu.version -R .comment $(EOUT)
-	if type upx &> /dev/null; then upx -qq $(EOUT); fi
+	if type upx > /dev/null; then upx -qq $(EOUT); fi
 
 DbgJoined: ldebug
 DbgJoined: edebug
@@ -48,7 +48,7 @@ RelSplit: erelease
 RelSplit: ECXFLAGS += -s -Wl,--build-id=none
 RelSplit: elink
 RelSplit:
-	if type upx &> /dev/null; then upx -qq $(EOUT) $(LOUT); fi
+	if type upx > /dev/null; then upx -qq $(EOUT) $(LOUT); fi
 
 DbgSplit: DbgLibOnly
 DbgSplit: edebug
@@ -102,11 +102,11 @@ $(OBJDIR)/run.o: run.c
 	$(CC) $(ECFLAGS) $(EINC) -c run.c -o $(OBJDIR)/run.o
 
 jlink:
-	$(CX) $(LCXFLAGS) $(LOBJ) $(EOBJ) -o $(EOUT) $(LLIB)
+	$(CX) $(LOBJ) $(EOBJ) $(LCXFLAGS) -o $(EOUT) $(LLIB)
 
 llink: LCXFLAGS += -shared
 llink:
-	$(CX) $(LCXFLAGS) $(LOBJ) -o $(LOUT) $(LLIB)
+	$(CX) $(LOBJ) $(LCXFLAGS) -o $(LOUT) $(LLIB)
 
 elink:
-	$(CX) $(ECXFLAGS) $(EOBJ) -o $(EOUT) $(ELIB)
+	$(CX) $(EOBJ) $(ECXFLAGS) -o $(EOUT) $(ELIB)
