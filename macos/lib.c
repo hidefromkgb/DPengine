@@ -98,10 +98,10 @@ long lCountCPUs() {
 
 
 
-void lMakeThread(THRD *thrd) {
+void lMakeThread(void *thrd) {
     pthread_t pthr;
 
-    pthread_create(&pthr, 0, (void *(*)(void*))cThrdFunc, thrd);
+    pthread_create(&pthr, 0, cThrdFunc, thrd);
 }
 
 

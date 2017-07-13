@@ -83,8 +83,8 @@ clean:
 	rm -rf $(OBJDIR) $(EXEBASE)
 
 strip:
-	if type strip &>/dev/null && [ -f $(EOUT) ]; then strip -x $(EOUT); fi
-	if type strip &>/dev/null && [ -f $(LOUT) ]; then strip -x $(LOUT); fi
+	if type strip >/dev/null 2>&1 && [ -f $(EOUT) ]; then strip -x $(EOUT); fi
+	if type strip >/dev/null 2>&1 && [ -f $(LOUT) ]; then strip -x $(LOUT); fi
 
 lbuild:
 	mkdir -p $(OBJDIR)/core/gif $(OBJDIR)/core/ogl

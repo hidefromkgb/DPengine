@@ -5,7 +5,7 @@
 		<Option title="DPengine (linux)" />
 		<Option makefile_is_custom="1" />
 		<Option compiler="gcc" />
-		<Option virtualFolders="src/;src/run/;src/run/exec/;src/run/exec/loc/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/shad/;src/lib/core/ogl/load/;src/lib/core/gif/load/;" />
+		<Option virtualFolders="src/;src/run/;src/run/exec/;src/run/exec/loc/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/load/;src/lib/core/gif/load/;" />
 		<Build>
 			<Target title="RelJoined">
 				<Option output="../linux-gtk" prefix_auto="1" extension_auto="1" />
@@ -77,12 +77,6 @@
 		</Unit>
 		<Unit filename="../core/ogl/oglstd.h">
 			<Option virtualFolder="src/lib/core/ogl/" />
-		</Unit>
-		<Unit filename="../core/ogl/shad/pixl.glsl">
-			<Option virtualFolder="src/lib/core/ogl/shad/" />
-		</Unit>
-		<Unit filename="../core/ogl/shad/vert.glsl">
-			<Option virtualFolder="src/lib/core/ogl/shad/" />
 		</Unit>
 		<Unit filename="../exec/exec.c">
 			<Option compilerVar="CC" />

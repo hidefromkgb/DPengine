@@ -28,7 +28,7 @@ RelJoined: LCXFLAGS += -s -flto -Wl,--build-id=none
 RelJoined: jlink
 RelJoined:
 	strip -R .eh_frame -R .gnu.version -R .comment $(EOUT)
-	if type upx > /dev/null; then upx -qq $(EOUT); fi
+	if type upx >/dev/null 2>&1; then upx -qq $(EOUT); fi
 
 DbgJoined: ldebug
 DbgJoined: edebug
@@ -48,7 +48,7 @@ RelSplit: erelease
 RelSplit: ECXFLAGS += -s -Wl,--build-id=none
 RelSplit: elink
 RelSplit:
-	if type upx > /dev/null; then upx -qq $(EOUT) $(LOUT); fi
+	if type upx >/dev/null 2>&1; then upx -qq $(EOUT) $(LOUT); fi
 
 DbgSplit: DbgLibOnly
 DbgSplit: edebug

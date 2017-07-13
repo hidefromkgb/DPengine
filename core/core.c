@@ -467,7 +467,7 @@ long TryUpdatePixTree(ENGD *engd, TREE *estr) {
         printf(TXL_FAIL" %s\n", estr->path);
     else {
         turn = estr->epix->ainf.uuid ^ estr->turn;
-        printf("[%4u%c%c%c] %s\n", estr->epix->ainf.uuid >> 2, (char)stat,
+        printf("[%4ld%c%c%c] %s\n", estr->epix->ainf.uuid >> 2, (char)stat,
               (turn & 2)? 'D' : 'U', (turn & 1)? 'L' : 'R', estr->path);
     }
     return ~0;
