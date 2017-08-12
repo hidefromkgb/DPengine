@@ -294,11 +294,6 @@ typedef struct {
     char    *name;
 } CTGS;
 
-/// mersenne random number generator info
-typedef struct {
-    uint32_t size, indx, data[];
-} RNGS;
-
 /// parallel execution unit data
 typedef struct {
     intptr_t desc;
@@ -389,14 +384,14 @@ struct ENGC {
     ENGD     *engd; /// rendering engine handle
     LINF     *libs; /// sprite libraries array
     CTGS     *ctgs; /// categories array
-    RNGS     *seed; /// random number generator seed
     PICT     *pcur, /// the sprite currently picked
              *povr, /// the sprite with cursor over it
             **parr, /// on-screen sprite pointers array
             **elem; /// pointer buffer for SortBy*()
     char    **tran, /// localized text array (ASCIIZ; last item is also 0)
              *cfnm; /// name of the main configuration file
-    uint32_t *blgp, /// boundaries of library groups in sorted PARR
+    uint32_t *seed, /// random number generator seed
+             *blgp, /// boundaries of library groups in sorted PARR
               lcnt, /// libraries count
               ccnt, /// categories count
               pcnt, /// on-screen sprites count (may differ every frame)
@@ -729,9 +724,8 @@ void CheckHashAndDownload(intptr_t user, uint64_t zero) {
     load = rLoadFile(para->file, &size);
     if (strlen(para->hash) == sizeof(shan) << 1) {
         retn = sprintf(blob = realloc(0, 32), "blob %ld", size);
-        curr[0] = 0x67452301; curr[1] = 0xEFCDAB89;
-        curr[2] = 0x98BADCFE; curr[3] = 0x10325476;
-        curr[4] = 0xC3D2E1F0;
+        curr[0] = 0x67452301; curr[1] = 0xEFCDAB89; curr[2] = 0x98BADCFE;
+        curr[3] = 0x10325476; curr[4] = 0xC3D2E1F0;
         MakeSHA1(curr, blob, retn + 1 + size, 0, retn);
         MakeSHA1(curr, load - (retn + 1), retn + 1 + size, retn + 1, 0);
         for (retn = 0; retn < sizeof(shan); retn++) {
@@ -899,42 +893,38 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
 
 
 
-void FreePRNG(RNGS **seed) {
+/// Mersenne random number generator
+
+void RNG_Free(uint32_t **seed) {
     free(*seed);
     *seed = 0;
 }
 
-RNGS *InitPRNG(uint32_t init) {
-    #define RNG_SIZE 624
-    RNGS *seed = malloc(sizeof(uint32_t) * (1 + 1 + RNG_SIZE));
+uint32_t *RNG_Make(uint32_t init) {
+    const uint32_t size = 624;
+    uint32_t *seed;
 
-    seed->data[0] = init;
-    seed->indx = seed->size = RNG_SIZE;
-    for (init = 1; init < seed->size; init++)
-        seed->data[init] = init + 1812433253 *
-            (seed->data[init - 1] ^ (seed->data[init - 1] >> 30));
+    (seed = calloc(sizeof(*seed), size + 1))[1] = init;
+    for (init = 1; init < size; init++)
+        seed[init + 1] = init + (seed[init] ^ (seed[init] >> 30)) * 1812433253;
     return seed;
-    #undef RNG_SIZE
 }
 
-uint32_t PRNG(RNGS *seed) {
-    uint32_t iter, retn;
+uint32_t RNG_Load(uint32_t *seed) {
+    const uint32_t size = 624;
+    uint32_t retn, iter;
 
     if (!seed)
         return 0;
-    if (seed->indx >= seed->size)
-        for (seed->indx = iter = 0; iter < seed->size; iter++){
-            retn = (seed->data[ iter                  ] & 0x80000000)
-                 | (seed->data[(iter + 1) % seed->size] & 0x7FFFFFFF);
-            seed->data[iter] = seed->data[(iter + 397) % seed->size]
-                             ^ (retn >> 1) ^ ((retn & 1)? 0x9908B0DF : 0);
-        }
-    retn = seed->data[seed->indx++];
+
+    seed[0] = (iter = seed[0] + 1) % size;
+    retn = (seed[iter] & 0x80000000) | (seed[seed[0] + 1] & 0x7FFFFFFF);
+    retn = seed[iter] = seed[(iter + 396) % size + 1]
+                      ^ (retn >> 1) ^ ((retn & 1)? 0x9908B0DF : 0);
     retn ^= (retn >> 11);
     retn ^= (retn <<  7) & 0x9D2C5680;
     retn ^= (retn << 15) & 0xEFC60000;
-    retn ^= (retn >> 18);
-    return retn;
+    return retn ^ (retn >> 18);
 }
 
 
@@ -1521,7 +1511,7 @@ void FollowParent(ENGC *engc, PICT *pict, T2IV *move) {
 
 
 /// SEED = 0 means "keep centering and placement"
-void MoveToParent(PICT *pict, RNGS *seed) {
+void MoveToParent(PICT *pict, uint32_t *seed) {
     static float
         xdim[] = {0.0, 0.5, 1.0, 0.0, 0.5, 1.0, 0.0, 0.5, 1.0, -1.0, -1.0},
         ydim[] = {1.0, 1.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, -1.0, -1.0};
@@ -1538,9 +1528,9 @@ void MoveToParent(PICT *pict, RNGS *seed) {
         /// read centering and placement for the current effect
         desc = pict->ulib->earr[pict->indx >> 1].flgs
              >> ((pict->indx & 1) << 3); /// direction was inherited from BOSS
-        #define CALC(d) ((d[desc & EFF_AAAA] >= 0.0)? d[desc & EFF_AAAA] \
-                       : (float)(PRNG(seed) & 0xFFF) * 0.000244140625)   \
-                       * (float)anim[iter]->d       /* ^-[1 / 4096]-^ */
+        #define CALC(d) ((d[desc & EFF_AAAA] >= 0.0)? d[desc & EFF_AAAA]   \
+                       : (float)(RNG_Load(seed) & 0xFFF) * 0.000244140625) \
+                       * (float)anim[iter]->d           /* ^-[1 / 4096]-^ */
         /// ANIMs are only needed for dimensions
         for (iter = 0; iter < 2; iter++, desc >>= 4)
             vect[iter] = (T2FV){{CALC(xdim), CALC(ydim)}};
@@ -1565,7 +1555,7 @@ long BoundCrossed(float move, float offs, long bmin, long bmax) {
 
 
 /// INDX is not used if FROM is an effect, as all we need is stored there
-long SpawnEffect(PICT **retn, PICT *from, RNGS *seed,
+long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
                  ulong indx, uint64_t time) {
     BINF *binf;
 
@@ -1631,7 +1621,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
             seed = ulib->barr[pict->indx >> 1].igrp;
             lbgn = (seed)? ulib->ngrp[seed - 1] : 0;
             lend = ulib->ngrp[seed];
-            seed = PRNG(engc->seed) % ulib->bgrp[lend - 1]->prob;
+            seed = RNG_Load(engc->seed) % ulib->bgrp[lend - 1]->prob;
 
             /// nonexact binary search: bsearch() won`t help here
             ///  0th -----,  1st -,  2nd ----,   <  these are the elements
@@ -1652,8 +1642,8 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
         /// this is the first time this sprite appears; let`s put it somewhere
         lbgn = binf->cntr[pict->indx & 1].x << 1;
         lend = binf->cntr[pict->indx & 1].y << 1;
-        pict->offs.x = PRNG(engc->seed) % (engc->dims.x - lbgn);
-        pict->offs.y = PRNG(engc->seed) % (engc->dims.y - lend) + lend;
+        pict->offs.x = RNG_Load(engc->seed) % (engc->dims.x - lbgn);
+        pict->offs.y = RNG_Load(engc->seed) % (engc->dims.y - lend) + lend;
     }
     else {
         /// re-center the upcoming sprite based on the previous center
@@ -1666,13 +1656,13 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
     pict->tfrm =  0; /// "update me to 0-th frame ASAP!"
     pict->tbhv = (pict->flgs & PIF_BUSY)? LLONG_MAX : engc->tcur + binf->dmin;
     if (binf->dmax > binf->dmin)
-        pict->tbhv += PRNG(engc->seed) % (binf->dmax - binf->dmin);
+        pict->tbhv += RNG_Load(engc->seed) % (binf->dmax - binf->dmin);
     /// now choosing sprite direction
     if ((pict->flgs & (PIF_TPL1 | PIF_TPL2))
     ||  (binf->trgt && !(binf->flgs & BHV_CTLM)
     &&  (prev = engc->blgp[binf->trgt] - engc->blgp[binf->trgt - 1]))) {
         if (!(flgs & CBF_INIT) && !(pict->flgs & (PIF_TPL1 | PIF_TPL2)))
-            pict->boss = engc->parr[PRNG(engc->seed) % prev
+            pict->boss = engc->parr[RNG_Load(engc->seed) % prev
                                   + engc->blgp[binf->trgt - 1]];
         for (pict->iovr = prev = 0; prev <= 1; prev++) {
             if (binf->obfm[prev])
@@ -1682,8 +1672,8 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
                      - ((binf->igrp)? pict->ulib->nmov[binf->igrp - 1] : 0)
                      :         pict->ulib->nsta[binf->igrp]
                      - ((binf->igrp)? pict->ulib->nsta[binf->igrp - 1] : 0);
-                oinf = (prev)? pict->ulib->bmov[PRNG(engc->seed) % seed]
-                             : pict->ulib->bsta[PRNG(engc->seed) % seed];
+                oinf = (prev)? pict->ulib->bmov[RNG_Load(engc->seed) % seed]
+                             : pict->ulib->bsta[RNG_Load(engc->seed) % seed];
             }
             pict->iovr |= (oinf - pict->ulib->barr) << (prev << 4);
         }
@@ -1700,7 +1690,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
         flgs |= CBF_DNSE;
     }
     else if (!(binf->flgs & BHV_CTLM) && (binf->flgs & BHV_ALLM)) {
-        prev = PRNG(engc->seed);
+        prev = RNG_Load(engc->seed);
         switch (binf->flgs & BHV_ALLM) {
             /// horizontal + diagonal + vertical movement
             case BHV_ALLM:
@@ -1733,7 +1723,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
                 prev = (((binf->flgs & BHV_HNVM) == BHV_HNVM) ||
                         !(binf->flgs & BHV_HNVM))? 61 : 31;
                 angl =  ((binf->flgs & BHV_HNVM) == BHV_VERM)? 45.0 : 15.0;
-                angl = (angl + PRNG(engc->seed) % prev) * DTR_CONV;
+                angl = (angl + RNG_Load(engc->seed) % prev) * DTR_CONV;
                 break;
 
             case BHV_VERM:
@@ -1744,16 +1734,16 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
                 angl = 0.0;
                 break;
         }
-        pict->indx = (pict->indx & -2) | (PRNG(engc->seed) & 1);
+        pict->indx = (pict->indx & -2) | (RNG_Load(engc->seed) & 1);
         pict->move = (T2FV){{cos(angl) * binf->move, sin(angl) * binf->move}};
         if (pict->indx & 1)
             pict->move.x = -pict->move.x;
-        if (PRNG(engc->seed) & 1)
+        if (RNG_Load(engc->seed) & 1)
             pict->move.y = -pict->move.y;
     }
     else {
         if (!(binf->flgs & BHV_CTLM))
-            pict->indx = (pict->indx & -2) | (PRNG(engc->seed) & 1);
+            pict->indx = (pict->indx & -2) | (RNG_Load(engc->seed) & 1);
         pict->move = (T2FV){{0.0, 0.0}};
     }
     /// now spawning effects for the behaviour, if any (and if allowed to)
@@ -1785,7 +1775,7 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
             case PIF_OVRM:
                 indx = ulib->novr[flgs = ulib->barr[pict->indx >> 1].igrp];
                 flgs = (flgs)? ulib->novr[flgs - 1] : 0;
-                flgs = flgs + PRNG(engc->seed) % (indx - flgs);
+                flgs = flgs + RNG_Load(engc->seed) % (indx - flgs);
                 indx = ulib->bovr[flgs] - ulib->barr;
                 temp = *pict;
                 ChooseBehaviour(engc, &temp, (indx << 1) | (temp.indx & 1),
@@ -1802,12 +1792,13 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
             case PIF_DRGM:
                 indx = ulib->ndrg[flgs = ulib->barr[pict->indx >> 1].igrp];
                 flgs = (flgs)? ulib->ndrg[flgs - 1] : 0;
-                flgs = flgs + PRNG(engc->seed) % (indx - flgs);
+                flgs = flgs + RNG_Load(engc->seed) % (indx - flgs);
                 indx = ulib->bdrg[flgs] - ulib->barr;
                 break;
 
             case PIF_SLPM:
-                indx = ulib->bslp[PRNG(engc->seed) % ulib->nslp] - ulib->barr;
+                indx = ulib->bslp[RNG_Load(engc->seed) % ulib->nslp]
+                     - ulib->barr;
                 break;
 
             case PIF_TPL1:
@@ -3095,7 +3086,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 /// iterating over the requested random sprites count
                 for (icon = RUN_FE2C(engc->MCT_RGPU, MSG_NGET, 0);
                     (icon > 0) && ilen; icon--) {
-                    irnd[iput[data = PRNG(engc->seed) % ilen]]++;
+                    irnd[iput[data = RNG_Load(engc->seed) % ilen]]++;
                     if ((~cmsg & FCS_MARK) && (data < --ilen))
                         iput[data] = iput[ilen];
                 }
@@ -3258,7 +3249,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
        *uSTF[] = {"Topmost","Hover",  "Interaction",
                   "Speech", "Effects","Update"};
     char *file, *fptr, *conf, *temp;
-    uint32_t elem, *iter; /// for IF_BIN_FIND and InitPRNG
+    uint32_t elem, *iter; /// for IF_BIN_FIND and RNG_Make
     uint64_t *fram;
     intptr_t indx;
     int16_t runs = 0;
@@ -3550,7 +3541,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                 (intptr_t)engc.libs[indx].name);
     }
     RUN_FC2E(engc.MCT_FLTR, MSG_BCLK, 0);
-    engc.seed = InitPRNG(elem = time(0));
+    engc.seed = RNG_Make(elem = time(0));
 
     printf("[((RNG))] seed = 0x%08X\n[[[INI]]] %s\n", elem, engc.cfnm);
 
@@ -3609,7 +3600,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
             Concatenate(&conf, uSTF[indx], ",");
     Concatenate(&conf, DEF_ENDL);
     rSaveFile(engc.cfnm, conf, strlen(conf));
-    FreePRNG(&engc.seed);
+    RNG_Free(&engc.seed);
     free(engc.cdef.lang);
     free(engc.ccur.lang);
     free(engc.cini.lang);
