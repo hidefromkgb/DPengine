@@ -68,6 +68,43 @@ static void WriteFrameStd(GIF_GHDR *ghdr, GIF_FHDR *curr, GIF_FHDR *prev,
 
 
 
+static void ReadMetadataStd(GIF_AHDR *ahdr, void *data) {
+    #define RMS_BGRA(i) do { uint32_t temp;                              \
+            temp = retn->bpal[bptr[0]].bgra; retn->bpal[bptr[0]].bgra =  \
+            ((((temp & 0x00FF00FF) * (1 + bptr[i])) >> 8) & 0x00FF00FF)| \
+            ((((temp & 0xFF00FF00) >> 8) * (1 + bptr[i])) & 0xFF00FF00); \
+            bptr += 1 + i; } while (0)
+    ASTD *retn = (ASTD*)data;
+    uint8_t *bptr;
+    long iter;
+
+    if ((ahdr->name[0] != 'O') || (ahdr->name[4] != 'i')
+    ||  (ahdr->name[1] != 'p') || (ahdr->name[5] != 't')
+    ||  (ahdr->name[2] != 'a') || (ahdr->name[6] != 'y')
+    ||  (ahdr->name[3] != 'c') || (ahdr->name[7] != ':'))
+        return;
+
+    bptr = (uint8_t*)(ahdr + 1);
+    iter = *bptr++;
+    while (!0) {
+        for (; iter > 1; iter -= 2)
+            RMS_BGRA(1);
+        if (!iter && bptr[0]) {
+            iter = *bptr++;
+            continue;
+        }
+        else if (iter && bptr[1]) {
+            iter = bptr[1] - 1;
+            RMS_BGRA(2);
+            continue;
+        }
+        break;
+    }
+    #undef RMS_BGRA
+}
+
+
+
 void FreeAnimStd(ASTD **anim) {
     if (anim && *anim) {
         free((*anim)->bptr);
@@ -85,7 +122,7 @@ ASTD *MakeAnimStd(char *data, long size) {
 
     if (!data || (size <= 0))
         return 0;
-    if (!GIF_Load((void*)data, size, 0, WriteFrameStd,
+    if (!GIF_Load((void*)data, size, 0, WriteFrameStd, ReadMetadataStd,
                   (void*)(retn = calloc(1, sizeof(*retn)))))
         FreeAnimStd(&retn);
     return retn;
