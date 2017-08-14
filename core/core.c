@@ -593,6 +593,11 @@ void LTHR(THRD *data) {
                                                    &elem->epix->yoff);
         elem->epix->hash = HashAnimStd(retn, &size);
         elem->turn = size & 3;
+        for (size = 0; size <= 0xFF; size++)
+            if ((uint8_t)(retn->bpal[size].chnl[3] - 1) < (uint8_t)0xFE) {
+                elem->epix->tran = 1;
+                break;
+            }
     }
     elem->epix->anim = retn;
 }

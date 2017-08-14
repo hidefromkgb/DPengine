@@ -41,7 +41,7 @@ typedef struct SEMD SEMD;
 typedef struct {
     void *anim;    /// animation data (the format may vary)
     ulong scal;    /// scaling factor in powers of 2
-    ulong tran;    /// number of semi-transparent pixels
+    ulong tran;    /// indicator of semi-transparent pixels
     ulong offs[4]; /// offsets from the initial size: X_lf, X_rt, Y_up, Y_dn
 } UNIT;
 
