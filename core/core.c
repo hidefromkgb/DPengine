@@ -569,8 +569,40 @@ ASTD *ConvertAnim(AINF *asrc) {
 
 
 
+uint32_t RecolorPalette(BGRA *bpal, char *file, long size) {
+    #pragma pack(push, 1)
+    struct {
+        uint8_t srcr, srcg, srcb;
+        uint8_t tran;
+        uint8_t dstr, dstg, dstb;
+    } *amap;
+    #pragma pack(pop)
+
+    char *apal;
+    uint32_t retn = 0;
+
+    if (bpal && file)
+        for (apal  = file + size -  sizeof(*amap);
+             apal >= file;  apal -= sizeof(*amap))
+            for (amap = (typeof(amap))apal, size = 0; size < 256; size++)
+                if ((bpal[size].chnl[0] == amap->srcb)
+                &&  (bpal[size].chnl[1] == amap->srcg)
+                &&  (bpal[size].chnl[2] == amap->srcr)
+                &&  (bpal[size].chnl[3] == 0xFF)) {
+                     bpal[size].chnl[0] = ((long)amap->dstb * amap->tran) >> 8;
+                     bpal[size].chnl[1] = ((long)amap->dstg * amap->tran) >> 8;
+                     bpal[size].chnl[2] = ((long)amap->dstr * amap->tran) >> 8;
+                     bpal[size].chnl[3] = amap->tran;
+                     if (amap->tran < 0xFF)
+                        retn++;
+                     break;
+                }
+
+    return retn;
+}
+
 void LTHR(THRD *data) {
-    char *file;
+    char *name, *file;
     long  size;
     ASTD *retn;
     TREE *elem;
@@ -593,6 +625,18 @@ void LTHR(THRD *data) {
                                                    &elem->epix->yoff);
         elem->epix->hash = HashAnimStd(retn, &size);
         elem->turn = size & 3;
+
+        if (data->flgs == ELA_DISK) {
+            name = strdup((char*)data->data);
+            size = strlen((char*)data->data);
+            name[size - 3] = 'a';
+            name[size - 2] = 'r';
+            name[size - 1] = 't';
+            file = lLoadFile(name, &size);
+            RecolorPalette(retn->bpal, file, size);
+            free(file);
+            free(name);
+        }
         for (size = 0; size <= 0xFF; size++)
             if ((uint8_t)(retn->bpal[size].chnl[3] - 1) < (uint8_t)0xFE) {
                 elem->epix->tran = 1;
