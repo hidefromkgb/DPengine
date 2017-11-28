@@ -8,10 +8,10 @@ static void WriteFrameStd(void *data, GIF_WHDR *whdr) {
     long x, y, yoff, iter, ifin, dsrc, ddst;
     ASTD *retn = (ASTD*)data;
 
-    ddst = (y = whdr->xdim * whdr->ydim) * whdr->ifrm
+    ddst = whdr->ifrm * (y = whdr->xdim * whdr->ydim)
          + whdr->xdim * whdr->fryo + whdr->frxo;
-    if (!retn->bpal) { /** the animation is empty, initializing **/
-        retn->bpal = malloc(256 * sizeof(*retn->bpal));
+    if (!whdr->ifrm) { /** frame extraction has just begun, initializing **/
+        retn->bpal = realloc(retn->bpal, 256 * sizeof(*retn->bpal));
         for (x = whdr->clrs - 1; x >= 0; x--) {
             retn->bpal[x].chnl[0] = whdr->cpal[x].B;
             retn->bpal[x].chnl[1] = whdr->cpal[x].G;
@@ -22,8 +22,8 @@ static void WriteFrameStd(void *data, GIF_WHDR *whdr) {
         retn->xdim = whdr->xdim;
         retn->ydim = whdr->ydim;
         retn->fcnt = (whdr->nfrm < 0)? -whdr->nfrm : whdr->nfrm;
-        retn->time = malloc(retn->fcnt * sizeof(*retn->time));
-        memset(retn->bptr = malloc(retn->fcnt * y), 0xFF, y);
+        retn->time = realloc(retn->time, retn->fcnt * sizeof(*retn->time));
+        memset(retn->bptr = realloc(retn->bptr, retn->fcnt * y), 0xFF, y);
     }
     retn->time[whdr->ifrm] = whdr->time * 10;
     ifin = (!(iter = (whdr->intr)? 0 : 4))? 4 : 5; /** interlacing support **/
@@ -37,7 +37,7 @@ static void WriteFrameStd(void *data, GIF_WHDR *whdr) {
                 if (whdr->tran != (long)whdr->bptr[++dsrc])
                     retn->bptr[whdr->xdim * y + x + ddst] = whdr->bptr[dsrc];
     if (whdr->ifrm + 1 < whdr->nfrm) { /** background for the next frame **/
-        dsrc = (y = whdr->xdim * whdr->ydim) * (whdr->ifrm + 1);
+        dsrc = (whdr->ifrm + 1) * (y = whdr->xdim * whdr->ydim);
         if ((whdr->mode != GIF_BKGD) || (whdr->frxo | whdr->fryo)
         ||  (whdr->frxd != whdr->xdim) || (whdr->fryd != whdr->ydim))
             memcpy(retn->bptr + dsrc, retn->bptr + dsrc
@@ -67,7 +67,7 @@ static void ReadMetadataStd(void *data, GIF_WHDR *whdr) {
     ||  (whdr->bptr[3] != 'c') || (whdr->bptr[7] != ':'))
         return;
 
-    bptr = (uint8_t*)(whdr->bptr + 8 + 3);
+    bptr = whdr->bptr + 8 + 3;
     iter = *bptr++;
     while (!0) {
         for (; iter > 1; iter -= 2)
@@ -103,8 +103,6 @@ void FreeAnimStd(ASTD **anim) {
 ASTD *MakeAnimStd(char *data, long size) {
     ASTD *retn;
 
-    if (!data || (size <= 0))
-        return 0;
     if (!GIF_Load((void*)data, size, WriteFrameStd, ReadMetadataStd,
                   (void*)(retn = calloc(1, sizeof(*retn))), 0))
         FreeAnimStd(&retn);
