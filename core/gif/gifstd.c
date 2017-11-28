@@ -1,74 +1,57 @@
 #include "load/gif_load.h"
 #include "gifstd.h"
+#include <string.h>
 
 
 
-static void WriteFrameStd(GIF_GHDR *ghdr, GIF_FHDR *curr, GIF_FHDR *prev,
-                          GIF_RGBX *cpal, long clrs, uint8_t *bptr, void *data,
-                          long nfrm, long tran, long time, long indx) {
+static void WriteFrameStd(void *data, GIF_WHDR *whdr) {
     long x, y, yoff, iter, ifin, dsrc, ddst;
     ASTD *retn = (ASTD*)data;
 
-    yoff = ghdr->xdim * ghdr->ydim;
-    if (retn->fcnt < (x = labs(nfrm))) {
-        retn->bptr = realloc(retn->bptr, x * yoff);
-        retn->xdim = ghdr->xdim;
-        retn->ydim = ghdr->ydim;
-        retn->fcnt = x;
-        retn->time = realloc(retn->time, x * sizeof(*retn->time));
-    }
-    retn->time[indx] = time * 10;
-    if (!retn->bpal) {
+    ddst = (y = whdr->xdim * whdr->ydim) * whdr->ifrm
+         + whdr->xdim * whdr->fryo + whdr->frxo;
+    if (!retn->bpal) { /** the animation is empty, initializing **/
         retn->bpal = malloc(256 * sizeof(*retn->bpal));
-        for (clrs--; clrs >= 0; clrs--) {
-            retn->bpal[clrs].chnl[0] = cpal[clrs].B;
-            retn->bpal[clrs].chnl[1] = cpal[clrs].G;
-            retn->bpal[clrs].chnl[2] = cpal[clrs].R;
-            retn->bpal[clrs].chnl[3] = 0xFF;
+        for (x = whdr->clrs - 1; x >= 0; x--) {
+            retn->bpal[x].chnl[0] = whdr->cpal[x].B;
+            retn->bpal[x].chnl[1] = whdr->cpal[x].G;
+            retn->bpal[x].chnl[2] = whdr->cpal[x].R;
+            retn->bpal[x].chnl[3] = 0xFF;
         }
         retn->bpal[0xFF].bgra = 0x00000000;
+        retn->xdim = whdr->xdim;
+        retn->ydim = whdr->ydim;
+        retn->fcnt = (whdr->nfrm < 0)? -whdr->nfrm : whdr->nfrm;
+        retn->time = malloc(retn->fcnt * sizeof(*retn->time));
+        memset(retn->bptr = malloc(retn->fcnt * y), 0xFF, y);
     }
-    iter = ghdr->xdim;
-    ifin = ghdr->ydim;
-    dsrc = indx * yoff;
-    ddst = 0;
-    /** background = some previous frame (maybe with a hole) **/
-    if (prev) {
-        ddst = ((uintptr_t)prev <= (uintptr_t)sizeof(prev))?
-               yoff * (indx - (uintptr_t)prev) : yoff * (indx - 1);
-        for (y = 0; y < yoff; y++)
-            retn->bptr[dsrc + y] = retn->bptr[ddst + y];
-
-        if ((uintptr_t)prev > (uintptr_t)sizeof(prev)) {
-            ddst = dsrc + ghdr->xdim * prev->yoff + prev->xoff;
-            iter = prev->xdim;
-            ifin = prev->ydim;
-            prev = 0;
-        }
-    }
-    /** empty background or hole in the previous frame **/
-    if (!prev)
-        for (y = 0; y < ifin; y++)
-            for (x = 0; x < iter; x++)
-                retn->bptr[ghdr->xdim * y + x + ddst] = 0xFF;
-
-    ddst = dsrc + ghdr->xdim * curr->yoff + curr->xoff;
-    iter = (curr->flgs & GIF_FINT)? 0 : 4;
-    ifin = (curr->flgs & GIF_FINT)? 4 : 5;
+    retn->time[whdr->ifrm] = whdr->time * 10;
+    ifin = (!(iter = (whdr->intr)? 0 : 4))? 4 : 5; /** interlacing support **/
 
     /** [TODO:] the frame is assumed to be inside global bounds,
                 however it might exceed them in some GIFs; fix me. **/
     for (dsrc = -1; iter < ifin; iter++)
         for (yoff = 16 >> ((iter > 1)? iter : 1), y = (8 >> iter) & 7;
-             y < curr->ydim; y += yoff)
-            for (x = 0; x < curr->xdim; x++)
-                if (tran != (long)bptr[++dsrc])
-                    retn->bptr[ghdr->xdim * y + x + ddst] = bptr[dsrc];
+             y < whdr->fryd; y += yoff)
+            for (x = 0; x < whdr->frxd; x++)
+                if (whdr->tran != (long)whdr->bptr[++dsrc])
+                    retn->bptr[whdr->xdim * y + x + ddst] = whdr->bptr[dsrc];
+    if (whdr->ifrm + 1 < whdr->nfrm) { /** background for the next frame **/
+        dsrc = (y = whdr->xdim * whdr->ydim) * (whdr->ifrm + 1);
+        if ((whdr->mode != GIF_BKGD) || (whdr->frxo | whdr->fryo)
+        ||  (whdr->frxd != whdr->xdim) || (whdr->fryd != whdr->ydim))
+            memcpy(retn->bptr + dsrc, retn->bptr + dsrc
+                - ((whdr->ifrm && (whdr->mode == GIF_PREV))? y + y : y), y);
+        if (whdr->mode == GIF_BKGD) /** cutting a hole if need be **/
+            for (ddst += whdr->xdim * whdr->ydim, y = 0; y < whdr->fryd; y++)
+                for (x = 0; x < whdr->frxd; x++)
+                    retn->bptr[whdr->xdim * y + x + ddst] = 0xFF;
+    }
 }
 
 
 
-static void ReadMetadataStd(GIF_AHDR *ahdr, void *data) {
+static void ReadMetadataStd(void *data, GIF_WHDR *whdr) {
     #define RMS_BGRA(i) do { uint32_t temp;                              \
             temp = retn->bpal[bptr[0]].bgra; retn->bpal[bptr[0]].bgra =  \
             ((((temp & 0x00FF00FF) * (1 + bptr[i])) >> 8) & 0x00FF00FF)| \
@@ -78,13 +61,13 @@ static void ReadMetadataStd(GIF_AHDR *ahdr, void *data) {
     uint8_t *bptr;
     long iter;
 
-    if ((ahdr->name[0] != 'O') || (ahdr->name[4] != 'i')
-    ||  (ahdr->name[1] != 'p') || (ahdr->name[5] != 't')
-    ||  (ahdr->name[2] != 'a') || (ahdr->name[6] != 'y')
-    ||  (ahdr->name[3] != 'c') || (ahdr->name[7] != ':'))
+    if ((whdr->bptr[0] != 'O') || (whdr->bptr[4] != 'i')
+    ||  (whdr->bptr[1] != 'p') || (whdr->bptr[5] != 't')
+    ||  (whdr->bptr[2] != 'a') || (whdr->bptr[6] != 'y')
+    ||  (whdr->bptr[3] != 'c') || (whdr->bptr[7] != ':'))
         return;
 
-    bptr = (uint8_t*)(ahdr + 1);
+    bptr = (uint8_t*)(whdr->bptr + 8 + 3);
     iter = *bptr++;
     while (!0) {
         for (; iter > 1; iter -= 2)
@@ -122,8 +105,8 @@ ASTD *MakeAnimStd(char *data, long size) {
 
     if (!data || (size <= 0))
         return 0;
-    if (!GIF_Load((void*)data, size, 0, WriteFrameStd, ReadMetadataStd,
-                  (void*)(retn = calloc(1, sizeof(*retn)))))
+    if (!GIF_Load((void*)data, size, WriteFrameStd, ReadMetadataStd,
+                  (void*)(retn = calloc(1, sizeof(*retn))), 0))
         FreeAnimStd(&retn);
     return retn;
 }
