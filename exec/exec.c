@@ -73,8 +73,9 @@
 /** 'sleep' state               **/ #define BHV_SLPM (BHV_CTLM | BHV_VERM)
 /** [extractor]                 **/ #define BHV_MMMM (BHV_CTLM | BHV_ALLM)
 
-/** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 29)
+/** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 28)
 
+/** this effect is a speech     **/ #define EFF_TEXT (1 << 29)
 /** do not follow parent        **/ #define EFF_STAY (1 << 30)
 /** animation can be looped     **/ #define ANI_LOOP (1 << 31)
 
@@ -1186,6 +1187,11 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
 
 void ParsePhrase(BINF *retn, char *path, char **imgp, char **conf) {
     /// phrases are nothing more than additional effect sprites!
+    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0,
+                  (EFF_TOPA << 0) | (EFF_BTMA << 4) | EFF_TEXT
+                | (EFF_TOPA << 8) | (EFF_BTMA << 12), 0, 0, 0, {}};
+
+
 }
 
 void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
