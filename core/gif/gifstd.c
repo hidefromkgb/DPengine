@@ -25,7 +25,8 @@ static void WriteFrameStd(void *data, GIF_WHDR *whdr) {
         retn->time = realloc(retn->time, retn->fcnt * sizeof(*retn->time));
         memset(retn->bptr = realloc(retn->bptr, retn->fcnt * y), 0xFF, y);
     }
-    retn->time[whdr->ifrm] = whdr->time * 10;
+    retn->time[whdr->ifrm] = 10 * ((whdr->time < 0)?
+                                   -whdr->time - 1 : whdr->time);
     ifin = (!(iter = (whdr->intr)? 0 : 4))? 4 : 5; /** interlacing support **/
 
     /** [TODO:] the frame is assumed to be inside global bounds,
@@ -52,14 +53,13 @@ static void WriteFrameStd(void *data, GIF_WHDR *whdr) {
 
 
 static void ReadMetadataStd(void *data, GIF_WHDR *whdr) {
-    #define RMS_BGRA(i) do { uint32_t temp;                              \
-            temp = retn->bpal[bptr[0]].bgra; retn->bpal[bptr[0]].bgra =  \
-            ((((temp & 0x00FF00FF) * (1 + bptr[i])) >> 8) & 0x00FF00FF)| \
-            ((((temp & 0xFF00FF00) >> 8) * (1 + bptr[i])) & 0xFF00FF00); \
+    #define RMS_BGRA(i) do { uint32_t t = ((ASTD*)data)->bpal[bptr[0]].bgra; \
+            ((ASTD*)data)->bpal[bptr[0]].bgra =                              \
+            ((((t & 0x00FF00FF) * (1 + bptr[i])) >> 8) & 0x00FF00FF) |       \
+            ((((t & 0xFF00FF00) >> 8) * (1 + bptr[i])) & 0xFF00FF00);        \
             bptr += 1 + i; } while (0)
-    ASTD *retn = (ASTD*)data;
-    uint8_t *bptr;
-    long iter;
+    uint8_t *bptr = whdr->bptr + 8 + 3;
+    long iter = *bptr++;
 
     if ((whdr->bptr[0] != 'O') || (whdr->bptr[4] != 'i')
     ||  (whdr->bptr[1] != 'p') || (whdr->bptr[5] != 't')
@@ -67,8 +67,6 @@ static void ReadMetadataStd(void *data, GIF_WHDR *whdr) {
     ||  (whdr->bptr[3] != 'c') || (whdr->bptr[7] != ':'))
         return;
 
-    bptr = whdr->bptr + 8 + 3;
-    iter = *bptr++;
     while (!0) {
         for (; iter > 1; iter -= 2)
             RMS_BGRA(1);

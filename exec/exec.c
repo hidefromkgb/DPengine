@@ -28,7 +28,7 @@
 /** 'behavior'                  **/ #define SVT_BHVR 0x532A0FD4
 /** 'behaviorgroup'             **/ #define SVT_BGRP 0xA40004B2
 /** 'categories'                **/ #define SVT_CTGS 0x21179D08
-/** 'speak'                     **/ #define SVT_PHRS 0xF708913D
+/** 'speak'                     **/ #define SVT_TEXT 0xF708913D
 
 /// /// /// /// /// /// /// /// /// behaviour movement types
 /** 'none'                      **/ #define BMT_NONM 0xF3B3E074
@@ -73,9 +73,8 @@
 /** 'sleep' state               **/ #define BHV_SLPM (BHV_CTLM | BHV_VERM)
 /** [extractor]                 **/ #define BHV_MMMM (BHV_CTLM | BHV_ALLM)
 
-/** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 28)
+/** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 29)
 
-/** this effect is a speech     **/ #define EFF_TEXT (1 << 29)
 /** do not follow parent        **/ #define EFF_STAY (1 << 30)
 /** animation can be looped     **/ #define ANI_LOOP (1 << 31)
 
@@ -267,6 +266,9 @@ enum {
 /**                             **/ #define OCT_FREL octl[30]
 /**                             **/ #define OCT_FRES octl[31]
 
+/// engine data (client side), prototype
+typedef struct ENGC ENGC;
+
 /// behaviour/effect unit info (write-once, read-only)
 typedef struct {
     AINF  unit[2];  /// image pair
@@ -283,8 +285,8 @@ typedef struct {
     uint32_t name,  /// BHV: name hash; EFF: target index
              flgs,  /// BHV/EFF: flags
              link,  /// linked behaviour index
-             bsay,  /// index of the speech said at the beginning
-             esay,  /// index of the speech said at the end
+             btxt,  /// index of the speech said at the beginning
+             etxt,  /// index of the speech said at the end
           obfm[2];  /// indices for override behaviours for follow mode
                     /// ([0] = static, [1] = moving)
 } BINF;
@@ -301,8 +303,11 @@ typedef struct {
     char *hash, *file, *hreq;
 } PARA;
 
-/// engine data (client side), prototype
-typedef struct ENGC ENGC;
+/// BINF ordered group
+typedef struct {
+    BINF   **barr;  /// behaviours / effects ordered by behaviour group
+    long    *narr;  /// bounds of behaviour groups: [0~~)[G0~~~)[G1...
+} BGRP;
 
 /// unit library info (write-once, read-only), opaque outside the module
 /// [TODO:] (priority 1) interactions
@@ -311,32 +316,28 @@ typedef struct {
     CTRL     pict,  /// image box control to preview the sprite
              capt,  /// character name just below the image box
              spin;  /// spin control to set ICNT
+    BGRP     ernd,  /// random-capable speeches extracted from EARR
+             bbhv,  /// non-0 probability BARR elements ordered by bhv. group
+             bsta,  /// stationary behaviours extracted from BARR
+             bmov,  /// moving behaviours extracted from BARR
+             bovr,  /// mouseover behaviours extracted from BARR
+             bdrg;  /// drag behaviours extracted from BARR
     ENGC    *engc;  /// parent engine
     CTGS    *ctgs;  /// library categories (hashed and sorted)
     BINF    *barr,  /// available behaviours ordered by name hash
             *earr,  /// available effects ordered by parent bhv. name hash
-           **bgrp,  /// nonzero-probability BARR elements ordered by bhv. group
-           **bsta,  /// stationary behaviours extracted from BARR
-           **bmov,  /// moving behaviours extracted from BARR
-           **bovr,  /// mouseover behaviours extracted from BARR
-           **bdrg,  /// drag behaviours extracted from BARR
            **bslp;  /// sleep behaviours extracted from BARR
     char   **bimp,  /// image paths for behaviours (0 if loaded)
            **eimp,  /// image paths for effects (0 if loaded)
             *path,  /// the folder from which the library was built
             *name;  /// human-readable name (may differ from PATH!)
-    long    *ngrp,  /// bounds of behaviour groups in BGRP: [0~~)[G0~~~)[G1...
-            *nsta,  /// bounds of behaviour groups in BSTA: [0~~)[G0~~~)[G1...
-            *nmov,  /// bounds of behaviour groups in BMOV: [0~~)[G0~~~)[G1...
-            *novr,  /// bounds of behaviour groups in BOVR: [0~~)[G0~~~)[G1...
-            *ndrg,  /// bounds of behaviour groups in BDRG: [0~~)[G0~~~)[G1...
-             nslp,  /// number of sleep behaviours
+    long     nslp,  /// number of sleep behaviours
              prev,  /// preview index in sorted BARR
              ccnt,  /// categories count
              zcnt,  /// nonzero probability behaviours count
              bcnt,  /// total behaviours count
              ecnt,  /// total effects count
-             icnt;  /// number of on-screen bhv. sprites from the library
+             icnt;  /// number of behavioral sprites requested by the user
 } LINF;
 
 /// actual on-screen sprite, opaque outside the module
@@ -350,7 +351,7 @@ typedef struct _PICT {
     uint32_t fram,  /// current frame
              flgs,  /// sprite-specific flags
              indx,  /// behaviour direction (lowest bit) and index
-             iovr,  /// override behaviours (lowest 16 = s, highest 16 = m)
+             iovr,  /// override behaviour indices (lo16 = sta, hi16 = mov)
              ipre;  /// BHV: behaviour before entering a special mode
                     /// EFF: behaviour of the parent
     uint64_t tfrm,  /// BHV: next frame, msec
@@ -535,24 +536,24 @@ long WhitespaceUTF8(char *line) {
     switch (line[0]) {
         case '\x09':
         case '\x20':
-            return ~0;
+            return !0;
         case '\xC2':
-            if (line[1] == '\xA0') return ~0; else break;
+            return !!(line[1] == '\xA0');
         case '\xE1':
-            if (line[1] == '\x9A' && line[2] == '\x80') return ~0; else break;
+            return !!((line[1] == '\x9A') && (line[2] == '\x80'));
         case '\xE3':
-            if (line[1] == '\x80' && line[2] == '\x80') return ~0; else break;
+            return !!((line[1] == '\x80') && (line[2] == '\x80'));
         case '\xEF':
-            if (line[1] == '\xBB' && line[2] == '\xBF') return ~0; else break;
+            return !!((line[1] == '\xBB') && (line[2] == '\xBF'));
         case '\xE2':
             switch (line[1]) {
-                case '\x81': if (line[2] == '\x9F') return ~0; else break;
+                case '\x81': return !!(line[2] == '\x9F');
                 case '\x80':
                     switch (line[2]) {
                         case '\x80': case '\x81': case '\x82': case '\x83':
                         case '\x84': case '\x85': case '\x86': case '\x87':
                         case '\x88': case '\x89': case '\x8A': case '\x8B':
-                        case '\xAF': return ~0;
+                        case '\xAF': return !0;
                     }
             }
     }
@@ -651,7 +652,6 @@ char *_MakeGetQuery(long uenc, ...) {
 
 
 
-/** [TODO:] fix little-endian dependency **/
 void MakeSHA1(uint32_t *curr, char *text, uint32_t size,
               uint32_t base, uint32_t trim) {
     #define SHA_R(v, b) (((v) << (b)) | ((v) >> (32 - (b))))
@@ -945,8 +945,7 @@ uint32_t HashLine(char *line, long size) {
 
 
 static inline float ClampToBounds(float what, float bmin, float bmax) {
-    what = (what > bmin)? what : bmin;
-    return (what < bmax)? what : bmax;
+    return (what < bmax)? (what > bmin)? what : bmin : bmax;
 }
 
 
@@ -1065,11 +1064,11 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
 
     /// speech said on behaviour start.........................................  def = ""
     if (TRY_TEMP(conf))
-        retn->bsay = HashLine(Dequote(temp), 0);
+        retn->btxt = HashLine(Dequote(temp), 0);
 
     /// speech said on behaviour end...........................................  def = ""
     if (TRY_TEMP(conf))
-        retn->esay = HashLine(Dequote(temp), 0);
+        retn->etxt = HashLine(Dequote(temp), 0);
 
     /// flag to never execute this behaviour at random.........................  def = False
     if (TRY_TEMP(conf))
@@ -1095,7 +1094,7 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
     /// automatically determine the images to use when following something.....  def = True
     elem = 0;
     if (TRY_TEMP(conf))
-        elem = !(HashLine(ToLower(temp, 0), 0) == VAL_TRUE);
+        SET_FLAG(elem, temp, VAL_FALS, 1);
 
     /// static behaviour for follow mode.......................................  def = ""
     if (TRY_TEMP(conf))
@@ -1185,13 +1184,41 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
         SET_FLAG(retn->flgs, temp, VAL_FALS, ANI_LOOP);
 }
 
-void ParsePhrase(BINF *retn, char *path, char **imgp, char **conf) {
-    /// phrases are nothing more than additional effect sprites!
+void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
+    char *temp;
+
+    /// speeches are nothing more than additional effect sprites!
     *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0,
-                  (EFF_TOPA << 0) | (EFF_BTMA << 4) | EFF_TEXT
+                  (EFF_TOPA << 0) | (EFF_BTMA << 4)
                 | (EFF_TOPA << 8) | (EFF_BTMA << 12), 0, 0, 0, {}};
 
+    /// speech name............................................................ !def
+    retn->name = HashLine(Dequote(GET_TEMP(conf)), 0);
 
+    /// speech text............................................................ !def
+    if ((*(*conf)++ == '"') && (temp = SplitLine(conf, '"', 0))) {
+        imgp[0] = Concatenate(0, temp);
+        imgp[1] = (char*)1;
+        (*conf) += (**conf == DEF_TSEP)? 1 : 0;
+    }
+    else {
+        imgp[0] = imgp[1] = 0;
+        return;
+    }
+    /// sound files............................................................  def = ""
+    if ((*(*conf)++ == '{') && (temp = SplitLine(conf, '}', 0))) {
+        /// [TODO:] stop ignoring sounds
+        (*conf) += (**conf == DEF_TSEP)? 1 : 0;
+    }
+    /// flag to never execute this speech at random............................  def = False
+    if (TRY_TEMP(conf))
+        SET_FLAG(retn->prob, temp, VAL_FALS, 1);
+
+    /// behaviour group index..................................................  def = 0
+    if (TRY_TEMP(conf)) {
+        retn->igrp = StrToFloat(temp);
+        retn->igrp = (retn->igrp > 0)? retn->igrp : 0;
+    }
 }
 
 void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
@@ -1216,7 +1243,7 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
         libs->bcnt = libs->ecnt = 0;
         while ((conf = SplitLine(&fptr, '\n', 1)))
             switch (DetermineType(&conf)) {
-//                case SVT_PHRS:
+                case SVT_TEXT:
                 case SVT_EFCT:
                     libs->ecnt++;
                     break;
@@ -1249,9 +1276,9 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     libs->name = strdup(GET_TEMP(&conf));
                     break;
 
-                case SVT_PHRS:
-                    ParsePhrase(&libs->earr[ecnt], libs->path,
-                                &libs->eimp[ecnt * 2], &conf);
+                case SVT_TEXT:
+//                    ParseSpeech(&libs->earr[ecnt], libs->path,
+//                                &libs->eimp[ecnt * 2], &conf);
 //                    ecnt++;
                     break;
 
@@ -1327,6 +1354,11 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
 
 
 
+void FreeBhvGroup(BGRP *bgrp) {
+    free(bgrp->barr);
+    free(bgrp->narr);
+}
+
 void FreeLib(LINF *elem) {
     long iter = elem->bcnt * 2;
 
@@ -1346,24 +1378,23 @@ void FreeLib(LINF *elem) {
     free(elem->barr);
     free(elem->earr);
     free(elem->bslp);
-    free(elem->bdrg);
-    free(elem->ndrg);
-    free(elem->bovr);
-    free(elem->novr);
-    free(elem->bmov);
-    free(elem->nmov);
-    free(elem->bsta);
-    free(elem->nsta);
-    free(elem->bgrp);
-    free(elem->ngrp);
+    FreeBhvGroup(&elem->ernd);
+    FreeBhvGroup(&elem->bbhv);
+    FreeBhvGroup(&elem->bsta);
+    FreeBhvGroup(&elem->bmov);
+    FreeBhvGroup(&elem->bovr);
+    FreeBhvGroup(&elem->bdrg);
 }
 
 
 
 void LoadLib(LINF *elem, ENGD *engd) {
-    long iter, indx, ncnt;
+    long iter, indx, ncnt, xdim, ydim;
     char **nimp;
+    uint32_t *bptr;
+    uint8_t *name;
     BINF *narr;
+    AINF *temp;
 
     if (!elem->bimp || (elem->icnt <= 0))
         return;
@@ -1373,9 +1404,29 @@ void LoadLib(LINF *elem, ENGD *engd) {
         ncnt = ((indx)? elem->ecnt : elem->bcnt) * 2;
         for (iter = 0; iter < ncnt; iter++)
             if (nimp[iter]) {
-                cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
-                                    (uint8_t*)ExtractLastDirs(nimp[iter], 2),
-                                     nimp[iter], ELA_DISK, free);
+//                if ((~iter & 1) && (nimp[iter + 1] == (char*)1)) {
+//                    /// handle speech
+//                    nimp[iter + 1] = 0;
+//
+//                    xdim = 128;
+//                    ydim = 16;
+//                    temp = malloc(sizeof(*temp)
+//                                + sizeof(*bptr) * (1 + xdim * ydim));
+//                    temp->fcnt = 1;
+//                    temp->xdim = xdim;
+//                    temp->ydim = ydim;
+//                    *(temp->time = bptr = (uint32_t*)(temp + 1)) = 0;
+//                    temp->uuid = (intptr_t)++bptr;
+//                    for (xdim = temp->xdim * temp->ydim; xdim; xdim--)
+//                        bptr[xdim - 1] = 0xFF0000FF;
+//                    cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
+//                                         name, temp, ELA_AINF, free);
+//                }
+//                else {
+                    name = (uint8_t*)ExtractLastDirs(nimp[iter], 2);
+                    cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
+                                         name, nimp[iter], ELA_DISK, free);
+//                }
                 nimp[iter] = 0;
             }
     }
@@ -1625,9 +1676,9 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
             pict->indx = (ulib->barr[pict->indx >> 1].link - 1) << 1;
         else {
             seed = ulib->barr[pict->indx >> 1].igrp;
-            lbgn = (seed)? ulib->ngrp[seed - 1] : 0;
-            lend = ulib->ngrp[seed];
-            seed = RNG_Load(engc->seed) % ulib->bgrp[lend - 1]->prob;
+            lbgn = (seed)? ulib->bbhv.narr[seed - 1] : 0;
+            lend = ulib->bbhv.narr[seed];
+            seed = RNG_Load(engc->seed) % ulib->bbhv.barr[lend - 1]->prob;
 
             /// nonexact binary search: bsearch() won`t help here
             ///  0th -----,  1st -,  2nd ----,   <  these are the elements
@@ -1636,11 +1687,11 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
             ///       |      `---- SEED = 5: 1st element
             ///       `---- SEED = 3: 0th element
             while (lbgn < lend)
-                if (ulib->bgrp[(lend + lbgn) >> 1]->prob <= seed)
+                if (ulib->bbhv.barr[(lend + lbgn) >> 1]->prob <= seed)
                     lbgn = (lend + lbgn + 2) >> 1;
                 else
                     lend = (lend + lbgn + 0) >> 1;
-            pict->indx = (ulib->bgrp[lbgn] - ulib->barr) << 1;
+            pict->indx = (ulib->bbhv.barr[lbgn] - ulib->barr) << 1;
         }
     }
     binf = &pict->ulib->barr[pict->indx >> 1];
@@ -1674,12 +1725,12 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
             if (binf->obfm[prev])
                 oinf = &pict->ulib->barr[binf->obfm[prev] - 1];
             else {
-                seed = (prev)? pict->ulib->nmov[binf->igrp]
-                     - ((binf->igrp)? pict->ulib->nmov[binf->igrp - 1] : 0)
-                     :         pict->ulib->nsta[binf->igrp]
-                     - ((binf->igrp)? pict->ulib->nsta[binf->igrp - 1] : 0);
-                oinf = (prev)? pict->ulib->bmov[RNG_Load(engc->seed) % seed]
-                             : pict->ulib->bsta[RNG_Load(engc->seed) % seed];
+                seed = (prev)? pict->ulib->bmov.narr[binf->igrp]
+                     - ((binf->igrp)? pict->ulib->bmov.narr[binf->igrp - 1] : 0)
+                     :         pict->ulib->bsta.narr[binf->igrp]
+                     - ((binf->igrp)? pict->ulib->bsta.narr[binf->igrp - 1] : 0);
+                oinf = (prev)? pict->ulib->bmov.barr[RNG_Load(engc->seed) % seed]
+                             : pict->ulib->bsta.barr[RNG_Load(engc->seed) % seed];
             }
             pict->iovr |= (oinf - pict->ulib->barr) << (prev << 4);
         }
@@ -1760,6 +1811,14 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
                         (pict->tbhv >= LLONG_MAX)? LLONG_MAX : engc->tcur);
 }
 
+long RandByGrp(uint32_t *seed, PICT *pict, BGRP *bgrp) {
+    uint32_t indx, flgs;
+
+    indx = bgrp->narr[flgs = pict->ulib->barr[pict->indx >> 1].igrp];
+    indx -= (flgs = (flgs)? bgrp->narr[flgs - 1] : 0);
+    return bgrp->barr[flgs + RNG_Load(seed) % indx] - pict->ulib->barr;
+}
+
 long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
     uint32_t flgs = 0, indx = 0;
     LINF *ulib = pict->ulib;
@@ -1778,39 +1837,34 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
     }
     else {
         switch (mode) {
-            case PIF_OVRM:
-                indx = ulib->novr[flgs = ulib->barr[pict->indx >> 1].igrp];
-                flgs = (flgs)? ulib->novr[flgs - 1] : 0;
-                flgs = flgs + RNG_Load(engc->seed) % (indx - flgs);
-                indx = ulib->bovr[flgs] - ulib->barr;
-                temp = *pict;
-                ChooseBehaviour(engc, &temp, (indx << 1) | (temp.indx & 1),
-                                CBF_NEXT | CBF_DNSE);
-                anim = (AINF){temp.ulib->barr[temp.indx >> 1].
-                                         unit[temp.indx &  1].uuid,
-                              engc->ppos.x - temp.offs.x,
-                              engc->ppos.y - temp.offs.y, 0};
-                cEngineCallback(engc->engd, ECB_TEST, (intptr_t)&anim);
-                if (!anim.fcnt)
-                    return 0;
-                break;
-
             case PIF_DRGM:
-                indx = ulib->ndrg[flgs = ulib->barr[pict->indx >> 1].igrp];
-                flgs = (flgs)? ulib->ndrg[flgs - 1] : 0;
-                flgs = flgs + RNG_Load(engc->seed) % (indx - flgs);
-                indx = ulib->bdrg[flgs] - ulib->barr;
+            case PIF_OVRM:
+                indx = RandByGrp(engc->seed, pict,
+                                (mode == PIF_OVRM)? &ulib->bovr : &ulib->bdrg);
                 break;
 
             case PIF_SLPM:
-                indx = ulib->bslp[RNG_Load(engc->seed) % ulib->nslp]
-                     - ulib->barr;
+                /// compatible with RandByGrp() if all sleeping IGRP equal zero !!!
+                /// [TODO:] deduplicate
+                indx = ulib->bslp[RNG_Load(engc->seed) % ulib->nslp] - ulib->barr;
                 break;
 
             case PIF_TPL1:
             case PIF_TPL2:
                 indx = pict->indx >> 1;
                 break;
+        }
+        if (mode == PIF_OVRM) {
+            temp = *pict;
+            ChooseBehaviour(engc, &temp, (indx << 1) | (temp.indx & 1),
+                            CBF_NEXT | CBF_DNSE);
+            anim = (AINF){temp.ulib->barr[temp.indx >> 1].
+                                     unit[temp.indx &  1].uuid,
+                          engc->ppos.x - temp.offs.x,
+                          engc->ppos.y - temp.offs.y, 0};
+            cEngineCallback(engc->engd, ECB_TEST, (intptr_t)&anim);
+            if (!anim.fcnt)
+                return 0;
         }
         flgs = CBF_NEXT;
         pict->flgs |= mode;
@@ -1843,36 +1897,30 @@ long TruncateAndSort(BINF **base, long *rcnt) {
 
 
 
-void ExtractStaMov(LINF *elem, BINF ***bout,
-                   long **nout, long *fill, long gcnt, long move) {
-    long *narr, indx;
-    BINF **barr;
+void ExtractStaMov(LINF *elem, BGRP *bgrp, long *fill, long gcnt, long move) {
+    long indx;
 
-    move = !!move;
-    narr = calloc(gcnt, sizeof(*narr));
+    bgrp->narr = calloc(gcnt, sizeof(*bgrp->narr));
     for (indx = 0; indx < gcnt; indx++)
         fill[indx] = 0;
     for (indx = 0; indx < elem->bcnt; indx++)
-        if ((elem->barr[indx].move == 0.0) ^ move)
+        if ((elem->barr[indx].move == 0.0) == !move)
             fill[elem->barr[indx].igrp]++;
-    narr[0] = fill[0] = (fill[0])? fill[0] : 1;
+    bgrp->narr[0] = fill[0] = (fill[0])? fill[0] : 1;
     for (indx = 1; indx < gcnt; indx++)
-        narr[indx] = narr[indx - 1] + ((fill[indx])? fill[indx] : fill[0]);
-    barr = calloc(narr[gcnt - 1], sizeof(*barr));
+        bgrp->narr[indx] = bgrp->narr[indx - 1] + ((fill[indx])? fill[indx] : fill[0]);
+    bgrp->barr = calloc(bgrp->narr[gcnt - 1], sizeof(*bgrp->barr));
     for (indx = 0; indx < elem->bcnt; indx++)
-        if ((elem->barr[indx].move == 0.0) ^ move)
-            barr[narr[elem->barr[indx].igrp] - fill[elem->barr[indx].igrp]--] =
-            &elem->barr[indx];
+        if ((elem->barr[indx].move == 0.0) == !move)
+            bgrp->barr[bgrp->narr[elem->barr[indx].igrp] - fill[elem->barr[indx].igrp]--] = &elem->barr[indx];
     /// if there are absolutely no elements in group 0, assign the preview:
     /// it can not get any worse now, anyway
-    if (!barr[0])
-        barr[0] = &elem->barr[elem->prev];
+    if (!bgrp->barr[0])
+        bgrp->barr[0] = &elem->barr[elem->prev];
     for (--gcnt; gcnt; gcnt--)
-        if (!barr[narr[gcnt - 1]])
-            for (indx = 0; indx < narr[0]; indx++)
-                barr[narr[gcnt - 1] + indx] = barr[indx];
-    *bout = barr;
-    *nout = narr;
+        if (!bgrp->barr[bgrp->narr[gcnt - 1]])
+            for (indx = 0; indx < bgrp->narr[0]; indx++)
+                bgrp->barr[bgrp->narr[gcnt - 1] + indx] = bgrp->barr[indx];
 }
 
 
@@ -1957,52 +2005,54 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                                        -       iter->cntr[turn].y;
         }
 
-        elem->bgrp = malloc(elem->bcnt * sizeof(*elem->bgrp));
+        /// [TODO:] deduplicate
+
+        elem->bbhv.barr = malloc(elem->bcnt * sizeof(*elem->bbhv.barr));
         /// populating BGRP with all behaviours and sorting by group number
         for (indx = 0; indx < elem->bcnt; indx++)
-            elem->bgrp[indx] = &elem->barr[indx];
-        qsort(elem->bgrp, elem->bcnt, sizeof(*elem->bgrp), igrpcmp);
+            elem->bbhv.barr[indx] = &elem->barr[indx];
+        qsort(elem->bbhv.barr, elem->bcnt, sizeof(*elem->bbhv.barr), igrpcmp);
         /// counting groups + normalizing their indices to [0; GCNT) interval
         for (gcnt = turn = indx = 0; indx < elem->bcnt; indx++) {
-            if (elem->bgrp[indx]->igrp != turn) {
-                turn = elem->bgrp[indx]->igrp;
+            if (elem->bbhv.barr[indx]->igrp != turn) {
+                turn = elem->bbhv.barr[indx]->igrp;
                 gcnt++;
             }
-            elem->bgrp[indx]->igrp = gcnt;
+            elem->bbhv.barr[indx]->igrp = gcnt;
         }
         gcnt++;
         /// populating BGRP with nonzero-probability behaviours, ZCNT := len
         for (elem->zcnt = indx = 0; indx < elem->bcnt; indx++)
             if (elem->barr[indx].prob)
-                elem->bgrp[elem->zcnt++] = &elem->barr[indx];
-        elem->bgrp = realloc(elem->bgrp, elem->zcnt * sizeof(*elem->bgrp));
+                elem->bbhv.barr[elem->zcnt++] = &elem->barr[indx];
+        elem->bbhv.barr = realloc(elem->bbhv.barr, elem->zcnt * sizeof(*elem->bbhv.barr));
         /// sorting BGRP by normalized group index
-        qsort(elem->bgrp, elem->zcnt, sizeof(*elem->bgrp), igrpcmp);
+        qsort(elem->bbhv.barr, elem->zcnt, sizeof(*elem->bbhv.barr), igrpcmp);
 
         /// filling NGRP with behaviour group boundaries
-        elem->ngrp = calloc(gcnt, sizeof(*elem->ngrp));
+        elem->bbhv.narr = calloc(gcnt, sizeof(*elem->bbhv.narr));
         for (turn = indx = 0; indx < elem->zcnt; indx++)
-            elem->ngrp[elem->bgrp[indx]->igrp] = indx + 1;
+            elem->bbhv.narr[elem->bbhv.barr[indx]->igrp] = indx + 1;
         /// adjusting groups with no members of nonzero probability
         for (indx = 1; indx < gcnt; indx++)
-            if (!elem->ngrp[indx])
-                elem->ngrp[indx] = elem->ngrp[indx - 1];
+            if (!elem->bbhv.narr[indx])
+                elem->bbhv.narr[indx] = elem->bbhv.narr[indx - 1];
         /// turning probabilities into integral probabilities
         for (turn = indx = 0; indx < gcnt; indx++) {
-            for (++turn; turn < elem->ngrp[indx]; ++turn)
-                elem->bgrp[turn]->prob += elem->bgrp[turn - 1]->prob;
-            turn = elem->ngrp[indx];
+            for (++turn; turn < elem->bbhv.narr[indx]; ++turn)
+                elem->bbhv.barr[turn]->prob += elem->bbhv.barr[turn - 1]->prob;
+            turn = elem->bbhv.narr[indx];
         }
         fill = calloc(gcnt, sizeof(*fill));
 
         /// extracting stationary and moving behaviours
-        ExtractStaMov(elem, &elem->bsta, &elem->nsta, fill, gcnt, 0);
-        ExtractStaMov(elem, &elem->bmov, &elem->nmov, fill, gcnt, 1);
+        ExtractStaMov(elem, &elem->bsta, fill, gcnt, 0);
+        ExtractStaMov(elem, &elem->bmov, fill, gcnt, 1);
 
         /// extracting sleep behaviours
         for (elem->nslp = qmax = turn = indx = 0; indx < elem->bcnt; indx++) {
             if (elem->barr[indx].move < elem->barr[qmax].move)
-                qmax = indx;
+                qmax = indx; /// QMAX := index of the slowest moving sprite
             if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
                 elem->nslp++;
             else if (elem->barr[indx].prob
@@ -2026,84 +2076,84 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             elem->bslp[(elem->nslp = 1) - 1] = &elem->barr[qmax];
 
         /// extracting mouseover behaviours
-        elem->novr = calloc(gcnt, sizeof(*elem->novr));
+        elem->bovr.narr = calloc(gcnt, sizeof(*elem->bovr.narr));
         for (indx = 0; indx < gcnt; indx++)
             fill[indx] = 0;
         for (qmax = indx = 0; indx < elem->bcnt; indx++) {
             if (elem->barr[indx].move < elem->barr[qmax].move)
                 qmax = indx;
             if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_OVRM)
-                elem->novr[elem->barr[indx].igrp]++;
+                elem->bovr.narr[elem->barr[indx].igrp]++;
             else if (elem->barr[indx].prob
                  && !elem->barr[indx].trgt && !elem->barr[indx].move)
                 fill[elem->barr[indx].igrp]--;
         }
         for (indx = 0; indx < gcnt; indx++) {
-            if (elem->novr[indx] > 0)
-                fill[indx] = elem->novr[indx];
+            if (elem->bovr.narr[indx] > 0)
+                fill[indx] = elem->bovr.narr[indx];
             else
-                elem->novr[indx] = -fill[indx];
-            if (!elem->novr[indx])
-                elem->novr[indx] = fill[indx] =
-                    (elem->novr[0])? elem->novr[0] : 1;
-            elem->novr[indx] += (indx)? elem->novr[indx - 1] : 0;
+                elem->bovr.narr[indx] = -fill[indx];
+            if (!elem->bovr.narr[indx])
+                elem->bovr.narr[indx] = fill[indx] =
+                    (elem->bovr.narr[0])? elem->bovr.narr[0] : 1;
+            elem->bovr.narr[indx] += (indx)? elem->bovr.narr[indx - 1] : 0;
             fill[indx] = (fill[indx] > 0)?
-                          elem->novr[indx] : -elem->novr[indx];
+                          elem->bovr.narr[indx] : -elem->bovr.narr[indx];
         }
-        elem->bovr = calloc(elem->novr[gcnt - 1], sizeof(*elem->bovr));
-        elem->bovr[0] = &elem->barr[qmax];
+        elem->bovr.barr = calloc(elem->bovr.narr[gcnt - 1], sizeof(*elem->bovr.barr));
+        elem->bovr.barr[0] = &elem->barr[qmax];
         for (indx = 0; indx < elem->bcnt; indx++) {
             qmax = fill[elem->barr[indx].igrp];
             if (((qmax > 0) &&
                 ((elem->barr[indx].flgs & BHV_MMMM) == BHV_OVRM))
             ||  ((qmax < 0) && elem->barr[indx].prob &&
                  !elem->barr[indx].trgt && !elem->barr[indx].move)) {
-                elem->bovr[((qmax > 0)? qmax : -qmax) - 1] = &elem->barr[indx];
+                elem->bovr.barr[((qmax > 0)? qmax : -qmax) - 1] = &elem->barr[indx];
                 fill[elem->barr[indx].igrp] = qmax - ((qmax > 0)? 1 : -1);
             }
         }
         qmax = 0;
-        for (indx = elem->novr[0]; indx < elem->novr[gcnt - 1]; indx++)
-            if (!elem->bovr[indx]) {
-                elem->bovr[indx] = elem->bovr[qmax];
-                qmax = (qmax + 1) % elem->novr[0];
+        for (indx = elem->bovr.narr[0]; indx < elem->bovr.narr[gcnt - 1]; indx++)
+            if (!elem->bovr.barr[indx]) {
+                elem->bovr.barr[indx] = elem->bovr.barr[qmax];
+                qmax = (qmax + 1) % elem->bovr.narr[0];
             }
 
         /// extracting 'dragged' behaviours (uses mouseovers!)
-        elem->ndrg = calloc(gcnt, sizeof(*elem->ndrg));
+        elem->bdrg.narr = calloc(gcnt, sizeof(*elem->bdrg.narr));
         for (indx = 0; indx < gcnt; indx++)
             fill[indx] = 0;
         for (indx = 0; indx < elem->bcnt; indx++)
             if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_DRGM)
-                elem->ndrg[elem->barr[indx].igrp]++;
+                elem->bdrg.narr[elem->barr[indx].igrp]++;
             else if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
                 fill[elem->barr[indx].igrp]--;
         for (indx = 0; indx < gcnt; indx++) {
-            if (elem->ndrg[indx] > 0)
-                fill[indx] = elem->ndrg[indx];
+            if (elem->bdrg.narr[indx] > 0)
+                fill[indx] = elem->bdrg.narr[indx];
             else
-                elem->ndrg[indx] = -fill[indx];
-            if (!elem->ndrg[indx])
-                elem->ndrg[indx] =
-                    elem->novr[indx] - ((indx)? elem->novr[indx - 1] : 0);
-            elem->ndrg[indx] += (indx)? elem->ndrg[indx - 1] : 0;
+                elem->bdrg.narr[indx] = -fill[indx];
+            if (!elem->bdrg.narr[indx])
+                elem->bdrg.narr[indx] =
+                    elem->bovr.narr[indx] - ((indx)? elem->bovr.narr[indx - 1] : 0);
+            elem->bdrg.narr[indx] += (indx)? elem->bdrg.narr[indx - 1] : 0;
         }
-        elem->bdrg = calloc(elem->ndrg[gcnt - 1], sizeof(*elem->bdrg));
+        elem->bdrg.barr = calloc(elem->bdrg.narr[gcnt - 1], sizeof(*elem->bdrg.barr));
         for (indx = 0; indx < gcnt; indx++)
             if (!fill[indx]) {
-                qmax = (indx)? elem->ndrg[indx - 1] : 0;
-                turn = (indx)? elem->novr[indx - 1] : 0;
-                for (; qmax < elem->ndrg[indx];)
-                    elem->bdrg[qmax++] = elem->bovr[turn++];
+                qmax = (indx)? elem->bdrg.narr[indx - 1] : 0;
+                turn = (indx)? elem->bovr.narr[indx - 1] : 0;
+                for (; qmax < elem->bdrg.narr[indx];)
+                    elem->bdrg.barr[qmax++] = elem->bovr.barr[turn++];
             }
         for (indx = 0; indx < elem->bcnt; indx++)
             if ((fill[qmax = elem->barr[indx].igrp] > 0)
             &&  (elem->barr[indx].flgs & BHV_MMMM) == BHV_DRGM)
-                elem->bdrg[elem->ndrg[qmax] - --fill[qmax] - 1] =
+                elem->bdrg.barr[elem->bdrg.narr[qmax] - --fill[qmax] - 1] =
                     &elem->barr[indx];
             else if ((fill[qmax] < 0)
                  &&  (elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
-                elem->bdrg[elem->ndrg[qmax] + ++fill[qmax] - 1] =
+                elem->bdrg.barr[elem->bdrg.narr[qmax] + ++fill[qmax] - 1] =
                     &elem->barr[indx];
 
         free(fill);

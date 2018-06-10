@@ -19,9 +19,33 @@ struct FRBO {
            swiz;    /// pixel buffer switcher
 };
 
+typedef struct {
+    GLint size, fcnt, indx;
+    GLubyte *bptr;
+} TXSZ;
 
 
-/** [main vertex shader] (FB = frame bank, CA = current animation)
+
+int sizecmp(const void *a, const void *b) {
+    return ((TXSZ*)b)->size - ((TXSZ*)a)->size;
+}
+
+
+
+void FreeRendererOGL(RNDR **rndr) {
+    if (rndr && *rndr) {
+        OGL_FreeVBO(&(*rndr)->surf);
+        free((*rndr)->temp);
+        free(*rndr);
+        *rndr = 0;
+    }
+}
+
+
+
+long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
+                     ulong uniq, ulong size, ulong xscr, ulong yscr) {
+    /** [main vertex shader] (FB = frame bank, CA = current animation)
 
     ===== dynamic uniforms: changes every frame
     T4FV <data>: x = X position of the sprite
@@ -59,46 +83,44 @@ struct FRBO {
                  y = FB index
                  z = CA palette U-pos in texture + 0.5
                  w = CA palette V-pos in texture + 0.5
- **/
-char *MainVertexShader =
-"attribute vec3 vert;"
+    **/
+    char *MainVertexShader =
+    "attribute vec3 vert;"
 
-"uniform sampler2D data;"
-"uniform sampler2D dims;"
-"uniform sampler2D bank;"
-"uniform vec4 disz;"
-"uniform vec4 hitd;"
+    "uniform sampler2D data;"
+    "uniform sampler2D dims;"
+    "uniform sampler2D bank;"
+    "uniform vec4 disz;"
+    "uniform vec4 hitd;"
 
-"varying vec4 vtex;"
-"varying vec4 voff;"
+    "varying vec4 vtex;"
+    "varying vec4 voff;"
 
-"const vec4 orts = vec4(-1.0, 1.0, 0.5, 0.0);"
-"const vec4 coef = vec4(-0.125, 0.250, 0.500, 0.000);"
+    "const vec4 orts = vec4(-1.0, 1.0, 0.5, 0.0);"
+    "const vec4 coef = vec4(-0.125, 0.250, 0.500, 0.000);"
 
-"void main() {"
-    "vec4 vdat = texture2D(data, vec2(hitd.z, disz.z) *"
-                               "(floor(vert.zz * hitd.wz) + orts.zz));"
-    "vec4 indx = vdat.wwww * orts.wwzw + hitd.wzww * (orts.zzxw * 2.0)"
-              "* floor(vdat.wwww * coef.yyyy + orts.xxww);"
-    "vec2 offs = vec2(hitd.z, disz.w) * (floor(indx.xy) + orts.zz);"
-    "vec4 vdim = texture2D(dims, offs);"
-    "vec4 vbnk = texture2D(bank, offs);"
-    "vtex = (orts.xzzw * 4.0) * vdim.zwzw *"
-          "((floor(indx.zzww) * orts.yxww + indx.zwww - coef.yzww) *"
-           "(vert.xyzz - coef.zzww) + coef.xyzw);"
-    "indx = floor(vec4(vdat.z * vdim.z * vdim.w, indx.wxy * 256.0))"
-         "+ vbnk.yxww * orts.yyww + orts.wwzz;"
-    "voff = (indx.x < vbnk.z)? indx.xyzw : indx.xyzw"
-         "+ floor((indx.xxxx - vbnk.zzzz) / vbnk.wwww)"
-         "* (vbnk.wwww * orts.xwww + orts.wyww)"
-         "+ (vbnk.zzzz * orts.xwww + orts.wyww);"
-    "gl_Position = (orts.yyww * vert.xyzz  * vdim.zwxx * vdim.xyzw"
-                "-  orts.xyzw * vdat.xyyy) * disz.xyyy + orts.xyyy;"
-"}";
+    "void main() {"
+        "vec4 vdat = texture2D(data, vec2(hitd.z, disz.z) *"
+                                   "(floor(vert.zz * hitd.wz) + orts.zz));"
+        "vec4 indx = vdat.wwww * orts.wwzw + hitd.wzww * (orts.zzxw * 2.0)"
+                  "* floor(vdat.wwww * coef.yyyy + orts.xxww);"
+        "vec2 offs = vec2(hitd.z, disz.w) * (floor(indx.xy) + orts.zz);"
+        "vec4 vdim = texture2D(dims, offs);"
+        "vec4 vbnk = texture2D(bank, offs);"
+        "vtex = (orts.xzzw * 4.0) * vdim.zwzw *"
+              "((floor(indx.zzww) * orts.yxww + indx.zwww - coef.yzww) *"
+               "(vert.xyzz - coef.zzww) + coef.xyzw);"
+        "indx = floor(vec4(vdat.z * vdim.z * vdim.w, indx.wxy * 256.0))"
+             "+ vbnk.yxww * orts.yyww + orts.wwzz;"
+        "voff = (indx.x < vbnk.z)? indx.xyzw : indx.xyzw"
+             "+ floor((indx.xxxx - vbnk.zzzz) / vbnk.wwww)"
+             "* (vbnk.wwww * orts.xwww + orts.wyww)"
+             "+ (vbnk.zzzz * orts.xwww + orts.wyww);"
+        "gl_Position = (orts.yyww * vert.xyzz  * vdim.zwxx * vdim.xyzw"
+                    "-  orts.xyzw * vdat.xyyy) * disz.xyyy + orts.xyyy;"
+    "}";
 
-
-
-/** [main pixel shader] (FB = frame bank, CA = current animation)
+    /** [main pixel shader] (FB = frame bank, CA = current animation)
 
     ===== basic concepts and theory
                _________    __________________   This is a frame bank array on
@@ -122,57 +144,33 @@ char *MainVertexShader =
     ===== vertex attributes (marked {}) and static uniforms: no or few changes
     T1FV <atex>: FB array, each layer is an FB with palette indices; see above
     T4FV <apal>: palette texture
- **/
-char *MainPixelShader =
-"uniform sampler3D atex;"
-"uniform sampler3D apal;"
-"uniform vec4 hitd;"
+    **/
+    char *MainPixelShader =
+    "uniform sampler3D atex;"
+    "uniform sampler3D apal;"
+    "uniform vec4 hitd;"
 
-"varying vec4 vtex;"
-"varying vec4 voff;"
+    "varying vec4 vtex;"
+    "varying vec4 voff;"
 
-"const vec4 coef = vec4(1.0, 0.0, 0.5, 255.0);"
+    "const vec4 coef = vec4(1.0, 0.5, 255.0, 0.0);"
 
-"void main() {"
-    "vec4 pixl = floor(vtex);"
-    "pixl = texture3D(atex, (floor((pixl.yyw * pixl.zzw + pixl.xxw + voff.xxy)"
-                                 "* hitd.wzw) + coef.zzz) * hitd.zzx);"
-    "if (pixl.x == coef.x) discard;"
-    "gl_FragColor = texture3D(apal, vec3(hitd.zy * (pixl.xx * coef.wy + voff.zw), 0.5));"
-"}";
+    "void main() {"
+        "vec4 pixl = floor(vtex);"
+        "pixl.xyz = (pixl.zzw * pixl.yyw + pixl.xxw + voff.xxy) * hitd.wzw;"
+        "pixl = texture3D(atex, (floor(pixl.xyz) + coef.yyy) * hitd.zzx);"
+        "if (pixl.x == coef.x)"
+            "discard;"
+        "else {"
+            "pixl.xy = hitd.zy * (pixl.xx * coef.zw + voff.zw);"
+            "gl_FragColor = texture3D(apal, vec3(pixl.xy, 0.5));"
+        "}"
+    "}";
 
-
-
-typedef struct {
-    GLint size, fcnt, indx;
-    GLubyte *bptr;
-} TXSZ;
-
-
-
-int sizecmp(const void *a, const void *b) {
-    return ((TXSZ*)b)->size - ((TXSZ*)a)->size;
-}
-
-
-
-void FreeRendererOGL(RNDR **rndr) {
-    if (rndr && *rndr) {
-        OGL_FreeVBO(&(*rndr)->surf);
-        free((*rndr)->temp);
-        free(*rndr);
-        *rndr = 0;
-    }
-}
-
-
-
-long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
-                     ulong uniq, ulong size, ulong xscr, ulong yscr) {
     GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
     GLubyte *atex, *aptr;
-    T4FV *dims, *bank;
     GLuint *indx;
+    T4FV *dims, *bank;
     T3FV *vert;
     TXSZ *txsz;
     BGRA *apal;
@@ -182,14 +180,12 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     if (!rndr || *rndr)
         return !!rndr;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mtex);
-    mtex = (mtex < 4096)? mtex : 4096;
-    while (mtex) {
+    mtex = ((mtex < 4096)? mtex : 4096) << 1;
+    while (mtex >>= 1)
         if ((test = OGL_MakeTex(mtex, mtex, 1, GL_TEXTURE_3D,
                                 GL_REPEAT, GL_NEAREST, GL_NEAREST,
                                 GL_UNSIGNED_BYTE, GL_R8, GL_RED, 0)))
             break;
-        mtex >>= 1;
-    }
     OGL_FreeTex(&test);
 
     if (!mtex)
