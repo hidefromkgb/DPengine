@@ -54,9 +54,8 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                  w = [base index (22)] [Y inv (1)] [X inv (1)]
 
     ===== vertex attributes (marked {}) and static uniforms: no or few changes
-    T3FV {vert}: x = X quad coordinates, either 0 or 1  -->  / (0, 1) (1, 1) \
-                 y = Y quad coordinates, either 0 or 1  -->  \ (0, 0) (1, 0) /
-                 z = index of the current quad (0-based)
+    T2FV {vert}: x = current quad index (1-based, subtract 1); sign: X coord
+                 y = <apal> depth (see pixel shader specs);    sign: Y coord
     T4FV <dims>: x = frame X scale
                  y = frame Y scale
                  z = frame width
@@ -81,11 +80,15 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                  w = 0.0 ##### RESERVED, DO NOT CHANGE #####
     T4FV  voff : x = current frame offset in FB
                  y = FB index
-                 z = CA palette U-pos in texture + 0.5
-                 w = CA palette V-pos in texture + 0.5
+                 z = CA palette U-pos in texture + 0.5    ##### UNUSED #####
+                 w = CA palette V-pos in texture + 0.5    ##### UNUSED #####
+    T4FV  vdep : x = CA palette U-pos in texture + 0.5
+                 y = CA palette V-pos in texture + 0.5
+                 z = CA palette W-pos in texture, premult
+                 w = CA palette W-pos in texture, premult ##### UNUSED #####
     **/
     char *MainVertexShader =
-    "attribute vec3 vert;"
+    "attribute vec2 vert;"
 
     "uniform sampler2D data;"
     "uniform sampler2D dims;"
@@ -95,28 +98,32 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
     "varying vec4 vtex;"
     "varying vec4 voff;"
+    "varying vec4 vdep;"
 
     "const vec4 orts = vec4(-1.0, 1.0, 0.5, 0.0);"
     "const vec4 coef = vec4(-0.125, 0.250, 0.500, 0.000);"
 
     "void main() {"
-        "vec4 vdat = texture2D(data, vec2(hitd.z, disz.z) *"
-                                   "(floor(vert.zz * hitd.wz) + orts.zz));"
+        "vec4 vdat = texture2D(data, vec2(hitd.z, disz.z)"
+                  "* (floor(abs(vert.xx) * hitd.wz - hitd.wz) + orts.zz));"
         "vec4 indx = vdat.wwww * orts.wwzw + hitd.wzww * (orts.zzxw * 2.0)"
                   "* floor(vdat.wwww * coef.yyyy + orts.xxww);"
-        "vec2 offs = vec2(hitd.z, disz.w) * (floor(indx.xy) + orts.zz);"
-        "vec4 vdim = texture2D(dims, offs);"
-        "vec4 vbnk = texture2D(bank, offs);"
-        "vtex = (orts.xzzw * 4.0) * vdim.zwzw *"
-              "((floor(indx.zzww) * orts.yxww + indx.zwww - coef.yzww) *"
-               "(vert.xyzz - coef.zzww) + coef.xyzw);"
-        "indx = floor(vec4(vdat.z * vdim.z * vdim.w, indx.wxy * 256.0))"
-             "+ vbnk.yxww * orts.yyww + orts.wwzz;"
-        "voff = (indx.x < vbnk.z)? indx.xyzw : indx.xyzw"
+        "vec4 offs = vec4(hitd.z, disz.w, step(orts.ww, vert.xy))"
+                  "* (floor(indx.xyww) + orts.zzyy);"
+        "vec4 vdim = texture2D(dims, offs.xy);"
+        "vec4 vbnk = texture2D(bank, offs.xy);"
+        "vtex =  (orts.xzzw * 4.0) * vdim.zwzw"
+             "* ((floor(indx.zzww) * orts.yxww + indx.zwww - coef.yzww)"
+             "*  (offs.zwzz - coef.zzww) + coef.xyzw);"
+        "indx = vbnk.yxww * orts.yyww + orts.wwzz"
+             "+ floor(vec4(vdat.z * vdim.z * vdim.w, indx.wxy * 256.0));"
+        "voff = (indx.x < vbnk.z)? indx.xyzw : (indx.xyzw"
              "+ floor((indx.xxxx - vbnk.zzzz) / vbnk.wwww)"
              "* (vbnk.wwww * orts.xwww + orts.wyww)"
-             "+ (vbnk.zzzz * orts.xwww + orts.wyww);"
-        "gl_Position = (orts.yyww * vert.xyzz  * vdim.zwxx * vdim.xyzw"
+             "+ (vbnk.zzzz * orts.xwww + orts.wyww));"
+        "vdep = vec4(indx.zw, (floor(indx.ww * hitd.zz) + orts.zz)"
+                            "* abs(vert.yy));"
+        "gl_Position = (orts.yyww * offs.zwzz  * vdim.zwxx * vdim.xyzw"
                     "-  orts.xyzw * vdat.xyyy) * disz.xyyy + orts.xyyy;"
     "}";
 
@@ -152,6 +159,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
     "varying vec4 vtex;"
     "varying vec4 voff;"
+    "varying vec4 vdep;"
 
     "const vec4 coef = vec4(1.0, 0.5, 255.0, 0.0);"
 
@@ -159,19 +167,18 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         "vec4 pixl = floor(vtex);"
         "pixl.xyz = (pixl.zzw * pixl.yyw + pixl.xxw + voff.xxy) * hitd.wzw;"
         "pixl = texture3D(atex, (floor(pixl.xyz) + coef.yyy) * hitd.zzx);"
-        "if (pixl.x == coef.x)"
-            "discard;"
-        "else {"
-            "pixl.xy = hitd.zy * (pixl.xx * coef.zw + voff.zw);"
-            "gl_FragColor = texture3D(apal, vec3(pixl.xy, 0.5));"
-        "}"
+        "if (pixl.x != coef.x)"
+            "gl_FragColor = texture3D(apal, (pixl.xxx * coef.zww + vdep.xyz)"
+                                          "* hitd.zyw);"
+        "else discard;"
     "}";
 
-    GLsizei cbnk, fill, curr, mtex, chei, phei, dhei, fcnt, fend;
+    GLsizei cbnk, fill, curr, mtex, chei, dhei, phei, pdep, fcnt, fend;
+    GLfloat idep;
     GLubyte *atex, *aptr;
     GLuint *indx;
     T4FV *dims, *bank;
-    T3FV *vert;
+    T2FV *vert;
     TXSZ *txsz;
     BGRA *apal;
     RNDR *retn;
@@ -207,15 +214,21 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     dhei = ceil((GLfloat)size  / mtex) + 1;
     chei = ceil((GLfloat)uniq  / mtex);
     phei = ceil((256.0 * uniq) / mtex);
+    phei = ((pdep = ceil((GLfloat)phei  / mtex)) <= 1)? phei : mtex;
 
     /// allocate vertex arrays
     indx = calloc(mtex * dhei * 6, sizeof(*indx));
     vert = calloc(mtex * dhei * 4, sizeof(*vert));
-    for (curr = mtex * dhei - 1; curr >= 0; curr--) {
-        vert[curr * 4 + 0] = (T3FV){{0, 1, curr}};
-        vert[curr * 4 + 1] = (T3FV){{0, 0, curr}};
-        vert[curr * 4 + 2] = (T3FV){{1, 0, curr}};
-        vert[curr * 4 + 3] = (T3FV){{1, 1, curr}};
+
+    /// warning, IDEP equals inverse depth of palette texture; it goes into
+    /// all vertex attributes!
+    /// [TODO:] offload IDEP to a uniform
+    /// [TODO:] pack both signs into a T1FV
+    for (idep = 1.0 / pdep, curr = mtex * dhei - 1; curr >= 0; curr--) {
+        vert[curr * 4 + 0] = (T2FV){{-curr - 1,  idep}};
+        vert[curr * 4 + 1] = (T2FV){{-curr - 1, -idep}};
+        vert[curr * 4 + 2] = (T2FV){{ curr + 1, -idep}};
+        vert[curr * 4 + 3] = (T2FV){{ curr + 1,  idep}};
         indx[curr * 6 + 0] = curr * 4 + 0;
         indx[curr * 6 + 1] = curr * 4 + 1;
         indx[curr * 6 + 2] = curr * 4 + 2;
@@ -230,7 +243,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         {{.cdat = mtex * dhei * fill, .draw = GL_STATIC_DRAW,
           /** No name and type for indices! **/ .pdat = indx},
          {.cdat = mtex * dhei * curr, .draw = GL_STATIC_DRAW,
-          .name = "vert", .type = OGL_UNI_T3FV, .pdat = vert}};
+          .name = "vert", .type = OGL_UNI_T2FV, .pdat = vert}};
     OGL_UNIF suni[] =
         {{.name = "data", .type = OGL_UNI_T1II, .pdat = (GLvoid*)0},
          {.name = "dims", .type = OGL_UNI_T1II, .pdat = (GLvoid*)1},
@@ -257,7 +270,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
     txsz = calloc(uniq, sizeof(*txsz));
     dims = calloc(mtex * chei, sizeof(*dims));
-    apal = calloc(mtex * phei, sizeof(*apal));
+    apal = calloc(mtex * phei * pdep, sizeof(*apal));
     for (curr = 1; curr <= uniq; curr++)
         if (uarr[curr].anim) {
             ASTD *anim = uarr[curr].anim;
@@ -271,7 +284,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
     /// allocate the palette texture
     *OGL_BindTex(retn->surf, 3, OGL_TEX_NSET) =
-        OGL_MakeTex(mtex, phei, 1, GL_TEXTURE_3D,
+        OGL_MakeTex(mtex, phei, pdep, GL_TEXTURE_3D,
                     GL_REPEAT, GL_NEAREST, GL_NEAREST, GL_UNSIGNED_BYTE,
                     GL_RGBA8, (rgba)? GL_RGBA : GL_BGRA, apal);
     free(apal);
@@ -297,6 +310,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
             fcnt -= fend;
         }
     }
+
     /// allocate the main FB array texture (uninitialized)
     test = *OGL_BindTex(retn->surf, 4, OGL_TEX_NSET) =
         OGL_MakeTex(mtex, mtex, cbnk + 1, GL_TEXTURE_3D,

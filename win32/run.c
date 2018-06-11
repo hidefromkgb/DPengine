@@ -1818,7 +1818,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     HMODULE hlsh, hlsf;
 
 //    AllocConsole();
-//    freopen("CONOUT$", "wb", stdout);
+    freopen("CONOUT$", "wb", stdout);
 
     OleInitialize(0);
     InitCommonControlsEx(&icct);
