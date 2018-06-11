@@ -6,7 +6,17 @@ To run properly, DPE requires the [DP animation base](https://github.com/Rooster
 
 The source code is meant to be built via either Code::Blocks IDE or makefiles included in the project.
 
-N.B.: to be able to build on Windows using Code::Blocks, go to Settings → Compiler and Debugger → Toolchain Executables, and change 'Make program' to 'mingw32-make.exe'. It`s how it was meant to be.
+N.B.: to be able to build on Windows using Code::Blocks 10.05, go to Settings → Compiler and Debugger → Toolchain Executables, and change 'Make program' to 'mingw32-make.exe'. It`s how it was meant to be. More recent versions ship with correct settings.
+
+N.B.: to build and run DPE on Linux, install the following packages:
+
+1. make
+1. gcc
+1. mesa-common-dev
+1. libgtk2.0-dev
+1. libgtkglext1-dev
+1. libcurl4-openssl-dev
+1. libssl-dev
 
 ## Releases
 
