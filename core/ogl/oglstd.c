@@ -6,6 +6,7 @@ struct RNDR {
     T4FV *temp;
     T4FV  disz;
     T4FV  hitd;
+    T4FV  idep;
     long  size;
 };
 
@@ -54,8 +55,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                  w = [base index (22)] [Y inv (1)] [X inv (1)]
 
     ===== vertex attributes (marked {}) and static uniforms: no or few changes
-    T2FV {vert}: x = current quad index (1-based, subtract 1); sign: X coord
-                 y = <apal> depth (see pixel shader specs);    sign: Y coord
+    T2FV {vert}: x = current quad index, 1-based; sign: X coord, +0.5: Y coord
     T4FV <dims>: x = frame X scale
                  y = frame Y scale
                  z = frame width
@@ -66,10 +66,10 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                  w = end of FB as if it all consisted of CA frames
     T4FV  disz : x = 2.0 / screen width
                  y = 2.0 / screen height
-                 z = 1.0 / <data> height
-                 w = 1.0 / <dims> and <bank> height
-    T4FV  hitd : x = 1.0 / <atex> depth  (see pixel shader specs)
-                 y = 1.0 / <apal> height (see pixel shader specs)
+                 z = 1.0 / <apal> depth  (see pixel shader specs)
+                 w = 0.0 ##### RESERVED, DO NOT CHANGE #####
+    T4FV  idep : x = 1.0 / <dims> and <bank> height
+                 y = 1.0 / <data> height
                  z = 1.0 / max texture size
                  w = 1.0 ##### RESERVED, DO NOT CHANGE #####
 
@@ -80,51 +80,55 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                  w = 0.0 ##### RESERVED, DO NOT CHANGE #####
     T4FV  voff : x = current frame offset in FB
                  y = FB index
-                 z = CA palette U-pos in texture + 0.5    ##### UNUSED #####
-                 w = CA palette V-pos in texture + 0.5    ##### UNUSED #####
-    T4FV  vdep : x = CA palette U-pos in texture + 0.5
-                 y = CA palette V-pos in texture + 0.5
-                 z = CA palette W-pos in texture, premult
-                 w = CA palette W-pos in texture, premult ##### UNUSED #####
+                 z = ???                                  ##### UNUSED #####
+                 w = ???                                  ##### UNUSED #####
+    T4FV  vdep : x = CA palette W-pos in texture, premult ##### UNUSED #####
+                 y = CA palette W-pos in texture, premult
+                 z = CA palette U-pos in texture + 0.5
+                 w = CA palette V-pos in texture + 0.5
     **/
     char *MainVertexShader =
-    "attribute vec2 vert;"
+    "attribute float vert;"
 
     "uniform sampler2D data;"
     "uniform sampler2D dims;"
     "uniform sampler2D bank;"
     "uniform vec4 disz;"
-    "uniform vec4 hitd;"
+    "uniform vec4 idep;"
 
     "varying vec4 vtex;"
     "varying vec4 voff;"
     "varying vec4 vdep;"
 
+    "const vec4 ints = vec4(-2.0, 4.0, 1.0, 0.0);"
     "const vec4 orts = vec4(-1.0, 1.0, 0.5, 0.0);"
     "const vec4 coef = vec4(-0.125, 0.250, 0.500, 0.000);"
+    "const vec4 pals = vec4(256.0, 1.0, 0.0, 0.0);"
 
     "void main() {"
-        "vec4 vdat = texture2D(data, vec2(hitd.z, disz.z)"
-                  "* (floor(abs(vert.xx) * hitd.wz - hitd.wz) + orts.zz));"
-        "vec4 indx = vdat.wwww * orts.wwzw + hitd.wzww * (orts.zzxw * 2.0)"
+        "vec4 vvec = vec4(abs(vert), vert, orts.ww);"
+        "vec4 vdat = texture2D(data, idep.zy"
+                  "* (floor(vvec.xx * idep.wz - idep.wz) + orts.zz));"
+        "vec4 indx = vdat.wwww * orts.wwzw + idep.wzww * ints.zzxw"
                   "* floor(vdat.wwww * coef.yyyy + orts.xxww);"
-        "vec4 offs = vec4(hitd.z, disz.w, step(orts.ww, vert.xy))"
-                  "* (floor(indx.xyww) + orts.zzyy);"
+        "vec4 iint = floor(indx.xyzy * pals.yyyx);"
+        "vec4 offs = (iint.xyww * orts.yyww + orts.zzww) * idep.zxww"
+                  "+ step(coef.yyyy, vvec.zzyx - floor(vvec.zzzx));"
         "vec4 vdim = texture2D(dims, offs.xy);"
         "vec4 vbnk = texture2D(bank, offs.xy);"
-        "vtex =  (orts.xzzw * 4.0) * vdim.zwzw"
-             "* ((floor(indx.zzww) * orts.yxww + indx.zwww - coef.yzww)"
-             "*  (offs.zwzz - coef.zzww) + coef.xyzw);"
-        "indx = vbnk.yxww * orts.yyww + orts.wwzz"
-             "+ floor(vec4(vdat.z * vdim.z * vdim.w, indx.wxy * 256.0));"
+        "vtex = ints.yxxw * vdim.zwzw"
+             "* ((iint.zzzz * orts.yxww + indx.zwww - coef.yzww)"
+             "* (coef.zzww - offs.zwzz) - coef.xyzw);"
+        "vdim = vdim.xyzw * vdim.zwww * orts.yyyw;"
+        "indx = vdat.zzzz * vdim.zwww + vbnk.yxww;"
         "voff = (indx.x < vbnk.z)? indx.xyzw : (indx.xyzw"
              "+ floor((indx.xxxx - vbnk.zzzz) / vbnk.wwww)"
              "* (vbnk.wwww * orts.xwww + orts.wyww)"
              "+ (vbnk.zzzz * orts.xwww + orts.wyww));"
-        "vdep = vec4(indx.zw, (floor(indx.ww * hitd.zz) + orts.zz)"
-                            "* abs(vert.yy));"
-        "gl_Position = (orts.yyww * offs.zwzz  * vdim.zwxx * vdim.xyzw"
-                    "-  orts.xyzw * vdat.xyyy) * disz.xyyy + orts.xyyy;"
+        "vdep = iint.wwxw * pals.wwxy + orts.wwzz"
+             "+ disz.zzww * (floor(indx.wwww * idep.zzzz) + orts.zzzz);"
+        "gl_Position = (offs.zwzz * vdim.xyww - orts.xyzw * vdat.xyyy)"
+                    "*  disz.xyyy + orts.xyyy;"
     "}";
 
     /** [main pixel shader] (FB = frame bank, CA = current animation)
@@ -151,6 +155,10 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     ===== vertex attributes (marked {}) and static uniforms: no or few changes
     T1FV <atex>: FB array, each layer is an FB with palette indices; see above
     T4FV <apal>: palette texture
+    T4FV  hitd : x = 1.0 / <atex> depth
+                 y = 1.0 / <apal> height
+                 z = 1.0 / max texture size
+                 w = 1.0 ##### RESERVED, DO NOT CHANGE #####
     **/
     char *MainPixelShader =
     "uniform sampler3D atex;"
@@ -165,20 +173,19 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 
     "void main() {"
         "vec4 pixl = floor(vtex);"
-        "pixl.xyz = (pixl.zzw * pixl.yyw + pixl.xxw + voff.xxy) * hitd.wzw;"
-        "pixl = texture3D(atex, (floor(pixl.xyz) + coef.yyy) * hitd.zzx);"
+        "pixl.xyz = hitd.wzw * (pixl.zzw * pixl.yyw + pixl.xxw + voff.xxy);"
+        "pixl = texture3D(atex, hitd.zzx * (floor(pixl.xyz) + coef.yyy));"
         "if (pixl.x != coef.x)"
-            "gl_FragColor = texture3D(apal, (pixl.xxx * coef.zww + vdep.xyz)"
-                                          "* hitd.zyw);"
+            "gl_FragColor = texture3D(apal, hitd.zyw *"
+                                          "(pixl.xxx * coef.zww + vdep.zwy));"
         "else discard;"
     "}";
 
     GLsizei cbnk, fill, curr, mtex, chei, dhei, phei, pdep, fcnt, fend;
-    GLfloat idep;
     GLubyte *atex, *aptr;
+    GLfloat *vert;
     GLuint *indx;
     T4FV *dims, *bank;
-    T2FV *vert;
     TXSZ *txsz;
     BGRA *apal;
     RNDR *retn;
@@ -204,11 +211,6 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     glEnable(GL_DEPTH_TEST);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_BLEND);
-
-    retn = calloc(1, sizeof(*retn));
-
-    retn->disz.x = 2.0 / xscr;
-    retn->disz.y = 2.0 / yscr;
     glViewport(0, 0, xscr, yscr);
 
     dhei = ceil((GLfloat)size  / mtex) + 1;
@@ -216,19 +218,19 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     phei = ceil((256.0 * uniq) / mtex);
     phei = ((pdep = ceil((GLfloat)phei  / mtex)) <= 1)? phei : mtex;
 
+    retn = calloc(1, sizeof(*retn));
+    retn->disz = (T4FV){{2.0 / xscr, 2.0 / yscr, 1.0 / pdep, 0.0}};
+    retn->idep = (T4FV){{1.0 / chei, 1.0 / dhei, 1.0 / mtex, 1.0}};
+
     /// allocate vertex arrays
     indx = calloc(mtex * dhei * 6, sizeof(*indx));
     vert = calloc(mtex * dhei * 4, sizeof(*vert));
 
-    /// warning, IDEP equals inverse depth of palette texture; it goes into
-    /// all vertex attributes!
-    /// [TODO:] offload IDEP to a uniform
-    /// [TODO:] pack both signs into a T1FV
-    for (idep = 1.0 / pdep, curr = mtex * dhei - 1; curr >= 0; curr--) {
-        vert[curr * 4 + 0] = (T2FV){{-curr - 1,  idep}};
-        vert[curr * 4 + 1] = (T2FV){{-curr - 1, -idep}};
-        vert[curr * 4 + 2] = (T2FV){{ curr + 1, -idep}};
-        vert[curr * 4 + 3] = (T2FV){{ curr + 1,  idep}};
+    for (curr = mtex * dhei - 1; curr >= 0; curr--) {
+        vert[curr * 4 + 0] = -1.5 - curr;
+        vert[curr * 4 + 1] = -1.0 - curr;
+        vert[curr * 4 + 2] = +1.0 + curr;
+        vert[curr * 4 + 3] = +1.5 + curr;
         indx[curr * 6 + 0] = curr * 4 + 0;
         indx[curr * 6 + 1] = curr * 4 + 1;
         indx[curr * 6 + 2] = curr * 4 + 2;
@@ -243,7 +245,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         {{.cdat = mtex * dhei * fill, .draw = GL_STATIC_DRAW,
           /** No name and type for indices! **/ .pdat = indx},
          {.cdat = mtex * dhei * curr, .draw = GL_STATIC_DRAW,
-          .name = "vert", .type = OGL_UNI_T2FV, .pdat = vert}};
+          .name = "vert", .type = OGL_UNI_T1FV, .pdat = vert}};
     OGL_UNIF suni[] =
         {{.name = "data", .type = OGL_UNI_T1II, .pdat = (GLvoid*)0},
          {.name = "dims", .type = OGL_UNI_T1II, .pdat = (GLvoid*)1},
@@ -251,14 +253,13 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
          {.name = "apal", .type = OGL_UNI_T1II, .pdat = (GLvoid*)3},
          {.name = "atex", .type = OGL_UNI_T1II, .pdat = (GLvoid*)4},
          {.name = "disz", .type = OGL_UNI_T4FV, .pdat = &retn->disz},
-         {.name = "hitd", .type = OGL_UNI_T4FV, .pdat = &retn->hitd}};
+         {.name = "hitd", .type = OGL_UNI_T4FV, .pdat = &retn->hitd},
+         {.name = "idep", .type = OGL_UNI_T4FV, .pdat = &retn->idep}};
 
     retn->surf = OGL_MakeVBO(5, GL_TRIANGLES,
                              sizeof(satr) / sizeof(*satr), satr,
                              sizeof(suni) / sizeof(*suni), suni,
                              2, (char*[]){MainVertexShader, MainPixelShader});
-    retn->disz.z = 1.0 / dhei;
-    retn->disz.w = 1.0 / chei;
     free(vert);
     free(indx);
 
@@ -356,7 +357,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                     GL_FLOAT, GL_RGBA32F, GL_RGBA, bank);
     free(bank);
 
-    retn->hitd = (T4FV){{1.0 / (cbnk + 1), 1.0 / phei, 1.0 / mtex, 1.0}};
+    retn->hitd = (T4FV){{1.0 / (cbnk + 1), 1.0 / phei, retn->idep.z, 1.0}};
     *rndr = retn;
     return ~0;
 }
