@@ -55,7 +55,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
                  w = [base index (22)] [Y inv (1)] [X inv (1)]
 
     ===== vertex attributes (marked {}) and static uniforms: no or few changes
-    T2FV {vert}: x = current quad index, 1-based; sign: X coord, +0.5: Y coord
+    T1FV {vert}: x = current quad index, 1-based; sign: X coord, +0.5: Y coord
     T4FV <dims>: x = frame X scale
                  y = frame Y scale
                  z = frame width

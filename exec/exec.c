@@ -1188,8 +1188,9 @@ void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
     char *temp;
 
     /// speeches are nothing more than additional effect sprites!
+    /// BHV_MMMM serves as a sign that the sprite is a speech
     *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0,
-                  (EFF_TOPA << 0) | (EFF_BTMA << 4)
+                  (EFF_TOPA << 0) | (EFF_BTMA << 4) | BHV_MMMM
                 | (EFF_TOPA << 8) | (EFF_BTMA << 12), 0, 0, 0, {}};
 
     /// speech name............................................................ !def
@@ -1198,7 +1199,7 @@ void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
     /// speech text............................................................ !def
     if ((*(*conf)++ == '"') && (temp = SplitLine(conf, '"', 0))) {
         imgp[0] = Concatenate(0, temp);
-        imgp[1] = (char*)1;
+        imgp[1] = 0;
         (*conf) += (**conf == DEF_TSEP)? 1 : 0;
     }
     else {
@@ -1277,9 +1278,9 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     break;
 
                 case SVT_TEXT:
-//                    ParseSpeech(&libs->earr[ecnt], libs->path,
-//                                &libs->eimp[ecnt * 2], &conf);
-//                    ecnt++;
+                    ParseSpeech(&libs->earr[ecnt], libs->path,
+                                &libs->eimp[ecnt * 2], &conf);
+                    ecnt++;
                     break;
 
                 case SVT_EFCT:
@@ -1404,29 +1405,30 @@ void LoadLib(LINF *elem, ENGD *engd) {
         ncnt = ((indx)? elem->ecnt : elem->bcnt) * 2;
         for (iter = 0; iter < ncnt; iter++)
             if (nimp[iter]) {
-//                if ((~iter & 1) && (nimp[iter + 1] == (char*)1)) {
-//                    /// handle speech
-//                    nimp[iter + 1] = 0;
-//
-//                    xdim = 128;
-//                    ydim = 16;
-//                    temp = malloc(sizeof(*temp)
-//                                + sizeof(*bptr) * (1 + xdim * ydim));
-//                    temp->fcnt = 1;
-//                    temp->xdim = xdim;
-//                    temp->ydim = ydim;
-//                    *(temp->time = bptr = (uint32_t*)(temp + 1)) = 0;
-//                    temp->uuid = (intptr_t)++bptr;
-//                    for (xdim = temp->xdim * temp->ydim; xdim; xdim--)
-//                        bptr[xdim - 1] = 0xFF0000FF;
-//                    cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
-//                                         name, temp, ELA_AINF, free);
-//                }
-//                else {
+                if ((narr[iter >> 1].flgs & BHV_MMMM) == BHV_MMMM) {
+                    /// handle speech
+                    narr[iter >> 1].flgs ^= BHV_MMMM;
+                    xdim = 128;
+                    ydim = 32;
+                    temp = malloc(sizeof(*temp) + strlen(nimp[iter]) + 1
+                                + sizeof(*bptr) * (1 + xdim * ydim));
+                    temp->fcnt = 1;
+                    temp->xdim = xdim;
+                    temp->ydim = ydim;
+                    *(temp->time = bptr = (uint32_t*)(temp + 1)) = 0;
+                    temp->uuid = (intptr_t)++bptr;
+                    for (xdim = temp->xdim * temp->ydim; xdim; xdim--)
+                        *bptr++ = 0xFFFF00FF; /** 0xAARRGGBB **/
+                    strcpy((char*)bptr, nimp[iter]);
+                    free(nimp[iter]);
+                    cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
+                                        (uint8_t*)bptr, temp, ELA_AINF, free);
+                }
+                else {
                     name = (uint8_t*)ExtractLastDirs(nimp[iter], 2);
                     cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
                                          name, nimp[iter], ELA_DISK, free);
-//                }
+                }
                 nimp[iter] = 0;
             }
     }
@@ -2155,6 +2157,11 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                  &&  (elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
                 elem->bdrg.barr[elem->bdrg.narr[qmax] + ++fill[qmax] - 1] =
                     &elem->barr[indx];
+
+        /// fixing one-sided effects and speeches, if any
+        for (indx = 0; indx < elem->ecnt; indx++)
+            if (!elem->earr[indx].unit[1].time)
+                elem->earr[indx].unit[1] = elem->earr[indx].unit[0];
 
         free(fill);
     }
