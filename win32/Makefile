@@ -7,7 +7,7 @@ OBJDIR = .obj
 
 RCFLAGS = -J rc -O coff
 CRTLIBS = -lmsvcrt -lwininet -lkernel32 -luser32 -lshell32 -lgdi32 -lole32 -lcomctl32 -lcomdlg32
-CRTFUNC = -Dstrdup=_strdup -Dvsnprintf=_vsnprintf
+CRTFUNC = -Dstrdup=_strdup
 
 LLIB = $(CRTLIBS) -lopengl32
 LINC =

@@ -3239,12 +3239,13 @@ intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if (cmsg == MSG_NSET) {
                 LINF *libs = (LINF*)ctrl->data;
 
-                if (!!libs->icnt ^ !!data)
+                cmsg = !libs->icnt;
+                libs->icnt = data;
+                if (cmsg == !!data)
                     SetProgress(libs->engc, TXT_SELE,
                                 RUN_FE2C(libs->engc->MCT_SELE, MSG_PGET, 0)
-                             + ((!libs->icnt && data)? 1 : -1),
+                             + ((cmsg && data)? 1 : -1),
                                 RUN_FE2C(libs->engc->MCT_SELE, MSG_PGET, 1));
-                libs->icnt = data;
             }
             break;
     }

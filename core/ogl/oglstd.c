@@ -7,7 +7,7 @@ struct RNDR {
     T4FV  disz;
     T4FV  hitd;
     T4FV  idep;
-    long  size;
+    long  size, mult;
 };
 
 /// renderbuffer-based framebuffer object, opaque outside the module
@@ -184,7 +184,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     GLsizei cbnk, fill, curr, mtex, chei, dhei, phei, pdep, fcnt, fend;
     GLubyte *atex, *aptr;
     GLfloat *vert;
-    GLuint *indx;
+    GLuint *indx = 0;
     T4FV *dims, *bank;
     TXSZ *txsz;
     BGRA *apal;
@@ -223,7 +223,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     retn->idep = (T4FV){{1.0 / chei, 1.0 / dhei, 1.0 / mtex, 1.0}};
 
     /// allocate vertex arrays
-    indx = calloc(mtex * dhei * 6, sizeof(*indx));
+//    indx = calloc(mtex * dhei * 6, sizeof(*indx)); /// GL_QUADS if commented
     vert = calloc(mtex * dhei * 4, sizeof(*vert));
 
     for (curr = mtex * dhei - 1; curr >= 0; curr--) {
@@ -231,14 +231,18 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
         vert[curr * 4 + 1] = -1.0 - curr;
         vert[curr * 4 + 2] = +1.0 + curr;
         vert[curr * 4 + 3] = +1.5 + curr;
-        indx[curr * 6 + 0] = curr * 4 + 0;
-        indx[curr * 6 + 1] = curr * 4 + 1;
-        indx[curr * 6 + 2] = curr * 4 + 2;
-        indx[curr * 6 + 3] = curr * 4 + 0;
-        indx[curr * 6 + 4] = curr * 4 + 2;
-        indx[curr * 6 + 5] = curr * 4 + 3;
     }
-    fill = 6 * sizeof(*indx);
+    if (indx)
+        for (curr = mtex * dhei - 1; curr >= 0; curr--) {
+            indx[curr * 6 + 0] = curr * 4 + 0;
+            indx[curr * 6 + 1] = curr * 4 + 1;
+            indx[curr * 6 + 2] = curr * 4 + 2;
+            indx[curr * 6 + 3] = curr * 4 + 0;
+            indx[curr * 6 + 4] = curr * 4 + 2;
+            indx[curr * 6 + 5] = curr * 4 + 3;
+        }
+    retn->mult = (indx)? 6 : 4;
+    fill = 6 * sizeof(*indx) * !!indx;
     curr = 4 * sizeof(*vert);
 
     OGL_UNIF satr[] =
@@ -256,7 +260,7 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
          {.name = "hitd", .type = OGL_UNI_T4FV, .pdat = &retn->hitd},
          {.name = "idep", .type = OGL_UNI_T4FV, .pdat = &retn->idep}};
 
-    retn->surf = OGL_MakeVBO(5, GL_TRIANGLES,
+    retn->surf = OGL_MakeVBO(5, (indx)? GL_TRIANGLES : GL_QUADS,
                              sizeof(satr) / sizeof(*satr), satr,
                              sizeof(suni) / sizeof(*suni), suni,
                              2, (char*[]){MainVertexShader, MainPixelShader});
@@ -397,7 +401,7 @@ void DrawRendererOGL(RNDR *rndr, UNIT *uarr, T4FV *data,
     glClearColor(0.0, 0.0, 0.0, (opaq)? 1.0 : 0.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     OGL_LoadTex(surf, 0, 0, 0, xdim, ydim, 0, rndr->temp);
-    OGL_DrawVBO(rndr->surf, 0, size * 6);
+    OGL_DrawVBO(rndr->surf, 0, size * rndr->mult);
 }
 
 
