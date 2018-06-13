@@ -100,35 +100,34 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     "varying vec4 voff;"
     "varying vec4 vdep;"
 
-    "const vec4 ints = vec4(-2.0, 4.0, 1.0, 0.0);"
-    "const vec4 orts = vec4(-1.0, 1.0, 0.5, 0.0);"
-    "const vec4 coef = vec4(-0.125, 0.250, 0.500, 0.000);"
-    "const vec4 pals = vec4(256.0, 1.0, 0.0, 0.0);"
-
+    "const mat4 coef = mat4(-1.0,   1.0,  0.5, 0.0,"
+                           "-2.0,   4.0,  1.0, 0.0,"
+                           "-0.125, 0.25, 0.5, 0.0,"
+                           " 256.0, 1.0,  0.0, 0.0);"
     "void main() {"
-        "vec4 vvec = vec4(abs(vert), vert, orts.ww);"
+        "vec4 vvec = vec4(abs(vert), vert, coef[0].ww);"
         "vec4 vdat = texture2D(data, idep.zy"
-                  "* (floor(vvec.xx * idep.wz - idep.wz) + orts.zz));"
-        "vec4 indx = vdat.wwww * orts.wwzw + idep.wzww * ints.zzxw"
-                  "* floor(vdat.wwww * coef.yyyy + orts.xxww);"
-        "vec4 iint = floor(indx.xyzy * pals.yyyx);"
-        "vec4 offs = (iint.xyww * orts.yyww + orts.zzww) * idep.zxww"
-                  "+ step(coef.yyyy, vvec.zzyx - floor(vvec.zzzx));"
+                  "* (floor(vvec.xx * idep.wz - idep.wz) + coef[0].zz));"
+        "vec4 indx = vdat.wwww * coef[0].wwzw + idep.wzww * coef[1].zzxw"
+                  "* floor(vdat.wwww * coef[2].yyyy + coef[0].xxww);"
+        "vec4 iint = floor(indx.xyzy * coef[3].yyyx);"
+        "vec4 offs = (iint.xyww * coef[0].yyww + coef[0].zzww) * idep.zxww"
+                  "+ step(coef[2].yyyy, vvec.zzyx - floor(vvec.zzzx));"
         "vec4 vdim = texture2D(dims, offs.xy);"
         "vec4 vbnk = texture2D(bank, offs.xy);"
-        "vtex = ints.yxxw * vdim.zwzw"
-             "* ((iint.zzzz * orts.yxww + indx.zwww - coef.yzww)"
-             "* (coef.zzww - offs.zwzz) - coef.xyzw);"
-        "vdim = vdim.xyzw * vdim.zwww * orts.yyyw;"
+        "vtex = coef[1].yxxw * vdim.zwzw"
+             "* ((iint.zzzz * coef[0].yxww + indx.zwww - coef[2].yzww)"
+             "* (coef[2].zzww - offs.zwzz) - coef[2].xyzw);"
+        "vdim = vdim.xyzw * vdim.zwww * coef[0].yyyw;"
         "indx = vdat.zzzz * vdim.zwww + vbnk.yxww;"
         "voff = (indx.x < vbnk.z)? indx.xyzw : (indx.xyzw"
              "+ floor((indx.xxxx - vbnk.zzzz) / vbnk.wwww)"
-             "* (vbnk.wwww * orts.xwww + orts.wyww)"
-             "+ (vbnk.zzzz * orts.xwww + orts.wyww));"
-        "vdep = iint.wwxw * pals.wwxy + orts.wwzz"
-             "+ disz.zzww * (floor(indx.wwww * idep.zzzz) + orts.zzzz);"
-        "gl_Position = (offs.zwzz * vdim.xyww - orts.xyzw * vdat.xyyy)"
-                    "*  disz.xyyy + orts.xyyy;"
+             "* (vbnk.wwww * coef[0].xwww + coef[0].wyww)"
+             "+ (vbnk.zzzz * coef[0].xwww + coef[0].wyww));"
+        "vdep = iint.wwxw * coef[3].wwxy + coef[0].wwzz"
+             "+ disz.zzww * (floor(indx.wwww * idep.zzzz) + coef[0].zzzz);"
+        "gl_Position = (offs.zwzz * vdim.xyww - coef[0].xyzw * vdat.xyyy)"
+                    "*  disz.xyyy + coef[0].xyyy;"
     "}";
 
     /** [main pixel shader] (FB = frame bank, CA = current animation)
@@ -226,13 +225,14 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
 //    indx = calloc(mtex * dhei * 6, sizeof(*indx)); /// GL_QUADS if commented
     vert = calloc(mtex * dhei * 4, sizeof(*vert));
 
+    /// 4 * 4 = 16 MB per 2^20 sprites
     for (curr = mtex * dhei - 1; curr >= 0; curr--) {
         vert[curr * 4 + 0] = -1.5 - curr;
         vert[curr * 4 + 1] = -1.0 - curr;
         vert[curr * 4 + 2] = +1.0 + curr;
         vert[curr * 4 + 3] = +1.5 + curr;
     }
-    if (indx)
+    if (indx) /// 6 * 4 = 24 MB per 2^20 sprites
         for (curr = mtex * dhei - 1; curr >= 0; curr--) {
             indx[curr * 6 + 0] = curr * 4 + 0;
             indx[curr * 6 + 1] = curr * 4 + 1;
