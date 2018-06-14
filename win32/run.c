@@ -931,8 +931,8 @@ LRESULT APIENTRY SBoxProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 ///  2: (fontmul.x) | (fontmul.y << 16)
 ///  3: (wndsize.x) | (wndsize.y << 16)
 ///  4: spin control text field alignment coeff
-///  5:
-///  6:
+///  5: HDIB DC        <---,___
+///  6: HDIB surface   <---`   \ on-demand, may be empty
 ///  7:
 LRESULT APIENTRY OptProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
     CTRL *ctrl;
@@ -1114,6 +1114,40 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                           rect.left, rect.top, rect.right, rect.bottom,
                           IsWindowVisible((HWND)ctrl->priv[0])?
                           SWP_SHOWWINDOW : SWP_HIDEWINDOW);
+            break;
+        }
+        case MSG_WDTA: {
+            AINF *anim = (AINF*)data;
+            uint32_t *bsrc, *bdst = (uint32_t*)anim->uuid;
+            long x, y, lsrc, ldst, lmax = 1024;
+            RECT rect = {0, 0, anim->xdim, 128};
+
+            if (!ctrl->priv[5]) { /// time to create a DC
+                BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader), 0, 0,
+                                    1, 8 * sizeof(uint32_t), BI_RGB}};
+                HBITMAP hdib;
+
+                bmpi.bmiHeader.biWidth = lmax;
+                bmpi.bmiHeader.biHeight = -rect.bottom;
+                ctrl->priv[5] = (intptr_t)CreateCompatibleDC(0);
+                SelectObject((HDC)ctrl->priv[5], (HFONT)ctrl->priv[1]);
+                hdib = CreateDIBSection((HDC)ctrl->priv[5],
+                                        &bmpi, DIB_RGB_COLORS,
+                                        (void*)&ctrl->priv[6], 0, 0);
+                SelectObject((HDC)ctrl->priv[5], hdib);
+                SetBkMode((HDC)ctrl->priv[5], TRANSPARENT);
+            }
+            for (bsrc = (uint32_t*)ctrl->priv[6], y = 0; y < anim->ydim; y++)
+                for (lsrc = y * lmax, ldst = y * rect.right, x = 0;
+                     x < rect.right; x++)
+                    bsrc[lsrc + x] = bdst[ldst + x];
+            DrawText((HDC)ctrl->priv[5],
+                     (char*)anim->time, -1, &rect, DT_CENTER | DT_WORDBREAK);
+            for (y = 0; y < anim->ydim; y++)
+                for (lsrc = y * lmax, ldst = y * rect.right, x = 0;
+                     x < rect.right; x++)
+                    bdst[ldst + x] = (bsrc[lsrc + x] & 0x00FFFFFF)
+                                   | (bdst[ldst + x] & 0xFF000000);
             break;
         }
     }
@@ -1365,6 +1399,14 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 void rFreeControl(CTRL *ctrl) {
     switch (ctrl->flgs & FCT_TTTT) {
         case FCT_WNDW:
+            if (ctrl->priv[5]) {
+                HGDIOBJ hdib;
+
+                hdib = GetCurrentObject((HDC)ctrl->priv[5], OBJ_BITMAP);
+                DeleteDC((HDC)ctrl->priv[5]);
+                DeleteObject(hdib);
+                ctrl->priv[5] = 0;
+            }
             /// every window has its own font instance
             DeleteObject((HFONT)ctrl->priv[1]);
             break;

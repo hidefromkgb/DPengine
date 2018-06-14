@@ -74,6 +74,7 @@ enum {
 /** set title text of anything  **/ MSG__TXT,
 /** close the container window  **/ MSG_WEND,
 /** resize & center wnd/sizebox **/ MSG_WSZC,
+/** draw text to existing AINF  **/ MSG_WDTA,
 /** click button or checkbox    **/ MSG_BCLK,
 /** get button/checkbox state   **/ MSG_BGST,
 /** get spin control position   **/ MSG_NGET,

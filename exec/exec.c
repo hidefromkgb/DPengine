@@ -1406,20 +1406,26 @@ void LoadLib(LINF *elem, ENGD *engd) {
         for (iter = 0; iter < ncnt; iter++)
             if (nimp[iter]) {
                 if ((narr[iter >> 1].flgs & BHV_MMMM) == BHV_MMMM) {
-                    /// handle speech
                     narr[iter >> 1].flgs ^= BHV_MMMM;
                     xdim = 128;
                     ydim = 32;
-                    temp = malloc(sizeof(*temp) + strlen(nimp[iter]) + 1
+                    temp = malloc(sizeof(*temp) + strlen(nimp[iter]) + 2
                                 + sizeof(*bptr) * (1 + xdim * ydim));
                     temp->fcnt = 1;
                     temp->xdim = xdim;
                     temp->ydim = ydim;
-                    *(temp->time = bptr = (uint32_t*)(temp + 1)) = 0;
+                    *(bptr = (uint32_t*)(temp + 1)) = 0;
                     temp->uuid = (intptr_t)++bptr;
                     for (xdim = temp->xdim * temp->ydim; xdim; xdim--)
-                        *bptr++ = 0xFFFF00FF; /** 0xAARRGGBB **/
-                    strcpy((char*)bptr, nimp[iter]);
+                        *bptr++ = 0xFFFFAAFF;
+
+                    temp->time = (uint32_t*)(nimp[iter]);
+                    elem->engc->mctl[0].fe2c(elem->engc->mctl,
+                                             MSG_WDTA, (intptr_t)temp);
+
+                    temp->time = (uint32_t*)temp->uuid - 1;
+                    strcpy((char*)bptr + 1, nimp[iter]);
+                    *(char*)bptr = '#';
                     free(nimp[iter]);
                     cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
                                         (uint8_t*)bptr, temp, ELA_AINF, free);
