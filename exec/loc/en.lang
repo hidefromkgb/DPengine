@@ -43,6 +43,7 @@ Always on top
 Enable effects
 Enable interactions
 Enable speech
+Enable colored speech
 React to cursor hover
  runs between updates
  % base scaling factor

@@ -28,7 +28,7 @@
 /** 'behavior'                  **/ #define SVT_BHVR 0x532A0FD4
 /** 'behaviorgroup'             **/ #define SVT_BGRP 0xA40004B2
 /** 'categories'                **/ #define SVT_CTGS 0x21179D08
-/** 'speak'                     **/ #define SVT_TEXT 0xF708913D
+/** 'speak'                     **/ #define SVT_SAYS 0xF708913D
 
 /// /// /// /// /// /// /// /// /// behaviour movement types
 /** 'none'                      **/ #define BMT_NONM 0xF3B3E074
@@ -73,9 +73,11 @@
 /** 'sleep' state               **/ #define BHV_SLPM (BHV_CTLM | BHV_VERM)
 /** [extractor]                 **/ #define BHV_MMMM (BHV_CTLM | BHV_ALLM)
 
-/** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 29)
+/** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 28)
 
+/** effect is a speech          **/ #define EFF_SAYS (1 << 29)
 /** do not follow parent        **/ #define EFF_STAY (1 << 30)
+
 /** animation can be looped     **/ #define ANI_LOOP (1 << 31)
 
 /// /// /// /// /// /// /// /// /// must stay as-is; these are used as indices
@@ -139,6 +141,7 @@
 /** 'effects'                   **/ #define CNF_EEFF 0xAB1F60DF
 /** 'interaction'               **/ #define CNF_EINT 0x3CD837AB
 /** 'speech'                    **/ #define CNF_ESAY 0x5E664BA6
+/** 'cspeech'                   **/ #define CNF_ECLR 0x32A64DBA
 /** 'hover'                     **/ #define CNF_ERCH 0x303621E9
 
 /// /// /// /// /// /// /// /// /// client specific flags
@@ -147,7 +150,8 @@
 /** behaviour effects are on    **/ #define CSF_EEFF (1 <<  2)
 /** interactions are on         **/ #define CSF_EINT (1 <<  3)
 /** speech bubbles are on       **/ #define CSF_ESAY (1 <<  4)
-/** cursor hover reaction is on **/ #define CSF_ERCH (1 <<  5)
+/** speech bubbles are colored  **/ #define CSF_ECLR (1 <<  5)
+/** cursor hover reaction is on **/ #define CSF_ERCH (1 <<  6)
 
 /// /// /// /// /// /// /// /// /// localized text constants
 enum {
@@ -200,6 +204,7 @@ enum {
 /** Enable effects              **/ TXT_EEFF,
 /** Enable interactions         **/ TXT_EINT,
 /** Enable speech               **/ TXT_ESAY,
+/** Enable colored speech       **/ TXT_ECLR,
 /** React to cursor hover       **/ TXT_ERCH,
 
 /**  runs between updates       **/ TXT_RUNS,
@@ -244,27 +249,28 @@ enum {
 /**                             **/ #define OCT_EEFF octl[ 3]
 /**                             **/ #define OCT_EINT octl[ 4]
 /**                             **/ #define OCT_ESAY octl[ 5]
-/**                             **/ #define OCT_ERCH octl[ 6]
-/**                             **/ #define OCT_NRUN octl[ 7]
-/**                             **/ #define OCT_TRUN octl[ 8]
-/**                             **/ #define OCT_NSCA octl[ 9]
-/**                             **/ #define OCT_TSCA octl[10]
-/**                             **/ #define OCT_NDIL octl[11]
-/**                             **/ #define OCT_TDIL octl[12]
-/**                             **/ #define OCT_NSAY octl[13]
-/**                             **/ #define OCT_TSAY octl[14]
-/**                             **/ #define OCT_NCDR octl[15]
-/**                             **/ #define OCT_TCDR octl[16]
-/**                             **/ #define OCT_LCHO octl[19]
-/**                             **/ #define OCT_LREL octl[20]
-/**                             **/ #define OCT_LRES octl[21]
-/**                             **/ #define OCT_LGUI octl[22]
-/**                             **/ #define OCT_BCHO octl[25]
-/**                             **/ #define OCT_BREL octl[26]
-/**                             **/ #define OCT_BRES octl[27]
-/**                             **/ #define OCT_BDIR octl[28]
-/**                             **/ #define OCT_FREL octl[30]
-/**                             **/ #define OCT_FRES octl[31]
+/**                             **/ #define OCT_ECLR octl[ 6]
+/**                             **/ #define OCT_ERCH octl[ 7]
+/**                             **/ #define OCT_NRUN octl[ 8]
+/**                             **/ #define OCT_TRUN octl[ 9]
+/**                             **/ #define OCT_NSCA octl[10]
+/**                             **/ #define OCT_TSCA octl[11]
+/**                             **/ #define OCT_NDIL octl[12]
+/**                             **/ #define OCT_TDIL octl[13]
+/**                             **/ #define OCT_NSAY octl[14]
+/**                             **/ #define OCT_TSAY octl[15]
+/**                             **/ #define OCT_NCDR octl[16]
+/**                             **/ #define OCT_TCDR octl[17]
+/**                             **/ #define OCT_LCHO octl[20]
+/**                             **/ #define OCT_LREL octl[21]
+/**                             **/ #define OCT_LRES octl[22]
+/**                             **/ #define OCT_LGUI octl[23]
+/**                             **/ #define OCT_BCHO octl[26]
+/**                             **/ #define OCT_BREL octl[27]
+/**                             **/ #define OCT_BRES octl[28]
+/**                             **/ #define OCT_BDIR octl[29]
+/**                             **/ #define OCT_FREL octl[31]
+/**                             **/ #define OCT_FRES octl[32]
 
 /// engine data (client side), prototype
 typedef struct ENGC ENGC;
@@ -285,8 +291,8 @@ typedef struct {
     uint32_t name,  /// BHV: name hash; EFF: target index
              flgs,  /// BHV/EFF: flags
              link,  /// linked behaviour index
-             btxt,  /// index of the speech said at the beginning
-             etxt,  /// index of the speech said at the end
+             bsay,  /// index of the speech said at the beginning
+             esay,  /// index of the speech said at the end
           obfm[2];  /// indices for override behaviours for follow mode
                     /// ([0] = static, [1] = moving)
 } BINF;
@@ -316,7 +322,7 @@ typedef struct {
     CTRL     pict,  /// image box control to preview the sprite
              capt,  /// character name just below the image box
              spin;  /// spin control to set ICNT
-    BGRP     ernd,  /// random-capable speeches extracted from EARR
+    BGRP     srnd,  /// random-capable speeches extracted from EARR
              bbhv,  /// non-0 probability BARR elements ordered by bhv. group
              bsta,  /// stationary behaviours extracted from BARR
              bmov,  /// moving behaviours extracted from BARR
@@ -331,7 +337,10 @@ typedef struct {
            **eimp,  /// image paths for effects (0 if loaded)
             *path,  /// the folder from which the library was built
             *name;  /// human-readable name (may differ from PATH!)
-    long     nslp,  /// number of sleep behaviours
+    uint32_t fgsc,  /// foreground speech color
+             bgsc;  /// background speech color
+    long     nsay,  /// number of speeches
+             nslp,  /// number of sleep behaviours
              prev,  /// preview index in sorted BARR
              ccnt,  /// categories count
              zcnt,  /// nonzero probability behaviours count
@@ -1064,11 +1073,11 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
 
     /// speech said on behaviour start.........................................  def = ""
     if (TRY_TEMP(conf))
-        retn->btxt = HashLine(Dequote(temp), 0);
+        retn->bsay = HashLine(Dequote(temp), 0);
 
     /// speech said on behaviour end...........................................  def = ""
     if (TRY_TEMP(conf))
-        retn->etxt = HashLine(Dequote(temp), 0);
+        retn->esay = HashLine(Dequote(temp), 0);
 
     /// flag to never execute this behaviour at random.........................  def = False
     if (TRY_TEMP(conf))
@@ -1188,9 +1197,8 @@ void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
     char *temp;
 
     /// speeches are nothing more than additional effect sprites!
-    /// BHV_MMMM serves as a sign that the sprite is a speech
     *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0,
-                  (EFF_TOPA << 0) | (EFF_BTMA << 4) | BHV_MMMM
+                  (EFF_TOPA << 0) | (EFF_BTMA << 4) | EFF_SAYS
                 | (EFF_TOPA << 8) | (EFF_BTMA << 12), 0, 0, 0, {}};
 
     /// speech name............................................................ !def
@@ -1244,7 +1252,7 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
         libs->bcnt = libs->ecnt = 0;
         while ((conf = SplitLine(&fptr, '\n', 1)))
             switch (DetermineType(&conf)) {
-                case SVT_TEXT:
+                case SVT_SAYS:
                 case SVT_EFCT:
                     libs->ecnt++;
                     break;
@@ -1270,16 +1278,17 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
             libs->eimp = calloc(ecnt * 2, sizeof(*libs->eimp));
         }
         fptr = file;
-        bcnt = ecnt = 0;
+        libs->nsay = bcnt = ecnt = 0;
         while ((conf = GetNextLine(&fptr)))
             switch (DetermineType(&conf)) {
                 case SVT_NAME:
                     libs->name = strdup(GET_TEMP(&conf));
                     break;
 
-                case SVT_TEXT:
+                case SVT_SAYS:
                     ParseSpeech(&libs->earr[ecnt], libs->path,
                                 &libs->eimp[ecnt * 2], &conf);
+                    libs->nsay++;
                     ecnt++;
                     break;
 
@@ -1379,7 +1388,7 @@ void FreeLib(LINF *elem) {
     free(elem->barr);
     free(elem->earr);
     free(elem->bslp);
-    FreeBhvGroup(&elem->ernd);
+    FreeBhvGroup(&elem->srnd);
     FreeBhvGroup(&elem->bbhv);
     FreeBhvGroup(&elem->bsta);
     FreeBhvGroup(&elem->bmov);
@@ -1390,7 +1399,7 @@ void FreeLib(LINF *elem) {
 
 
 void LoadLib(LINF *elem, ENGD *engd) {
-    long iter, indx, ncnt, xdim, ydim;
+    long iter, indx, ncnt, xdim, ydim, lsrc;
     char **nimp;
     uint32_t *bptr;
     uint8_t *name;
@@ -1405,35 +1414,63 @@ void LoadLib(LINF *elem, ENGD *engd) {
         ncnt = ((indx)? elem->ecnt : elem->bcnt) * 2;
         for (iter = 0; iter < ncnt; iter++)
             if (nimp[iter]) {
-                if ((narr[iter >> 1].flgs & BHV_MMMM) == BHV_MMMM) {
-                    narr[iter >> 1].flgs ^= BHV_MMMM;
-                    xdim = 128;
-                    ydim = 32;
-                    temp = malloc(sizeof(*temp) + strlen(nimp[iter]) + 2
-                                + sizeof(*bptr) * (1 + xdim * ydim));
-                    temp->fcnt = 1;
-                    temp->xdim = xdim;
-                    temp->ydim = ydim;
-                    *(bptr = (uint32_t*)(temp + 1)) = 0;
-                    temp->uuid = (intptr_t)++bptr;
-                    for (xdim = temp->xdim * temp->ydim; xdim; xdim--)
-                        *bptr++ = 0xFFFFAAFF;
-
-                    temp->time = (uint32_t*)(nimp[iter]);
-                    elem->engc->mctl[0].fe2c(elem->engc->mctl,
-                                             MSG_WDTA, (intptr_t)temp);
-
-                    temp->time = (uint32_t*)temp->uuid - 1;
-                    strcpy((char*)bptr + 1, nimp[iter]);
-                    *(char*)bptr = '#';
-                    free(nimp[iter]);
-                    cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
-                                        (uint8_t*)bptr, temp, ELA_AINF, free);
-                }
-                else {
+                if (!(narr[iter >> 1].flgs & EFF_SAYS)) {
                     name = (uint8_t*)ExtractLastDirs(nimp[iter], 2);
                     cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
                                          name, nimp[iter], ELA_DISK, free);
+                }
+                else {
+                    name = (uint8_t*)Concatenate(0, "#", nimp[iter]);
+                    ydim = strlen((char*)name) + 1;
+                    temp = realloc(nimp[iter], sizeof(*temp));
+                    temp->time = (uint32_t*)(name + 1);
+                    temp->xdim = elem->barr[0].unit[0].xdim << 1;
+                    temp->ydim = elem->barr[0].unit[0].ydim >> 1;
+                    xdim = elem->engc->mctl[0].fe2c(elem->engc->mctl,
+                                                    MSG_WTGD, (intptr_t)temp);
+                    temp->xdim = 8 +  8 + ((uint32_t)xdim & 0xFFFF);
+                    temp->ydim = 4 + 12 + ((uint32_t)xdim >> 16);
+                    xdim = 1 + temp->xdim * temp->ydim;
+                    temp = realloc(temp, sizeof(*temp) + ydim
+                                       + sizeof(*bptr) * xdim);
+                    bptr = (uint32_t*)(temp + 1) + xdim;
+                    strncpy((char*)bptr, (char*)name, ydim);
+                    free(name);
+                    name = (uint8_t*)bptr;
+                    temp->uuid = (intptr_t)(bptr = (uint32_t*)(temp + 1) + 1);
+                    temp->time = (uint32_t*)(name + 1);
+
+                    for (ydim = temp->ydim - 8 - 1; ydim >= 0; ydim--)
+                        for (lsrc = temp->xdim * ydim,
+                             xdim = 0; xdim < temp->xdim; xdim++)
+                            bptr[lsrc + xdim] =
+                                (((xdim >= 2) && (xdim < temp->xdim -  2))
+                              == ((ydim >= 2) && (ydim < temp->ydim - 10)))?
+                                ((xdim < 2) || (xdim >= temp->xdim - 2))?
+                                0 : elem->bgsc : elem->fgsc;
+                    for (ydim = temp->ydim - 8; ydim < temp->ydim; ydim++)
+                        for (lsrc = temp->xdim * ydim,
+                             xdim = 0; xdim < temp->xdim; xdim++)
+                            bptr[lsrc + xdim] = 0;
+                    for (ydim = 0; ydim < 10; ydim++)
+                        for (lsrc =  (temp->ydim - ydim) * temp->xdim
+                                  - ((temp->xdim * 0xAAAB) >> 17),
+                             xdim = -2; xdim < 10; xdim++)
+                            bptr[lsrc + xdim] =
+                                ((xdim >= 0) && ((xdim & -2) != (ydim & -2)))?
+                                                ((xdim & -2) >  (ydim & -2))?
+                                                0 : elem->bgsc : elem->fgsc;
+                    temp->xdim |= 0x08080000; /// right, left
+                    temp->ydim |= 0x0C040000; /// bottom, top
+                    temp->fcnt = elem->fgsc;
+                    elem->engc->mctl[0].fe2c(elem->engc->mctl,
+                                             MSG_WTDA, (intptr_t)temp);
+                    temp->xdim &= 0xFFFF;
+                    temp->ydim &= 0xFFFF;
+                    *(temp->time = (uint32_t*)(temp + 1)) = 0;
+                    temp->fcnt = 1;
+                    cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
+                                         name, temp, ELA_AINF, free);
                 }
                 nimp[iter] = 0;
             }
@@ -2835,10 +2872,10 @@ void CategorizePreviews(ENGC *engc) {
 void UpdateOptionControls(ENGC *engc, long main) {
     static uint32_t
         uCSF[] = {CSF_ETOP,        CSF_ERCH,        CSF_EINT,
-                  CSF_ESAY,        CSF_EEFF,        CSF_UONR};
+                  CSF_ESAY,        CSF_ECLR,        CSF_EEFF,        CSF_UONR};
     CTRL *uCTX[] = {
            &engc->OCT_ETOP, &engc->OCT_ERCH, &engc->OCT_EINT,
-           &engc->OCT_ESAY, &engc->OCT_EEFF, &engc->OCT_UONR,
+           &engc->OCT_ESAY, &engc->OCT_ECLR, &engc->OCT_EEFF, &engc->OCT_UONR,
            &engc->MCT_FLTR, &engc->MCT_EXAC, &engc->MCT_SRND, &engc->MCT_BDUP
     };
     CTRL *uCTN[] = {
@@ -2866,7 +2903,7 @@ void UpdateOptionControls(ENGC *engc, long main) {
 
 intptr_t FC2EO(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     static uint32_t uCSF[] = {CSF_UONR, CSF_ETOP, CSF_EEFF,
-                              CSF_EINT, CSF_ESAY, CSF_ERCH};
+                              CSF_EINT, CSF_ECLR, CSF_ESAY, CSF_ERCH};
     uint32_t indx = 0;
     char *temp;
     ENGC *engc;
@@ -2879,6 +2916,7 @@ intptr_t FC2EO(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
         case TXT_ERCH: indx++;
         case TXT_ESAY: indx++;
+        case TXT_ECLR: indx++;
         case TXT_EINT: indx++;
         case TXT_EEFF: indx++;
         case TXT_ETOP: indx++;
@@ -2889,6 +2927,7 @@ intptr_t FC2EO(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             engc->ccur.flgs = (!data)? engc->ccur.flgs & ~uCSF[indx]
                                      : engc->ccur.flgs |  uCSF[indx];
             if (ctrl->uuid == TXT_ESAY) {
+                RUN_FE2C(engc->OCT_ECLR, MSG__ENB, data);
                 RUN_FE2C(engc->OCT_NSAY, MSG__ENB, data);
                 RUN_FE2C(engc->OCT_TSAY, MSG__ENB, data);
             }
@@ -3297,6 +3336,58 @@ CTRL *MakeWindow(CTRL *tmpl, long size) {
 
 
 
+void RGB2HSV(uint32_t bgra, float *_hsv) {
+    #define max(a, b) ((a > b)? a : b)
+    #define min(a, b) ((a < b)? a : b)
+    float rd = (float)((bgra >> 16) & 0xFF) / 255;
+    float gd = (float)((bgra >>  8) & 0xFF) / 255;
+    float bd = (float)((bgra >>  0) & 0xFF) / 255;
+    float max = (float)max(rd, max(gd, bd)),
+          min = (float)min(rd, min(gd, bd));
+    float d = max - min;
+
+    _hsv[0] = 0;
+    _hsv[1] = (max == 0 ? 0 : d / max);
+    _hsv[2] = max;
+    if (max != min) {
+        if      (max == rd) _hsv[0] = (gd - bd) / d + (gd < bd ? 6 : 0);
+        else if (max == gd) _hsv[0] = (bd - rd) / d + 2;
+        else if (max == bd) _hsv[0] = (rd - gd) / d + 4;
+        _hsv[0] = floor(_hsv[0] * 60.0);
+        _hsv[0] = (_hsv[0] < 360.0)? _hsv[0] : _hsv[0] - 360.0;
+    }
+    #undef max
+    #undef min
+}
+
+uint32_t HSV2RGB(float *_hsv) {
+    uint8_t r, g, b;
+    float p, q, t;
+
+    if (_hsv[1] == 0.0)
+        r = g = b = _hsv[1] * 255.0;
+    else {
+        t = _hsv[0] / 60.0;
+        t -= (r = floor(t));
+        p = _hsv[2] * (1.0 - _hsv[1]);
+        q = _hsv[2] * (1.0 - _hsv[1] * t);
+        t = _hsv[2] * (1.0 - _hsv[1] * (1.0 - t));
+        switch (r) {
+            case 0:  r = _hsv[2]; g = t;       b = p;       break;
+            case 1:  r = q;       g = _hsv[2]; b = p;       break;
+            case 2:  r = p;       g = _hsv[2]; b = t;       break;
+            case 3:  r = p;       g = q;       b = _hsv[2]; break;
+            case 4:  r = t;       g = p;       b = _hsv[2]; break;
+            default: r = _hsv[2]; g = p;       b = q;       break;
+        }
+    }
+    return b | ((uint32_t)g << 8) | ((uint32_t)r << 16) | 0xFF000000;
+}
+
+int bgracmp(const void *a, const void *b) {
+    return *(int32_t*)a - *(int32_t*)b;
+}
+
 int linfcmp(const void *a, const void *b) {
     return strcmp(((LINF*)a)->name, ((LINF*)b)->name);
 }
@@ -3309,25 +3400,27 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                   CNF_IBGR, CNF_OPAQ, CNF_IRGN, CNF_DRAW},
         uCOM[] = {COM_RGPU, COM_SHOW, WIN_IPBO,
                   WIN_IBGR, COM_OPAQ, WIN_IRGN, COM_DRAW},
-        uCNF[] = {CNF_ETOP, CNF_ERCH, CNF_EINT,
-                  CNF_ESAY, CNF_EEFF, CNF_UONR},
-        uCSF[] = {CSF_ETOP, CSF_ERCH, CSF_EINT,
-                  CSF_ESAY, CSF_EEFF, CSF_UONR};
+        uCNF[] = {CNF_ETOP, CNF_ERCH, CNF_ECLR,
+                  CNF_EINT, CNF_ESAY, CNF_EEFF, CNF_UONR},
+        uCSF[] = {CSF_ETOP, CSF_ERCH, CSF_ECLR,
+                  CSF_EINT, CSF_ESAY, CSF_EEFF, CSF_UONR};
     static char
        *uSTR[] = {"GPU",    "Show",   "wPBO",
                   "wBGRA",  "Opaque", "wRegion","Draw"},
-       *uSTF[] = {"Topmost","Hover",  "Interaction",
-                  "Speech", "Effects","Update"};
+       *uSTF[] = {"Topmost","Hover",  "CSpeech",
+              "Interaction","Speech", "Effects","Update"};
     char *file, *fptr, *conf, *temp;
     uint32_t elem, *iter; /// for IF_BIN_FIND and RNG_Make
-    uint64_t *fram;
+    uint64_t tclr, cclr, pclr, *fram;
     intptr_t indx;
     int16_t runs = 0;
+    float _hsv[2][3];
+    AINF anim;
 
     ENGC engc = {.tcur = 1, .ftmp = COM_SHOW | COM_DRAW | COM_RGPU};
 
-    engc.cini = engc.cdef = (CONF){0, strdup(base),
-                                   CSF_EEFF | CSF_EINT | CSF_ERCH,
+    engc.cini = engc.cdef = (CONF){0, strdup(base), CSF_EEFF | CSF_EINT
+                                       | CSF_ESAY | CSF_ECLR | CSF_ERCH,
     /** runs between updates  **/ {   0,   5,  1000},
     /** base scaling factor   **/ {  25, 100,   300},
     /** time dilation factor  **/ {  10, 100,  1000},
@@ -3366,6 +3459,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                         break;
                     break;
 
+                /** [TODO:] deduplicate **/
                 case CNF_RUNS:
                     if (TRY_TEMP(&conf))
                         engc.cini.nrun[1] = ClampToBounds(StrToFloat(temp),
@@ -3475,6 +3569,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
         {0, indx, TXT_EEFF, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
         {0, indx, TXT_EINT, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
         {0, indx, TXT_ESAY, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {0, indx, TXT_ECLR, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
         {0, indx, TXT_ERCH, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
 
         {0, (intptr_t)engc.ccur.nrun,
@@ -3588,6 +3683,14 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     xico = (uint16_t)RUN_FE2C(engc.MCT_SPEC, MSG__GSZ, 0);
     /// constructing previews
     /// barr[0] should be barr[linf->prev], but barr is still unsorted here
+    for (elem = indx = 0; indx < engc.lcnt; indx++)
+        if (engc.libs[indx].nsay) {
+            xpos = engc.libs[indx].barr[0].unit[0].xdim
+                 * engc.libs[indx].barr[0].unit[0].ydim;
+            elem = (elem > xpos)? elem : xpos;
+        }
+    anim.fcnt = 0;
+    anim.time = (elem)? malloc(elem * sizeof(*anim.time)) : 0;
     for (indx = 0; indx < engc.lcnt; indx++) {
         xpos = engc.libs[indx].barr[0].unit[0].xdim;
         xpos = (xico > xpos)? xico : xpos;
@@ -3609,7 +3712,42 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
         RUN_FE2C(engc.libs[indx].spin, MSG_NSET, 0);
         RUN_FE2C(engc.libs[indx].capt, MSG__TXT,
                 (intptr_t)engc.libs[indx].name);
+
+        /// calculating speech colors if they are needed
+        if (!engc.libs[indx].nsay)
+            continue;
+        cclr = 0xFFFFFFFF;
+        pclr = 0xFF999999;
+/*
+        anim.xdim = engc.libs[indx].barr[0].unit[0].xdim;
+        anim.ydim = engc.libs[indx].barr[0].unit[0].ydim;
+        anim.uuid = engc.libs[indx].barr[0].unit[0].uuid;
+        xpos = anim.xdim * anim.ydim;
+        memset(anim.time, 0, xpos * sizeof(*anim.time));
+        cEngineCallback(engc.engd, ECB_DRAW, (intptr_t)&anim);
+        qsort(anim.time, xpos, sizeof(*anim.time), bgracmp);
+        for (tclr = cclr = pclr = 0; xpos >= 0; xpos--)
+            if (xpos && ((tclr & 0xFFFFFFFFUL) == anim.time[xpos - 1]))
+                tclr += 0x100000000UL;
+            else {
+                if ((tclr & 0xFF000000) && ((tclr >> 32) >= (cclr >> 32))) {
+                    pclr = cclr;
+                    cclr = tclr;
+                }
+                tclr = (xpos)? anim.time[xpos - 1] | 0x100000000UL : 0;
+            }
+        RGB2HSV(pclr, _hsv[0]);
+        RGB2HSV(cclr, _hsv[1]);
+        tclr = cclr;
+        cclr = (_hsv[1][1] > _hsv[0][1])? cclr : pclr;
+        pclr = (_hsv[1][1] > _hsv[0][1])? pclr : tclr;
+        RGB2HSV(pclr, _hsv[0]);
+        RGB2HSV(cclr, _hsv[1]);
+//*/
+        engc.libs[indx].bgsc = cclr;
+        engc.libs[indx].fgsc = pclr;
     }
+    free(anim.time);
     RUN_FC2E(engc.MCT_FLTR, MSG_BCLK, 0);
     engc.seed = RNG_Make(elem = time(0));
 

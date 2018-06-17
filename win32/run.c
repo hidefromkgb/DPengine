@@ -1076,6 +1076,8 @@ LRESULT APIENTRY PBarProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
 
 intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    enum {MAX_XDIM = 1024, MAX_YDIM = 128};
+
     switch (cmsg) {
         case MSG__SHW:
             ShowWindow((HWND)ctrl->priv[0], (data)? SW_SHOW : SW_HIDE);
@@ -1116,19 +1118,49 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                           SWP_SHOWWINDOW : SWP_HIDEWINDOW);
             break;
         }
-        case MSG_WDTA: {
+        case MSG_WTDA: {
             AINF *anim = (AINF*)data;
             uint32_t *bsrc, *bdst = (uint32_t*)anim->uuid;
-            long x, y, lsrc, ldst, lmax = 1024;
-            RECT rect = {0, 0, anim->xdim, 128};
+            long x, y, lsrc, ldst;
+            RECT rect = {(anim->xdim >> 16) & 0xFF, (anim->ydim >> 16) & 0xFF};
+
+            rect.right  = (anim->xdim & 0xFFFF) - ((anim->xdim >> 24) & 0xFF);
+            rect.bottom = (anim->ydim & 0xFFFF) - ((anim->ydim >> 24) & 0xFF);
+            bsrc = (uint32_t*)ctrl->priv[6];
+            for (y = rect.top; y < rect.bottom; y++)
+                for (lsrc = (y - rect.top) * MAX_XDIM - rect.left,
+                     ldst = y * (anim->xdim & 0xFFFF),
+                     x = rect.left; x < rect.right; x++)
+                    bsrc[lsrc + x] = bdst[ldst + x];
+            SetTextColor((HDC)ctrl->priv[5],
+                         (COLORREF)(((anim->fcnt >> 16) & 0x000000FF)
+                                  | ((anim->fcnt      ) & 0x0000FF00)
+                                  | ((anim->fcnt << 16) & 0x00FF0000)));
+            rect.right -= (x = rect.left);
+            rect.bottom -= (y = rect.top);
+            rect.top = rect.left = 0;
+            DrawText((HDC)ctrl->priv[5], (char*)anim->time, -1,
+                     &rect, DT_CENTER | DT_WORDBREAK);
+            rect.right += (rect.left = x);
+            rect.bottom += (rect.top = y);
+            for (y = rect.top; y < rect.bottom; y++)
+                for (lsrc = (y - rect.top) * MAX_XDIM - rect.left,
+                     ldst = y * (anim->xdim & 0xFFFF),
+                     x = rect.left; x < rect.right; x++)
+                    bdst[ldst + x] = (bsrc[lsrc + x] & 0x00FFFFFF)
+                                   | (bdst[ldst + x] & 0xFF000000);
+            break;
+        }
+        case MSG_WTGD: {
+            AINF *anim = (AINF*)data;
+            RECT rect = {0, 0, anim->xdim, anim->ydim};
 
             if (!ctrl->priv[5]) { /// time to create a DC
-                BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader), 0, 0,
+                BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader),
+                                    MAX_XDIM, -MAX_YDIM,
                                     1, 8 * sizeof(uint32_t), BI_RGB}};
                 HBITMAP hdib;
 
-                bmpi.bmiHeader.biWidth = lmax;
-                bmpi.bmiHeader.biHeight = -rect.bottom;
                 ctrl->priv[5] = (intptr_t)CreateCompatibleDC(0);
                 SelectObject((HDC)ctrl->priv[5], (HFONT)ctrl->priv[1]);
                 hdib = CreateDIBSection((HDC)ctrl->priv[5],
@@ -1137,18 +1169,10 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 SelectObject((HDC)ctrl->priv[5], hdib);
                 SetBkMode((HDC)ctrl->priv[5], TRANSPARENT);
             }
-            for (bsrc = (uint32_t*)ctrl->priv[6], y = 0; y < anim->ydim; y++)
-                for (lsrc = y * lmax, ldst = y * rect.right, x = 0;
-                     x < rect.right; x++)
-                    bsrc[lsrc + x] = bdst[ldst + x];
-            DrawText((HDC)ctrl->priv[5],
-                     (char*)anim->time, -1, &rect, DT_CENTER | DT_WORDBREAK);
-            for (y = 0; y < anim->ydim; y++)
-                for (lsrc = y * lmax, ldst = y * rect.right, x = 0;
-                     x < rect.right; x++)
-                    bdst[ldst + x] = (bsrc[lsrc + x] & 0x00FFFFFF)
-                                   | (bdst[ldst + x] & 0xFF000000);
-            break;
+            DrawText((HDC)ctrl->priv[5], (char*)anim->time, -1,
+                     &rect, DT_CENTER | DT_WORDBREAK | DT_CALCRECT);
+            return (((rect.right < MAX_XDIM)? rect.right : MAX_XDIM) & 0xFFFF)
+                 | (((rect.bottom < MAX_YDIM)? rect.bottom : MAX_YDIM) << 16);
         }
     }
     return 0;
@@ -1400,11 +1424,10 @@ void rFreeControl(CTRL *ctrl) {
     switch (ctrl->flgs & FCT_TTTT) {
         case FCT_WNDW:
             if (ctrl->priv[5]) {
-                HGDIOBJ hdib;
-
-                hdib = GetCurrentObject((HDC)ctrl->priv[5], OBJ_BITMAP);
+                ctrl->priv[6] = (intptr_t)GetCurrentObject((HDC)ctrl->priv[5],
+                                                                OBJ_BITMAP);
                 DeleteDC((HDC)ctrl->priv[5]);
-                DeleteObject(hdib);
+                DeleteObject((HGDIOBJ)ctrl->priv[6]);
                 ctrl->priv[5] = 0;
             }
             /// every window has its own font instance
@@ -1860,7 +1883,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
     HMODULE hlsh, hlsf;
 
 //    AllocConsole();
-    freopen("CONOUT$", "wb", stdout);
+//    freopen("CONOUT$", "wb", stdout);
 
     OleInitialize(0);
     InitCommonControlsEx(&icct);
