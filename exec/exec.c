@@ -1428,8 +1428,11 @@ void LoadLib(LINF *elem, ENGD *engd) {
                     temp->ydim = elem->barr[0].unit[0].ydim >> 1;
                     xdim = elem->engc->mctl[0].fe2c(elem->engc->mctl,
                                                     MSG_WTGD, (intptr_t)temp);
-                    temp->xdim = 8 +  8 + ((uint32_t)xdim & 0xFFFF);
+                    /// don`t forget to allocate horizontal space for
+                    /// the pointing arrow which is 12 pixels wide!
                     temp->ydim = 4 + 12 + ((uint32_t)xdim >> 16);
+                    temp->xdim = 8 +  8 + ((uint32_t)xdim & 0xFFFF);
+                    temp->xdim = (temp->xdim > 64)? temp->xdim : 64;
                     xdim = 1 + temp->xdim * temp->ydim;
                     temp = realloc(temp, sizeof(*temp) + ydim
                                        + sizeof(*bptr) * xdim);
