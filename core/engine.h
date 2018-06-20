@@ -55,46 +55,32 @@
 
 
 
-enum {
-    ECB_INIT = 0,
-    ECB_GUSR,
-    ECB_GFLG,
-    ECB_SFLG,
-    ECB_DRAW,
-    ECB_TEST,
-    ECB_LOAD,
-    ECB_QUIT,
-};
-enum {
-    ELA_DISK = 0,
-    ELA_LOAD,
-    ELA_AINF,
-};
-#define COM_RGPU  (1 << 31)
-#define COM_DRAW  (1 << 30)
-#define COM_SHOW  (1 << 29)
-#define COM_OPAQ  (1 << 28)
-#define COM_DDDD  (COM_RGPU)  /** deferred flags mask **/
+enum {ECB_INIT, ECB_GUSR, ECB_GFLG, ECB_SFLG,
+      ECB_DRAW, ECB_TEST, ECB_LOAD, ECB_QUIT};
+enum {ELA_DISK, ELA_LOAD, ELA_AINF};
 
-#define WIN_IBGR  (1 << 0)
-#define WIN_IPBO  (1 << 1)
-#define WIN_IRGN  (1 << 2)
+enum {COM_RGPU = 1 << 31, COM_DRAW = 1 << 30,
+      COM_SHOW = 1 << 29, COM_OPAQ = 1 << 28,
+      COM_DDDD = COM_RGPU /** deferred flags mask **/};
 
-/// UFRM flags
-#define UFR_LBTN  (1 <<  0)   /** left mouse button   **/
-#define UFR_MBTN  (1 <<  1)   /** middle mouse button **/
-#define UFR_RBTN  (1 <<  2)   /** right mouse button  **/
-#define UFR_MOUS  (1 <<  3)   /** mouse input enabled **/
-#define UFR_PL1W  (1 <<  4)   /** player #1 pressed W **/
-#define UFR_PL1S  (1 <<  5)   /** player #1 pressed S **/
-#define UFR_PL1A  (1 <<  6)   /** player #1 pressed A **/
-#define UFR_PL1D  (1 <<  7)   /** player #1 pressed D **/
-#define UFR_PL2W  (1 <<  8)   /** player #2 pressed W **/
-#define UFR_PL2S  (1 <<  9)   /** player #2 pressed S **/
-#define UFR_PL2A  (1 << 10)   /** player #2 pressed A **/
-#define UFR_PL2D  (1 << 11)   /** player #2 pressed D **/
-#define UFR_KEYB  (UFR_PL1W | UFR_PL1S | UFR_PL1A | UFR_PL1D \
-                 | UFR_PL2W | UFR_PL2S | UFR_PL2A | UFR_PL2D)
+enum {WIN_IBGR = 1 << 0, WIN_IPBO = 1 << 1, WIN_IRGN = 1 << 2};
+
+enum { /// UFRM flags
+    UFR_LBTN = 1 <<  0,   /** left mouse button   **/
+    UFR_MBTN = 1 <<  1,   /** middle mouse button **/
+    UFR_RBTN = 1 <<  2,   /** right mouse button  **/
+    UFR_MOUS = 1 <<  3,   /** mouse input enabled **/
+    UFR_PL1W = 1 <<  4,   /** player #1 pressed W **/
+    UFR_PL1S = 1 <<  5,   /** player #1 pressed S **/
+    UFR_PL1A = 1 <<  6,   /** player #1 pressed A **/
+    UFR_PL1D = 1 <<  7,   /** player #1 pressed D **/
+    UFR_PL2W = 1 <<  8,   /** player #2 pressed W **/
+    UFR_PL2S = 1 <<  9,   /** player #2 pressed S **/
+    UFR_PL2A = 1 << 10,   /** player #2 pressed A **/
+    UFR_PL2D = 1 << 11,   /** player #2 pressed D **/
+    UFR_KEYB = UFR_PL1W | UFR_PL1S | UFR_PL1A | UFR_PL1D
+             | UFR_PL2W | UFR_PL2S | UFR_PL2A | UFR_PL2D
+};
 
 
 
@@ -105,63 +91,35 @@ typedef struct ENGD ENGD;
 typedef unsigned long ulong;
 
 typedef union {
-    struct {
-        float x, y;
-    };
-    struct {
-        float u, v;
-    };
+    struct {float      x,    y;};
+    struct {float      u,    v;};
 } T2FV;
 
 typedef union {
-    struct {
-        float x, y, z;
-    };
-    struct {
-        float r, g, b;
-    };
+    struct {float      x,    y,    z;};
+    struct {float      r,    g,    b;};
 } T3FV;
 
 typedef union {
-    struct {
-        float x, y, z, w;
-    };
-    struct {
-        float r, g, b, a;
-    };
-    struct {
-        float xpos, ypos, xdim, ydim;
-    };
+    struct {float      x,    y,    z,    w;};
+    struct {float      r,    g,    b,    a;};
+    struct {float   xpos, ypos, xdim, ydim;};
 } T4FV;
 
 typedef union {
-    struct {
-        int32_t x, y;
-    };
-    struct {
-        int32_t u, v;
-    };
+    struct {int32_t    x,    y;};
+    struct {int32_t    u,    v;};
 } T2IV;
 
 typedef union {
-    struct {
-        int32_t x, y, z;
-    };
-    struct {
-        int32_t r, g, b;
-    };
+    struct {int32_t    x,    y,    z;};
+    struct {int32_t    r,    g,    b;};
 } T3IV;
 
 typedef union {
-    struct {
-        int32_t x, y, z, w;
-    };
-    struct {
-        int32_t r, g, b, a;
-    };
-    struct {
-        int32_t xpos, ypos, xdim, ydim;
-    };
+    struct {int32_t    x,    y,    z,    w;};
+    struct {int32_t    r,    g,    b,    a;};
+    struct {int32_t xpos, ypos, xdim, ydim;};
 } T4IV;
 
 /// animation unit info

@@ -215,7 +215,7 @@ LRESULT APIENTRY WindowProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
 
 BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
                       POINT *psrc, COLORREF ckey, BGRA *bptr, DWORD flgs) {
-    #define MAX_RECT 2000
+    enum {MAX_RECT = 2000};
     long x, y, xpos, ypos;
     HRGN retn, temp;
     struct {
@@ -264,14 +264,13 @@ BOOL APIENTRY ULWstub(HWND hwnd, HDC hdst, POINT *pdst, SIZE *size, HDC hsrc,
     }
     BitBlt(hdst, 0, 0, size->cx, size->cy, hsrc, 0, 0, SRCCOPY);
     return TRUE;
-    #undef MAX_RECT
 }
 
 
 
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                   BGRA **bptr, intptr_t *data, uint32_t flgs) {
-    #define EXT_ATTR (WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED)
+    enum {EXT_ATTR = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED};
     BLENDFUNCTION bstr = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
     WNDCLASSEX wndc = {sizeof(wndc), CS_HREDRAW | CS_VREDRAW, WindowProc,
                        0, 0, 0, 0, LoadCursor(0, IDC_HAND), 0, 0, " ", 0};
@@ -423,5 +422,4 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     while (PeekMessage(&pmsg, 0, 0, 0, PM_REMOVE));
     FreeLibrary(husr);
     FreeLibrary(hdwm);
-    #undef EXT_ATTR
 }

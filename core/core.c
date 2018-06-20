@@ -236,10 +236,8 @@ long CompareAnimStd(ASTD *a, ASTD *b, long flgs) {
 
 
 
-/// String-oriented linear hash multiplier
-#define SLH_MULT 0xFBC5
-/// String-oriented linear hash shift
-#define SLH_PLUS 0x11
+/// String-oriented linear hash multiplier and shift, respectively
+enum {SLH_MULT = 0xFBC5, SLH_PLUS = 0x11};
 
 #define HASH(hash, trgt) hash = SLH_PLUS + SLH_MULT * hash + trgt.bgra;
 uint64_t HashAnimStd(ASTD *anim, long *turn) {

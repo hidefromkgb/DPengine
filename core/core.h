@@ -25,9 +25,7 @@
     #define THR_FUNC void *
 #endif
 
-#define PFR_HALT (1 << 31)
-#define PFR_SKIP (1 << 30)
-#define PFR_PICK (1 << 29)
+enum {PFR_HALT = 1 << 31, PFR_SKIP = 1 << 30, PFR_PICK = 1 << 29};
 
 
 
