@@ -444,18 +444,27 @@ BOOL APIENTRY CalcScreen(HMONITOR hmon, HDC hdcm, LPRECT rect, LPARAM data) {
 
 
 char *rLoadFile(char *name, long *size) {
-    char *retn = 0;
-    HANDLE file;
+    char *retn;
     DWORD flen;
+    HANDLE file;
 
-    name = rConvertUTF8(name);
-    if (OldWin32())
+    if (OldWin32()) {
+        name = rConvertUTF8(name);
         file = CreateFileA(name, GENERIC_READ, FILE_SHARE_READ, 0,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-    else
+    }
+    else {
+        retn = malloc(strlen(name) + 5);
+        retn[0] = retn[1] = retn[3] = '\\';
+        retn[2] = '?';
+        strcpy(retn + 4, name);
+        name = rConvertUTF8(BackReslash(retn));
         file = CreateFileW((LPWSTR)name, GENERIC_READ, FILE_SHARE_READ, 0,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+        free(retn);
+    }
     free(name);
+    retn = 0;
     if (file != INVALID_HANDLE_VALUE) {
         flen = GetFileSize(file, 0);
         retn = malloc(flen + 1);
@@ -471,16 +480,25 @@ char *rLoadFile(char *name, long *size) {
 
 
 long rSaveFile(char *name, char *data, long size) {
-    HANDLE file;
+    char *retn;
     DWORD flen;
+    HANDLE file;
 
-    name = rConvertUTF8(name);
-    if (OldWin32())
+    if (OldWin32()) {
+        name = rConvertUTF8(name);
         file = CreateFileA(name, GENERIC_WRITE, FILE_SHARE_READ, 0,
                            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
-    else
+    }
+    else {
+        retn = malloc(strlen(name) + 5);
+        retn[0] = retn[1] = retn[3] = '\\';
+        retn[2] = '?';
+        strcpy(retn + 4, name);
+        name = rConvertUTF8(BackReslash(retn));
         file = CreateFileW((LPWSTR)name, GENERIC_WRITE, FILE_SHARE_READ, 0,
                            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+        free(retn);
+    }
     free(name);
     if (file != INVALID_HANDLE_VALUE) {
         WriteFile(file, data, size, &flen, 0);
