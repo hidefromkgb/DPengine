@@ -1288,10 +1288,11 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
         }
         fptr = file;
         libs->nsay = bcnt = ecnt = 0;
+        libs->name = strdup(path);          /// DP does exactly the same thing
         while ((conf = GetNextLine(&fptr)))
             switch (DetermineType(&conf)) {
-                case SVT_NAME:
-                    libs->name = strdup(GET_TEMP(&conf));
+                case SVT_NAME:              /// not this, but the one above
+//                    libs->name = strdup(GET_TEMP(&conf));
                     break;
 
                 case SVT_SAYS:
@@ -2836,15 +2837,14 @@ void UpdPreview(intptr_t data, uint64_t time) {
     LINF *elem;
     AINF *anim;
     char *name;
-    long iter, indx;
+    long  iter;
 
     if (engc->parr)
         return; /// previews are hidden when the engine is active
 
-    for (indx = iter = 0; iter < engc->lcnt; iter++) {
-        elem = &engc->libs[iter];
-        anim = &elem->barr[engc->libs[iter].prev].unit[0];
-        if (!anim->fcnt)
+    for (iter = data = 0; data < engc->lcnt; data++) {
+        elem = &engc->libs[data];
+        if (!(anim = &elem->barr[elem->prev].unit[0])->fcnt)
             continue; /// this preview has been loaded incorrectly, skipping
         if (elem->scrl && (time > elem->cntx.ttxt)) { /// update text!
             if (++elem->cntx.iofs >= elem->nofs)
@@ -2853,7 +2853,9 @@ void UpdPreview(intptr_t data, uint64_t time) {
                                                     :  elem->cntx.iofs];
             name[elem->nnam + elem->nofs] = '\0';
             if (time > (elem->cntx.ttxt += FRM_WAIT * FRM_TEXT))
-                elem->cntx.ttxt = time + FRM_WAIT * (indx++ % FRM_TEXT);
+                elem->cntx.ttxt = time + FRM_WAIT * (iter++ % FRM_TEXT);
+            /// ^-- this is done to split text updates into several batches,
+            ///     thus lowering the number of simultaneous updates per tick
             RUN_FE2C(elem->capt, MSG__TXT, (intptr_t)name);
             if (-elem->cntx.iofs != elem->nofs)
                 name[elem->nnam + elem->nofs] = ' ';
