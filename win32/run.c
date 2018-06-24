@@ -117,6 +117,21 @@ void AssignTextToControl(CTRL *ctrl, char *text) {
 
 
 
+void TextInRect(HDC devc, char *text, BOOL utf8, RECT *rect, UINT flgs) {
+    if (text) {
+        if (utf8)
+            text = rConvertUTF8(text);
+        if (OldWin32())
+            DrawTextA(devc, text, -1, rect, flgs);
+        else
+            DrawTextW(devc, (LPWSTR)text, -1, rect, flgs);
+        if (utf8)
+            free(text);
+    }
+}
+
+
+
 LRESULT APIENTRY MessageBtnRename(int code, WPARAM wPrm, LPARAM lPrm) {
     CWPRETSTRUCT *cwpr = (CWPRETSTRUCT*)lPrm;
     CTRL ctrl;
@@ -707,19 +722,6 @@ void ProcessSpin(LPARAM lPrm) {
 
 
 
-void TextInRect(HDC devc, char *text, RECT *rect) {
-    if (text) {
-        if (OldWin32())
-            DrawTextA(devc, text, -1, rect,
-                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        else
-            DrawTextW(devc, (LPWSTR)text, -1, rect,
-                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    }
-}
-
-
-
 /// PRIV:
 ///  0: HWND
 ///  1: HDC
@@ -1064,7 +1066,8 @@ LRESULT APIENTRY PBarProc(HWND hWnd, UINT uMsg, WPARAM wPrm, LPARAM lPrm) {
                                            : GetSysColor(COLOR_MENUTEXT));
                 SelectClipRgn(devc, clip);
                 DeleteObject(clip);
-                TextInRect(devc, (char*)ctrl->priv[2], &rect);
+                TextInRect(devc, (char*)ctrl->priv[2], 0,
+                          &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             }
             SelectClipRgn(devc, 0);
             EndPaint(hWnd, &pstr);
@@ -1139,8 +1142,8 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             rect.right -= (x = rect.left);
             rect.bottom -= (y = rect.top);
             rect.top = rect.left = 0;
-            DrawText((HDC)ctrl->priv[5], (char*)anim->time, -1,
-                     &rect, DT_CENTER | DT_WORDBREAK);
+            TextInRect((HDC)ctrl->priv[5], (char*)anim->time, 1,
+                       &rect, DT_CENTER | DT_WORDBREAK);
             rect.right += (rect.left = x);
             rect.bottom += (rect.top = y);
             for (y = rect.top; y < rect.bottom; y++)
@@ -1153,7 +1156,8 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         }
         case MSG_WTGD: {
             AINF *anim = (AINF*)data;
-            RECT rect = {0, 0, anim->xdim, anim->ydim};
+            RECT rect = {0, 0, (anim->xdim > 0)? anim->xdim : 0x7FFF,
+                               (anim->ydim > 0)? anim->ydim : 0x7FFF};
 
             if (!ctrl->priv[5]) { /// time to create a DC
                 BITMAPINFO bmpi = {{sizeof(bmpi.bmiHeader),
@@ -1169,8 +1173,8 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 SelectObject((HDC)ctrl->priv[5], hdib);
                 SetBkMode((HDC)ctrl->priv[5], TRANSPARENT);
             }
-            DrawText((HDC)ctrl->priv[5], (char*)anim->time, -1,
-                     &rect, DT_CENTER | DT_WORDBREAK | DT_CALCRECT);
+            TextInRect((HDC)ctrl->priv[5], (char*)anim->time, 1,
+                       &rect, DT_CENTER | DT_WORDBREAK | DT_CALCRECT);
             return (((rect.right < MAX_XDIM)? rect.right : MAX_XDIM) & 0xFFFF)
                  | (((rect.bottom < MAX_YDIM)? rect.bottom : MAX_YDIM) << 16);
         }
