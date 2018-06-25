@@ -7,53 +7,22 @@
 
 
 
-static inline long _OldWin32() {
-    static long retn = 2;
+char *_ConvertUTF8(char *utf8, long oldw) {
+    if (utf8) {
+        long size = (strlen(utf8) + 1) * 4;
+        LPWSTR wide = calloc(size, sizeof(*wide));
 
-    if (retn == 2)
-        retn = ((GetVersion() & 0xFF) < 5)? 1 : 0;
-    return retn;
-}
-
-
-
-char *_BackReslash(char *conv) {
-    long iter;
-
-    if (conv)
-        for (iter = 0; conv[iter]; iter++)
-            if (conv[iter] == '/')
-                conv[iter] = '\\';
-    return conv;
-}
-
-
-
-LPWSTR _UTF16(char *utf8) {
-    long size = (strlen(utf8) + 1) * 4;
-    LPWSTR retn = calloc(size, sizeof(*retn));
-    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, retn, size);
-    return retn;
-}
-
-
-
-char *_ConvertUTF8(char *utf8) {
-    if (!utf8)
-        return utf8;
-
-    LPWSTR wide = _UTF16(utf8);
-    long size;
-
-    if (!_OldWin32())
-        return (char*)wide;
-    else {
-        utf8 = calloc((size = (wcslen(wide) + 1) * 4), sizeof(*utf8));
-        WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wide, -1,
-                            utf8, size - 1, "#", 0);
-        free(wide);
-        return utf8;
+        MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide, size);
+        if (!oldw)
+            return (char*)wide;
+        else {
+            utf8 = calloc((size = (wcslen(wide) + 1) * 4), sizeof(*utf8));
+            WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wide, -1,
+                                utf8, size - 1, "#", 0);
+            free(wide);
+        }
     }
+    return utf8;
 }
 
 
@@ -77,12 +46,16 @@ void lShowMainWindow(ENGD *engd, long show) {
 
 
 char *lLoadFile(char *name, long *size) {
+    static long oldw = 2;
     char *retn;
     DWORD flen;
     HANDLE file;
 
-    if (_OldWin32()) {
-        name = _ConvertUTF8(name);
+    if (oldw == 2)
+        oldw = ((GetVersion() & 0xFF) < 5)? 1 : 0;
+
+    if (oldw) {
+        name = _ConvertUTF8(name, oldw);
         file = CreateFileA(name, GENERIC_READ, FILE_SHARE_READ, 0,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
     }
@@ -91,7 +64,10 @@ char *lLoadFile(char *name, long *size) {
         retn[0] = retn[1] = retn[3] = '\\';
         retn[2] = '?';
         strcpy(retn + 4, name);
-        name = _ConvertUTF8(_BackReslash(retn));
+        for (flen = 0; retn[flen]; flen++)
+            if (retn[flen] == '/')
+                retn[flen] = '\\';
+        name = _ConvertUTF8(retn, oldw);
         file = CreateFileW((LPWSTR)name, GENERIC_READ, FILE_SHARE_READ, 0,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
         free(retn);

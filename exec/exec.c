@@ -12,149 +12,197 @@
 /** convert degrees to radians  **/ #define DTR_CONV (M_PI / 180.0)
 /** convert radians to degrees  **/ #define RTD_CONV (1.0 / DTR_CONV)
 
-/** framerate limiter in msec   **/ #define FRM_WAIT 40
-
 /** default comment character   **/ #define DEF_CMNT '\''
 /** default token separator     **/ #define DEF_TSEP ','
 /** default dir slash (string)  **/ #define DEF_DSEP "/"
 
+/// /// /// /// /// /// /// /// /// ENGC.MCTL array indices
+/**                             **/ #define MCT_CAPT mctl[ 0]
+/**                             **/ #define MCT_FLTR mctl[ 1]
+/**                             **/ #define MCT_EXAC mctl[ 2]
+/**                             **/ #define MCT_OGRP mctl[ 3]
+/**                             **/ #define MCT_SGRP mctl[ 4]
+/**                             **/ #define MCT_SPEC mctl[ 5]
+/**                             **/ #define MCT_BADD mctl[ 6]
+/**                             **/ #define MCT_SRND mctl[ 7]
+/**                             **/ #define MCT_RGPU mctl[ 8]
+/**                             **/ #define MCT_BDUP mctl[ 9]
+/**                             **/ #define MCT_SELE mctl[10]
+/**                             **/ #define MCT_OPTS mctl[11]
+/**                             **/ #define MCT_GOGO mctl[12]
+/**                             **/ #define MCT_CHAR mctl[13]
+
+/// /// /// /// /// /// /// /// /// ENGC.OCTL array indices
+/**                             **/ #define OCT_OPTS octl[ 0]
+/**                             **/ #define OCT_UONR octl[ 1]
+/**                             **/ #define OCT_ETOP octl[ 2]
+/**                             **/ #define OCT_EEFF octl[ 3]
+/**                             **/ #define OCT_EINT octl[ 4]
+/**                             **/ #define OCT_ESAY octl[ 5]
+/**                             **/ #define OCT_ECLR octl[ 6]
+/**                             **/ #define OCT_ERCH octl[ 7]
+/**                             **/ #define OCT_NRUN octl[ 8]
+/**                             **/ #define OCT_TRUN octl[ 9]
+/**                             **/ #define OCT_NSCA octl[10]
+/**                             **/ #define OCT_TSCA octl[11]
+/**                             **/ #define OCT_NDIL octl[12]
+/**                             **/ #define OCT_TDIL octl[13]
+/**                             **/ #define OCT_NSAY octl[14]
+/**                             **/ #define OCT_TSAY octl[15]
+/**                             **/ #define OCT_NCDR octl[16]
+/**                             **/ #define OCT_TCDR octl[17]
+/**                             **/ #define OCT_LCHO octl[20]
+/**                             **/ #define OCT_LREL octl[21]
+/**                             **/ #define OCT_LRES octl[22]
+/**                             **/ #define OCT_LGUI octl[23]
+/**                             **/ #define OCT_BCHO octl[26]
+/**                             **/ #define OCT_BREL octl[27]
+/**                             **/ #define OCT_BRES octl[28]
+/**                             **/ #define OCT_BDIR octl[29]
+/**                             **/ #define OCT_FREL octl[31]
+/**                             **/ #define OCT_FRES octl[32]
+
+enum {
+/** framerate limiter in msec   **/ FRM_WAIT = 40,
+};
+enum {
 /// /// /// /// /// /// /// /// /// truth values
-/** 'true'                      **/ #define VAL_TRUE 0x390A9E10
-/** 'false'                     **/ #define VAL_FALS 0xD6A90B70
+/** 'true'                      **/ VAL_TRUE = 0x390A9E10,
+/** 'false'                     **/ VAL_FALS = 0xD6A90B70,
 
 /// /// /// /// /// /// /// /// /// section value types
-/** 'name'                      **/ #define SVT_NAME 0x692C5651
-/** 'effect'                    **/ #define SVT_EFCT 0x80720D9F
-/** 'behavior'                  **/ #define SVT_BHVR 0x532A0FD4
-/** 'behaviorgroup'             **/ #define SVT_BGRP 0xA40004B2
-/** 'categories'                **/ #define SVT_CTGS 0x21179D08
-/** 'speak'                     **/ #define SVT_SAYS 0xF708913D
+/** 'name'                      **/ SVT_NAME = 0x692C5651,
+/** 'effect'                    **/ SVT_EFCT = 0x80720D9F,
+/** 'behavior'                  **/ SVT_BHVR = 0x532A0FD4,
+/** 'behaviorgroup'             **/ SVT_BGRP = 0xA40004B2,
+/** 'categories'                **/ SVT_CTGS = 0x21179D08,
+/** 'speak'                     **/ SVT_SAYS = 0xF708913D,
 
 /// /// /// /// /// /// /// /// /// behaviour movement types
-/** 'none'                      **/ #define BMT_NONM 0xF3B3E074
-/** 'horizontal_only'           **/ #define BMT_HORM 0x2359740E
-/** 'vertical_only'             **/ #define BMT_VERM 0x4753BD0C
-/** 'diagonal_only'             **/ #define BMT_DIAM 0xA988F1D9
-/** 'horizontal_vertical'       **/ #define BMT_HNVM 0x9D44367E
-/** 'diagonal_horizontal'       **/ #define BMT_HNDM 0x590262FB
-/** 'diagonal_vertical'         **/ #define BMT_DNVM 0xE2676419
-/** 'all'                       **/ #define BMT_ALLM 0x43E72DD0
-/** 'mouseover'                 **/ #define BMT_OVRM 0xB73EDCDE
-/** 'dragged'                   **/ #define BMT_DRGM 0x4A4CCCE1
-/** 'sleep'                     **/ #define BMT_SLPM 0x62B9B962
+/** 'none'                      **/ BMT_NONM = 0xF3B3E074,
+/** 'horizontal_only'           **/ BMT_HORM = 0x2359740E,
+/** 'vertical_only'             **/ BMT_VERM = 0x4753BD0C,
+/** 'diagonal_only'             **/ BMT_DIAM = 0xA988F1D9,
+/** 'horizontal_vertical'       **/ BMT_HNVM = 0x9D44367E,
+/** 'diagonal_horizontal'       **/ BMT_HNDM = 0x590262FB,
+/** 'diagonal_vertical'         **/ BMT_DNVM = 0xE2676419,
+/** 'all'                       **/ BMT_ALLM = 0x43E72DD0,
+/** 'mouseover'                 **/ BMT_OVRM = 0xB73EDCDE,
+/** 'dragged'                   **/ BMT_DRGM = 0x4A4CCCE1,
+/** 'sleep'                     **/ BMT_SLPM = 0x62B9B962,
 
 /// /// /// /// /// /// /// /// /// effect alignment types
-/** 'top_left'                  **/ #define EMT_TNLA 0xE73713ED
-/** 'top'                       **/ #define EMT_TOPA 0xA47C2B7E
-/** 'top_right'                 **/ #define EMT_TNRA 0xECF514DD
-/** 'left'                      **/ #define EMT_CNLA 0x7D6BA6E7
-/** 'center'                    **/ #define EMT_CNTA 0x4E745BAB
-/** 'right'                     **/ #define EMT_CNRA 0x0F854D3F
-/** 'bottom_left'               **/ #define EMT_BNLA 0x884F61CE
-/** 'bottom'                    **/ #define EMT_BTMA 0x8819E73B
-/** 'bottom_right'              **/ #define EMT_BNRA 0xB9049E02
-/** 'any'                       **/ #define EMT_RNDA 0x43E92567
-/** 'any-not_center'            **/ #define EMT_RCLA 0xD76D8510
-
-/// /// /// /// /// /// /// /// /// behaviour/effect flags
-/** no movement at all          **/ #define BHV_NONM (0      )
-/** horizontal movement         **/ #define BHV_HORM (1 <<  0)
-/** diagonal movement           **/ #define BHV_DIAM (1 <<  1)
-/** vertical movement           **/ #define BHV_VERM (1 <<  2)
-/** movement control flag       **/ #define BHV_CTLM (1 <<  3)
-
-/** horz + vert movement        **/ #define BHV_HNVM (BHV_HORM | BHV_VERM)
-/** horz + diag movement        **/ #define BHV_HNDM (BHV_HORM | BHV_DIAM)
-/** diag + vert movement        **/ #define BHV_DNVM (BHV_DIAM | BHV_VERM)
-/** horz + diag + vert          **/ #define BHV_ALLM (BHV_HORM | BHV_DIAM\
-                                                               | BHV_VERM)
-/** 'mouse-over' state          **/ #define BHV_OVRM (BHV_CTLM | BHV_HORM)
-/** 'dragged' state             **/ #define BHV_DRGM (BHV_CTLM | BHV_DIAM)
-/** 'sleep' state               **/ #define BHV_SLPM (BHV_CTLM | BHV_VERM)
-/** [extractor]                 **/ #define BHV_MMMM (BHV_CTLM | BHV_ALLM)
-
-/** tgt offs has to be mirrored **/ #define BHV_MIRR (1 << 28)
-
-/** effect is a speech          **/ #define EFF_SAYS (1 << 29)
-/** do not follow parent        **/ #define EFF_STAY (1 << 30)
-
-/** animation can be looped     **/ #define ANI_LOOP (1 << 31)
-
-/// /// /// /// /// /// /// /// /// must stay as-is; these are used as indices
-/** top-left alignment          **/ #define EFF_TNLA 0x0
-/** top alignment               **/ #define EFF_TOPA 0x1
-/** top-right alignment         **/ #define EFF_TNRA 0x2
-/** center-left alignment       **/ #define EFF_CNLA 0x3
-/** center alignment            **/ #define EFF_CNTA 0x4
-/** center-right alignment      **/ #define EFF_CNRA 0x5
-/** bottom-left alignment       **/ #define EFF_BNLA 0x6
-/** bottom alignment            **/ #define EFF_BTMA 0x7
-/** bottom-right alignment      **/ #define EFF_BNRA 0x8
-/** random alignment            **/ #define EFF_RNDA 0x9
-/** random centerless alignment **/ #define EFF_RCLA 0xA
-/** [extractor]                 **/ #define EFF_AAAA 0xF
-
-/// /// /// /// /// /// /// /// /// this sprite is...
-/** ...an effect                **/ #define PIF_EFCT (1 <<  0)
-/** ...inactive, but reserved   **/ #define PIF_IRES (1 <<  1)
-/** ...stopped when following   **/ #define PIF_STOP (1 <<  2)
-/** ..."asleep"                 **/ #define PIF_SLPM (1 <<  3)
-/** ...dragged                  **/ #define PIF_DRGM (1 <<  4)
-/** ...under cursor             **/ #define PIF_OVRM (1 <<  5)
-/** ...controlled by Player 1   **/ #define PIF_TPL1 (1 <<  6)
-/** ...controlled by Player 2   **/ #define PIF_TPL2 (1 <<  7)
-/** [special modes` extractor]  **/ #define PIF_SPEC (PIF_SLPM \
-                                                    | PIF_DRGM \
-                                                    | PIF_OVRM)
-/** ["busy" sprites extractor]  **/ #define PIF_BUSY (PIF_SPEC \
-                                                    | PIF_TPL1 \
-                                                    | PIF_TPL2)
-
-/// /// /// /// /// /// /// /// /// flags for ChooseBehaviour
-/** first spawn of a sprite     **/ #define CBF_INIT (1 <<  0)
-/** select a pre-set behaviour  **/ #define CBF_NEXT (1 <<  1)
-/** do not spawn effects        **/ #define CBF_DNSE (1 <<  2)
+/** 'top_left'                  **/ EMT_TNLA = 0xE73713ED,
+/** 'top'                       **/ EMT_TOPA = 0xA47C2B7E,
+/** 'top_right'                 **/ EMT_TNRA = 0xECF514DD,
+/** 'left'                      **/ EMT_CNLA = 0x7D6BA6E7,
+/** 'center'                    **/ EMT_CNTA = 0x4E745BAB,
+/** 'right'                     **/ EMT_CNRA = 0x0F854D3F,
+/** 'bottom_left'               **/ EMT_BNLA = 0x884F61CE,
+/** 'bottom'                    **/ EMT_BTMA = 0x8819E73B,
+/** 'bottom_right'              **/ EMT_BNRA = 0xB9049E02,
+/** 'any'                       **/ EMT_RNDA = 0x43E92567,
+/** 'any-not_center'            **/ EMT_RCLA = 0xD76D8510,
 
 /// /// /// /// /// /// /// /// /// follow offset type values
-/** 'fixed'                     **/ #define FOT_FIXD 0x9A8F97BD
-/** 'mirror'                    **/ #define FOT_MIRR 0x304E7075
+/** 'fixed'                     **/ FOT_FIXD = 0x9A8F97BD,
+/** 'mirror'                    **/ FOT_MIRR = 0x304E7075,
 
 /// /// /// /// /// /// /// /// /// config file strings
-/** 'content'                   **/ #define CNF_BASE 0x6558329A
-/** 'language'                  **/ #define CNF_LANG 0x1644959C
-/** 'runstillupdate'            **/ #define CNF_RUNS 0x7ECC31BE
-/** 'basescale'                 **/ #define CNF_SCAL 0x7A285DE0
-/** 'timedilation'              **/ #define CNF_TDIL 0x338D79CF
-/** 'randomspeech'              **/ #define CNF_RSAY 0x0C4A8F7D
-/** 'cursordodge'               **/ #define CNF_PCDR 0xD00CAB48
-/** 'flags'                     **/ #define CNF_FLGS 0x8ACE03CE
-/** 'render'                    **/ #define CNF_RNDR 0x3C9F6676
-/** 'draw'                      **/ #define CNF_DRAW 0xE7ABD6EE
-/** 'show'                      **/ #define CNF_SHOW 0x27D90DCD
-/** 'gpu'                       **/ #define CNF_RGPU 0x11927E83
-/** 'opaque'                    **/ #define CNF_OPAQ 0xD246CFE1
-/** 'wbgra'                     **/ #define CNF_IBGR 0xABF3B1E8
-/** 'wpbo'                      **/ #define CNF_IPBO 0x78FE3880
-/** 'wregion'                   **/ #define CNF_IRGN 0xDE0DCCBE
-/** 'update'                    **/ #define CNF_UONR 0xE4895181
-/** 'topmost'                   **/ #define CNF_ETOP 0x0622A23D
-/** 'effects'                   **/ #define CNF_EEFF 0xAB1F60DF
-/** 'interaction'               **/ #define CNF_EINT 0x3CD837AB
-/** 'speech'                    **/ #define CNF_ESAY 0x5E664BA6
-/** 'cspeech'                   **/ #define CNF_ECLR 0x32A64DBA
-/** 'hover'                     **/ #define CNF_ERCH 0x303621E9
-
-/// /// /// /// /// /// /// /// /// client specific flags
-/** update the animation base   **/ #define CSF_UONR (1 <<  0)
-/** engine window is top-most   **/ #define CSF_ETOP (1 <<  1)
-/** behaviour effects are on    **/ #define CSF_EEFF (1 <<  2)
-/** interactions are on         **/ #define CSF_EINT (1 <<  3)
-/** speech bubbles are on       **/ #define CSF_ESAY (1 <<  4)
-/** speech bubbles are colored  **/ #define CSF_ECLR (1 <<  5)
-/** cursor hover reaction is on **/ #define CSF_ERCH (1 <<  6)
-
-/// /// /// /// /// /// /// /// /// localized text constants
+/** 'content'                   **/ CNF_BASE = 0x6558329A,
+/** 'language'                  **/ CNF_LANG = 0x1644959C,
+/** 'runstillupdate'            **/ CNF_RUNS = 0x7ECC31BE,
+/** 'basescale'                 **/ CNF_SCAL = 0x7A285DE0,
+/** 'timedilation'              **/ CNF_TDIL = 0x338D79CF,
+/** 'randomspeech'              **/ CNF_RSAY = 0x0C4A8F7D,
+/** 'cursordodge'               **/ CNF_PCDR = 0xD00CAB48,
+/** 'flags'                     **/ CNF_FLGS = 0x8ACE03CE,
+/** 'render'                    **/ CNF_RNDR = 0x3C9F6676,
+/** 'draw'                      **/ CNF_DRAW = 0xE7ABD6EE,
+/** 'show'                      **/ CNF_SHOW = 0x27D90DCD,
+/** 'gpu'                       **/ CNF_RGPU = 0x11927E83,
+/** 'opaque'                    **/ CNF_OPAQ = 0xD246CFE1,
+/** 'wbgra'                     **/ CNF_IBGR = 0xABF3B1E8,
+/** 'wpbo'                      **/ CNF_IPBO = 0x78FE3880,
+/** 'wregion'                   **/ CNF_IRGN = 0xDE0DCCBE,
+/** 'update'                    **/ CNF_UONR = 0xE4895181,
+/** 'topmost'                   **/ CNF_ETOP = 0x0622A23D,
+/** 'effects'                   **/ CNF_EEFF = 0xAB1F60DF,
+/** 'interaction'               **/ CNF_EINT = 0x3CD837AB,
+/** 'speech'                    **/ CNF_ESAY = 0x5E664BA6,
+/** 'cspeech'                   **/ CNF_ECLR = 0x32A64DBA,
+/** 'hover'                     **/ CNF_ERCH = 0x303621E9,
+};
 enum {
+/// /// /// /// /// /// /// /// /// behaviour/effect flags
+/** no movement at all          **/ BHV_NONM = 0      ,
+/** horizontal movement         **/ BHV_HORM = 1 <<  0,
+/** diagonal movement           **/ BHV_DIAM = 1 <<  1,
+/** vertical movement           **/ BHV_VERM = 1 <<  2,
+/** movement control flag       **/ BHV_CTLM = 1 <<  3,
+
+/** horz + vert movement        **/ BHV_HNVM = BHV_HORM | BHV_VERM,
+/** horz + diag movement        **/ BHV_HNDM = BHV_HORM | BHV_DIAM,
+/** diag + vert movement        **/ BHV_DNVM = BHV_DIAM | BHV_VERM,
+/** horz + diag + vert          **/ BHV_ALLM = BHV_HORM | BHV_DIAM | BHV_VERM,
+/** 'mouse-over' state          **/ BHV_OVRM = BHV_CTLM | BHV_HORM,
+/** 'dragged' state             **/ BHV_DRGM = BHV_CTLM | BHV_DIAM,
+/** 'sleep' state               **/ BHV_SLPM = BHV_CTLM | BHV_VERM,
+/** [extractor]                 **/ BHV_MMMM = BHV_CTLM | BHV_ALLM,
+
+/** tgt offs has to be mirrored **/ BHV_MIRR = 1 << 28,
+
+/** effect is a speech          **/ EFF_SAYS = 1 << 29,
+/** do not follow parent        **/ EFF_STAY = 1 << 30,
+
+/** animation can be looped     **/ ANI_LOOP = 1 << 31,
+};
+enum {
+/// /// /// /// /// /// /// /// /// must stay as-is; these are used as indices
+/** top-left alignment          **/ EFF_TNLA = 0x0,
+/** top alignment               **/ EFF_TOPA = 0x1,
+/** top-right alignment         **/ EFF_TNRA = 0x2,
+/** center-left alignment       **/ EFF_CNLA = 0x3,
+/** center alignment            **/ EFF_CNTA = 0x4,
+/** center-right alignment      **/ EFF_CNRA = 0x5,
+/** bottom-left alignment       **/ EFF_BNLA = 0x6,
+/** bottom alignment            **/ EFF_BTMA = 0x7,
+/** bottom-right alignment      **/ EFF_BNRA = 0x8,
+/** random alignment            **/ EFF_RNDA = 0x9,
+/** random centerless alignment **/ EFF_RCLA = 0xA,
+/** [extractor]                 **/ EFF_AAAA = 0xF,
+};
+enum {
+/// /// /// /// /// /// /// /// /// this sprite is...
+/** ...an effect                **/ PIF_EFCT = 1 <<  0,
+/** ...inactive, but reserved   **/ PIF_IRES = 1 <<  1,
+/** ...stopped when following   **/ PIF_STOP = 1 <<  2,
+/** ..."asleep"                 **/ PIF_SLPM = 1 <<  3,
+/** ...dragged                  **/ PIF_DRGM = 1 <<  4,
+/** ...under cursor             **/ PIF_OVRM = 1 <<  5,
+/** ...controlled by Player 1   **/ PIF_TPL1 = 1 <<  6,
+/** ...controlled by Player 2   **/ PIF_TPL2 = 1 <<  7,
+/** [special modes` extractor]  **/ PIF_SPEC = PIF_SLPM | PIF_DRGM | PIF_OVRM,
+/** ["busy" sprites extractor]  **/ PIF_BUSY = PIF_SPEC | PIF_TPL1 | PIF_TPL2,
+};
+enum {
+/// /// /// /// /// /// /// /// /// flags for ChooseBehaviour
+/** first spawn of a sprite     **/ CBF_INIT = 1 <<  0,
+/** select a pre-set behaviour  **/ CBF_NEXT = 1 <<  1,
+/** do not spawn effects        **/ CBF_DNSE = 1 <<  2,
+};
+enum {
+/// /// /// /// /// /// /// /// /// client specific flags
+/** update the animation base   **/ CSF_UONR = 1 <<  0,
+/** engine window is top-most   **/ CSF_ETOP = 1 <<  1,
+/** behaviour effects are on    **/ CSF_EEFF = 1 <<  2,
+/** interactions are on         **/ CSF_EINT = 1 <<  3,
+/** speech bubbles are on       **/ CSF_ESAY = 1 <<  4,
+/** speech bubbles are colored  **/ CSF_ECLR = 1 <<  5,
+/** cursor hover reaction is on **/ CSF_ERCH = 1 <<  6,
+};
+enum {
+/// /// /// /// /// /// /// /// /// localized text constants
 /** Remove character            **/ TXT_CDEL = 0,
 /** Remove all similar          **/ TXT_ADEL,
 /** Sleep / wake up             **/ TXT_CSLP,
@@ -225,52 +273,6 @@ enum {
 /** OK                          **/ TXT_BYES,
 /** Cancel                      **/ TXT_BNAY,
 };
-
-/// /// /// /// /// /// /// /// /// ENGC.MCTL array indices
-/**                             **/ #define MCT_CAPT mctl[ 0]
-/**                             **/ #define MCT_FLTR mctl[ 1]
-/**                             **/ #define MCT_EXAC mctl[ 2]
-/**                             **/ #define MCT_OGRP mctl[ 3]
-/**                             **/ #define MCT_SGRP mctl[ 4]
-/**                             **/ #define MCT_SPEC mctl[ 5]
-/**                             **/ #define MCT_BADD mctl[ 6]
-/**                             **/ #define MCT_SRND mctl[ 7]
-/**                             **/ #define MCT_RGPU mctl[ 8]
-/**                             **/ #define MCT_BDUP mctl[ 9]
-/**                             **/ #define MCT_SELE mctl[10]
-/**                             **/ #define MCT_OPTS mctl[11]
-/**                             **/ #define MCT_GOGO mctl[12]
-/**                             **/ #define MCT_CHAR mctl[13]
-
-/// /// /// /// /// /// /// /// /// ENGC.OCTL array indices
-/**                             **/ #define OCT_OPTS octl[ 0]
-/**                             **/ #define OCT_UONR octl[ 1]
-/**                             **/ #define OCT_ETOP octl[ 2]
-/**                             **/ #define OCT_EEFF octl[ 3]
-/**                             **/ #define OCT_EINT octl[ 4]
-/**                             **/ #define OCT_ESAY octl[ 5]
-/**                             **/ #define OCT_ECLR octl[ 6]
-/**                             **/ #define OCT_ERCH octl[ 7]
-/**                             **/ #define OCT_NRUN octl[ 8]
-/**                             **/ #define OCT_TRUN octl[ 9]
-/**                             **/ #define OCT_NSCA octl[10]
-/**                             **/ #define OCT_TSCA octl[11]
-/**                             **/ #define OCT_NDIL octl[12]
-/**                             **/ #define OCT_TDIL octl[13]
-/**                             **/ #define OCT_NSAY octl[14]
-/**                             **/ #define OCT_TSAY octl[15]
-/**                             **/ #define OCT_NCDR octl[16]
-/**                             **/ #define OCT_TCDR octl[17]
-/**                             **/ #define OCT_LCHO octl[20]
-/**                             **/ #define OCT_LREL octl[21]
-/**                             **/ #define OCT_LRES octl[22]
-/**                             **/ #define OCT_LGUI octl[23]
-/**                             **/ #define OCT_BCHO octl[26]
-/**                             **/ #define OCT_BREL octl[27]
-/**                             **/ #define OCT_BRES octl[28]
-/**                             **/ #define OCT_BDIR octl[29]
-/**                             **/ #define OCT_FREL octl[31]
-/**                             **/ #define OCT_FRES octl[32]
 
 /// engine data (client side), prototype
 typedef struct ENGC ENGC;
@@ -355,7 +357,7 @@ typedef struct {
              icnt;  /// [ number of behavioral sprites requested by the user ]
     uint64_t ttxt,  /// [ description line offset timestamp in the main menu ]
              tfrm;  /// [ frame timestamp in the main menu                   ]
-    }        cntx;  /// '---------------- WRITEABLE CONTEXT! ----------------'
+    }        wctx;  /// '----------------- WRITABLE CONTEXT -----------------'
 } LINF;
 
 /// actual on-screen sprite, opaque outside the module
@@ -628,9 +630,9 @@ void RecountSelectedLibs(ENGC *engc) {
     long full, frac, indx;
 
     for (full = frac = indx = 0; indx < engc->lcnt; indx++)
-        if (engc->libs[indx].cntx.icnt > 0)
+        if (engc->libs[indx].wctx.icnt > 0)
             frac++;
-        else if (!engc->libs[indx].cntx.icnt)
+        else if (!engc->libs[indx].wctx.icnt)
             full++;
     SetProgress(engc, TXT_SELE, frac, frac + full);
 }
@@ -1417,7 +1419,7 @@ void LoadLib(LINF *elem, ENGD *engd) {
     BINF *narr;
     AINF *temp;
 
-    if (!elem->bimp || (elem->cntx.icnt <= 0))
+    if (!elem->bimp || (elem->wctx.icnt <= 0))
         return;
     for (indx = 0; indx <= 1; indx++) {
         narr =  (indx)? elem->earr : elem->barr;
@@ -2223,7 +2225,7 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         free(fill);
     }
 
-    if (elem->cntx.icnt <= 0)
+    if (elem->wctx.icnt <= 0)
         return 1;
 
     /// now computing Q, the maximum number of effect spawns per behaviour
@@ -2237,17 +2239,17 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             else
                 qmax += 2 + ((iter->dmin)? iter->dmin : elem->barr[indx].dmax)
                           / iter->dmax;
-    engc->pmax += elem->cntx.icnt * ++qmax;
+    engc->pmax += elem->wctx.icnt * ++qmax;
     engc->parr = realloc(engc->parr, engc->pmax * sizeof(*engc->parr));
     /// now spawning sprites to the screen and emptying ICNT
-    for (indx = 0; indx < elem->cntx.icnt; indx++) {
+    for (indx = 0; indx < elem->wctx.icnt; indx++) {
         engc->pcnt++;
         engc->parr[engc->pcnt - 1] = calloc(1, sizeof(**engc->parr));
         engc->parr[engc->pcnt - 1]->ulib = elem;
         ChooseBehaviour(engc, engc->parr[engc->pcnt - 1],
                         0, CBF_INIT | CBF_DNSE);
     }
-    return elem->cntx.icnt + 1;
+    return elem->wctx.icnt + 1;
 }
 
 
@@ -2846,27 +2848,27 @@ void UpdPreview(intptr_t data, uint64_t time) {
         elem = &engc->libs[data];
         if (!(anim = &elem->barr[elem->prev].unit[0])->fcnt)
             continue; /// this preview has been loaded incorrectly, skipping
-        if (elem->scrl && (time > elem->cntx.ttxt)) { /// update text!
-            if (++elem->cntx.iofs >= elem->nofs)
-                elem->cntx.iofs = -elem->cntx.iofs;
-            name = &elem->scrl[(elem->cntx.iofs < 0)? -elem->cntx.iofs
-                                                    :  elem->cntx.iofs];
+        if (elem->scrl && (time > elem->wctx.ttxt)) { /// update text!
+            if (++elem->wctx.iofs >= elem->nofs)
+                elem->wctx.iofs = -elem->wctx.iofs;
+            name = &elem->scrl[(elem->wctx.iofs < 0)? -elem->wctx.iofs
+                                                    :  elem->wctx.iofs];
             name[elem->nnam + elem->nofs] = '\0';
-            if (time > (elem->cntx.ttxt += FRM_WAIT * FRM_TEXT))
-                elem->cntx.ttxt = time + FRM_WAIT * (iter++ % FRM_TEXT);
+            if (time > (elem->wctx.ttxt += FRM_WAIT * FRM_TEXT))
+                elem->wctx.ttxt = time + FRM_WAIT * (iter++ % FRM_TEXT);
             /// ^-- this is done to split text updates into several batches,
             ///     thus lowering the number of simultaneous updates per tick
             RUN_FE2C(elem->capt, MSG__TXT, (intptr_t)name);
-            if (-elem->cntx.iofs != elem->nofs)
+            if (-elem->wctx.iofs != elem->nofs)
                 name[elem->nnam + elem->nofs] = ' ';
         }
-        if (time > elem->cntx.tfrm) { /// update animation!
-            if (++elem->cntx.ifrm >= anim->fcnt)
-                elem->cntx.ifrm = 0;
-            if (time > (elem->cntx.tfrm += anim->time[elem->cntx.ifrm]))
-                elem->cntx.tfrm = time; /// > 1 frame skipped, resetting
+        if (time > elem->wctx.tfrm) { /// update animation!
+            if (++elem->wctx.ifrm >= anim->fcnt)
+                elem->wctx.ifrm = 0;
+            if (time > (elem->wctx.tfrm += anim->time[elem->wctx.ifrm]))
+                elem->wctx.tfrm = time; /// > 1 frame skipped, resetting
             RUN_FE2C(elem->pict, MSG_IFRM,
-                    (elem->cntx.ifrm & 0x3FF) | (anim->uuid << 10));
+                    (elem->wctx.ifrm & 0x3FF) | (anim->uuid << 10));
         }
     }
 }
@@ -2889,9 +2891,9 @@ void CategorizePreviews(ENGC *engc) {
                 if (!!elem ^ (flgs - 1))
                     break;
             }
-        engc->libs[indx].cntx.icnt =
-            ((!elem & !!flgs) ^ (engc->libs[indx].cntx.icnt < 0))?
-            -engc->libs[indx].cntx.icnt - 1 : engc->libs[indx].cntx.icnt;
+        engc->libs[indx].wctx.icnt =
+            ((!elem & !!flgs) ^ (engc->libs[indx].wctx.icnt < 0))?
+            -engc->libs[indx].wctx.icnt - 1 : engc->libs[indx].wctx.icnt;
     }
     RecountSelectedLibs(engc);
     RUN_FE2C(engc->MCT_CHAR, MSG_WSZC, 0);
@@ -3057,7 +3059,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             xinc = xsep;
             line = yinc = ymax = 0;
             for (data = 0; data <= engc->lcnt; data++) {
-                if ((data < engc->lcnt) && (engc->libs[data].cntx.icnt < 0))
+                if ((data < engc->lcnt) && (engc->libs[data].wctx.icnt < 0))
                     continue; /// skipping disabled libraries
                 if ((data < engc->lcnt)
                 &&  (xinc + xsep - engc->libs[data].pict.xdim <= xdim)) {
@@ -3068,7 +3070,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 }
                 /// if we are here, either the line is full or the array ended
                 for (xinc = xsep; line < data; line++) {
-                    temp = !(engc->libs[line].cntx.icnt < 0);
+                    temp = !(engc->libs[line].wctx.icnt < 0);
                     RUN_FE2C(engc->libs[line].pict, MSG__SHW, temp);
                     RUN_FE2C(engc->libs[line].capt, MSG__SHW, temp);
                     RUN_FE2C(engc->libs[line].spin, MSG__SHW, temp);
@@ -3121,7 +3123,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
                 data = RUN_FE2C(engc->MCT_SPEC, MSG_NGET, 0);
                 for (cmsg = 0; cmsg < engc->lcnt; cmsg++)
-                    if (engc->libs[cmsg].cntx.icnt >= 0) {
+                    if (engc->libs[cmsg].wctx.icnt >= 0) {
                         spin = RUN_FE2C(engc->libs[cmsg].spin, MSG_NGET, 0);
                         spin = (spin + data > 0)? spin + data : 0;
                         RUN_FE2C(engc->libs[cmsg].spin, MSG_NSET, spin);
@@ -3219,7 +3221,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if ((cmsg = RUN_FE2C(engc->MCT_BDUP, MSG_BGST, 0)) & FCS_ENBL) {
                 /// indexing random-capable libraries
                 for (ilen = icon = 0; icon < engc->lcnt; icon++)
-                    if (engc->libs[icon].cntx.icnt == 0)
+                    if (engc->libs[icon].wctx.icnt == 0)
                         iput[ilen++] = icon;
                 /// iterating over the requested random sprites count
                 for (icon = RUN_FE2C(engc->MCT_RGPU, MSG_NGET, 0);
@@ -3230,11 +3232,11 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 }
                 /// finally, adding the computed random values to ICNTs
                 for (icon = 0; icon < engc->lcnt; icon++)
-                    engc->libs[icon].cntx.icnt += irnd[icon];
+                    engc->libs[icon].wctx.icnt += irnd[icon];
             }
             /// is there anything selected? let`s find out
             for (icon = 0; icon < engc->lcnt; icon++)
-                if (engc->libs[icon].cntx.icnt > 0)
+                if (engc->libs[icon].wctx.icnt > 0)
                     break;
             if (icon >= engc->lcnt) {
                 /// [TODO:] do we need to show messages here?
@@ -3245,13 +3247,13 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             }
             /// counting the number of selected libraries
             for (cmsg = icon = 0; icon < engc->lcnt; icon++)
-                if (engc->libs[icon].cntx.icnt > 0)
+                if (engc->libs[icon].wctx.icnt > 0)
                     cmsg++;
             SetProgress(engc, TXT_LOAD, 0, cmsg);
 
             cEngineCallback(engc->engd, ECB_LOAD, ~0);
             for (data = icon = 0; icon < engc->lcnt; icon++)
-                if (engc->libs[icon].cntx.icnt > 0) {
+                if (engc->libs[icon].wctx.icnt > 0) {
                     LoadLib(&engc->libs[icon], engc->engd);
                     SetProgress(engc, TXT_LOAD, ++data, cmsg);
                     RUN_FE2C(engc->MCT_SELE, MSG_PPOS, data);
@@ -3263,7 +3265,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             for (libs = engc->libs, icon = 0; icon < engc->lcnt; icon++)
                 if (AppendSpriteArr(&engc->libs[icon], engc)) {
                     /// revert random ICNT
-                    engc->libs[icon].cntx.icnt -= irnd[icon];
+                    engc->libs[icon].wctx.icnt -= irnd[icon];
                     if (++libs <= &engc->libs[icon])
                         libs[-1] = engc->libs[icon];
                 }
@@ -3322,8 +3324,8 @@ intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if (cmsg == MSG_NSET) {
                 LINF *libs = (LINF*)ctrl->data;
 
-                cmsg = !libs->cntx.icnt;
-                libs->cntx.icnt = data;
+                cmsg = !libs->wctx.icnt;
+                libs->wctx.icnt = data;
                 if (cmsg == !!data)
                     SetProgress(libs->engc, TXT_SELE,
                                 RUN_FE2C(libs->engc->MCT_SELE, MSG_PGET, 0)
