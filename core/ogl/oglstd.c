@@ -193,7 +193,9 @@ long MakeRendererOGL(RNDR **rndr, ulong rgba, UNIT *uarr,
     if (!rndr || *rndr)
         return !!rndr;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mtex);
-    mtex = ((mtex < 4096)? mtex : 4096) << 1;
+    /// 4096 proved to be too unreliable, 4096^2 bordering
+    /// on IEEE-754 bit capacity, so let`s use 2048 instead
+    mtex = ((mtex < 2048)? mtex : 2048) << 1;
     while (mtex >>= 1)
         if ((test = OGL_MakeTex(mtex, mtex, 1, GL_TEXTURE_3D,
                                 GL_REPEAT, GL_NEAREST, GL_NEAREST,

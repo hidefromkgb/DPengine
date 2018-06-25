@@ -530,7 +530,7 @@ int pixlcmp(const void *a, const void *b) {
 ASTD *ConvertAnim(AINF *asrc) {
     ASTD *retn = 0;
     uint64_t *temp;
-    uint32_t iter, indx;
+    uint32_t iter, indx, prox, prev;
 
     if (!asrc || !asrc->xdim || !asrc->ydim
     ||  !asrc->fcnt || !asrc->time || !asrc->uuid)
@@ -552,15 +552,17 @@ ASTD *ConvertAnim(AINF *asrc) {
     /// assuming that the picture contains no more than 256 colors.
     /// [TODO:] add dithering to fix this!
 
-    indx = 0;
-    iter = asrc->fcnt * asrc->xdim * asrc->ydim - 1;
-    /// the first index is zero; we don`t explicitly set
-    /// it, as retn->bptr is already filled with zeroes
-    retn->bpal[indx].bgra = temp[iter];
+    retn->bpal[0xFF].bgra = 0x00000000;
+    prev = ~(uint32_t)temp[(iter = asrc->fcnt * asrc->xdim * asrc->ydim) - 1];
+    prox = indx = 0;
     while (iter--) {
-        if ((uint32_t)temp[iter + 1] != (uint32_t)temp[iter])
-            retn->bpal[++indx].bgra = temp[iter];
-        retn->bptr[temp[iter] >> 32] = indx;
+        if ((uint32_t)temp[iter] != prev) {
+            if ((prev = (uint32_t)temp[iter]) & 0xFF000000)
+                retn->bpal[prox = indx++].bgra = prev;
+            else
+                prox = 0xFF;
+        }
+        retn->bptr[temp[iter] >> 32] = prox;
     }
     free(temp);
     return retn;
