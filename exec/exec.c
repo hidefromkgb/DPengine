@@ -343,7 +343,7 @@ typedef struct {
             *scrl;  /// NAME adapted for scrolling, or 0 if not needed
     uint32_t fgsc,  /// foreground speech color
              bgsc;  /// background speech color
-    long     nsay,  /// number of speeches
+    long     nsay,  /// template speech ID + 1 (0 if no speech)
              nslp,  /// number of sleep behaviours
              prev,  /// preview index in sorted BARR
              ccnt,  /// categories count
@@ -598,10 +598,10 @@ char *SplitLine(char **tail, char tsep, long keep) {
                     temp = iter;
                 iter = SkipCharUTF8(iter);
             }
-            *tail = (**tail)? *tail + 1 : 0;
+            *tail = (**tail)? SkipCharUTF8(*tail) : 0;
             if (*temp) {
                 if (*temp != tsep)
-                    temp++;
+                    temp = SkipCharUTF8(temp);
                 if (!keep)
                     *temp = 0;
             }
@@ -1053,7 +1053,7 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
     uint32_t elem, *iter;
     char *temp;
 
-    /// defaults         (neff, ieff, igrp)----v--v--v
+    /// defaults          (neff, ieff, igrp)---v--v--v
     *retn = (BINF){{}, {}, {}, 0, 5000, 15000, 0, 0, 0, 0.1 * FRM_WAIT, 0, 0, 0,
                    BHV_ALLM | ANI_LOOP, 0, 0, 0, {}};
 
@@ -1170,7 +1170,7 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
     uint32_t elem, *iter;
     char *temp;
 
-    /// defaults     (neff, ieff, igrp)----v--v--v
+    /// defaults      (neff, ieff, igrp)---v--v--v
     *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0, 0,
                    ANI_LOOP | EFF_STAY | (EFF_RNDA * 0x1111), 0, 0, 0, {}};
 
@@ -1218,10 +1218,11 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
 }
 
 void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
+    /// speeches are nothing more than additional effect sprites!
     char *temp;
 
-    /// speeches are nothing more than additional effect sprites!
-    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0, 0,
+    /// defaults               v---(prob)   v--v--v---(neff, ieff, igrp)
+    *retn = (BINF){{}, {}, {}, 1, 0, 10000, 0, 0, 0, 0.0, 0, 0, 0,
                   (EFF_TOPA << 0) | (EFF_BTMA << 4) | EFF_SAYS
                 | (EFF_TOPA << 8) | (EFF_BTMA << 12), 0, 0, 0, {}};
 
@@ -1236,6 +1237,10 @@ void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
         imgp[0] = Concatenate(0, temp);
         imgp[1] = 0;
         (*conf) += (**conf == DEF_TSEP)? 1 : 0;
+        /// DMAX is 10000 by default and does not change, whereas DMIN
+        /// depends on the text length; in DP it equals (L / 15) seconds
+        retn->dmin = (1000.0 / 15.0) * strlen(imgp[0]);
+        retn->dmin = (retn->dmin)? retn->dmin : FRM_WAIT;
     }
     else {
         imgp[0] = imgp[1] = 0;
@@ -1248,7 +1253,7 @@ void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
     }
     /// flag to never execute this speech at random............................  def = False
     if (TRY_TEMP(conf))
-        SET_FLAG(retn->prob, temp, VAL_FALS, 1);
+        SET_FLAG(retn->prob, temp, VAL_FALS, retn->prob);
 
     /// behaviour group index..................................................  def = 0
     if (TRY_TEMP(conf)) {
@@ -1690,7 +1695,7 @@ long BoundCrossed(float move, float offs, long bmin, long bmax) {
 
 /// INDX is not used if FROM is an effect, as all we need is stored there
 long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
-                 ulong indx, uint64_t time) {
+                 ulong indx, uint64_t time, uint32_t make) {
     BINF *binf;
 
     if (from->tmov >= LLONG_MAX)
@@ -1698,7 +1703,8 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
 
     if (~from->flgs & PIF_EFCT) {
         /// parent = behaviour
-        *retn = calloc(1, sizeof(**retn));
+        if (make)
+            *retn = calloc(1, sizeof(**retn));
         (*retn)->boss = from;
         (*retn)->ulib = from->ulib;
         (*retn)->indx = (indx << 1) | (from->indx & 1);
@@ -1706,7 +1712,8 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
     }
     else if (*retn != from) {
         /// parent = effect that needs to be copied to RETN
-        *retn = calloc(1, sizeof(**retn));
+        if (make)
+            *retn = calloc(1, sizeof(**retn));
         **retn = *from;
         from->tmov = LLONG_MAX; /// only one self-replication allowed
     }
@@ -1885,11 +1892,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
         for (lend = binf->neff; lend; lend--)
             SpawnEffect(&engc->parr[engc->pcnt++], pict,
                          engc->seed, lend + binf->ieff - 1,
-                        (pict->tbhv >= LLONG_MAX)? LLONG_MAX : engc->tcur);
-    /// now spawning the behaviour start speech, if any (and if allowed to)
-    if (binf->bsay && (engc->ccur.flgs & CSF_ESAY))
-        SpawnEffect(&engc->parr[engc->pcnt++], pict,
-                     engc->seed, binf->bsay - 1, engc->tcur);
+                        (pict->tbhv >= LLONG_MAX)? LLONG_MAX : engc->tcur, 1);
 }
 
 long RandByGrp(uint32_t *seed, PICT *pict, BGRP *bgrp) {
@@ -2009,7 +2012,8 @@ void ExtractStaMov(LINF *elem, BGRP *bgrp, long *fill, long gcnt, long move) {
 ///   1: all good, 0 sprites on the screen
 ///  >1: all good, (return) - 1 sprites on the screen
 long AppendSpriteArr(LINF *elem, ENGC *engc) {
-    long indx, turn, qmax, gcnt, *fill;
+    long indx, turn, next, qmax, gcnt, bcnt, *fill;
+    int32_t *cgrp, *bgrp, *ggrp;
     BINF temp, *iter;
 
     if (elem->bimp || elem->eimp) {
@@ -2043,45 +2047,51 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         elem->ecnt = Truncate(&elem->earr, elem->ecnt);
         qsort(elem->earr, elem->ecnt, sizeof(*elem->earr), namecmp);
 
-        /// [TODO:] deduplicate BSAY and ESAY loops right below!
+        if (elem->nsay) {
+            for (indx = elem->ecnt - 1; indx >= 0; indx--)
+                if (elem->earr[indx].flgs & EFF_SAYS) {
+                    elem->nsay = indx + 1;
+                    break;
+                }
+            /// [TODO:] deduplicate BSAY and ESAY loops right below!
 
-        /// resolving speeches said on behaviour start
-        qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), bsaycmp);
-        for (indx = elem->bcnt - 1; indx >= 0; indx--)
-            elem->barr[indx].temp = 0;
-        for (indx = elem->ecnt - 1; indx >= 0; indx--)
-            if ((elem->earr[indx].flgs & EFF_SAYS)
-            &&  (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
-                                 sizeof(*elem->barr), bsaycmp))) {
-                for (turn = iter - elem->barr + 1; (turn < elem->bcnt) &&
-                    (elem->barr[turn].bsay == iter->bsay); turn++)
-                    elem->barr[turn].temp = indx + 1;
-                for (turn = iter - elem->barr - 1; (turn >= 0) &&
-                    (elem->barr[turn].bsay == iter->bsay); turn--)
-                    elem->barr[turn].temp = indx + 1;
-                iter->temp = indx + 1;
-            }
-        for (indx = elem->bcnt - 1; indx >= 0; indx--)
-            elem->barr[indx].bsay = elem->barr[indx].temp;
-        /// resolving speeches said on behaviour end
-        qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), esaycmp);
-        for (indx = elem->bcnt - 1; indx >= 0; indx--)
-            elem->barr[indx].temp = 0;
-        for (indx = elem->ecnt - 1; indx >= 0; indx--)
-            if ((elem->earr[indx].flgs & EFF_SAYS)
-            &&  (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
-                                 sizeof(*elem->barr), esaycmp))) {
-                for (turn = iter - elem->barr + 1; (turn < elem->bcnt) &&
-                    (elem->barr[turn].esay == iter->esay); turn++)
-                    elem->barr[turn].temp = indx + 1;
-                for (turn = iter - elem->barr - 1; (turn >= 0) &&
-                    (elem->barr[turn].esay == iter->esay); turn--)
-                    elem->barr[turn].temp = indx + 1;
-                iter->temp = indx + 1;
-            }
-        for (indx = elem->bcnt - 1; indx >= 0; indx--)
-            elem->barr[indx].esay = elem->barr[indx].temp;
-
+            /// resolving speeches said on behaviour start
+            qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), bsaycmp);
+            for (indx = elem->bcnt - 1; indx >= 0; indx--)
+                elem->barr[indx].temp = 0;
+            for (indx = elem->ecnt - 1; indx >= 0; indx--)
+                if ((elem->earr[indx].flgs & EFF_SAYS)
+                &&  (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
+                                     sizeof(*elem->barr), bsaycmp))) {
+                    for (turn = iter - elem->barr + 1; (turn < elem->bcnt) &&
+                        (elem->barr[turn].bsay == iter->bsay); turn++)
+                        elem->barr[turn].temp = indx + 1;
+                    for (turn = iter - elem->barr - 1; (turn >= 0) &&
+                        (elem->barr[turn].bsay == iter->bsay); turn--)
+                        elem->barr[turn].temp = indx + 1;
+                    iter->temp = indx + 1;
+                }
+            for (indx = elem->bcnt - 1; indx >= 0; indx--)
+                elem->barr[indx].bsay = elem->barr[indx].temp;
+            /// resolving speeches said on behaviour end
+            qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), esaycmp);
+            for (indx = elem->bcnt - 1; indx >= 0; indx--)
+                elem->barr[indx].temp = 0;
+            for (indx = elem->ecnt - 1; indx >= 0; indx--)
+                if ((elem->earr[indx].flgs & EFF_SAYS)
+                &&  (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
+                                     sizeof(*elem->barr), esaycmp))) {
+                    for (turn = iter - elem->barr + 1; (turn < elem->bcnt) &&
+                        (elem->barr[turn].esay == iter->esay); turn++)
+                        elem->barr[turn].temp = indx + 1;
+                    for (turn = iter - elem->barr - 1; (turn >= 0) &&
+                        (elem->barr[turn].esay == iter->esay); turn--)
+                        elem->barr[turn].temp = indx + 1;
+                    iter->temp = indx + 1;
+                }
+            for (indx = elem->bcnt - 1; indx >= 0; indx--)
+                elem->barr[indx].esay = elem->barr[indx].temp;
+        }
         /// determining the effect count and min. index for every behaviour
         /// (note that some behaviours may have no effects)
         qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), namecmp);
@@ -2129,11 +2139,89 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
 
         /// [TODO:] deduplicate
 
+        /// populating SRND::BARR with random speeches, sorting by group number
+        elem->srnd.barr = malloc(elem->ecnt * sizeof(*elem->srnd.barr));
+        for (turn = indx = 0; indx < elem->ecnt; indx++)
+            if ((elem->earr[indx].flgs & EFF_SAYS) && elem->earr[indx].prob)
+                elem->srnd.barr[turn++] = &elem->earr[indx];
+        qsort(elem->srnd.barr, turn, sizeof(*elem->srnd.barr), igrpcmp);
+
+        /// populating BBHV::BARR with all behaviours, sorting by group number
         elem->bbhv.barr = malloc(elem->bcnt * sizeof(*elem->bbhv.barr));
-        /// populating BGRP with all behaviours and sorting by group number
         for (indx = 0; indx < elem->bcnt; indx++)
             elem->bbhv.barr[indx] = &elem->barr[indx];
         qsort(elem->bbhv.barr, elem->bcnt, sizeof(*elem->bbhv.barr), igrpcmp);
+
+        if (!turn) { /// turn = random speech count
+            free(elem->srnd.barr);
+            elem->srnd.barr = 0;
+        }
+        else {
+            ggrp = malloc(elem->ecnt * sizeof(*ggrp));
+            ggrp[0] = elem->srnd.barr[0]->igrp;
+            for (gcnt = indx = 1; indx < turn; indx++)
+                if (igrpcmp(&elem->srnd.barr[indx],
+                            &elem->srnd.barr[indx - 1]))
+                    ggrp[gcnt++] = elem->srnd.barr[indx]->igrp;
+
+            bgrp = malloc(elem->bcnt * sizeof(*bgrp));
+            bgrp[0] = elem->bbhv.barr[0]->igrp;
+            for (bcnt = indx = 1; indx < elem->bcnt; indx++)
+                if (igrpcmp(&elem->bbhv.barr[indx],
+                            &elem->bbhv.barr[indx - 1]))
+                    bgrp[bcnt++] = elem->bbhv.barr[indx]->igrp;
+
+            cgrp = malloc((gcnt + bcnt) * sizeof(*cgrp));
+            for (indx = 0; indx < gcnt; indx++)
+                cgrp[indx] = ggrp[indx];
+            for (indx = 0; indx < bcnt; indx++)
+                cgrp[gcnt + indx] = bgrp[indx];
+            qsort(cgrp, gcnt + bcnt, sizeof(*cgrp), uintcmp);
+            for (qmax = next = indx = 0; indx < gcnt + bcnt; indx++)
+                if (!indx || (cgrp[indx] != cgrp[indx - 1])) {
+                    switch (0x10 * !bsearch(&cgrp[indx], ggrp, gcnt,
+                                             sizeof(*ggrp), uintcmp)
+                                 + !bsearch(&cgrp[indx], bgrp, bcnt,
+                                             sizeof(*bgrp), uintcmp)) {
+                        case 0x01: cgrp[qmax++] = (cgrp[indx])?
+                                                   INT32_MAX : next++; break;
+                        case 0x00: cgrp[qmax++] =              next++; break;
+                        case 0x10:                             next++; break;
+                    }
+                }
+            free(bgrp);
+            free(ggrp);
+
+            elem->srnd.barr[0]->igrp = cgrp[0];
+            for (gcnt = 0, indx = 1; indx < turn; indx++) {
+                if (igrpcmp(&elem->srnd.barr[indx],
+                            &elem->srnd.barr[indx - 1]))
+                    gcnt++;
+                elem->srnd.barr[indx]->igrp = cgrp[gcnt];
+            }
+            free(cgrp);
+            qsort(elem->srnd.barr, turn, sizeof(*elem->srnd.barr), igrpcmp);
+            for (indx = 0; indx < turn; indx++)
+                if (elem->srnd.barr[indx]->igrp >= INT32_MAX)
+                    break;
+            if (indx < turn)
+                elem->srnd.barr = realloc(elem->srnd.barr, (turn = indx)
+                                        * sizeof(*elem->srnd.barr));
+            if (!turn) {
+                free(elem->srnd.barr);
+                elem->srnd.barr = 0;
+            }
+            else {
+                /// NEXT has been set in the switch, and
+                /// equals the last normalized group index
+                elem->srnd.narr = calloc(next, sizeof(*elem->srnd.narr));
+                for (indx = 0; indx < turn; indx++)
+                    elem->srnd.narr[elem->srnd.barr[indx]->igrp]++;
+                for (indx = 1; indx < next; indx++)
+                    elem->srnd.narr[indx] += elem->srnd.narr[indx - 1];
+            }
+        }
+
         /// counting groups + normalizing their indices to [0; GCNT) interval
         for (gcnt = turn = indx = 0; indx < elem->bcnt; indx++) {
             if (elem->bbhv.barr[indx]->igrp != turn) {
@@ -2143,15 +2231,19 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             elem->bbhv.barr[indx]->igrp = gcnt;
         }
         gcnt++;
-        /// populating BGRP with nonzero-probability behaviours, ZCNT := len
+
+        if (!elem->srnd.narr) /// if no random speech, fill all groups with 0s
+            elem->srnd.narr = calloc(gcnt, sizeof(*elem->srnd.narr));
+
+        /// populating BBHV::BARR with nonzero-probability behaviours
         for (elem->zcnt = indx = 0; indx < elem->bcnt; indx++)
             if (elem->barr[indx].prob)
                 elem->bbhv.barr[elem->zcnt++] = &elem->barr[indx];
         elem->bbhv.barr = realloc(elem->bbhv.barr, elem->zcnt * sizeof(*elem->bbhv.barr));
-        /// sorting BGRP by normalized group index
+        /// sorting BBHV::BARR by normalized group index
         qsort(elem->bbhv.barr, elem->zcnt, sizeof(*elem->bbhv.barr), igrpcmp);
 
-        /// filling NGRP with behaviour group boundaries
+        /// filling BBHV::NARR with behaviour group boundaries
         elem->bbhv.narr = calloc(gcnt, sizeof(*elem->bbhv.narr));
         for (turn = indx = 0; indx < elem->zcnt; indx++)
             elem->bbhv.narr[elem->bbhv.barr[indx]->igrp] = indx + 1;
@@ -2309,6 +2401,11 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         engc->parr[engc->pcnt - 1]->ulib = elem;
         ChooseBehaviour(engc, engc->parr[engc->pcnt - 1],
                         0, CBF_INIT | CBF_DNSE);
+        if (elem->nsay) { /// creating a speech template, if needed
+            SpawnEffect(&engc->parr[engc->pcnt], engc->parr[engc->pcnt - 1],
+                         engc->seed, elem->nsay - 1, engc->tcur, 1);
+            engc->parr[engc->pcnt++]->flgs |= PIF_IRES;
+        }
     }
     return elem->wctx.icnt + 1;
 }
@@ -2572,7 +2669,7 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
     handle them all.
  3. Considering [1] and [2], it`s problematic to respawn an effect if its
     run time is less than its respawn time. It becomes "reserved" and waits.
- 4. speeches are created as "reserved" and never ever go away, they just
+ 4. Speeches are created as "reserved" and never ever go away, they just
     wait in silence till the time comes for a random speech or for some new
     behaviour to start (if the new one has a speech attached, it plays,
     otherwise it is the exit speech from the previous one that gets played)
@@ -2581,13 +2678,14 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                    uint64_t time, intptr_t user, uint32_t attr,
                    int32_t xptr, int32_t yptr, int32_t isel) {
     ENGC *engc = (ENGC*)user;
+    BINF *binf, *btmp;
+    LINF *ltmp;
     PICT *pict;
-    BINF *binf;
     AINF *anim;
     T2IV  bmov;
 
     char *temp;
-    long  indx, elem;
+    long  indx, elem, tran;
     uint64_t curr;
 
 //    cEngineCallback(engd, ECB_LOAD, ~0);
@@ -2602,8 +2700,8 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
 
     /// watch out for reserved-s (they shouldn`t be in [0; ISEL], though)
     if ((attr & UFR_MOUS) && ((isel >= 0) || pict)) {
-        if (!pict && ((engc->ppos.z ^ attr) & UFR_LBTN)) {
-            pict = engc->pcur = engc->parr[isel];
+        if (!pict && ((engc->ppos.z ^ attr) & UFR_LBTN)
+        && (pict = engc->pcur = engc->parr[isel])) {
             if (pict->flgs & PIF_EFCT)
                 pict = engc->pcur = pict->boss;
             printf("[GRABBED] %s\n", pict->ulib->name);
@@ -2682,35 +2780,85 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
         if (pict->flgs & PIF_EFCT) {
             /// effect
             if (engc->povr && (pict->boss == engc->povr)
-            && (pict->ipre != engc->povr->indx)) {
+            && (pict->ipre != engc->povr->indx) && (~binf->flgs & EFF_SAYS)) {
                 /// on mouseover, previously bound effects are to be purged
+                /// (only the speech sprite has to survive that)
                 free(pict);
                 engc->parr[indx] = 0;
                 continue;
             }
             if (~binf->flgs & EFF_STAY)
                 MoveToParent(pict, 0);   /// teleport next to the parent
-            if ((engc->tcur >= pict->tmov)               /// time to wake up
-            &&!((pict->ipre ^ pict->boss->indx) & ~1)) { /// same behaviour
-                pict->flgs &= ~PIF_IRES; /// drop the reserved state, if any
-                if (engc->tcur >= pict->tbhv)
-                    elem = indx;         /// PICT expired, let`s edit inplace
-                else
-                    engc->parr[elem = engc->pcnt++] = 0;
-                SpawnEffect(&engc->parr[elem], pict,
-                             engc->seed, 0, engc->tcur);
-            }
-            else if (engc->tcur >= pict->tbhv) {
-                /// if (respawn > runtime) and same behaviour
-                if (binf->dmin && binf->dmax && (binf->dmax > binf->dmin)
-                &&!((pict->ipre ^ pict->boss->indx) & ~1))
-                    pict->flgs |= PIF_IRES; /// reserved, waiting for respawn
-                else {
-                    free(pict);             /// either the run time is up or
-                    engc->parr[indx] = 0;   /// parent behaviour has changed
-                    continue;
+            if (~binf->flgs & EFF_SAYS) { /// this is not a speech, right?..
+                if ((engc->tcur >= pict->tmov)               /// restoring!
+                &&!((pict->ipre ^ pict->boss->indx) & ~1)) { /// same behaviour
+                    pict->flgs &= ~PIF_IRES; /// drop the reserved state, if any
+                    if (engc->tcur >= pict->tbhv)
+                        elem = indx;         /// PICT expired, let`s edit inplace
+                    else
+                        engc->parr[elem = engc->pcnt++] = 0;
+                    /// 1 here has no effect when from == to!
+                    SpawnEffect(&engc->parr[elem], pict, engc->seed,
+                                 0, engc->tcur, 1);
+                }
+                else if (engc->tcur >= pict->tbhv) { /// expired!
+                    /// if (respawn > runtime) and same behaviour
+                    if (binf->dmin && binf->dmax && (binf->dmax > binf->dmin)
+                    &&!((pict->ipre ^ pict->boss->indx) & ~1))
+                        pict->flgs |= PIF_IRES; /// reserved, waiting for respawn
+                    else {
+                        free(pict);             /// either the run time is up or
+                        engc->parr[indx] = 0;   /// parent behaviour has changed
+                        continue;
+                    }
                 }
             }
+            else if (engc->ccur.flgs & CSF_ESAY) { /// ...wrong, this is a speech!
+                if ((pict->ipre ^ pict->boss->indx) & ~1) {
+                    /// the parent behaviour has changed; updating
+                    btmp = pict->boss->ulib->barr;
+                    if (!(elem = btmp[pict->boss->indx >> 1].bsay))
+                        elem = btmp[pict->ipre >> 1].esay;
+                    if (elem) { /// do not spawn new speech but reuse old
+                        pict->flgs &= ~PIF_IRES;
+                        SpawnEffect(&engc->parr[indx], pict->boss, engc->seed,
+                                     elem - 1, engc->tcur, 0);
+                    }
+                }
+                if (engc->tcur >= pict->tbhv) { /// expired!
+                    /// cooldown is in, generating a random speech in advance;
+                    /// if either group 0 is empty or RNG tells so, we choose
+                    /// the group corresponding to the parent`s current one
+                    ltmp = pict->boss->ulib;
+                    elem = (!ltmp->srnd.narr[0] || (RNG_Load(engc->seed) & 1))?
+                             ltmp->barr[pict->boss->indx >> 1].igrp : 0;
+                    tran = (elem)? ltmp->srnd.narr[elem - 1] : 0;
+                    if (!(elem = ltmp->srnd.narr[elem] - tran)) {
+                        elem = ltmp->srnd.narr[0];
+                        tran = 0; /// falling back to 0th group
+                    }
+                    if ((RNG_Load(engc->seed)
+                      % (engc->ccur.nsay[2] - engc->ccur.nsay[0])
+                      >= engc->ccur.nsay[1] - engc->ccur.nsay[0]) || !elem)
+                        /// no speech available, will try again after cooldown
+                        pict->tmov = pict->tbhv = engc->tcur + binf->dmax;
+                    else {
+                        /// it`s possible to choose a random speech; choosing
+                        tran += RNG_Load(engc->seed) % elem;
+                        SpawnEffect(&engc->parr[indx], pict->boss, engc->seed,
+                                     ltmp->srnd.barr[tran] - ltmp->earr,
+                                     engc->tcur + binf->dmax, 0);
+                        pict->tmov = engc->tcur + binf->dmax;
+                    }
+                    pict->flgs |= PIF_IRES; /// reserving till it`s time
+                }
+                else if ((engc->tcur >= pict->tmov)) { /// restoring!
+                    pict->flgs &= ~PIF_IRES;
+                    pict->tmov = LLONG_MAX;
+                }
+            }
+            else /// disable the sprite if speeches are disallowed
+                pict->flgs |= PIF_IRES;
         }
         else if ((engc->tcur >= pict->tbhv)
              || ((pict->fram >= anim->fcnt) && !(binf->flgs & ANI_LOOP))) {
