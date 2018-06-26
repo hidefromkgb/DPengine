@@ -290,7 +290,8 @@ typedef struct {
           igrp;     /// behaviour group index
     float move;     /// movement speed in pixels per frame
     intptr_t trgt;  /// follow target library index (0 if empty)
-    uint32_t name,  /// BHV: name hash; EFF: target index
+    uint32_t temp,  /// temporary storage
+             name,  /// BHV: name hash; EFF: target index
              flgs,  /// BHV/EFF: flags
              link,  /// linked behaviour index
              bsay,  /// index of the speech said at the beginning
@@ -1003,6 +1004,16 @@ int namecmp(const void *a, const void *b) {
     return (retn)? (retn < 0)? -1 : 1 : 0;
 }
 
+int esaycmp(const void *a, const void *b) {
+    int64_t retn = (int64_t)((BINF*)a)->esay - (int64_t)((BINF*)b)->esay;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
+}
+
+int bsaycmp(const void *a, const void *b) {
+    int64_t retn = (int64_t)((BINF*)a)->bsay - (int64_t)((BINF*)b)->bsay;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
+}
+
 int uintcmp(const void *a, const void *b) {
     int64_t retn = (int64_t)*(uint32_t*)a - (int64_t)*(uint32_t*)b;
     return (retn)? (retn < 0)? -1 : 1 : 0;
@@ -1043,7 +1054,7 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
     char *temp;
 
     /// defaults         (neff, ieff, igrp)----v--v--v
-    *retn = (BINF){{}, {}, {}, 0, 5000, 15000, 0, 0, 0, 0.1 * FRM_WAIT, 0, 0,
+    *retn = (BINF){{}, {}, {}, 0, 5000, 15000, 0, 0, 0, 0.1 * FRM_WAIT, 0, 0, 0,
                    BHV_ALLM | ANI_LOOP, 0, 0, 0, {}};
 
     /// behaviour name......................................................... !def
@@ -1083,13 +1094,15 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
         retn->link = HashLine(Dequote(temp), 0);
 
     /// speech said on behaviour start.........................................  def = ""
-    if (TRY_TEMP(conf))
-        retn->bsay = HashLine(Dequote(temp), 0);
-
+    if (TRY_TEMP(conf)) { /// for the meaning of '\r' see ParseSpeech
+        (temp = Dequote(temp))[-1] = '\r';
+        retn->bsay = (*temp)? HashLine(ToLower(temp - 1, 0), 0) : 0;
+    }
     /// speech said on behaviour end...........................................  def = ""
-    if (TRY_TEMP(conf))
-        retn->esay = HashLine(Dequote(temp), 0);
-
+    if (TRY_TEMP(conf)) { /// for the meaning of '\r' see ParseSpeech
+        (temp = Dequote(temp))[-1] = '\r';
+        retn->esay = (*temp)? HashLine(ToLower(temp - 1, 0), 0) : 0;
+    }
     /// flag to never execute this behaviour at random.........................  def = False
     if (TRY_TEMP(conf))
         if (HashLine(ToLower(temp, 0), 0) == VAL_TRUE)
@@ -1158,7 +1171,7 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
     char *temp;
 
     /// defaults     (neff, ieff, igrp)----v--v--v
-    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0,
+    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0, 0,
                    ANI_LOOP | EFF_STAY | (EFF_RNDA * 0x1111), 0, 0, 0, {}};
 
     /// effect name (skipped intentionally).................................... !def
@@ -1208,12 +1221,15 @@ void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
     char *temp;
 
     /// speeches are nothing more than additional effect sprites!
-    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0,
+    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0, 0,
                   (EFF_TOPA << 0) | (EFF_BTMA << 4) | EFF_SAYS
                 | (EFF_TOPA << 8) | (EFF_BTMA << 12), 0, 0, 0, {}};
 
     /// speech name............................................................ !def
-    retn->name = HashLine(Dequote(GET_TEMP(conf)), 0);
+    /// N.B.: we prepend speech names with '\r' so that they
+    ///       don`t occasionally match some behaviour names!
+    (temp = Dequote(GET_TEMP(conf)))[-1] = '\r';
+    retn->name = retn->bsay = retn->esay = HashLine(ToLower(temp - 1, 0), 0);
 
     /// speech text............................................................ !def
     if ((*(*conf)++ == '"') && (temp = SplitLine(conf, '"', 0))) {
@@ -1864,12 +1880,16 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
             pict->indx = (pict->indx & -2) | (RNG_Load(engc->seed) & 1);
         pict->move = (T2FV){{0.0, 0.0}};
     }
-    /// now spawning effects for the behaviour, if any (and if allowed to)
+    /// now spawning the behaviour effects, if any (and if allowed to)
     if ((~flgs & CBF_DNSE) && (engc->ccur.flgs & CSF_EEFF))
         for (lend = binf->neff; lend; lend--)
             SpawnEffect(&engc->parr[engc->pcnt++], pict,
                          engc->seed, lend + binf->ieff - 1,
                         (pict->tbhv >= LLONG_MAX)? LLONG_MAX : engc->tcur);
+    /// now spawning the behaviour start speech, if any (and if allowed to)
+    if (binf->bsay && (engc->ccur.flgs & CSF_ESAY))
+        SpawnEffect(&engc->parr[engc->pcnt++], pict,
+                     engc->seed, binf->bsay - 1, engc->tcur);
 }
 
 long RandByGrp(uint32_t *seed, PICT *pict, BGRP *bgrp) {
@@ -1940,20 +1960,17 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
 
 
 
-long TruncateAndSort(BINF **base, long *rcnt) {
+long Truncate(BINF **base, long rcnt) {
     BINF *root = *base, *iter = root - 1;
     long indx;
 
-    for (indx = 0; indx < *rcnt; indx++)
+    for (indx = 0; indx < rcnt; indx++)
         if ((root[indx].unit[0].uuid | root[indx].unit[1].uuid)
         &&  (++iter != &root[indx]))
             *iter = root[indx];
-
-    if ((indx = iter - root + 1) < *rcnt)
-        *base = realloc(root, (*rcnt = indx) * sizeof(*root));
-    if (*rcnt)
-        qsort(*base, *rcnt, sizeof(**base), namecmp);
-    return *rcnt;
+    if ((indx = iter - root + 1) < rcnt)
+        *base = realloc(root, (rcnt = indx) * sizeof(*root));
+    return rcnt;
 }
 
 
@@ -2015,26 +2032,70 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
 
         /// saving preview name hash
         temp.name = elem->barr[elem->prev].name;
-        /// sorting all behaviours and effects by name hash
-        TruncateAndSort(&elem->earr, &elem->ecnt);
-        if (!TruncateAndSort(&elem->barr, &elem->bcnt)) {
+
+        /// shortening all behaviours and effects to save memory
+        if (!(elem->bcnt = Truncate(&elem->barr, elem->bcnt))) {
             /// freeing the library in case it`s got no behaviours
             FreeLib(elem);
             *elem = (LINF){};
             return 0;
         }
+        elem->ecnt = Truncate(&elem->earr, elem->ecnt);
+        qsort(elem->earr, elem->ecnt, sizeof(*elem->earr), namecmp);
+
+        /// [TODO:] deduplicate BSAY and ESAY loops right below!
+
+        /// resolving speeches said on behaviour start
+        qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), bsaycmp);
+        for (indx = elem->bcnt - 1; indx >= 0; indx--)
+            elem->barr[indx].temp = 0;
+        for (indx = elem->ecnt - 1; indx >= 0; indx--)
+            if ((elem->earr[indx].flgs & EFF_SAYS)
+            &&  (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
+                                 sizeof(*elem->barr), bsaycmp))) {
+                for (turn = iter - elem->barr + 1; (turn < elem->bcnt) &&
+                    (elem->barr[turn].bsay == iter->bsay); turn++)
+                    elem->barr[turn].temp = indx + 1;
+                for (turn = iter - elem->barr - 1; (turn >= 0) &&
+                    (elem->barr[turn].bsay == iter->bsay); turn--)
+                    elem->barr[turn].temp = indx + 1;
+                iter->temp = indx + 1;
+            }
+        for (indx = elem->bcnt - 1; indx >= 0; indx--)
+            elem->barr[indx].bsay = elem->barr[indx].temp;
+        /// resolving speeches said on behaviour end
+        qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), esaycmp);
+        for (indx = elem->bcnt - 1; indx >= 0; indx--)
+            elem->barr[indx].temp = 0;
+        for (indx = elem->ecnt - 1; indx >= 0; indx--)
+            if ((elem->earr[indx].flgs & EFF_SAYS)
+            &&  (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
+                                 sizeof(*elem->barr), esaycmp))) {
+                for (turn = iter - elem->barr + 1; (turn < elem->bcnt) &&
+                    (elem->barr[turn].esay == iter->esay); turn++)
+                    elem->barr[turn].temp = indx + 1;
+                for (turn = iter - elem->barr - 1; (turn >= 0) &&
+                    (elem->barr[turn].esay == iter->esay); turn--)
+                    elem->barr[turn].temp = indx + 1;
+                iter->temp = indx + 1;
+            }
+        for (indx = elem->bcnt - 1; indx >= 0; indx--)
+            elem->barr[indx].esay = elem->barr[indx].temp;
+
+        /// determining the effect count and min. index for every behaviour
+        /// (note that some behaviours may have no effects)
+        qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), namecmp);
+        for (indx = elem->ecnt - 1; indx >= 0; indx--)
+            if (!(elem->earr[indx].flgs & EFF_SAYS)
+            &&   (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
+                                  sizeof(*elem->barr), namecmp))) {
+                iter->ieff = indx;
+                iter->neff++;
+            }
         /// retrieving the new preview position
         if ((iter = bsearch(&temp, elem->barr, elem->bcnt,
                             sizeof(*elem->barr), namecmp)))
             elem->prev = iter - elem->barr;
-        /// determining the effect count and min. index for every behaviour
-        /// (note that some behaviours may have no effects)
-        for (indx = elem->ecnt - 1; indx >= 0; indx--)
-            if ((iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
-                                sizeof(*elem->barr), namecmp))) {
-                iter->ieff = indx;
-                iter->neff++;
-            }
         /// iterating over all behaviours
         for (indx = 0; indx < elem->bcnt; indx++) {
             /// resolving the linked behaviour, if any
@@ -2232,14 +2293,14 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
     /// (Q = 1 when repeat delay D = 0; otherwise, Q = ceil(((E)? E : B) / D)
     /// where E is effect duration and B is maximum behaviour duration)
     /// note that E / D is # of effects created per effect expiration window
-    for (qmax = indx = 0; indx < elem->bcnt; indx++)
+    for (qmax = (elem->nsay)? 1 : 0, indx = 0; indx < elem->bcnt; indx++)
         for (turn = 0; turn < elem->barr[indx].neff; turn++)
             if (!(iter = &elem->earr[elem->barr[indx].ieff + turn])->dmax)
                 qmax += 2; /// > 1, as ChooseBehaviour() runs before SortByY()
             else
                 qmax += 2 + ((iter->dmin)? iter->dmin : elem->barr[indx].dmax)
                           / iter->dmax;
-    engc->pmax += elem->wctx.icnt * ++qmax;
+    engc->pmax += elem->wctx.icnt * (qmax + 1); /// +1 for the sprite itself
     engc->parr = realloc(engc->parr, engc->pmax * sizeof(*engc->parr));
     /// now spawning sprites to the screen and emptying ICNT
     for (indx = 0; indx < elem->wctx.icnt; indx++) {
@@ -2511,6 +2572,10 @@ uint32_t eUpdFlags(ENGD *engd, intptr_t user, uint32_t flgs) {
     handle them all.
  3. Considering [1] and [2], it`s problematic to respawn an effect if its
     run time is less than its respawn time. It becomes "reserved" and waits.
+ 4. speeches are created as "reserved" and never ever go away, they just
+    wait in silence till the time comes for a random speech or for some new
+    behaviour to start (if the new one has a speech attached, it plays,
+    otherwise it is the exit speech from the previous one that gets played)
  **/
 uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                    uint64_t time, intptr_t user, uint32_t attr,
