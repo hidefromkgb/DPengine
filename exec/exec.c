@@ -3657,10 +3657,10 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
               "Interaction","Speech", "Effects","Update"};
     char *file, *fptr, *conf, *temp;
     uint32_t elem, *iter; /// for IF_BIN_FIND and RNG_Make
-    uint64_t tclr, cclr, pclr;
+    uint64_t cclr, pclr;//, tclr;
     intptr_t indx;
     int16_t runs = 0;
-    float _hsv[2][3];
+//    float _hsv[2][3];
     LINF *ulib;
     AINF atmp;
 

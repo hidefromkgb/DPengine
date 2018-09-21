@@ -303,20 +303,20 @@ long rMoveDir(char *dsrc, char *ddst) {
     long retn, iter;
 
     ptmp = pcmd = calloc(1, 128 + 4 * (strlen(dddd[0]) + strlen(dddd[1])));
-    strncpy(ptmp, (ddst)? "mv -f '" : "rm -r '", retn = sizeof("mv -f '") - 1);
+    memcpy(ptmp, (ddst)? "mv -f '" : "rm -r '", retn = sizeof("mv -f '") - 1);
     ptmp += retn;
     for (iter = (ddst)? 1 : 0; iter >= 0; iter--) {
         while ((dtmp = strchr(dddd[iter], '\''))) {
             strncpy(ptmp, dddd[iter], retn = dtmp - dddd[iter]);
             ptmp += retn;
-            strncpy(ptmp, "'\\''", retn = sizeof("'\\''") - 1);
+            memcpy(ptmp, "'\\''", retn = sizeof("'\\''") - 1);
             ptmp += retn;
             dddd[iter] = dtmp + 1;
         }
         strncpy(ptmp, dddd[iter], retn = strlen(dddd[iter]));
         ptmp += retn;
         dtmp = (iter)? "' '" : "'";
-        strncpy(ptmp, dtmp, retn = strlen(dtmp));
+        memcpy(ptmp, dtmp, retn = strlen(dtmp));
         ptmp += retn;
     }
     retn = !system(pcmd);

@@ -251,20 +251,20 @@ long rMoveDir(char *dsrc, char *ddst) {
     char *pcmd, *ptmp, *dtmp, *dddd[] = {(ddst)? ddst : dsrc, dsrc};
 
     ptmp = pcmd = calloc(1, 128 + 4 * (strlen(dddd[0]) + strlen(dddd[1])));
-    strncpy(ptmp, (ddst)? "mv -f '" : "rm -r '", retn = sizeof("mv -f '") - 1);
+    memcpy(ptmp, (ddst)? "mv -f '" : "rm -r '", retn = sizeof("mv -f '") - 1);
     ptmp += retn;
     for (iter = (ddst)? 1 : 0; iter >= 0; iter--) {
         while ((dtmp = strchr(dddd[iter], '\''))) {
             strncpy(ptmp, dddd[iter], retn = dtmp - dddd[iter]);
             ptmp += retn;
-            strncpy(ptmp, "'\\''", retn = sizeof("'\\''") - 1);
+            memcpy(ptmp, "'\\''", retn = sizeof("'\\''") - 1);
             ptmp += retn;
             dddd[iter] = dtmp + 1;
         }
         strncpy(ptmp, dddd[iter], retn = strlen(dddd[iter]));
         ptmp += retn;
         dtmp = (iter)? "' '" : "'";
-        strncpy(ptmp, dtmp, retn = strlen(dtmp));
+        memcpy(ptmp, dtmp, retn = strlen(dtmp));
         ptmp += retn;
     }
     retn = !system(pcmd);
@@ -461,16 +461,56 @@ void ProcessSpin(GtkSpinButton *spin, gpointer data) {
 
 
 
-gboolean ButtonSize(GtkWidget *gwnd, GdkRectangle *rect, gpointer user) {
-    PangoLayout *play = gtk_label_get_layout(GTK_LABEL(user));
+void MoveControl(CTRL *ctrl, intptr_t data) {
+    long xpos = (int16_t)data, ypos = (int32_t)data >> 16;
+    CTRL *root = ctrl;
+
+    while (root->prev)
+        root = root->prev;
+    xpos = (xpos < 0)? -xpos : xpos * (uint16_t)(root->priv[2]      );
+    ypos = (ypos < 0)? -ypos : ypos * (uint16_t)(root->priv[2] >> 16);
+    gtk_fixed_move(GTK_FIXED(ctrl->prev->priv[7]),
+                   GTK_WIDGET(ctrl->priv[0]), xpos, ypos);
+}
+
+
+
+uint32_t GetWidgetSize(intptr_t what) {
+    GtkRequisition requ;
+
+    gtk_widget_size_request(GTK_WIDGET(what), &requ);
+    return (uint16_t)requ.width | ((uint32_t)requ.height  << 16);
+}
+
+
+
+void LabelSize(GtkWidget *gwnd, GdkRectangle *rect, gpointer data) {
+    CTRL *ctrl = (CTRL*)data;
+    uint32_t size;
+
+    if (((size = GetWidgetSize(ctrl->priv[7])) != ctrl->priv[2])
+    ||  ((uint16_t)(ctrl->priv[1] >> 16) != rect->height)
+    ||  ((uint16_t)(ctrl->priv[1]      ) != rect->width)) {
+        ctrl->priv[2] = size;
+        ctrl->priv[1] = (uint16_t)rect->width | ((uint32_t)rect->height << 16);
+        gtk_layout_move(GTK_LAYOUT(ctrl->priv[6]), GTK_WIDGET(ctrl->priv[7]),
+                       ((ctrl->flgs & FST_CNTR)?
+                       (rect->width  - (int16_t)(size      )) / 2 : 0),
+                       (rect->height - (int16_t)(size >> 16)) / 2);
+    }
+}
+
+
+
+void ButtonSize(GtkWidget *gwnd, GdkRectangle *rect, gpointer data) {
+    PangoLayout *play = gtk_label_get_layout(GTK_LABEL(data));
     PangoRectangle prec;
 
     pango_layout_set_width(play, rect->width * PANGO_SCALE);
     pango_layout_set_height(play, rect->height * PANGO_SCALE);
     pango_layout_get_pixel_extents(play, 0, &prec);
-    gtk_widget_set_size_request(GTK_WIDGET(user), prec.width, prec.height);
-    gtk_widget_queue_draw(GTK_WIDGET(user));
-    return TRUE;
+    gtk_widget_set_size_request(GTK_WIDGET(data), prec.width, prec.height);
+    gtk_widget_queue_draw(GTK_WIDGET(data));
 }
 
 
@@ -538,20 +578,6 @@ gboolean IBoxDraw(GtkWidget *gwnd, GdkEventExpose *eexp, gpointer data) {
 
 
 
-void MoveControl(CTRL *ctrl, intptr_t data) {
-    long xpos = (int16_t)data, ypos = (int32_t)data >> 16;
-    CTRL *root = ctrl;
-
-    while (root->prev)
-        root = root->prev;
-    xpos = (xpos < 0)? -xpos : xpos * (uint16_t)(root->priv[2]      );
-    ypos = (ypos < 0)? -ypos : ypos * (uint16_t)(root->priv[2] >> 16);
-    gtk_fixed_move(GTK_FIXED(ctrl->prev->priv[7]),
-                   GTK_WIDGET(ctrl->priv[0]), xpos, ypos);
-}
-
-
-
 gboolean OptQuit(GtkWidget *gwnd, GdkEvent *ewcl, gpointer data) {
     if (((CTRL*)data)->fc2e((CTRL*)data, MSG_WEND, 0)) {
         gtk_main_quit();
@@ -579,7 +605,7 @@ gboolean OptResize(GtkWidget *gwnd, GdkEventConfigure *ecnf, gpointer data) {
 ///  0: GtkWidget
 ///  1: (wndsize.x) | (wndsize.y << 16)
 ///  2: (fontmul.x) | (fontmul.y << 16)
-///  3:
+///  3: PangoLayout
 ///  4:
 ///  5:
 ///  6:
@@ -607,6 +633,19 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             gtk_widget_set_size_request(gwnd, xdim, ydim);
             gtk_window_set_position(GTK_WINDOW(gwnd), GTK_WIN_POS_CENTER);
             break;
+        }
+        case MSG_WTGD: {
+            PangoLayout *play = (PangoLayout*)ctrl->priv[3];
+            AINF *anim = (AINF*)data;
+            int xdim, ydim;
+
+            pango_layout_set_wrap(play, PANGO_WRAP_WORD_CHAR);
+            pango_layout_set_alignment(play, PANGO_ALIGN_CENTER);
+            pango_layout_set_width(play, (anim->xdim > 0)? anim->xdim : -1);
+            pango_layout_set_height(play, (anim->ydim > 0)? anim->ydim : -1);
+            pango_layout_set_text(play, (char*)anim->time, -1);
+            pango_layout_get_pixel_size(play, &xdim, &ydim);
+            return (uint16_t)xdim | ((uint32_t)ydim << 16);
         }
     }
     return 0;
@@ -740,13 +779,9 @@ intptr_t FE2CL(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 ///  7:
 intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
-        case MSG__GSZ: {
-            gint xdim, ydim;
+        case MSG__GSZ:
+            return GetWidgetSize(ctrl->priv[0]);
 
-            gtk_widget_get_size_request(GTK_WIDGET(ctrl->priv[0]),
-                                        &xdim, &ydim);
-            return (uint16_t)xdim | ((uint32_t)ydim << 16);
-        }
         case MSG__POS:
             MoveControl(ctrl, data);
             break;
@@ -782,23 +817,19 @@ intptr_t FE2CN(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 
 /// PRIV:
-///  0: GtkWidget (container)
-///  1:
-///  2:
+///  0: GtkWidget (outer container)
+///  1: (inner.width) | (inner.height << 16)
+///  2: (label.width) | (label.height << 16)
 ///  3:
 ///  4:
 ///  5:
-///  6:
-///  7: GtkWidget (text)
+///  6: GtkWidget (inner container)
+///  7: GtkWidget (text label itself)
 intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
-        case MSG__GSZ: {
-            gint xdim, ydim;
+        case MSG__GSZ:
+            return GetWidgetSize(ctrl->priv[0]);
 
-            gtk_widget_get_size_request(GTK_WIDGET(ctrl->priv[0]),
-                                        &xdim, &ydim);
-            return (uint16_t)xdim | (uint32_t)(ydim << 16);
-        }
         case MSG__POS:
             MoveControl(ctrl, data);
             break;
@@ -906,6 +937,7 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 void rFreeControl(CTRL *ctrl) {
     switch (ctrl->flgs & FCT_TTTT) {
         case FCT_WNDW:
+            g_object_unref(G_OBJECT(ctrl->priv[3])); /// PangoLayout
             break;
 
         case FCT_TEXT:
@@ -948,6 +980,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
     root = ctrl->prev;
     if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
         PangoFontMetrics *fmet;
+        PangoContext *pctx;
         long xfon, yfon;
 
         ctrl->fe2c = FE2CW;
@@ -962,10 +995,10 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                                      GDK_WINDOW_TYPE_HINT_DIALOG);
         }
         gtk_container_set_border_width(GTK_CONTAINER(gwnd), 0);
-
-        fmet = pango_context_get_metrics(gtk_widget_get_pango_context(gwnd),
-                                         gtk_widget_get_style(gwnd)->font_desc,
-        /** [TODO:] set language? -> **/ 0);
+        pctx = gtk_widget_get_pango_context(gwnd);
+        ctrl->priv[3] = (intptr_t)pango_layout_new(pctx);
+        fmet = pango_context_get_metrics
+                   (pctx, gtk_widget_get_style(gwnd)->font_desc, 0);
         xfon = pango_font_metrics_get_approximate_char_width(fmet);
         yfon = pango_font_metrics_get_ascent(fmet);
         ctrl->priv[2] =  (uint16_t)round(1.500 * xfon / PANGO_SCALE)
@@ -1005,16 +1038,21 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
             case FCT_TEXT:
                 gwnd = gtk_frame_new(0);
                 ctrl->fe2c = FE2CT;
+                ctrl->priv[1] = ctrl->priv[2] = 0;
                 ctrl->priv[7] = (intptr_t)gtk_label_new(0);
-                gtk_widget_show(GTK_WIDGET(ctrl->priv[7]));
-                gtk_misc_set_alignment(GTK_MISC(ctrl->priv[7]),
-                                      (ctrl->flgs & FST_CNTR)? 0.5 : 0.0, 0.5);
-                gtk_container_add(GTK_CONTAINER(gwnd),
+                ctrl->priv[6] = (intptr_t)gtk_layout_new(0, 0);
+                g_signal_connect(G_OBJECT(ctrl->priv[6]), "size-allocate",
+                                 G_CALLBACK(LabelSize), ctrl);
+                gtk_container_add(GTK_CONTAINER(ctrl->priv[6]),
                                   GTK_WIDGET(ctrl->priv[7]));
+                gtk_container_add(GTK_CONTAINER(gwnd),
+                                  GTK_WIDGET(ctrl->priv[6]));
                 gtk_frame_set_shadow_type(GTK_FRAME(gwnd),
                                          (ctrl->flgs & FST_SUNK)?
                                           GTK_SHADOW_ETCHED_IN :
                                           GTK_SHADOW_NONE);
+                gtk_widget_show(GTK_WIDGET(ctrl->priv[6]));
+                gtk_widget_show(GTK_WIDGET(ctrl->priv[7]));
                 break;
 
             case FCT_BUTN:
