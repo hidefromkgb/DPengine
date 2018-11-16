@@ -479,7 +479,7 @@ uint32_t GetWidgetSize(intptr_t what) {
     GtkRequisition requ;
 
     gtk_widget_size_request(GTK_WIDGET(what), &requ);
-    return (uint16_t)requ.width | ((uint32_t)requ.height  << 16);
+    return (uint16_t)requ.width | ((uint32_t)requ.height << 16);
 }
 
 
@@ -496,7 +496,7 @@ void LabelSize(GtkWidget *gwnd, GdkRectangle *rect, gpointer data) {
         gtk_layout_move(GTK_LAYOUT(ctrl->priv[6]), GTK_WIDGET(ctrl->priv[7]),
                        ((ctrl->flgs & FST_CNTR)?
                        (rect->width  - (int16_t)(size      )) / 2 : 0),
-                       (rect->height - (int16_t)(size >> 16)) / 2);
+                       (rect->height - (int16_t)(size >> 16)) / 2 - 1);
     }
 }
 
@@ -506,7 +506,7 @@ void ButtonSize(GtkWidget *gwnd, GdkRectangle *rect, gpointer data) {
     PangoLayout *play = gtk_label_get_layout(GTK_LABEL(data));
     PangoRectangle prec;
 
-    pango_layout_set_width(play, rect->width * PANGO_SCALE);
+    pango_layout_set_width(play, (rect->width - 8) * PANGO_SCALE);
     pango_layout_set_height(play, rect->height * PANGO_SCALE);
     pango_layout_get_pixel_extents(play, 0, &prec);
     gtk_widget_set_size_request(GTK_WIDGET(data), prec.width, prec.height);
@@ -605,7 +605,7 @@ gboolean OptResize(GtkWidget *gwnd, GdkEventConfigure *ecnf, gpointer data) {
 ///  0: GtkWidget
 ///  1: (wndsize.x) | (wndsize.y << 16)
 ///  2: (fontmul.x) | (fontmul.y << 16)
-///  3: PangoLayout
+///  3: PangoFontDescription
 ///  4:
 ///  5:
 ///  6:
@@ -634,17 +634,71 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             gtk_window_set_position(GTK_WINDOW(gwnd), GTK_WIN_POS_CENTER);
             break;
         }
-        case MSG_WTGD: {
-            PangoLayout *play = (PangoLayout*)ctrl->priv[3];
+        case MSG_WTDA: {
             AINF *anim = (AINF*)data;
-            int xdim, ydim;
+            PangoRectangle rect =
+                {(uint8_t)(anim->xdim >> 16), (uint8_t)(anim->ydim >> 16)};
+            PangoFontDescription *pfnt = (PangoFontDescription*)ctrl->priv[3];
+            PangoLayout *play;
+            cairo_surface_t *pict, *surf;
+//            cairo_font_options_t *opts;
+            cairo_t *temp;
 
+            rect.width  = (uint16_t)anim->xdim - rect.x
+                        - (uint8_t)(anim->xdim >> 24);
+            rect.height = (uint16_t)anim->ydim - rect.y
+                        - (uint8_t)(anim->ydim >> 24);
+
+            /// [TODO:] get rid of this disgusting width hack
+            rect.width += 6;
+            rect.x -= 3;
+
+            pict = cairo_image_surface_create_for_data
+                       ((uint8_t*)anim->uuid, CAIRO_FORMAT_ARGB32,
+                        (uint16_t)anim->xdim, (uint16_t)anim->ydim,
+                         sizeof(uint32_t) * (uint16_t)anim->xdim);
+            surf = cairo_surface_create_for_rectangle
+                       (pict, rect.x, rect.y, rect.width, rect.height);
+            play = pango_cairo_create_layout(temp = cairo_create(surf));
+//            opts = cairo_font_options_create();
+//            cairo_font_options_set_antialias(opts, CAIRO_ANTIALIAS_SUBPIXEL);
+//            cairo_set_font_options(temp, opts);
+            pango_layout_set_font_description(play, pfnt);
             pango_layout_set_wrap(play, PANGO_WRAP_WORD_CHAR);
             pango_layout_set_alignment(play, PANGO_ALIGN_CENTER);
-            pango_layout_set_width(play, (anim->xdim > 0)? anim->xdim : -1);
-            pango_layout_set_height(play, (anim->ydim > 0)? anim->ydim : -1);
+            pango_layout_set_width (play, rect.width  * PANGO_SCALE);
+            pango_layout_set_height(play, rect.height * PANGO_SCALE);
+            pango_layout_set_text(play, (char*)anim->time, -1);
+            pango_cairo_update_layout(temp, play);
+            pango_cairo_show_layout(temp, play);
+            cairo_destroy(temp);
+            g_object_unref(play);
+            cairo_surface_destroy(surf);
+            cairo_surface_destroy(pict);
+//            cairo_font_options_destroy(opts);
+            break;
+        }
+        case MSG_WTGD: {
+            AINF *anim = (AINF*)data;
+            int xdim = (anim->xdim > 0)? anim->xdim * PANGO_SCALE : -1,
+                ydim = (anim->ydim > 0)? anim->ydim * PANGO_SCALE : -1;
+            PangoFontDescription *pfnt = (PangoFontDescription*)ctrl->priv[3];
+            PangoLayout *play;
+            cairo_surface_t *surf;
+            cairo_t *temp;
+
+            surf = cairo_recording_surface_create(CAIRO_CONTENT_ALPHA, 0);
+            play = pango_cairo_create_layout(temp = cairo_create(surf));
+            pango_layout_set_width(play, xdim);
+            pango_layout_set_height(play, ydim);
+            pango_layout_set_font_description(play, pfnt);
+            pango_layout_set_wrap(play, PANGO_WRAP_WORD_CHAR);
+            pango_layout_set_alignment(play, PANGO_ALIGN_CENTER);
             pango_layout_set_text(play, (char*)anim->time, -1);
             pango_layout_get_pixel_size(play, &xdim, &ydim);
+            cairo_destroy(temp);
+            g_object_unref(play);
+            cairo_surface_destroy(surf);
             return (uint16_t)xdim | ((uint32_t)ydim << 16);
         }
     }
@@ -937,7 +991,6 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 void rFreeControl(CTRL *ctrl) {
     switch (ctrl->flgs & FCT_TTTT) {
         case FCT_WNDW:
-            g_object_unref(G_OBJECT(ctrl->priv[3])); /// PangoLayout
             break;
 
         case FCT_TEXT:
@@ -996,9 +1049,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
         }
         gtk_container_set_border_width(GTK_CONTAINER(gwnd), 0);
         pctx = gtk_widget_get_pango_context(gwnd);
-        ctrl->priv[3] = (intptr_t)pango_layout_new(pctx);
-        fmet = pango_context_get_metrics
-                   (pctx, gtk_widget_get_style(gwnd)->font_desc, 0);
+        ctrl->priv[3] = (intptr_t)gwnd->style->font_desc;
+        fmet = pango_context_get_metrics(pctx, gwnd->style->font_desc, 0);
         xfon = pango_font_metrics_get_approximate_char_width(fmet);
         yfon = pango_font_metrics_get_ascent(fmet);
         ctrl->priv[2] =  (uint16_t)round(1.500 * xfon / PANGO_SCALE)
