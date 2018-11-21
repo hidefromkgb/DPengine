@@ -44,7 +44,7 @@ void lRestartEngine(ENGD *engd) {
     /// to ensure that it did process the stop notification we just sent;
     /// if not in a timer context, a dummy event will be rejected anyway
     post = otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2_
-               (NSEvent(), NSApplicationDefined, (CGPoint){},
+               (NSEvent(), NSApplicationDefined, (NSPoint){},
                            NSApplicationDefined, 0, 0, 0, 0, 0, 0);
     stop_(thrd, post);
     postEvent_atStart_(thrd, post, true);
@@ -175,7 +175,7 @@ void OnFPS(CFRunLoopTimerRef runp, void *user) {
 
 
 void OnCalc(CFRunLoopObserverRef runp, CFRunLoopActivity acti, void *user) {
-    CGPoint dptr;
+    NSPoint dptr;
     uint32_t attr;
     intptr_t *data;
     DRAW *draw;
@@ -210,7 +210,7 @@ void OnCalc(CFRunLoopObserverRef runp, CFRunLoopActivity acti, void *user) {
     if (~attr & COM_RGPU) {
         CGContextSetBlendMode(draw->hctx, kCGBlendModeClear);
         CGContextFillRect(draw->hctx,
-                         (CGRect){{0, 0}, {draw->xdim, draw->ydim}});
+                         (NSRect){{0, 0}, {draw->xdim, draw->ydim}});
     }
     cOutputFrame((ENGD*)user, 0);
     setNeedsDisplay_(draw->view, true);
@@ -218,7 +218,7 @@ void OnCalc(CFRunLoopObserverRef runp, CFRunLoopActivity acti, void *user) {
 
 
 
-void MAC_Handler(OnDraw, CGRect rect) {
+void MAC_Handler(OnDraw, NSRect rect) {
     CGContextRef ctxt;
     CGImageRef iref;
 
@@ -239,7 +239,7 @@ void MAC_Handler(OnDraw, CGRect rect) {
         ctxt = graphicsPort(currentContext(NSGraphicsContext()));
         CGContextSetBlendMode(ctxt, kCGBlendModeCopy);
         CGContextDrawImage
-            (ctxt, (CGRect){{0, 0}, {draw->xdim, draw->ydim}}, iref);
+            (ctxt, (NSRect){{0, 0}, {draw->xdim, draw->ydim}}, iref);
         CGImageRelease(iref);
     }
 }
@@ -250,12 +250,12 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                   BGRA **bptr, intptr_t *data, uint32_t flgs) {
     #define SUB_VDLG "lNSV"
 
+    NSString *scib;
     NSApplication *thrd;
     NSAutoreleasePool *pool;
     CFRunLoopObserverRef idl1, idl2;
     CFRunLoopTimerRef tmrf;
-    CFStringRef scib;
-    CGRect dims;
+    NSRect dims;
     Class view;
     DRAW draw;
 
@@ -270,7 +270,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     draw.attr = 0;
     draw.xdim = xdim - xpos;
     draw.ydim = ydim - ypos;
-    dims = (CGRect){{0, 0}, {draw.xdim, draw.ydim}};
+    dims = (NSRect){{0, 0}, {draw.xdim, draw.ydim}};
 
     pool = init(alloc(NSAutoreleasePool()));
     thrd = sharedApplication(NSApplication());
