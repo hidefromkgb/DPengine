@@ -992,7 +992,7 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             real.size = GetStringSize(capt, real.size);
             MAC_FreeString(capt);
             real.size.width *= 2;  /// to guarantee that the string will fit
-            real.size.height += 4; /// why 4? no idea! [TODO:] compute in RT
+            real.size.height += 2; /// why 2? no idea! [TODO:] compute in RT
             rect = frame((NSView*)ctrl->priv[0]);
             if (ctrl->flgs & FST_CNTR)
                 real.origin.x = 0.5 * (rect.size.width - real.size.width);
