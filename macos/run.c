@@ -1006,8 +1006,8 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
         case MSG__ENB:
             setTextColor_((NSTextField*)ctrl->priv[1],
-                          (data)? textColor(NSColor())
-                                : placeholderTextColor(NSColor()));
+                          (data)? controlTextColor(NSColor())
+                                : disabledControlTextColor(NSColor()));
             break;
 
         case MSG__SHW:
