@@ -210,7 +210,8 @@ uint64_t lTimeFunc() {
 
 
 void lRestartEngine(ENGD *engd) {
-    gtk_main_quit();
+    if (gtk_main_level())
+        gtk_main_quit();
 }
 
 

@@ -5,7 +5,7 @@
 		<Option title="DPengine (linux)" />
 		<Option makefile_is_custom="1" />
 		<Option compiler="gcc" />
-		<Option virtualFolders="src/;src/run/;src/run/exec/;src/run/exec/loc/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/load/;src/lib/core/gif/load/;" />
+		<Option virtualFolders="src/;src/run/;src/run/exec/;src/run/exec/loc/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/load/;src/lib/core/gif/load/" />
 		<Build>
 			<Target title="RelJoined">
 				<Option output="../linux-gtk" prefix_auto="1" extension_auto="1" />
@@ -94,6 +94,9 @@
 		<Unit filename="../exec/loc/ru.lang">
 			<Option virtualFolder="src/run/exec/loc/" />
 		</Unit>
+		<Unit filename="Makefile">
+			<Option virtualFolder="src/" />
+		</Unit>
 		<Unit filename="lib.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/lib/" />
@@ -101,9 +104,6 @@
 		<Unit filename="run.c">
 			<Option compilerVar="CC" />
 			<Option virtualFolder="src/run/" />
-		</Unit>
-		<Unit filename="Makefile">
-			<Option virtualFolder="src/" />
 		</Unit>
 		<Extensions>
 			<code_completion />

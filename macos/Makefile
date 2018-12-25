@@ -1,7 +1,7 @@
 MAC_VER = $(shell sw_vers -productVersion | cut -d. -f-2 | tr -d .)
 MAC_OLD = $(shell [ $(MAC_VER) -le 107 ] && echo true)
 
-CC = clang -m32 -mstackrealign -fno-stack-protector -fvisibility=hidden
+CC = clang -m32 -mstackrealign -fno-stack-protector -fvisibility=hidden -fconstant-cfstrings
 ifeq ($(MAC_OLD), true)
 CC += -no-integrated-as -DMAC_OLD
 endif

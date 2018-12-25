@@ -462,7 +462,7 @@ void ProcessSpin(GtkSpinButton *spin, gpointer data) {
 
 
 void MoveControl(CTRL *ctrl, intptr_t data) {
-    long xpos = (int16_t)data, ypos = (int32_t)data >> 16;
+    long xpos = ((long*)data)[0], ypos = ((long*)data)[1];
     CTRL *root = ctrl;
 
     while (root->prev)
@@ -547,6 +547,14 @@ gboolean ListItemUpdate(GtkTreeModel *tree, GtkTreePath *path,
     gtk_list_store_set(GTK_LIST_STORE(ctrl->priv[2]), iter, 0, bool, -1);
     g_free(pstr);
     return FALSE;
+}
+
+
+
+void WndScroll(GtkAdjustment *vadj, gpointer data) {
+    CTRL *ctrl = (CTRL*)data;
+
+    ctrl->fc2e(ctrl, MSG_SGIP, ctrl->fe2c(ctrl, MSG_SGIP, 0));
 }
 
 
@@ -636,10 +644,12 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         }
         case MSG_WTDA: {
             AINF *anim = (AINF*)data;
+            uint8_t cfnt[4] = {anim->fcnt >> 16, anim->fcnt >> 8, anim->fcnt};
             PangoRectangle rect =
                 {(uint8_t)(anim->xdim >> 16), (uint8_t)(anim->ydim >> 16)};
             PangoFontDescription *pfnt = (PangoFontDescription*)ctrl->priv[3];
             PangoLayout *play;
+            PangoAttrList *attr;
             cairo_surface_t *pict, *surf;
 //            cairo_font_options_t *opts;
             cairo_t *temp;
@@ -663,6 +673,11 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 //            opts = cairo_font_options_create();
 //            cairo_font_options_set_antialias(opts, CAIRO_ANTIALIAS_SUBPIXEL);
 //            cairo_set_font_options(temp, opts);
+            pango_attr_list_insert(attr = pango_attr_list_new(),
+                                   pango_attr_foreground_new(cfnt[0] << 8,
+                                                             cfnt[1] << 8,
+                                                             cfnt[2] << 8));
+            pango_layout_set_attributes(play, attr);
             pango_layout_set_font_description(play, pfnt);
             pango_layout_set_wrap(play, PANGO_WRAP_WORD_CHAR);
             pango_layout_set_alignment(play, PANGO_ALIGN_CENTER);
@@ -676,6 +691,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             cairo_surface_destroy(surf);
             cairo_surface_destroy(pict);
 //            cairo_font_options_destroy(opts);
+            pango_attr_list_unref(attr);
             break;
         }
         case MSG_WTGD: {
@@ -725,7 +741,8 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ctrl->priv[0]),
                                           dcur / dmax);
             gtk_widget_queue_draw(GTK_WIDGET(ctrl->priv[0]));
-            gtk_main_iteration_do(0);
+            while (gtk_events_pending())
+                gtk_main_iteration_do(0);
             break;
         }
         case MSG__TXT:
@@ -910,16 +927,20 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 ///  0: GtkWidget
 ///  1: (wndsize.x) | (wndsize.y << 16)
 ///  2: (wndmove.x) | (wndmove.y << 16)
-///  3:
+///  3: total height
 ///  4:
 ///  5:
 ///  6: GtkViewport
 ///  7: GtkFixed
 intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
+        case MSG__GSZ:
+            return ctrl->priv[1];
+
         case MSG_WSZC: {
             GtkAllocation area;
             long xdim, ydim;
+            double temp;
 
             if ((ctrl->prev->flgs & FCT_TTTT) != FCT_WNDW)
                 return -1;
@@ -927,6 +948,7 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if (!data) {
                 xdim = (uint16_t)(ctrl->priv[1]      );
                 ydim = (uint16_t)(ctrl->priv[1] >> 16);
+                data = ctrl->priv[1];
             }
             else {
                 xdim = (uint16_t)(ctrl->priv[2]      );
@@ -935,18 +957,36 @@ intptr_t FE2CS(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                      * (uint16_t)(ctrl->prev->priv[2]      );
                 ydim = (uint16_t)(data >> 16) - ydim - ctrl->prev->ydim
                      * (uint16_t)(ctrl->prev->priv[2] >> 16);
-                ctrl->priv[1] = (uint16_t)xdim | ((uint32_t)ydim << 16);
+                data = (uint16_t)xdim | ((uint32_t)ydim << 16);
             }
             gtk_widget_set_size_request(GTK_WIDGET(ctrl->priv[0]), xdim, ydim);
             if (ctrl->fc2e) {
                 gtk_widget_get_allocation
                     (gtk_scrolled_window_get_vscrollbar
                          (GTK_SCROLLED_WINDOW(ctrl->priv[0])), &area);
-                ctrl->fc2e(ctrl, MSG_SMAX, ctrl->priv[1] - area.width);
+                temp = (ctrl->priv[3])?
+                    (double)ctrl->fe2c(ctrl, MSG_SGIP, 0) / ctrl->priv[3] : 0;
+                ctrl->priv[3] = ctrl->fc2e(ctrl, MSG_SSID, data - area.width);
+                gtk_widget_set_size_request(GTK_WIDGET(ctrl->priv[7]),
+                                            xdim, ctrl->priv[3]);
+                ctrl->priv[1] = data;
+                ctrl->fc2e(ctrl, MSG_SGIP, temp *= ctrl->priv[3]);
+                gtk_adjustment_set_value
+                    (gtk_scrolled_window_get_vadjustment
+                         (GTK_SCROLLED_WINDOW(ctrl->priv[0])), temp);
             }
+            ctrl->priv[1] = data;
             gtk_widget_show(GTK_WIDGET(ctrl->priv[0]));
             break;
         }
+        case MSG_SGIP:
+            return gtk_adjustment_get_value
+                       (gtk_scrolled_window_get_vadjustment
+                            (GTK_SCROLLED_WINDOW(ctrl->priv[0])));
+
+        case MSG_SGTH:
+            return ctrl->priv[3];
+
         case MSG__SHW:
             ((data)? gtk_widget_show
                    : gtk_widget_hide)(GTK_WIDGET(ctrl->priv[0]));
@@ -1206,6 +1246,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                                   GTK_WIDGET(ctrl->priv[6]));
                 gtk_widget_show(GTK_WIDGET(ctrl->priv[6]));
                 gtk_widget_show(GTK_WIDGET(ctrl->priv[7]));
+                g_signal_connect(G_OBJECT(gtk_scrolled_window_get_vadjustment
+                                              (GTK_SCROLLED_WINDOW(gwnd))),
+                                 "value-changed", G_CALLBACK(WndScroll), ctrl);
                 break;
 
             case FCT_IBOX:

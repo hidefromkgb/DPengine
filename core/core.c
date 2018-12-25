@@ -1011,6 +1011,7 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
                 TreeDel(&engd->hpix, TreeDelAnim);
                 engd->uniq = 0;
             }
+            StopThreads(engd);
             lFreeSemaphore(&engd->isem, engd->ncpu);
             lFreeSemaphore(&engd->osem, engd->ncpu);
             free(engd->thrd);

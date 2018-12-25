@@ -351,11 +351,16 @@ typedef struct {
              bcnt,  /// total behaviours count
              ecnt,  /// total effects count
              nnam,  /// [ description line length in uint8_t`s               ]
-             nofs;  /// [ maximum description line offset                    ]
+             noff;  /// [ maximum description line offset                    ]
     struct {
-    long     iofs,  /// [ current description line offset                    ]
+    long     ioff,  /// [ current description line offset                    ]
              ifrm,  /// [ index of the frame played in the main menu         ]
-             icnt;  /// [ number of behavioral sprites requested by the user ]
+             icnt,  /// [ number of behavioral sprites requested by the user ]
+             xoff,  /// [ preview's horz. offset; negative if needs changing ]
+             ymin,  /// [ preview's minimal vert. offset                     ]
+             ymax,  /// [ preview's maximal vert. offset                     ]
+             yold,  /// [ preview's previous maximal vert. offset            ]
+             show;  /// [ whether the preview needs to be shown              ]
     uint64_t ttxt,  /// [ description line offset timestamp in the main menu ]
              tfrm;  /// [ frame timestamp in the main menu                   ]
     }        wctx;  /// '----------------- WRITABLE CONTEXT -----------------'
@@ -3046,10 +3051,21 @@ void Relocalize(ENGC *engc, char *lang) {
 
 
 
+void CreatePreview(LINF *ulib) {
+    rMakeControl(&ulib->pict, 0, 0);
+    rMakeControl(&ulib->spin, 0, 0);
+    rMakeControl(&ulib->capt, 0, 0);
+    RUN_FE2C(ulib->spin, MSG_NDIM, 30000 << 16);
+    RUN_FE2C(ulib->spin, MSG_NSET, 0);
+    RUN_FE2C(ulib->capt, MSG__TXT, (intptr_t)ulib->scrl);
+}
+
+
+
 void UpdPreview(intptr_t data, uint64_t time) {
     enum {FRM_TEXT = 6}; /// text advancment multiplier of FRM_WAIT
     ENGC *engc = (ENGC*)data;
-    LINF *elem;
+    LINF *ulib;
     AINF *anim;
     char *name;
     long  iter;
@@ -3058,30 +3074,30 @@ void UpdPreview(intptr_t data, uint64_t time) {
         return; /// previews are hidden when the engine is active
 
     for (iter = data = 0; data < engc->lcnt; data++) {
-        elem = &engc->libs[data];
-        if (!(anim = &elem->barr[elem->prev].unit[0])->fcnt)
+        ulib = &engc->libs[data];
+        if (!(anim = ulib->barr[ulib->prev].unit)->fcnt || !ulib->capt.fe2c)
             continue; /// this preview has been loaded incorrectly, skipping
-        if (elem->scrl && (time > elem->wctx.ttxt)) { /// update text!
-            if (++elem->wctx.iofs >= elem->nofs)
-                elem->wctx.iofs = -elem->wctx.iofs;
-            name = &elem->scrl[(elem->wctx.iofs < 0)? -elem->wctx.iofs
-                                                    :  elem->wctx.iofs];
-            name[elem->nnam + elem->nofs] = '\0';
-            if (time > (elem->wctx.ttxt += FRM_WAIT * FRM_TEXT))
-                elem->wctx.ttxt = time + FRM_WAIT * (iter++ % FRM_TEXT);
+        if (ulib->noff && (time > ulib->wctx.ttxt)) { /// update text!
+            if (++ulib->wctx.ioff >= ulib->noff)
+                ulib->wctx.ioff = -ulib->wctx.ioff;
+            name = &ulib->scrl[(ulib->wctx.ioff < 0)? -ulib->wctx.ioff
+                                                    :  ulib->wctx.ioff];
+            name[ulib->nnam + ulib->noff] = '\0';
+            if (time > (ulib->wctx.ttxt += FRM_WAIT * FRM_TEXT))
+                ulib->wctx.ttxt = time + FRM_WAIT * (iter++ % FRM_TEXT);
             /// ^-- this is done to split text updates into several batches,
             ///     thus lowering the number of simultaneous updates per tick
-            RUN_FE2C(elem->capt, MSG__TXT, (intptr_t)name);
-            if (-elem->wctx.iofs != elem->nofs)
-                name[elem->nnam + elem->nofs] = ' ';
+            RUN_FE2C(ulib->capt, MSG__TXT, (intptr_t)name);
+            if (-ulib->wctx.ioff != ulib->noff)
+                name[ulib->nnam + ulib->noff] = ' ';
         }
-        if (time > elem->wctx.tfrm) { /// update animation!
-            if (++elem->wctx.ifrm >= anim->fcnt)
-                elem->wctx.ifrm = 0;
-            if (time > (elem->wctx.tfrm += anim->time[elem->wctx.ifrm]))
-                elem->wctx.tfrm = time; /// > 1 frame skipped, resetting
-            RUN_FE2C(elem->pict, MSG_IFRM,
-                    (elem->wctx.ifrm & 0x3FF) | (anim->uuid << 10));
+        if (time > ulib->wctx.tfrm) { /// update animation!
+            if (++ulib->wctx.ifrm >= anim->fcnt)
+                ulib->wctx.ifrm = 0;
+            if (time > (ulib->wctx.tfrm += anim->time[ulib->wctx.ifrm]))
+                ulib->wctx.tfrm = time; /// > 1 frame skipped, resetting
+            RUN_FE2C(ulib->pict, MSG_IFRM,
+                    (ulib->wctx.ifrm & 0x3FF) | (anim->uuid << 10));
         }
     }
 }
@@ -3110,6 +3126,90 @@ void CategorizePreviews(ENGC *engc) {
     }
     RecountSelectedLibs(engc);
     RUN_FE2C(engc->MCT_CHAR, MSG_WSZC, 0);
+}
+
+
+
+void DisplayPreviews(ENGC *engc, long yoff, long ydim, long ywnd) {
+    long iter = 0, show = -1, ycap, yspi, apos[2];
+    LINF *ulib = engc->libs;
+
+    if (!engc->lcnt || !ulib->capt.fe2c)
+        return;
+
+    ycap = (uint16_t)(RUN_FE2C(ulib->capt, MSG__GSZ, 0) >> 16);
+    yspi = (uint16_t)(RUN_FE2C(ulib->spin, MSG__GSZ, 0) >> 16);
+    for (; iter < engc->lcnt; show = -1, ulib = engc->libs + ++iter) {
+        apos[0] = ulib->wctx.yold + ulib->wctx.ymin - ulib->wctx.ymax;
+        if ((ulib->wctx.ymax >= yoff) && (ulib->wctx.ymin <= yoff + ywnd)) {
+            ulib->wctx.yold = ulib->wctx.ymax;
+            if (ulib->wctx.show == (ulib->wctx.icnt < 0))
+                show = !ulib->wctx.show;
+            if ((ulib->wctx.icnt >= 0) && (ulib->wctx.xoff < 0)) {
+                if (!ulib->capt.fe2c)
+                    CreatePreview(ulib);
+                apos[0] = ulib->wctx.xoff;
+                apos[1] = yspi - ulib->wctx.ymax;
+                RUN_FE2C(ulib->spin, MSG__POS, (intptr_t)apos);
+                apos[1] += ycap;
+                RUN_FE2C(ulib->capt, MSG__POS, (intptr_t)apos);
+                apos[1] -= ulib->pict.ydim;
+                RUN_FE2C(ulib->pict, MSG__POS, (intptr_t)apos);
+                ulib->wctx.xoff = -ulib->wctx.xoff;
+                show = 1;
+            }
+        }
+        else if ((ulib->wctx.yold >= yoff) && (apos[0] <= yoff + ywnd)) {
+            ulib->wctx.yold = ulib->wctx.ymax;
+            show = 0;
+        }
+        if (ulib->capt.fe2c && (show >= 0)) {
+            RUN_FE2C(ulib->pict, MSG__SHW, show);
+            RUN_FE2C(ulib->capt, MSG__SHW, show);
+            RUN_FE2C(ulib->spin, MSG__SHW, show);
+            ulib->wctx.show = show;
+        }
+    }
+}
+
+
+
+intptr_t RearrangePreviews(ENGC *engc, long skip, long xdim, long ydim) {
+    long xinc, yinc, ymax, ycap, yspi, iter, line;
+    LINF *ulib = engc->libs;
+
+    if (!engc->lcnt || !ulib->capt.fe2c)
+        return -1;
+
+    xinc = skip;
+    line = yinc = ymax = 0;
+    ycap = (uint16_t)(RUN_FE2C(ulib->capt, MSG__GSZ, 0) >> 16);
+    yspi = (uint16_t)(RUN_FE2C(ulib->spin, MSG__GSZ, 0) >> 16);
+    for (iter = 0; iter <= engc->lcnt; ulib = engc->libs + ++iter) {
+        if ((iter < engc->lcnt) && (ulib->wctx.icnt < 0))
+            continue; /// skipping disabled libraries
+        if ((iter < engc->lcnt) && (xinc + skip - ulib->pict.xdim <= xdim)) {
+            xinc += skip - ulib->pict.xdim;
+            ymax = (-ulib->pict.ydim > ymax)? -ulib->pict.ydim : ymax;
+            continue;
+        }
+        /// if we are here, either the line is full or the array ended
+        for (xinc = skip, ulib = engc->libs + line;
+             line < iter; ulib = engc->libs + ++line) {
+            if (ulib->wctx.icnt >= 0) {
+                ulib->wctx.ymax = yinc + ymax + ycap + yspi;
+                ulib->wctx.ymin = yinc;
+                ulib->wctx.xoff = -xinc;
+                xinc += skip - ulib->pict.xdim;
+            }
+        }
+        yinc += ymax + ycap + yspi + skip;
+        if (iter < engc->lcnt) {
+            xinc = skip + skip - ulib->pict.xdim;
+            ymax = -ulib->pict.ydim;
+        }
+    }
+    return (yinc - skip > ydim)? yinc - skip : ydim;
 }
 
 
@@ -3254,60 +3354,17 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
     switch (ctrl->uuid) {
         case TXT_HEAD: {
-            if (cmsg != MSG_SMAX)
-                break;
-
-            /// rearrange the scroll area and all previews it contains
-            long xdim = (uint16_t)data, ydim = (uint16_t)(data >> 16),
-                 xsep, ysep, xinc, yinc, line, temp, ymax, ycap, yspi;
             ENGC *engc = (ENGC*)ctrl->data;
+            intptr_t retn;
 
-            if (!engc->lcnt || !engc->libs[0].capt.fe2c)
-                break;
-            xsep = 8; /// separator width
-            ysep = 8; /// separator height
-            ycap = (uint16_t)(RUN_FE2C(engc->libs[0].capt, MSG__GSZ, 0) >> 16);
-            yspi = (uint16_t)(RUN_FE2C(engc->libs[0].spin, MSG__GSZ, 0) >> 16);
-
-            xinc = xsep;
-            line = yinc = ymax = 0;
-            for (data = 0; data <= engc->lcnt; data++) {
-                if ((data < engc->lcnt) && (engc->libs[data].wctx.icnt < 0))
-                    continue; /// skipping disabled libraries
-                if ((data < engc->lcnt)
-                &&  (xinc + xsep - engc->libs[data].pict.xdim <= xdim)) {
-                    xinc += xsep - engc->libs[data].pict.xdim;
-                    ymax = (-engc->libs[data].pict.ydim > ymax)?
-                            -engc->libs[data].pict.ydim : ymax;
-                    continue;
-                }
-                /// if we are here, either the line is full or the array ended
-                for (xinc = xsep; line < data; line++) {
-                    temp = !(engc->libs[line].wctx.icnt < 0);
-                    RUN_FE2C(engc->libs[line].pict, MSG__SHW, temp);
-                    RUN_FE2C(engc->libs[line].capt, MSG__SHW, temp);
-                    RUN_FE2C(engc->libs[line].spin, MSG__SHW, temp);
-                    if (!temp)
-                        continue;
-                    temp = yinc + ymax + engc->libs[line].pict.ydim;
-                    RUN_FE2C(engc->libs[line].pict, MSG__POS,
-                            (uint16_t)-xinc | (uint32_t)(-temp << 16));
-                    temp = yinc + ymax;
-                    RUN_FE2C(engc->libs[line].capt, MSG__POS,
-                            (uint16_t)-xinc | (uint32_t)(-temp << 16));
-                    temp = yinc + ymax + ycap;
-                    RUN_FE2C(engc->libs[line].spin, MSG__POS,
-                            (uint16_t)-xinc | (uint32_t)(-temp << 16));
-                    xinc += xsep - engc->libs[line].pict.xdim;
-                }
-                yinc += ymax + ysep + ycap + yspi;
-                if (data < engc->lcnt) {
-                    xinc = xsep + xsep - engc->libs[data].pict.xdim;
-                    ymax = -engc->libs[data].pict.ydim;
-                }
-            }
-            ctrl->fe2c(ctrl, MSG__SHW, 1);
-            return (yinc - ysep > ydim)? yinc - ysep - ydim : 0;
+            if (cmsg == MSG_SGIP)
+                DisplayPreviews(engc, data, ctrl->fe2c(ctrl, MSG_SGTH, 0),
+                               (uint32_t)ctrl->fe2c(ctrl, MSG__GSZ, 0) >> 16);
+            else if ((cmsg == MSG_SSID)
+                 && ((retn = RearrangePreviews(engc, 8, (uint16_t)data,
+                                              (uint16_t)(data >> 16))) >= 0))
+                return retn;
+            break;
         }
         case TXT_OGRP:
             if (cmsg == MSG_LGST) {
@@ -3337,9 +3394,10 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 data = RUN_FE2C(engc->MCT_SPEC, MSG_NGET, 0);
                 for (cmsg = 0; cmsg < engc->lcnt; cmsg++)
                     if (engc->libs[cmsg].wctx.icnt >= 0) {
-                        spin = RUN_FE2C(engc->libs[cmsg].spin, MSG_NGET, 0);
+                        spin = engc->libs[cmsg].wctx.icnt;
                         spin = (spin + data > 0)? spin + data : 0;
-                        RUN_FE2C(engc->libs[cmsg].spin, MSG_NSET, spin);
+                        if (engc->libs[cmsg].spin.fe2c)
+                            RUN_FE2C(engc->libs[cmsg].spin, MSG_NSET, spin);
                         RUN_FC2E(engc->libs[cmsg].spin, MSG_NSET, spin);
                     }
             }
@@ -3386,7 +3444,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         case TXT_FLTR:
             if (cmsg == MSG_BCLK) {
                 RUN_FE2C(((ENGC*)ctrl->data)->MCT_EXAC, MSG__ENB, data);
-                CategorizePreviews(((ENGC*)ctrl->data));
+                CategorizePreviews((ENGC*)ctrl->data);
                 RUN_FE2C(((ENGC*)ctrl->data)->MCT_OGRP, MSG__ENB, data);
             }
             break;
@@ -3868,6 +3926,16 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     UpdateOptionControls(&engc, 1);
     RUN_FE2C(engc.MCT_CAPT, MSG__SHW, 1);
 
+    /// getting minimal width for a preview from one of the spin controls
+    xico = (uint16_t)RUN_FE2C(engc.MCT_SPEC, MSG__GSZ, 0);
+    /// getting the width of a single space character
+    atmp.xdim = atmp.ydim = 0;
+    atmp.time = (uint32_t*)" ";
+    yico = (uint16_t)RUN_FE2C(engc.MCT_CAPT, MSG_WTGD, (intptr_t)&atmp);
+    /// showing the scroll window
+    engc.MCT_CHAR.fc2e = FC2EM;
+    RUN_FE2C(engc.MCT_CHAR, MSG__SHW, 1);
+
     fptr = Concatenate(0, engc.cini.base, DEF_DSEP, DEF_FLDR);
     ypos = !!(engc.cini.flgs & CSF_UONR);
     xpos = 0;
@@ -3889,9 +3957,14 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     /// sort engine`s libraries by name, initialize the rendering engine
     qsort(engc.libs, engc.lcnt, sizeof(*engc.libs), linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc.engd);
-    for (ulib = &engc.libs[indx = 0]; indx < engc.lcnt;
-         ulib = &engc.libs[++indx]) {
-        /// now constructing previews
+
+    for (indx = 0; indx < engc.ccnt; indx++)
+        RUN_FE2C(engc.MCT_OGRP, MSG_LADD, (intptr_t)engc.ctgs[indx].name);
+    RUN_FE2C(engc.MCT_OGRP, MSG__TXT, (intptr_t)engc.tran[TXT_OGRP]);
+
+    /// now constructing previews
+    for (ulib = engc.libs, indx = 0; indx < engc.lcnt;
+         ulib = engc.libs + ++indx) {
         if (ulib->bimp && ulib->bimp[0]) {
             temp = ExtractLastDirs(ulib->bimp[0], 2);
             cEngineLoadAnimAsync(engc.engd, &ulib->barr[0].unit[0],
@@ -3916,37 +3989,9 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     cEngineCallback(engc.engd, ECB_LOAD, 0);
     cEngineCallback(engc.engd, ECB_LOAD, ~0);
 
-    /// hiding the scroll window
-    engc.MCT_CHAR.fc2e = FC2EM;
-    RUN_FE2C(engc.MCT_CHAR, MSG__SHW, 0);
-
-    SetProgress(&engc, TXT_SELE, 0, engc.lcnt);
-    RUN_FE2C(engc.MCT_SELE, MSG_PPOS, 0);
-    for (indx = 0; indx < engc.ccnt; indx++)
-        RUN_FE2C(engc.MCT_OGRP, MSG_LADD, (intptr_t)engc.ctgs[indx].name);
-    RUN_FE2C(engc.MCT_OGRP, MSG__TXT, (intptr_t)engc.tran[TXT_OGRP]);
-
-    /// getting minimal width for a preview from one of the spin controls
-    xico = (uint16_t)RUN_FE2C(engc.MCT_SPEC, MSG__GSZ, 0);
-    /// constructing previews
-    /// barr[0] should be barr[linf->prev], but barr is still unsorted here
-    for (ulib = &engc.libs[elem = indx = 0]; indx < engc.lcnt;
-         ulib = &engc.libs[++indx])
-        if (ulib->nsay) {
-            xpos = ulib->barr[0].unit[0].xdim * ulib->barr[0].unit[0].ydim;
-            elem = (elem > xpos)? elem : xpos;
-        }
-
-    /// getting the width of a single space character
-    atmp.xdim = atmp.ydim = 0;
-    atmp.time = (uint32_t*)" ";
-    yico = (uint16_t)RUN_FE2C(engc.MCT_CAPT, MSG_WTGD, (intptr_t)&atmp);
-
-//    anim.fcnt = 0;
-//    anim.time = (elem)? malloc(elem * sizeof(*anim.time)) : 0;
-
-    for (ulib = &engc.libs[indx = 0]; indx < engc.lcnt;
-         ulib = &engc.libs[++indx]) {
+    /// still constructing previews
+    for (ulib = engc.libs, indx = 0; indx < engc.lcnt;
+         ulib = engc.libs + ++indx) {
         xpos = ulib->barr[0].unit[0].xdim;
         xpos = (xico > xpos)? xico : xpos;
         ulib->pict = (CTRL){&engc.MCT_CHAR, (intptr_t)engc.engd, indx,
@@ -3957,64 +4002,64 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                              FCT_SPIN, 0, 0, -xpos, 3, FC2EI};
         ulib->capt = (CTRL){&engc.MCT_CHAR, (intptr_t)ulib, indx,
                              FCT_TEXT | FST_CNTR, 0, 0, -xpos, 2, FC2EI};
-        rMakeControl(&ulib->pict, 0, 0);
-        rMakeControl(&ulib->spin, 0, 0);
-        rMakeControl(&ulib->capt, 0, 0);
-        RUN_FE2C(ulib->spin, MSG_NDIM, 30000 << 16);
-        RUN_FE2C(ulib->spin, MSG_NSET, 0);
-        RUN_FE2C(ulib->capt, MSG__TXT, (intptr_t)ulib->name);
-
         /// calculating library name offsets
+        ulib->scrl = calloc(1, ulib->nnam = strlen(ulib->name) + 16);
+        sprintf(ulib->scrl, "%d. %s", (int)indx + 1, ulib->name);
         atmp.xdim = atmp.ydim = 0;
-        atmp.time = (uint32_t*)ulib->name;
+        atmp.time = (uint32_t*)ulib->scrl;
         ypos = (uint16_t)RUN_FE2C(engc.MCT_CAPT, MSG_WTGD, (intptr_t)&atmp);
-        ulib->scrl = 0;
+        ulib->noff = 0;
         if (xpos < ypos) {
             /// name width greater than the name field width, need to scroll
-            ulib->nnam = strlen(ulib->name);
-            ulib->nofs = ceil((float)(ypos - xpos) / (float)yico) + 2;
-            for ((file = malloc(ulib->nofs + 1))[ypos = ulib->nofs] = 0;
+            ulib->nnam = strlen(ulib->scrl);
+            ulib->noff = ceil((float)(ypos - xpos) / (float)yico) + 2;
+            for ((file = malloc(ulib->noff + 1))[ypos = ulib->noff] = 0;
                   ypos; file[--ypos] = ' ');
-            ulib->scrl = Concatenate(0, file, ulib->name, file);
+            fptr = Concatenate(0, file, ulib->scrl, file);
+            free(ulib->scrl);
             free(file);
+            ulib->scrl = fptr;
         }
+        if (!indx)
+            CreatePreview(ulib); /// need that preview for others to work
 
-        /// calculating speech colors if they are needed
-        if (!ulib->nsay)
-            continue;
-        cclr = 0xFFFFFFFF;
-        pclr = 0xFF000000;
+        /// calculating speech colors if there are speeches in the library
+        if (ulib->nsay) {
+            cclr = 0xFFFFFFFF;
+            pclr = 0xFF0080FF;
 /*
-        anim.xdim = ulib->barr[0].unit[0].xdim;
-        anim.ydim = ulib->barr[0].unit[0].ydim;
-        anim.uuid = ulib->barr[0].unit[0].uuid;
-        xpos = anim.xdim * anim.ydim;
-        memset(anim.time, 0, xpos * sizeof(*anim.time));
-        cEngineCallback(engc.engd, ECB_DRAW, (intptr_t)&anim);
-        qsort(anim.time, xpos, sizeof(*anim.time), bgracmp);
-        for (tclr = cclr = pclr = 0; xpos >= 0; xpos--)
-            if (xpos && ((tclr & 0xFFFFFFFFUL) == anim.time[xpos - 1]))
-                tclr += 0x100000000UL;
-            else {
-                if ((tclr & 0xFF000000) && ((tclr >> 32) >= (cclr >> 32))) {
-                    pclr = cclr;
-                    cclr = tclr;
+            anim.xdim = ulib->barr[0].unit[0].xdim;
+            anim.ydim = ulib->barr[0].unit[0].ydim;
+            anim.uuid = ulib->barr[0].unit[0].uuid;
+            xpos = anim.xdim * anim.ydim;
+            memset(anim.time, 0, xpos * sizeof(*anim.time));
+            cEngineCallback(engc.engd, ECB_DRAW, (intptr_t)&anim);
+            qsort(anim.time, xpos, sizeof(*anim.time), bgracmp);
+            for (tclr = cclr = pclr = 0; xpos >= 0; xpos--)
+                if (xpos && ((tclr & 0xFFFFFFFFUL) == anim.time[xpos - 1]))
+                    tclr += 0x100000000UL;
+                else {
+                    if ((tclr & 0xFF000000) && ((tclr >> 32) >= (cclr >> 32))) {
+                        pclr = cclr;
+                        cclr = tclr;
+                    }
+                    tclr = (xpos)? anim.time[xpos - 1] | 0x100000000UL : 0;
                 }
-                tclr = (xpos)? anim.time[xpos - 1] | 0x100000000UL : 0;
-            }
-        RGB2HSV(pclr, _hsv[0]);
-        RGB2HSV(cclr, _hsv[1]);
-        tclr = cclr;
-        cclr = (_hsv[1][1] > _hsv[0][1])? cclr : pclr;
-        pclr = (_hsv[1][1] > _hsv[0][1])? pclr : tclr;
-        RGB2HSV(pclr, _hsv[0]);
-        RGB2HSV(cclr, _hsv[1]);
+            RGB2HSV(pclr, _hsv[0]);
+            RGB2HSV(cclr, _hsv[1]);
+            tclr = cclr;
+            cclr = (_hsv[1][1] > _hsv[0][1])? cclr : pclr;
+            pclr = (_hsv[1][1] > _hsv[0][1])? pclr : tclr;
+            RGB2HSV(pclr, _hsv[0]);
+            RGB2HSV(cclr, _hsv[1]);
 //*/
-        ulib->bgsc = cclr;
-        ulib->fgsc = pclr;
+            ulib->bgsc = cclr;
+            ulib->fgsc = pclr;
+        }
     }
 //    free(anim.time);
     RUN_FC2E(engc.MCT_FLTR, MSG_BCLK, 0);
+    CategorizePreviews(&engc);
     engc.seed = RNG_Make(elem = time(0));
 
     printf("[((RNG))] seed = 0x%08X\n[[[INI]]] %s\n", elem, engc.cfnm);
