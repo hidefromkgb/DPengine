@@ -672,8 +672,10 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
         }
         case MSG_WTDA: {
-            const double mrgn = 1.0; /// text margins; [TODO:] get in RT
+            const double mrgn = 1.0, /// text margins; [TODO:] get in RT
+                         invc = 1.0 / 255.0; /// to convert color channels
             AINF *anim = (AINF*)data;
+            uint8_t cfnt[4] = {anim->fcnt >> 16, anim->fcnt >> 8, anim->fcnt};
             CGContextRef ctxt;
             CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
             NSAutoreleasePool *pool = init(alloc(NSAutoreleasePool()));
@@ -698,7 +700,11 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             setAlignment_(psty, NSCenterTextAlignment);
             text = MAC_MakeString((char*)anim->time);
             dict = MAC_MakeDict(NSFontAttributeName, font,
-                                NSParagraphStyleAttributeName, psty);
+                                NSParagraphStyleAttributeName, psty,
+                                NSForegroundColorAttributeName,
+                                colorWithDeviceRed_green_blue_alpha_
+                                    (NSColor(), invc * cfnt[0], invc * cfnt[1],
+                                                invc * cfnt[2], 1.0));
             drawInRect_withAttributes_(text, (NSRect){{}, rect.size}, dict);
             MAC_FreeString(text);
             MAC_FreeDict(dict);
@@ -715,7 +721,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             CGContextRelease(ctxt);
             CGColorSpaceRelease(drgb);
             release(itmp);
-            release(pool);
+            release(pool); /// for CGImage and NSColor
             break;
         }
         case MSG_WTGD: {
