@@ -4026,7 +4026,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
         /// calculating speech colors if there are speeches in the library
         if (ulib->nsay) {
             cclr = 0xFFFFFFFF;
-            pclr = 0xFF0080FF;
+            pclr = 0xFF000000;
 /*
             anim.xdim = ulib->barr[0].unit[0].xdim;
             anim.ydim = ulib->barr[0].unit[0].ydim;

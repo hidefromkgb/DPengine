@@ -29,12 +29,6 @@
 
 
 
-/// subclass storage
-typedef struct {
-    Class cell, tray, menu, wndw, text, butn,
-          spin, list, pbar, sbox, ibox, frmt;
-} SCLS;
-
 ///thread data
 typedef struct {
     long size;
@@ -627,7 +621,7 @@ bool MAC_Handler(OnKeys, void *ctrl, NSView *view, SEL what) {
 ///  3: first tab-enabled control
 ///  4: last tab-enabled control
 ///  5: NSNumberFormatter for spin controls
-///  6: SCLS subclass storage
+///  6:
 ///  7: NSView, the main container and delegate
 intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
@@ -1126,8 +1120,6 @@ intptr_t FE2CI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 void rFreeControl(CTRL *ctrl) {
     switch (ctrl->flgs & FCT_TTTT) {
         case FCT_WNDW: {
-            /// releasing the subclass storage
-            free((SCLS*)ctrl->priv[6]);
             /// releasing the formatter
             release((NSNumberFormatter*)ctrl->priv[5]);
             /// we must release neither the window (0) nor its view (7);
@@ -1340,7 +1332,6 @@ void MAC_Handler(OnSize) {
 
 void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
     CTRL *root;
-    SCLS *scls;
     NSString *capt;
     NSRect dims;
     void *gwnd;
@@ -1356,19 +1347,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
         ctrl->priv[2] =  (uint16_t)round(0.45 * maximumAdvancement(gwnd).width)
                       | ((uint32_t)round(0.60 * ffsz) << 16);
 
-        ctrl->priv[6] = (intptr_t)(scls = calloc(1, sizeof(*scls)));
-        scls->cell = MAC_LoadClass(CLS_CELL);
-        scls->wndw = MAC_LoadClass(CLS_WNDW);
-        scls->text = MAC_LoadClass(CLS_TEXT);
-        scls->butn = MAC_LoadClass(CLS_BUTN);
-        scls->spin = MAC_LoadClass(CLS_SPIN);
-        scls->list = MAC_LoadClass(CLS_LIST);
-        scls->pbar = MAC_LoadClass(CLS_PBAR);
-        scls->sbox = MAC_LoadClass(CLS_SBOX);
-        scls->ibox = MAC_LoadClass(CLS_IBOX);
-        scls->frmt = MAC_LoadClass(CLS_FRMT);
-
-        ctrl->priv[5] = (intptr_t)init(alloc(scls->frmt));
+        ctrl->priv[5] = (intptr_t)init(alloc(MAC_LoadClass(CLS_FRMT)));
         setFormatterBehavior_((NSNumberFormatter*)ctrl->priv[5],
                                NSNumberFormatterBehavior10_4);
         setNumberStyle_((NSNumberFormatter*)ctrl->priv[5],
@@ -1383,7 +1362,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                    (alloc(NSWindow()), dims, flgs,
                     kCGBackingStoreBuffered, false);
 
-        ctrl->priv[7] = (intptr_t)init(alloc(scls->wndw));
+        ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_WNDW)));
         setContentView_(gwnd, (NSView*)ctrl->priv[7]);
         setDelegate_(gwnd, (NSView*)ctrl->priv[7]);
         MAC_SetIvar((NSView*)ctrl->priv[7], VAR_DATA, ctrl);
@@ -1408,15 +1387,14 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
             *yoff = ypos
                   + ((ctrl->ydim < 0)? 1 - ctrl->ydim / yspc : ctrl->ydim);
         dims = (NSRect){{xpos * xspc, ypos * yspc}, {xdim, ydim}};
-        scls = (SCLS*)root->priv[6];
 
         switch (ctrl->flgs & FCT_TTTT) {
             case FCT_TEXT: {
                 NSRect temp = {{}, dims.size};
 
                 ctrl->fe2c = FE2CT;
-                ctrl->priv[1] = (intptr_t)(gwnd = init(alloc(scls->text)));
-                MAC_SetIvar(gwnd, VAR_DATA, 0);
+                gwnd = init(alloc(MAC_LoadClass(CLS_TEXT)));
+                ctrl->priv[1] = (intptr_t)gwnd;
                 setFrame_(gwnd, temp);
                 setEditable_(gwnd, false);
                 setBordered_(gwnd, false);
@@ -1432,7 +1410,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
             }
             case FCT_BUTN:
                 ctrl->fe2c = FE2CX;
-                gwnd = init(alloc(scls->butn));
+                gwnd = init(alloc(MAC_LoadClass(CLS_BUTN)));
                 MAC_SetIvar(gwnd, VAR_DATA, ctrl);
                 setTarget_(gwnd, gwnd);
                 setAction_(gwnd, ActionSelector());
@@ -1449,7 +1427,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
 
             case FCT_CBOX:
                 ctrl->fe2c = FE2CX;
-                gwnd = init(alloc(scls->butn));
+                gwnd = init(alloc(MAC_LoadClass(CLS_BUTN)));
                 MAC_SetIvar(gwnd, VAR_DATA, ctrl);
                 setTarget_(gwnd, gwnd);
                 setAction_(gwnd, ActionSelector());
@@ -1465,8 +1443,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 ctrl->fe2c = FE2CN;
                 gwnd = init(alloc(NSView()));
                 ctrl->priv[3] = root->priv[5];
-                ctrl->priv[6] = (intptr_t)init(alloc(scls->spin));
-                ctrl->priv[7] = (intptr_t)init(alloc(scls->text));
+                ctrl->priv[6] = (intptr_t)init(alloc(MAC_LoadClass(CLS_SPIN)));
+                ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_TEXT)));
                 MAC_SetIvar((NSStepper*)ctrl->priv[6], VAR_DATA, ctrl);
                 MAC_SetIvar((NSTextField*)ctrl->priv[7], VAR_DATA, ctrl);
                 spin = cellSize(cell((NSStepper*)ctrl->priv[6]));
@@ -1499,8 +1477,8 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 ctrl->fe2c = FE2CL;
                 temp.size = dims.size;
                 gwnd = init(alloc(NSScrollView()));
-                ctrl->priv[1] = (intptr_t)scls->cell;
-                ctrl->priv[7] = (intptr_t)init(alloc(scls->list));
+                ctrl->priv[1] = (intptr_t)MAC_LoadClass(CLS_CELL);
+                ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_LIST)));
                 MAC_SetIvar((NSTableView*)ctrl->priv[7], VAR_DATA, ctrl);
                 setDataSource_((NSTableView*)ctrl->priv[7],
                                (NSTableView*)ctrl->priv[7]);
@@ -1531,7 +1509,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 setDrawsBackground_(gwnd, false);
                 setHasVerticalScroller_(gwnd, true);
                 setPostsBoundsChangedNotifications_(contentView(gwnd), true);
-                ctrl->priv[7] = (intptr_t)init(alloc(scls->sbox));
+                ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_SBOX)));
                 MAC_SetIvar((NSView*)ctrl->priv[7], VAR_DATA, ctrl);
                 setDocumentView_(gwnd, (NSView*)ctrl->priv[7]);
                 addObserver_selector_name_object_
@@ -1545,7 +1523,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 long line = dims.size.width * 4;
 
                 ctrl->fe2c = FE2CI;
-                gwnd = init(alloc(scls->ibox));
+                gwnd = init(alloc(MAC_LoadClass(CLS_IBOX)));
                 MAC_SetIvar(gwnd, VAR_DATA, ctrl);
                 ctrl->priv[3] =  (uint16_t)dims.size.width
                               | ((uint32_t)dims.size.height << 16);
@@ -1565,7 +1543,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 NSMutableParagraphStyle *psty;
 
                 ctrl->fe2c = FE2CP;
-                gwnd = init(alloc(scls->pbar));
+                gwnd = init(alloc(MAC_LoadClass(CLS_PBAR)));
                 MAC_SetIvar(gwnd, VAR_DATA, ctrl);
                 setIndeterminate_(gwnd, false);
                 setWantsLayer_(gwnd, true);
