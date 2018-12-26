@@ -253,7 +253,7 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     NSString *scib;
     NSApplication *thrd;
     NSAutoreleasePool *pool;
-    CFRunLoopObserverRef idl1, idl2;
+    CFRunLoopObserverRef idle;
     CFRunLoopTimerRef tmrf;
     NSRect dims;
     Class view;
@@ -325,17 +325,12 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     setOpaque_(draw.hwnd, false);
 
     tmrf = MAC_MakeTimer(1000, OnFPS, engd);
-    /// duplicate idle functions are a dirty hack to prevent blocking on
-    /// context menu, as we will soon have two runloop levels running...
-    /// [TODO:] resolve this
-    idl1 = MAC_MakeIdleFunc(OnCalc, engd);
-    idl2 = MAC_MakeIdleFunc(OnCalc, engd);
+    idle = MAC_MakeIdleFunc(OnCalc, engd);
     orderFront_(draw.hwnd, thrd);
 
     run(thrd);
 
-    MAC_FreeIdleFunc(idl2);
-    MAC_FreeIdleFunc(idl1);
+    MAC_FreeIdleFunc(idle);
     MAC_FreeTimer(tmrf);
 
     cDeallocFrame(engd, 0);

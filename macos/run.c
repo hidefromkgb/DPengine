@@ -54,14 +54,9 @@ static SEL ActionSelector() {
     return what;
 }
 
-/// NAME holds the selector associated with this function
-void MAC_Handler(OnMenu, NSMenu *menu) {
-    eProcessMenuItem((MENU*)tag(menu));
-}
 
 
-
-NSMenu *Submenu(MENU *menu, NSMenu *base) {
+NSMenu *Submenu(MENU *menu, id base) {
     if (!menu)
         return 0;
 
@@ -111,17 +106,44 @@ NSMenu *Submenu(MENU *menu, NSMenu *base) {
     return retn;
 }
 
-
-
 void rOpenContextMenu(MENU *tmpl) {
-    NSMenu *menu, *base;
-    NSPoint dptr;
+    NSArray *mode;
+    id base;
 
-    dptr = mouseLocation(NSEvent());
-    menu = Submenu(tmpl, base = init(alloc(MAC_LoadClass(CLS_MENU))));
-    popUpMenuPositioningItem_atLocation_inView_(menu, nil, dptr, nil);
+    MAC_SetIvar(base = init(alloc(MAC_LoadClass(CLS_MENU))), VAR_DATA, tmpl);
+    mode = (NSArray*)CFArrayCreate(kCFAllocatorDefault,
+                                  (const void**)&NSRunLoopCommonModes, 1, 0);
+    performSelector_target_argument_order_modes_
+        (currentRunLoop(NSRunLoop()), ActionSelector(), base, base, 1, mode);
+    CFRelease(mode);
+}
+
+void OpenMenu(MENU *tmpl, id base) {
+    NSPoint dptr = mouseLocation(NSEvent());
+    NSMenu *menu;
+
+    popUpMenuPositioningItem_atLocation_inView_
+        (menu = Submenu(tmpl, base), nil, dptr, nil);
     release(menu);
     release(base);
+}
+
+void MAC_Handler(OnMenu, NSMenu *menu) {
+    MENU *mctx;
+
+    if (self != menu)
+        eProcessMenuItem((MENU*)tag(menu));
+    else {
+        MAC_GetIvar(self, VAR_DATA, &mctx);
+        OpenMenu(mctx, self);
+    }
+}
+
+void MAC_Handler(OnTray) {
+    MENU *mctx;
+
+    MAC_GetIvar(self, VAR_DATA, &mctx);
+    OpenMenu(mctx, init(alloc(MAC_LoadClass(CLS_MENU))));
 }
 
 
@@ -157,15 +179,6 @@ long rMessage(char *text, char *head, char *byes, char *bnay) {
     MAC_FreeString(tttt);
     MAC_FreeString(hhhh);
     return retn;
-}
-
-
-
-void MAC_Handler(OnTray) {
-    MENU *mctx;
-
-    MAC_GetIvar(self, VAR_DATA, &mctx);
-    rOpenContextMenu(mctx);
 }
 
 
