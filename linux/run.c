@@ -42,8 +42,6 @@ void GTKMenuDestroy(GtkWidget *item, gpointer user) {
         gtk_widget_destroy(item);
 }
 
-
-
 GtkWidget *Submenu(MENU *menu, ulong chld) {
     if (!menu)
         return 0;
@@ -86,19 +84,19 @@ GtkWidget *Submenu(MENU *menu, ulong chld) {
     return GTK_WIDGET(retn);
 }
 
-
-
-void MainMenu(GtkStatusIcon *icon, guint mbtn, guint32 time, gpointer user) {
-    rOpenContextMenu((MENU*)user);
-}
-
-
-
-void rOpenContextMenu(MENU *menu) {
+void OpenMenu(MENU *menu, guint32 time) {
     GtkMenu *mwnd = GTK_MENU(Submenu(menu, 0));
 
     if (mwnd)
-        gtk_menu_popup(mwnd, 0, 0, 0, 0, 0, gtk_get_current_event_time());
+        gtk_menu_popup(mwnd, 0, 0, 0, 0, 0, time);
+}
+
+void MainMenu(GtkStatusIcon *icon, guint mbtn, guint32 time, gpointer user) {
+    OpenMenu((MENU*)user, gtk_get_current_event_time());
+}
+
+void rOpenContextMenu(MENU *menu) {
+    OpenMenu(menu, GDK_CURRENT_TIME);
 }
 
 
