@@ -697,7 +697,7 @@ void rFreeTrayIcon(intptr_t icon) {
 
 
 long AppendSizeBoxArray(CTRL *ctrl, long size) {
-    const long hdef = 16384;
+    const long hdef = 28000;
 
     if (ctrl->priv[6] < size) {
         ctrl->priv[5] = (intptr_t)realloc((void*)ctrl->priv[5],
