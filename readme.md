@@ -5,6 +5,12 @@ An alternative experimental engine for
 written in C and GLSL and focused on performance. Don\`t trust GitHub if it
 shows ObjC in the list of used languages, it\`s pure C.
 
+**[WARNING:]** This repo contains submodules (core/gif/load/, core/ogl/load/,
+macos/load/), so don\`t forget to specify `--recursive` when doing a
+`git clone`! As for GitHub ZIP downloader, unfortunately it still
+[doesn\`t support](https://stackoverflow.com/q/12936014) submodules as of now,
+so downloading a ZIP instead of cloning yields an incomplete copy.
+
 Win32 GUI (as seen on Windows 98 SE):
 ![Win32](https://www.ponychan.net/fan/src/1466830858097.png)
 
