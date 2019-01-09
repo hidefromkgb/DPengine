@@ -3056,7 +3056,8 @@ void CreatePreview(LINF *ulib) {
     rMakeControl(&ulib->spin, 0, 0);
     rMakeControl(&ulib->capt, 0, 0);
     RUN_FE2C(ulib->spin, MSG_NDIM, 30000 << 16);
-    RUN_FE2C(ulib->spin, MSG_NSET, 0);
+    RUN_FE2C(ulib->spin, MSG_NSET,
+            (ulib->wctx.icnt < 0)? -ulib->wctx.icnt - 1 : ulib->wctx.icnt);
     RUN_FE2C(ulib->capt, MSG__TXT, (intptr_t)ulib->scrl);
 }
 
