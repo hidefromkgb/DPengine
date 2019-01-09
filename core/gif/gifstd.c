@@ -4,7 +4,7 @@
 
 
 
-static void WriteFrameStd(void *data, GIF_WHDR *whdr) {
+static void WriteFrameStd(void *data, struct GIF_WHDR *whdr) {
     long x, y, yoff, iter, ifin, dsrc, ddst;
     ASTD *retn = (ASTD*)data;
 
@@ -52,7 +52,7 @@ static void WriteFrameStd(void *data, GIF_WHDR *whdr) {
 
 
 
-static void ReadMetadataStd(void *data, GIF_WHDR *whdr) {
+static void ReadMetadataStd(void *data, struct GIF_WHDR *whdr) {
     #define RMS_BGRA(i) do { uint32_t t = ((ASTD*)data)->bpal[bptr[0]].bgra; \
             ((ASTD*)data)->bpal[bptr[0]].bgra =                              \
             ((((t & 0x00FF00FF) * (1 + bptr[i])) >> 8) & 0x00FF00FF) |       \
