@@ -10,3 +10,6 @@
 	path = macos/load
 	url = https://github.com/hidefromkgb/mac_load
 	branch = master
+[submodule "exec/zip"]
+	path = exec/zip
+	url = https://github.com/hidefromkgb/zip_load
