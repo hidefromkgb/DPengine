@@ -297,8 +297,8 @@ long rSaveFile(char *name, char *data, long size) {
 
 
 
-long rMakeDir(char *name) {
-    return !mkdir(name, 0755) || (errno == EEXIST);
+long rMakeDir(char *name, long dupl) {
+    return !mkdir(name, 0755) || (!dupl && (errno == EEXIST));
 }
 
 
@@ -460,9 +460,11 @@ size_t WriteHTTPS(char *cptr, size_t size, size_t memb, void *user) {
 
 
 void rFreeHTTPS(intptr_t user) {
-    free(((char**)user)[0]);
-    free(((char**)user)[1]);
-    free((char**)user);
+    if (user) {
+        free(((char**)user)[0]);
+        free(((char**)user)[1]);
+        free((char**)user);
+    }
 }
 
 
@@ -1692,7 +1694,8 @@ int main(int argc, char *argv[]) {
     path = (NSString*)CFURLCopyFileSystemPath
            (CFArrayGetValueAtIndex(urls, 0), kCFURLPOSIXPathStyle);
     conf = MAC_LoadString(path);
-    if (!rMakeDir(strcat(conf = realloc(conf, 64 + strlen(conf)), DEF_OPTS)))
+    conf = realloc(conf, 64 + strlen(conf));
+    if (!rMakeDir(strcat(conf, DEF_OPTS), 0))
         printf("WARNING: cannot create '%s'!", conf);
     MAC_FreeString(path);
 

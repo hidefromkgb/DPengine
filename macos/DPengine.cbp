@@ -6,7 +6,7 @@
 		<Option makefile_is_custom="1" />
 		<Option execution_dir="." />
 		<Option compiler="gcc" />
-		<Option virtualFolders="src/;src/run/;src/run/exec/;src/run/exec/loc/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/load/;src/lib/core/gif/load/;" />
+		<Option virtualFolders="src/;src/run/;src/run/exec/;src/run/exec/loc/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/load/;src/lib/core/gif/load/;src/run/exec/zip/;" />
 		<Build>
 			<Target title="RelJoined">
 				<Option output="../macos.app/Contents/MacOS/DPE" prefix_auto="1" extension_auto="1" />
@@ -96,6 +96,9 @@
 		</Unit>
 		<Unit filename="../exec/loc/ru.lang">
 			<Option virtualFolder="src/run/exec/loc/" />
+		</Unit>
+		<Unit filename="../exec/zip/zip_load.h">
+			<Option virtualFolder="src/run/exec/zip/" />
 		</Unit>
 		<Unit filename="rsrc/Info.plist">
 			<Option virtualFolder="src/run/" />

@@ -562,7 +562,7 @@ long rMoveDir(char *dsrc, char *ddst) {
 
 
 
-long rMakeDir(char *name) {
+long rMakeDir(char *name, long dupl) {
     BOOL retn;
 
     name = rConvertUTF8(name);
@@ -571,7 +571,7 @@ long rMakeDir(char *name) {
     else
         retn = CreateDirectoryW((LPWSTR)name, 0);
     if (!retn && (GetLastError() == ERROR_ALREADY_EXISTS))
-        retn = TRUE;
+        retn = !dupl;
     free(name);
     return !!retn;
 }
@@ -1962,7 +1962,7 @@ int APIENTRY WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdl, int show) {
             strcpy(path, conf = UTF8((LPWSTR)path));
             free(conf);
         }
-        if (rMakeDir(strcat(path, DEF_OPTS)))
+        if (rMakeDir(strcat(path, DEF_OPTS), 0))
             conf = strdup(path);
         else {
             printf("WARNING: cannot create '%s'!", path);

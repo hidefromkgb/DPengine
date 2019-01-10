@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <limits.h>
 #include "exec.h"
+#include "zip/zip_load.h"
 
 /// a macro to count the capacity of static arrays
 #define countof(a) (sizeof(a) / sizeof(*(a)))
@@ -792,6 +793,20 @@ void CheckHashAndDownload(intptr_t user, uint64_t zero) {
 
 
 
+void ZIPCallback(char *name, char *data, long size, void *user) {
+    if ((name = strstr(name, DEF_FLDR))
+    && ((name += sizeof(DEF_FLDR) - 1)[0] == '/')) {
+        name = Concatenate(0, (char*)user, name);
+        if (!size)
+            rMakeDir(name, 0);
+        else
+            rSaveFile(name, data, size);
+        free(name);
+    }
+}
+
+
+
 long TryGetFromGithub(ENGC *engc, char *user, char *auth,
                       char *proj, char *bran, char *repo, char *disk) {
     #define GIT_SFIN "\""
@@ -800,49 +815,68 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
     #define GIT_STYP GIT_SFIN "type" GIT_SFIN ":" GIT_SFIN
     #define GIT_SPTH GIT_SFIN "path" GIT_SFIN ":" GIT_SFIN
     #define GIT_SRAW "raw.githubusercontent.com"
+    #define GIT_SCLD "codeload.github.com"
     #define GIT_SAPI "api.github.com"
 
-    char *path, *file, *text, *temp, *tail;
-    long size, rlen, iter, full = 0;
-    intptr_t desc, para;
+    char *temp, *file = 0, *path = 0, *text = 0, *tail = 0;
+    long size, rlen, iter = 0, full = 0;
+    intptr_t para, desc = 0;
     PARA *tmpl;
 
     if (engc->lcnt
     || !rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP],
                  engc->tran[TXT_BYES], engc->tran[TXT_BNAY]))
         return 0;
-    text = tail = 0;
-    while ((desc = rMakeHTTPS(user, GIT_SAPI))) {
+    if ((desc = rMakeHTTPS(user, GIT_SCLD)) && (iter = rMakeDir(disk, 1))) {
+        /// no target directory present, need to populate it first
+        SetProgress(engc, TXT_LOAD, 0, 1);
+        temp = MakeGetQuery(0, auth, DEF_DSEP, proj, DEF_DSEP,
+                              "zip", DEF_DSEP, bran);
+        size = rLoadHTTPS(desc, temp, &path);
+        temp = realloc(temp, 0);
+        if (path) {
+            ZIP_Load(path, size, disk, ZIPCallback);
+            temp = realloc(path, 0);
+        }
+        SetProgress(engc, TXT_LOAD, 1, 1);
+    }
+    rFreeHTTPS(desc);
+    if (iter || (!path && !desc && !iter)) {
+        if (!path && (!desc || iter))
+            rMessage(engc->tran[TXT_INET], engc->tran[TXT_CCUP],
+                     engc->tran[TXT_BYES], 0);
+        return 1;
+    }
+    if ((desc = rMakeHTTPS(user, GIT_SAPI))) {
         temp = MakeGetQuery(0, "repos", DEF_DSEP,  auth, DEF_DSEP,
                                   proj, DEF_DSEP, "git", DEF_DSEP,
                                "trees", DEF_DSEP,  bran);
         rLoadHTTPS(desc, temp, &text);
         temp = realloc(temp, 0);
-        if (!text)
-            break;
-        size = sizeof(GIT_SPTH) + 1 + (rlen = strlen(repo));
-        memmove(path = realloc(0, size), GIT_SPTH, sizeof(GIT_SPTH) - 1);
-        memmove(path + sizeof(GIT_SPTH) - 1, repo, rlen);
-        path[size - 2] = *GIT_SFIN;
-        path[size - 1] = 0;
-        if ((temp = strstr(text, path)) && (temp = strstr(temp, GIT_SURL)))
-            tail = strstr(temp += sizeof(GIT_SURL) - 1, GIT_SFIN);
-        path = realloc(path, 0);
-        if (tail) {
-            tail[0] = 0;
-            tail = 0;
-            if ((temp = strstr(temp, GIT_SAPI))) {
-                temp += sizeof(GIT_SAPI); /** no -1: skipping the slash **/
-                temp = MakeGetQuery(0, temp, "?recursive=1");
-                rLoadHTTPS(desc, temp, &tail);
-                temp = realloc(temp, 0);
+        if (text) {
+            size = sizeof(GIT_SPTH) + 1 + (rlen = strlen(repo));
+            memmove(path = realloc(0, size), GIT_SPTH, sizeof(GIT_SPTH) - 1);
+            memmove(path + sizeof(GIT_SPTH) - 1, repo, rlen);
+            path[size - 2] = *GIT_SFIN;
+            path[size - 1] = 0;
+            if ((temp = strstr(text, path)) && (temp = strstr(temp, GIT_SURL)))
+                tail = strstr(temp += sizeof(GIT_SURL) - 1, GIT_SFIN);
+            path = realloc(path, 0);
+            if (tail) {
+                tail[0] = 0;
+                tail = 0;
+                if ((temp = strstr(temp, GIT_SAPI))) {
+                    temp += sizeof(GIT_SAPI); /** no -1: skipping the slash **/
+                    temp = MakeGetQuery(0, temp, "?recursive=1");
+                    rLoadHTTPS(desc, temp, &tail);
+                    temp = realloc(temp, 0);
+                }
             }
+            text = realloc(text, 0);
+            text = (tail)? tail-- : 0;
         }
-        text = realloc(text, 0);
-        text = (tail)? tail-- : 0;
-        rFreeHTTPS(desc);
-        break;
     }
+    rFreeHTTPS(desc);
     if (text && (desc = rMakeHTTPS(user, GIT_SRAW))) {
         while ((temp = strstr(tail + 1, GIT_SPTH))) {
             if ((tail = strstr(temp + sizeof(GIT_SPTH) - 1, GIT_SFIN))
@@ -876,7 +910,7 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
                 memmove(file + rlen + 1, path, size + 1);
                 for (temp = file + 1; (temp = strstr(temp, DEF_DSEP));) {
                     *temp = 0;
-                    if (!rMakeDir(file)) {
+                    if (!rMakeDir(file, 0)) {
                         path = Concatenate(0, engc->tran[TXT_FDIR], " ",
                                               GIT_SFIN, file, GIT_SFIN);
                         rMessage(path, engc->tran[TXT_CCUP],
@@ -910,6 +944,7 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
                  engc->tran[TXT_BYES], 0);
     return 1;
     #undef GIT_SAPI
+    #undef GIT_SCLD
     #undef GIT_SRAW
     #undef GIT_SPTH
     #undef GIT_STYP

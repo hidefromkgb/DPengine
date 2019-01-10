@@ -238,8 +238,8 @@ long rSaveFile(char *name, char *data, long size) {
 
 
 
-long rMakeDir(char *name) {
-    return !mkdir(name, 0755) || (errno == EEXIST);
+long rMakeDir(char *name, long dupl) {
+    return !mkdir(name, 0755) || (!dupl && (errno == EEXIST));
 }
 
 
@@ -376,9 +376,11 @@ size_t WriteHTTPS(char *cptr, size_t size, size_t memb, void *user) {
 
 
 void rFreeHTTPS(intptr_t user) {
-    free(((char**)user)[0]);
-    free(((char**)user)[1]);
-    free((char**)user);
+    if (user) {
+        free(((char**)user)[0]);
+        free(((char**)user)[1]);
+        free((char**)user);
+    }
 }
 
 
@@ -1306,9 +1308,9 @@ void _start() {
     conf = calloc(strlen(home) + size, sizeof(*conf));
     strcat(conf, home);
     strcat(conf, "/.config");
-    rMakeDir(conf);
+    rMakeDir(conf, 0);
     strcat(conf, DEF_OPTS);
-    if (!rMakeDir(conf))
+    if (!rMakeDir(conf, 0))
         printf("WARNING: cannot create '%s'!", conf);
 
     gtk_init(0, 0);
