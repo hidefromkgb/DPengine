@@ -3676,52 +3676,61 @@ CTRL *MakeWindow(CTRL *tmpl, long size) {
 
 
 
-void RGB2HSV(uint32_t bgra, float *_hsv) {
-    #define max(a, b) ((a > b)? a : b)
+void RGB2HSL(uint32_t bgra, float *_hsl) {
     #define min(a, b) ((a < b)? a : b)
-    float rd = (float)((bgra >> 16) & 0xFF) / 255;
-    float gd = (float)((bgra >>  8) & 0xFF) / 255;
-    float bd = (float)((bgra >>  0) & 0xFF) / 255;
-    float max = (float)max(rd, max(gd, bd)),
-          min = (float)min(rd, min(gd, bd));
-    float d = max - min;
-
-    _hsv[0] = 0;
-    _hsv[1] = (max == 0 ? 0 : d / max);
-    _hsv[2] = max;
-    if (max != min) {
-        if      (max == rd) _hsv[0] = (gd - bd) / d + (gd < bd ? 6 : 0);
-        else if (max == gd) _hsv[0] = (bd - rd) / d + 2;
-        else if (max == bd) _hsv[0] = (rd - gd) / d + 4;
-        _hsv[0] = floor(_hsv[0] * 60.0);
-        _hsv[0] = (_hsv[0] < 360.0)? _hsv[0] : _hsv[0] - 360.0;
-    }
-    #undef max
+    #define max(a, b) ((a > b)? a : b)
+    float rrrr = (float)((uint8_t)(bgra >> 16)) / 255,
+          gggg = (float)((uint8_t)(bgra >>  8)) / 255,
+          bbbb = (float)((uint8_t)(bgra      )) / 255,
+          _min = min(min(rrrr, gggg), bbbb),
+          _max = max(max(rrrr, gggg), bbbb), mean;
     #undef min
+    #undef max
+    _hsl[0] = _hsl[1] = _hsl[2] = 0.0;
+    if ((_hsl[2] = (_min + _max) * 0.5) <= 0.0)
+        return;
+    if ((_hsl[1] = mean = _max - _min) > 0.0)
+        _hsl[1] /= (_hsl[2] <= 0.5)? (_max + _min) : (2.0 - _max - _min);
+    else
+        return;
+    if (rrrr == _max)
+        _hsl[0] = (gggg == _min)? (5.0 + (_max - bbbb) / mean)
+                                : (1.0 - (_max - gggg) / mean);
+    else if (gggg == _max)
+        _hsl[0] = (bbbb == _min)? (1.0 + (_max - rrrr) / mean)
+                                : (3.0 - (_max - bbbb) / mean);
+    else // (bbbb == _max)
+        _hsl[0] = (rrrr == _min)? (3.0 + (_max - gggg) / mean)
+                                : (5.0 - (_max - rrrr) / mean);
+    _hsl[0] /= 6.0;
 }
 
-uint32_t HSV2RGB(float *_hsv) {
-    uint8_t r, g, b;
-    float p, q, t;
+uint32_t HSL2RGB(float *_hsl) {
+    uint8_t rrrr = 255 * _hsl[2], gggg = 255 * _hsl[2], bbbb = 255 * _hsl[2];
+    float coef, mean, fraq, mid1, mid2;
 
-    if (_hsv[1] == 0.0)
-        r = g = b = _hsv[1] * 255.0;
-    else {
-        t = _hsv[0] / 60.0;
-        t -= (r = floor(t));
-        p = _hsv[2] * (1.0 - _hsv[1]);
-        q = _hsv[2] * (1.0 - _hsv[1] * t);
-        t = _hsv[2] * (1.0 - _hsv[1] * (1.0 - t));
-        switch (r) {
-            case 0:  r = _hsv[2]; g = t;       b = p;       break;
-            case 1:  r = q;       g = _hsv[2]; b = p;       break;
-            case 2:  r = p;       g = _hsv[2]; b = t;       break;
-            case 3:  r = p;       g = q;       b = _hsv[2]; break;
-            case 4:  r = t;       g = p;       b = _hsv[2]; break;
-            default: r = _hsv[2]; g = p;       b = q;       break;
+    coef = (_hsl[2] <= 0.5)? (          _hsl[2] + _hsl[1] * _hsl[2])
+                           : (_hsl[1] + _hsl[2] - _hsl[1] * _hsl[2]);
+    if (coef > 0) {
+        mean = 2.0 * _hsl[2] - coef;
+        fraq = (coef - mean) * (6 * _hsl[0] - (int)(6 * _hsl[0]));
+        mid1 = mean + fraq;
+        mid2 = coef - fraq;
+        switch ((int)(6 * _hsl[0])) {
+        case 0: rrrr = 255 * coef; gggg = 255 * mid1; bbbb = 255 * mean; break;
+        case 1: rrrr = 255 * mid2; gggg = 255 * coef; bbbb = 255 * mean; break;
+        case 2: rrrr = 255 * mean; gggg = 255 * coef; bbbb = 255 * mid1; break;
+        case 3: rrrr = 255 * mean; gggg = 255 * mid2; bbbb = 255 * coef; break;
+        case 4: rrrr = 255 * mid1; gggg = 255 * mean; bbbb = 255 * coef; break;
+        case 5: rrrr = 255 * coef; gggg = 255 * mean; bbbb = 255 * mid2; break;
         }
     }
-    return b | ((uint32_t)g << 8) | ((uint32_t)r << 16) | 0xFF000000;
+    return bbbb | ((uint32_t)gggg << 8) | ((uint32_t)rrrr << 16) | 0xFF000000;
+}
+
+int li64cmp(const void *a, const void *b) {
+    int64_t retn = *(int64_t*)a - *(int64_t*)b;
+    return (retn >= 0)? (retn > 0)? 1 : 0 : -1;
 }
 
 int bgracmp(const void *a, const void *b) {
@@ -3749,12 +3758,13 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                   "wBGRA",  "Opaque", "wRegion","Draw"},
        *uSTF[] = {"Topmost","Hover",  "CSpeech",
               "Interaction","Speech", "Effects","Update"};
+    const float ldif = 0.25;
+    float mean, _hsl[2][3];
     char *file, *fptr, *conf, *temp;
     uint32_t elem, *iter; /// for IF_BIN_FIND and RNG_Make
-    uint64_t cclr, pclr;//, tclr;
+    uint64_t clrs[3], tclr;
     intptr_t indx;
     int16_t runs = 0;
-//    float _hsv[2][3];
     LINF *ulib;
     AINF atmp;
 
@@ -4059,41 +4069,64 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
         if (!indx)
             CreatePreview(ulib); /// need that preview for others to work
 
-        /// calculating speech colors if there are speeches in the library
-        if (ulib->nsay) {
-            cclr = 0xFFFFFFFF;
-            pclr = 0xFF000000;
-/*
-            anim.xdim = ulib->barr[0].unit[0].xdim;
-            anim.ydim = ulib->barr[0].unit[0].ydim;
-            anim.uuid = ulib->barr[0].unit[0].uuid;
-            xpos = anim.xdim * anim.ydim;
-            memset(anim.time, 0, xpos * sizeof(*anim.time));
-            cEngineCallback(engc.engd, ECB_DRAW, (intptr_t)&anim);
-            qsort(anim.time, xpos, sizeof(*anim.time), bgracmp);
-            for (tclr = cclr = pclr = 0; xpos >= 0; xpos--)
-                if (xpos && ((tclr & 0xFFFFFFFFUL) == anim.time[xpos - 1]))
+        ulib->fgsc = 0xFF000000;
+        ulib->bgsc = 0xFFFFFFFF;
+        /// calculating speech colors if there are speeches in
+        /// the library and the "colored speech" flag is set
+        if (ulib->nsay && (engc.ccur.flgs & CSF_ECLR)) {
+            atmp.fcnt = 0;
+            atmp.xdim = ulib->barr[0].unit[0].xdim;
+            atmp.ydim = ulib->barr[0].unit[0].ydim;
+            atmp.uuid = ulib->barr[0].unit[0].uuid;
+            atmp.time =
+                calloc(xpos = atmp.xdim * atmp.ydim, sizeof(*atmp.time));
+            cEngineCallback(engc.engd, ECB_DRAW, (intptr_t)&atmp);
+            qsort(atmp.time, xpos, sizeof(*atmp.time), bgracmp);
+            for (tclr = clrs[0] = clrs[1] = clrs[2] = 0; xpos >= 0; xpos--)
+                if (xpos && ((tclr & 0xFFFFFFFFUL) == atmp.time[xpos - 1]))
                     tclr += 0x100000000UL;
                 else {
-                    if ((tclr & 0xFF000000) && ((tclr >> 32) >= (cclr >> 32))) {
-                        pclr = cclr;
-                        cclr = tclr;
+                    if ((tclr & 0xFF000000)
+                    && ((tclr >> 32) >= (clrs[2] >> 32))) {
+                        if ((tclr >> 32) < (clrs[1] >> 32))
+                            clrs[2] = tclr;
+                        else if ((tclr >> 32) < (clrs[0] >> 32)) {
+                            clrs[2] = clrs[1];
+                            clrs[1] = tclr;
+                        }
+                        else {
+                            clrs[2] = clrs[1];
+                            clrs[1] = clrs[0];
+                            clrs[0] = tclr;
+                        }
                     }
-                    tclr = (xpos)? anim.time[xpos - 1] | 0x100000000UL : 0;
+                    tclr = (xpos)? atmp.time[xpos - 1] | 0x100000000UL : 0;
                 }
-            RGB2HSV(pclr, _hsv[0]);
-            RGB2HSV(cclr, _hsv[1]);
-            tclr = cclr;
-            cclr = (_hsv[1][1] > _hsv[0][1])? cclr : pclr;
-            pclr = (_hsv[1][1] > _hsv[0][1])? pclr : tclr;
-            RGB2HSV(pclr, _hsv[0]);
-            RGB2HSV(cclr, _hsv[1]);
-//*/
-            ulib->bgsc = cclr;
-            ulib->fgsc = pclr;
+            free(atmp.time);
+            #define LUMA(c) (3 * (uint8_t)(c >> 16) + /* -R /G |B */ \
+                             4 * (uint8_t)(c >> 8) + (uint8_t)c)
+            clrs[0] = ((uint64_t)LUMA(clrs[0]) << 32) + (uint32_t)clrs[0];
+            clrs[1] = ((uint64_t)LUMA(clrs[1]) << 32) + (uint32_t)clrs[1];
+            clrs[2] = ((uint64_t)LUMA(clrs[2]) << 32) + (uint32_t)clrs[2];
+            #undef LUMA
+            qsort(clrs, 3, sizeof(*clrs), li64cmp);
+            RGB2HSL(clrs[0], _hsl[0]);
+            RGB2HSL(clrs[2], _hsl[1]);
+            if (_hsl[1][2] - _hsl[0][2] < 2 * ldif) {
+                mean = 0.5 * (_hsl[1][2] + _hsl[0][2]);
+                if (mean + ldif > 1)
+                    _hsl[0][2] = mean - 2 * ldif;
+                else if (mean - ldif < 0)
+                    _hsl[1][2] = mean + 2 * ldif;
+                else {
+                    _hsl[0][2] = mean - ldif;
+                    _hsl[1][2] = mean + ldif;
+                }
+            }
+            ulib->fgsc = HSL2RGB(_hsl[0]);
+            ulib->bgsc = HSL2RGB(_hsl[1]);
         }
     }
-//    free(anim.time);
     RUN_FC2E(engc.MCT_FLTR, MSG_BCLK, 0);
     CategorizePreviews(&engc);
     engc.seed = RNG_Make(elem = time(0));

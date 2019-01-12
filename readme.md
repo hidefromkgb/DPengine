@@ -65,7 +65,7 @@ The task at hand is to implement the remaining DP features missing from DPE:
 
 Some functionality is not present in DP but would also be nice to have:
 
-1. Add colors to speech bubbles, make default colors configurable
+1. ~~Add colors to speech bubbles, make default colors configurable~~
 1. Implement the "alias method" for behaviours
 1. Parallelize sprite processing in frontend
 1. Move rendering options from tray menu to tab 3
