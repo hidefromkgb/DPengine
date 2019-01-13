@@ -6,8 +6,8 @@ written in C and GLSL and focused on performance. Don\`t trust GitHub if it
 shows ObjC in the list of used languages, it\`s pure C.
 
 **[WARNING:]** This repo contains submodules (core/gif/load/, core/ogl/load/,
-macos/load/), so don\`t forget to specify `--recursive` when doing a
-`git clone`! As for GitHub ZIP downloader, unfortunately it still
+exec/zip/, macos/load/), so don\`t forget to specify `--recursive` when
+doing a `git clone`! As for GitHub ZIP downloader, unfortunately it still
 [doesn\`t support](https://stackoverflow.com/q/12936014) submodules as of now,
 so downloading a ZIP instead of cloning yields an incomplete copy.
 

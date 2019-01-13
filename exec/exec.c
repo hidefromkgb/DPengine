@@ -320,8 +320,7 @@ typedef struct {
 } BGRP;
 
 /// unit library info (write-once, read-only), opaque outside the module
-/// [TODO:] (priority 1) interactions
-/// [TODO:] (priority 2) speech
+/// [TODO:] interactions
 typedef struct {
     CTRL     pict,  /// image box control to preview the sprite
              capt,  /// character name just below the image box
@@ -1473,7 +1472,7 @@ void FreeLib(LINF *elem) {
 
 
 void LoadLib(LINF *elem, ENGD *engd) {
-    long iter, indx, ncnt, xdim, ydim, lsrc;
+    long iter, indx, ncnt, xdim, ydim, lsrc, ldst;
     char **nimp;
     uint32_t *bptr;
     uint8_t *name;
@@ -1516,15 +1515,42 @@ void LoadLib(LINF *elem, ENGD *engd) {
                     name = (uint8_t*)bptr;
                     temp->uuid = (intptr_t)(bptr = (uint32_t*)(temp + 1) + 1);
                     temp->time = (uint32_t*)(name + 1);
-
+                    /// body
                     for (ydim = temp->ydim - 8 - 1; ydim >= 0; ydim--)
                         for (lsrc = temp->xdim * ydim,
                              xdim = 0; xdim < temp->xdim; xdim++)
                             bptr[lsrc + xdim] =
-                                (((xdim >= 2) && (xdim < temp->xdim -  2))
-                              == ((ydim >= 2) && (ydim < temp->ydim - 10)))?
-                                ((xdim < 2) || (xdim >= temp->xdim - 2))?
-                                0 : elem->bgsc : elem->fgsc;
+                                ((ydim < 2) || (ydim >= temp->ydim - 10)
+                              || (xdim < 2) || (xdim >= temp->xdim - 2))?
+                                    elem->fgsc : elem->bgsc;
+                    /// edges
+                    for (ydim = 0; ydim < 4; ydim++)
+                        for (lsrc = temp->xdim * ydim * 2,
+                             ldst = temp->xdim * (temp->ydim - 10) - lsrc,
+                             xdim = 0; xdim < 4; xdim++)
+                            /** upper right **/
+                            bptr[lsrc - xdim * 2 - 2 + temp->xdim * 2] =
+                            bptr[lsrc - xdim * 2 - 1 + temp->xdim * 2] =
+                            bptr[lsrc - xdim * 2 - 2 + temp->xdim] =
+                            bptr[lsrc - xdim * 2 - 1 + temp->xdim] =
+                            /** lower right **/
+                            bptr[ldst - xdim * 2 - 2 + temp->xdim * 2] =
+                            bptr[ldst - xdim * 2 - 1 + temp->xdim * 2] =
+                            bptr[ldst - xdim * 2 - 2 + temp->xdim] =
+                            bptr[ldst - xdim * 2 - 1 + temp->xdim] =
+                            /** upper left **/
+                            bptr[lsrc + xdim * 2 + 1 + temp->xdim] =
+                            bptr[lsrc + xdim * 2 + 0 + temp->xdim] =
+                            bptr[lsrc + xdim * 2 + 1] =
+                            bptr[lsrc + xdim * 2 + 0] =
+                            /** lower left **/
+                            bptr[ldst + xdim * 2 + 1 + temp->xdim] =
+                            bptr[ldst + xdim * 2 + 0 + temp->xdim] =
+                            bptr[ldst + xdim * 2 + 1] =
+                            bptr[ldst + xdim * 2 + 0] =
+                                ((xdim < 2) || (ydim < 2))? (xdim * ydim > 1)?
+                                  elem->fgsc : 0 : elem->bgsc;
+                    /// arrow
                     for (ydim = temp->ydim - 8; ydim < temp->ydim; ydim++)
                         for (lsrc = temp->xdim * ydim,
                              xdim = 0; xdim < temp->xdim; xdim++)
@@ -1537,6 +1563,7 @@ void LoadLib(LINF *elem, ENGD *engd) {
                                 ((xdim >= 0) && ((xdim & -2) != (ydim & -2)))?
                                                 ((xdim & -2) >  (ydim & -2))?
                                                 0 : elem->bgsc : elem->fgsc;
+                    /// text
                     temp->xdim |= 0x08080000; /// right, left
                     temp->ydim |= 0x0C040000; /// bottom, top
                     temp->fcnt = elem->fgsc;
@@ -4103,8 +4130,8 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                     tclr = (xpos)? atmp.time[xpos - 1] | 0x100000000UL : 0;
                 }
             free(atmp.time);
-            #define LUMA(c) (3 * (uint8_t)(c >> 16) + /* -R /G |B */ \
-                             4 * (uint8_t)(c >> 8) + (uint8_t)c)
+            #define LUMA(c) (299 * (uint8_t)(c >> 16) + /* -R /G |B */ \
+                             587 * (uint8_t)(c >> 8) + 114 * (uint8_t)c)
             clrs[0] = ((uint64_t)LUMA(clrs[0]) << 32) + (uint32_t)clrs[0];
             clrs[1] = ((uint64_t)LUMA(clrs[1]) << 32) + (uint32_t)clrs[1];
             clrs[2] = ((uint64_t)LUMA(clrs[2]) << 32) + (uint32_t)clrs[2];
