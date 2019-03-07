@@ -370,6 +370,8 @@ size_t WriteHTTPS(char *cptr, size_t size, size_t memb, void *user) {
     data[1] = (intptr_t)realloc((char*)data[1], 1 + data[0] + (size *= memb));
     memcpy((char*)data[1] + data[0], cptr, size);
     ((char*)data[1])[data[0] += size] = 0;
+    if (data[2])
+        ((void (*)(long, intptr_t))data[2])(data[0], data[3]);
     return size;
 }
 
@@ -399,9 +401,10 @@ intptr_t rMakeHTTPS(char *user, char *serv) {
 
 
 
-long rLoadHTTPS(intptr_t user, char *page, char **dest) {
+long rLoadHTTPS(intptr_t user, char *page, char **dest,
+                void (*load)(long, intptr_t), intptr_t lprm) {
+    intptr_t data[4] = {0, 0, (intptr_t)load, lprm};
     char *hreq, **ctxt = (char**)user;
-    intptr_t data[2] = {};
     CURL *curl;
 
     if (!page || !dest) {
@@ -411,9 +414,10 @@ long rLoadHTTPS(intptr_t user, char *page, char **dest) {
     curl = curl_easy_init();
     hreq = calloc(1, 1 + strlen(ctxt[1]) + strlen(page));
     curl_easy_setopt(curl, CURLOPT_URL, strcat(strcat(hreq, ctxt[1]), page));
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, ctxt[0]);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteHTTPS);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, data);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, ctxt[0]);
     if (curl_easy_perform(curl)) {
         data[1] = (intptr_t)realloc((char*)data[1], 0);
         data[1] = data[0] = 0;

@@ -340,7 +340,7 @@ typedef struct {
            **eimp,  /// image paths for effects (0 if loaded)
             *path,  /// the folder from which the library was built
             *name,  /// human-readable name (may differ from PATH!)
-            *scrl;  /// NAME adapted for scrolling, or 0 if not needed
+            *scrl;  /// index-prepended name adapted for scrolling
     uint32_t fgsc,  /// foreground speech color
              bgsc;  /// background speech color
     long     nsay,  /// template speech ID + 1 (0 if no speech)
@@ -622,11 +622,11 @@ char *SplitLine(char **tail, char tsep, long keep) {
 void SetProgress(ENGC *engc, long tran, long frac, long full) {
     char *text;
 
-    text = malloc(32 + strlen(engc->tran[tran]));
-    sprintf(text, "%s %ld / %ld", engc->tran[tran], frac, full);
+    sprintf(text = malloc(32 + strlen(engc->tran[tran])),
+           (full)? "%s %ld / %ld" : "%s %ld", engc->tran[tran], frac, full);
     RUN_FE2C(engc->MCT_SELE, MSG__TXT, (intptr_t)text);
-    RUN_FE2C(engc->MCT_SELE, MSG_PLIM, full);
-    RUN_FE2C(engc->MCT_SELE, MSG_PPOS, frac);
+    RUN_FE2C(engc->MCT_SELE, MSG_PLIM, (full)? full : 100);
+    RUN_FE2C(engc->MCT_SELE, MSG_PPOS, (full)? frac : 0);
     free(text);
 }
 
@@ -774,7 +774,7 @@ void CheckHashAndDownload(intptr_t user, uint64_t zero) {
     if (!shan[0])
         sprintf(text + flen, "already updated");
     else {
-        size = rLoadHTTPS(para->desc, para->hreq, &load);
+        size = rLoadHTTPS(para->desc, para->hreq, &load, 0, 0);
         if (!load)
             sprintf(text + flen, "error!");
         else {
@@ -804,7 +804,9 @@ void ZIPCallback(char *name, char *data, long size, void *user) {
     }
 }
 
-
+void LoadCallback(long size, intptr_t user) {
+    SetProgress((ENGC*)user, TXT_LOAD, size >> 10, 0);
+}
 
 long TryGetFromGithub(ENGC *engc, char *user, char *auth,
                       char *proj, char *bran, char *repo, char *disk) {
@@ -814,7 +816,6 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
     #define GIT_STYP GIT_SFIN "type" GIT_SFIN ":" GIT_SFIN
     #define GIT_SPTH GIT_SFIN "path" GIT_SFIN ":" GIT_SFIN
     #define GIT_SRAW "raw.githubusercontent.com"
-    #define GIT_SCLD "codeload.github.com"
     #define GIT_SAPI "api.github.com"
 
     char *temp, *file = 0, *path = 0, *text = 0, *tail = 0;
@@ -822,22 +823,20 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
     intptr_t para, desc = 0;
     PARA *tmpl;
 
-    if (engc->lcnt
-    || !rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP],
-                 engc->tran[TXT_BYES], engc->tran[TXT_BNAY]))
+    if (engc->lcnt || !rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP],
+                                engc->tran[TXT_BYES], engc->tran[TXT_BNAY]))
         return 0;
-    if ((desc = rMakeHTTPS(user, GIT_SCLD)) && (iter = rMakeDir(disk, 1))) {
+    if ((desc = rMakeHTTPS(user, GIT_SAPI)) && (iter = rMakeDir(disk, 1))) {
         /// no target directory present, need to populate it first
-        SetProgress(engc, TXT_LOAD, 0, 1);
-        temp = MakeGetQuery(0, auth, DEF_DSEP, proj, DEF_DSEP,
-                              "zip", DEF_DSEP, bran);
-        size = rLoadHTTPS(desc, temp, &path);
+        SetProgress(engc, TXT_LOAD, 0, 0);
+        temp = MakeGetQuery(0, "repos", DEF_DSEP,      auth, DEF_DSEP,
+                                  proj, DEF_DSEP, "zipball", DEF_DSEP, bran);
+        size = rLoadHTTPS(desc, temp, &path, LoadCallback, (intptr_t)engc);
         temp = realloc(temp, 0);
         if (path) {
             ZIP_Load(path, size, disk, ZIPCallback);
             temp = realloc(path, 0);
         }
-        SetProgress(engc, TXT_LOAD, 1, 1);
     }
     rFreeHTTPS(desc);
     if (iter || (!path && !desc && !iter)) {
@@ -850,7 +849,7 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
         temp = MakeGetQuery(0, "repos", DEF_DSEP,  auth, DEF_DSEP,
                                   proj, DEF_DSEP, "git", DEF_DSEP,
                                "trees", DEF_DSEP,  bran);
-        rLoadHTTPS(desc, temp, &text);
+        rLoadHTTPS(desc, temp, &text, 0, 0);
         temp = realloc(temp, 0);
         if (text) {
             size = sizeof(GIT_SPTH) + 1 + (rlen = strlen(repo));
@@ -867,7 +866,7 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
                 if ((temp = strstr(temp, GIT_SAPI))) {
                     temp += sizeof(GIT_SAPI); /** no -1: skipping the slash **/
                     temp = MakeGetQuery(0, temp, "?recursive=1");
-                    rLoadHTTPS(desc, temp, &tail);
+                    rLoadHTTPS(desc, temp, &tail, 0, 0);
                     temp = realloc(temp, 0);
                 }
             }
@@ -943,7 +942,6 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
                  engc->tran[TXT_BYES], 0);
     return 1;
     #undef GIT_SAPI
-    #undef GIT_SCLD
     #undef GIT_SRAW
     #undef GIT_SPTH
     #undef GIT_STYP
@@ -1473,7 +1471,7 @@ void FreeLib(LINF *elem) {
 
 void LoadLib(LINF *elem, ENGD *engd) {
     long iter, indx, ncnt, xdim, ydim, lsrc, ldst;
-    char **nimp;
+    char **nimp, clrs[32];
     uint32_t *bptr;
     uint8_t *name;
     BINF *narr;
@@ -1493,10 +1491,11 @@ void LoadLib(LINF *elem, ENGD *engd) {
                                          name, nimp[iter], ELA_DISK, free);
                 }
                 else {
-                    name = (uint8_t*)Concatenate(0, "#", nimp[iter]);
+                    sprintf(clrs, "#%08X / #%08X: ", elem->fgsc, elem->bgsc);
+                    name = (uint8_t*)Concatenate(0, clrs, nimp[iter]);
                     ydim = strlen((char*)name) + 1;
                     temp = realloc(nimp[iter], sizeof(*temp));
-                    temp->time = (uint32_t*)(name + 1);
+                    temp->time = (uint32_t*)(name + 23);
                     temp->xdim = elem->barr[0].unit[0].xdim << 1;
                     temp->ydim = elem->barr[0].unit[0].ydim >> 1;
                     xdim = RUN_FE2C(elem->engc->MCT_CAPT,
@@ -1514,7 +1513,7 @@ void LoadLib(LINF *elem, ENGD *engd) {
                     free(name);
                     name = (uint8_t*)bptr;
                     temp->uuid = (intptr_t)(bptr = (uint32_t*)(temp + 1) + 1);
-                    temp->time = (uint32_t*)(name + 1);
+                    temp->time = (uint32_t*)(name + 23);
                     /// body
                     for (ydim = temp->ydim - 8 - 1; ydim >= 0; ydim--)
                         for (lsrc = temp->xdim * ydim,

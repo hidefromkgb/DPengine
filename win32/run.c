@@ -610,7 +610,8 @@ intptr_t rMakeHTTPS(char *user, char *serv) {
 
 
 
-long rLoadHTTPS(intptr_t user, char *page, char **dest) {
+long rLoadHTTPS(intptr_t user, char *page, char **dest,
+                void (*load)(long, intptr_t), intptr_t lprm) {
     NETC *netc = (NETC*)user;
     DWORD size = 0, read = 0;
     char *retn = 0;
@@ -621,20 +622,18 @@ long rLoadHTTPS(intptr_t user, char *page, char **dest) {
     *dest = 0;
     user = INTERNET_FLAG_KEEP_CONNECTION | INTERNET_FLAG_SECURE;
     if ((hreq = HttpOpenRequest(netc->hcon, "GET", page, 0, 0, 0, user, 1))) {
-        HttpSendRequest(hreq, 0, 0, 0, 0);
-        user = 0;
-        do {
-            if (user <= read) {
-                user = 0x400000;
-                retn = realloc(retn, size + user);
-            }
+        for (HttpSendRequest(hreq, 0, 0, 0, 0), user = 0; ; ) {
+            if (user <= read)
+                retn = realloc(retn, size + (user = 0x400000));
             if (!InternetReadFile(hreq, retn + size, user - 1, &read) || !read)
                 break;
             else {
                 size += read;
                 user -= read;
+                if (load)
+                    load(size, lprm);
             }
-        } while (!0);
+        }
         InternetCloseHandle(hreq);
         retn = realloc(retn, size + 1);
         if (size) {

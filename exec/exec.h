@@ -141,9 +141,10 @@ intptr_t rFindMake(char *base);
 intptr_t rMakeHTTPS(char *user, char *serv);
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim);
+long  rLoadHTTPS(intptr_t user, char *page, char **dest,
+                 void (*load)(long, intptr_t), intptr_t lprm);
 long  rMessage(char *text, char *head, char *byes, char *bnay);
 long  rSaveFile(char *name, char *data, long size);
-long  rLoadHTTPS(intptr_t user, char *page, char **dest);
 long  rMoveDir(char *dsrc, char *ddst);
 long  rMakeDir(char *name, long dupl);
 void  rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data);
