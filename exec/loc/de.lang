@@ -1,10 +1,10 @@
-
-
-
-
-
-
-
+Charakter entfernen
+Alle ähnlichen entfernen
+Pausiere
+Pausiere alle ähnlichen
+Kontrolliere: Spieler 1
+Kontrolliere: Spieler 2
+Optionen...
 [ Desktop Ponies Engine ]
 Betriebssystemabhängig Optionen
 Transparenz deaktivieren
@@ -20,3 +20,44 @@ BGRA aktivieren
 Pixelpuffer aktivieren
 Nutzlos ohne Transparenz!
 Nutzlos ohne Grafikkarte!
+Konnte GPU nicht initialisieren!
+Die Animationen könnten veraltet sein. Das Internet nach Aktualisierungen durchsuchen? Warnung: Die Dauer ist äbhängig von der Verbindungsgeschwindigkeit.
+Verbindung zum Internet fehlgeschlagen!
+Verzeichnis konnte nicht erstellt werden!
+Aktualisieren
+Desktop Ponies
+Filter aktivieren
+Genaues Vergleichen
+[Mindestens ein:]
+[Alle:]
+Zufällige Auswahl:
+Gruppenauswahl:
+Hinzufügen
+Duplikate
+Ausgewählt:
+Geladen:
+Aktualisiert:
+Los!
+Aktualisere beim nächsten Start
+Immer im Vordergrund
+Effekte aktivieren
+Interaktionen aktivieren
+Sprache aktivieren
+Sprachfarben aktiviren
+Auf Mauszeiger reagieren
+ Aktualisierungsrate
+ % Vergrößerungsfaktor
+ % Geschwindigkeit
+ % Konversationschance
+ pix. Zeiger ausweich Radius
+Auswählen...
+Aktualisieren
+Zurücksetzen
+GUI Sprache: Deutsch
+Animationsverzeichnis:
+Verschieben das Animationsverzeichnis
+Bestätige das Speichern des Verzeichnises an einem neuen Ort:
+[ACHTUNG:] Beim Abbruch wird das Quellverzeichnis gelöscht!
+Konnte das Verzeichnis nicht verschieben:
+Ok
+Abrechen
