@@ -87,32 +87,36 @@ strip:
 	if type strip >/dev/null 2>&1 && [ -f $(LOUT) ]; then strip -x $(LOUT); fi
 
 lbuild:
-	mkdir -p $(OBJDIR)/core/gif $(OBJDIR)/core/ogl
-	mkdir -p $(EXEPATH) $(EXEPATH)/../Resources
-	cp rsrc/main.icns $(EXEPATH)/../Resources
-	cp rsrc/Info.plist $(EXEPATH)/..
 $(OBJDIR)/core/core.o: ../core/core.c
+	mkdir -p $(OBJDIR)/core
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/core.c -o $(OBJDIR)/core/core.o
 $(OBJDIR)/core/gif/gifstd.o: ../core/gif/gifstd.c
+	mkdir -p $(OBJDIR)/core/gif
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/gif/gifstd.c -o $(OBJDIR)/core/gif/gifstd.o
 $(OBJDIR)/core/ogl/oglstd.o: ../core/ogl/oglstd.c
+	mkdir -p $(OBJDIR)/core/ogl
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/ogl/oglstd.c -o $(OBJDIR)/core/ogl/oglstd.o
 $(OBJDIR)/lib.o: lib.c
+	mkdir -p $(OBJDIR)
 	$(CC) $(LCFLAGS) $(LINC) -c lib.c -o $(OBJDIR)/lib.o
 
 ebuild:
-	mkdir -p $(OBJDIR)/exec
+	mkdir -p $(EXEPATH) $(EXEPATH)/../Resources
+	cp rsrc/main.icns $(EXEPATH)/../Resources
+	cp rsrc/Info.plist $(EXEPATH)/..
 $(OBJDIR)/exec/exec.o: ../exec/exec.c
+	mkdir -p $(OBJDIR)/exec
 	$(CC) $(ECFLAGS) $(EINC) -c ../exec/exec.c -o $(OBJDIR)/exec/exec.o
 $(OBJDIR)/run.o: run.c
+	mkdir -p $(OBJDIR)
 	$(CC) $(ECFLAGS) $(EINC) -c run.c -o $(OBJDIR)/run.o
 
-jlink:
+jlink: $(LOBJ) $(EOBJ) $(EXEPATH)/../Info.plist $(EXEPATH)/../Resources/main.icns
 	$(CX) $(ECXFLAGS) $(LOBJ) $(EOBJ) -o $(EOUT) $(LLIB)
 
 llink: LCXFLAGS += -shared
-llink:
+llink: $(LOBJ)
 	$(CX) $(LCXFLAGS) $(LOBJ) -o $(LOUT) $(LLIB)
 
-elink:
+elink: $(EOBJ) $(EXEPATH)/../Info.plist $(EXEPATH)/../Resources/main.icns
 	$(CX) $(ECXFLAGS) $(EOBJ) -o $(EOUT) $(ELIB)

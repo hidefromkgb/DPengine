@@ -83,30 +83,33 @@ clean:
 	rm -rf $(OBJDIR)
 
 lbuild:
-	mkdir -p $(OBJDIR)/core/gif
-	mkdir -p $(OBJDIR)/core/ogl
 $(OBJDIR)/core/core.o: ../core/core.c
+	mkdir -p $(OBJDIR)/core
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/core.c -o $(OBJDIR)/core/core.o
 $(OBJDIR)/core/gif/gifstd.o: ../core/gif/gifstd.c
+	mkdir -p $(OBJDIR)/core/gif
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/gif/gifstd.c -o $(OBJDIR)/core/gif/gifstd.o
 $(OBJDIR)/core/ogl/oglstd.o: ../core/ogl/oglstd.c
+	mkdir -p $(OBJDIR)/core/ogl
 	$(CC) $(LCFLAGS) $(LINC) -c ../core/ogl/oglstd.c -o $(OBJDIR)/core/ogl/oglstd.o
 $(OBJDIR)/lib.o: lib.c
+	mkdir -p $(OBJDIR)
 	$(CC) $(LCFLAGS) $(LINC) -c lib.c -o $(OBJDIR)/lib.o
 
 ebuild:
-	mkdir -p $(OBJDIR)/exec
 $(OBJDIR)/exec/exec.o: ../exec/exec.c
+	mkdir -p $(OBJDIR)/exec
 	$(CC) $(ECFLAGS) $(EINC) -c ../exec/exec.c -o $(OBJDIR)/exec/exec.o
 $(OBJDIR)/run.o: run.c
+	mkdir -p $(OBJDIR)
 	$(CC) $(ECFLAGS) $(EINC) -c run.c -o $(OBJDIR)/run.o
 
-jlink:
+jlink: $(LOBJ) $(EOBJ)
 	$(CX) $(LOBJ) $(EOBJ) $(LCXFLAGS) -o $(EOUT) $(LLIB)
 
 llink: LCXFLAGS += -shared
-llink:
+llink: $(LOBJ)
 	$(CX) $(LOBJ) $(LCXFLAGS) -o $(LOUT) $(LLIB)
 
-elink:
+elink: $(EOBJ)
 	$(CX) $(EOBJ) $(ECXFLAGS) -o $(EOUT) $(ELIB)
