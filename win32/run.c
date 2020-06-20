@@ -1777,7 +1777,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
 void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
     uint64_t time, tcur;
     uint32_t temp;
-    MSG pmsg;
+    MSG pmsg = {};
 
     time = tcur = 0;
     while (pmsg.message != WM_QUIT) {

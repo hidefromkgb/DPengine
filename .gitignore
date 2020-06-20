@@ -17,6 +17,7 @@ Content*
 
 # Win32-specific
 Thumbs.db
+*.lnk
 *.def
 *.a
 

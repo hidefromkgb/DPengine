@@ -12,12 +12,15 @@ doing a `git clone`! As for GitHub ZIP downloader, unfortunately it still
 so downloading a ZIP instead of cloning yields an incomplete copy.
 
 Win32 GUI (as seen on Windows 98 SE):
+
 ![Win32](https://www.ponychan.net/fan/src/1466830858097.png)
 
 Linux GUI (as seen on Arch Linux 4.6):
+
 ![Linux](https://www.ponychan.net/fan/src/1466929218785.png)
 
 MacOS GUI (as seen on 10.10 Yosemite):
+
 ![MacOS](https://www.ponychan.net/fan/src/1470521199962.png)
 
 To run properly, DPE requires the
