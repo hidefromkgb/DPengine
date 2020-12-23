@@ -405,7 +405,7 @@ struct ENGC {
              *octl; /// GUI controls array (options window)
     T4FV     *data; /// main display sequence passed to the renderer
     ENGD     *engd; /// rendering engine handle
-    LINF     *libs; /// sprite libraries array
+    CTR_V(LINF) libs; /// sprite libraries array
     CTR_V(CTGS) ctgs; /// categories array
     PICT     *pcur, /// the sprite currently picked
              *povr, /// the sprite with cursor over it
@@ -415,7 +415,6 @@ struct ENGC {
              *cfnm; /// name of the main configuration file
     uint32_t *seed, /// random number generator seed
              *blgp, /// boundaries of library groups in sorted PARR
-              lcnt, /// libraries count
               pcnt, /// on-screen sprites count (may differ every frame)
               pmax, /// max. PARR capacity (realloc on exceed)
               ftmp; /// temporary storage for engine flags
@@ -629,10 +628,10 @@ void SetProgress(ENGC *engc, long tran, long frac, long full) {
 void RecountSelectedLibs(ENGC *engc) {
     long full, frac, indx;
 
-    for (full = frac = indx = 0; indx < engc->lcnt; indx++)
-        if (engc->libs[indx].wctx.icnt > 0)
+    for (full = frac = indx = 0; indx < engc->libs.size; indx++)
+        if (engc->libs._[indx].wctx.icnt > 0)
             frac++;
-        else if (!engc->libs[indx].wctx.icnt)
+        else if (!engc->libs._[indx].wctx.icnt)
             full++;
     SetProgress(engc, TXT_SELE, frac, frac + full);
 }
@@ -817,8 +816,8 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
     intptr_t para, desc = 0;
     PARA *tmpl;
 
-    if (engc->lcnt || !rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP],
-                                engc->tran[TXT_BYES], engc->tran[TXT_BNAY]))
+    if (engc->libs.size || !rMessage(engc->tran[TXT_CTUP], engc->tran[TXT_CCUP],
+                                     engc->tran[TXT_BYES], engc->tran[TXT_BNAY]))
         return 0;
     if ((desc = rMakeHTTPS(user, GIT_SAPI)) && (iter = rMakeDir(disk, 1))) {
         /// no target directory present, need to populate it first
@@ -1303,9 +1302,9 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
     if ((file = rLoadFile(conf, 0))) {
         free(conf);
 
-        engc->libs = realloc(engc->libs, ++engc->lcnt * sizeof(*engc->libs));
-        CTR_ASSIGN(engc->libs[engc->lcnt - 1]);
-        libs = &engc->libs[engc->lcnt - 1];
+        CTR_V_MGET(engc->libs, engc->libs.size + 1);
+        CTR_ASSIGN(engc->libs._[engc->libs.size - 1]);
+        libs = &engc->libs._[engc->libs.size - 1];
         libs->engc = engc;
         libs->path = fptr;
 
@@ -1327,9 +1326,9 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
         CTR_V_MGET(libs->barr, bcnt);
         if (!libs->barr.size) {
             /// no behaviours found, the library is broken; stopping
-            engc->lcnt--;
-            free(libs->path);
             free(file);
+            free(libs->path);
+            CTR_V_MGET(engc->libs, engc->libs.size - 1);
             return;
         }
         fptr = file;
@@ -1561,21 +1560,21 @@ void SortByLib(ENGC *engc) {
     if (engc->pcnt < 1)
         return;
 
-    memset(engc->elem, 0, (engc->lcnt + 1) * sizeof(*engc->elem));
-    memset(engc->blgp, 0, (engc->lcnt + 1) * sizeof(*engc->blgp));
+    memset(engc->elem, 0, (engc->libs.size + 1) * sizeof(*engc->elem));
+    memset(engc->blgp, 0, (engc->libs.size + 1) * sizeof(*engc->blgp));
 
     for (iter = engc->pcnt - 1; iter >= 0; iter--) {
         if (!engc->parr[iter])
             engc->pcnt--;
         else {
             indx = (~engc->parr[iter]->flgs & PIF_EFCT)?
-                     engc->parr[iter]->ulib - engc->libs + 1 : 0;
+                     engc->parr[iter]->ulib - engc->libs._ + 1 : 0;
             engc->parr[iter]->next = engc->elem[indx];
             engc->elem[indx] = engc->parr[iter];
             engc->blgp[indx]++;
         }
     }
-    for (iter = indx = 0; indx <= engc->lcnt; indx++) {
+    for (iter = indx = 0; indx <= engc->libs.size; indx++) {
         while (engc->elem[indx]) {
             engc->parr[iter++] = engc->elem[indx];
             engc->elem[indx] = engc->elem[indx]->next;
@@ -3104,8 +3103,8 @@ void UpdPreview(intptr_t data, uint64_t time) {
     if (engc->parr)
         return; /// previews are hidden when the engine is active
 
-    for (iter = data = 0; data < engc->lcnt; data++) {
-        ulib = &engc->libs[data];
+    for (iter = data = 0; data < engc->libs.size; data++) {
+        ulib = &engc->libs._[data];
         if (!(anim = ulib->barr._[ulib->prev].unit)->fcnt || !ulib->capt.fe2c)
             continue; /// this preview has been loaded incorrectly, skipping
         if (ulib->noff && (time > ulib->wctx.ttxt)) { /// update text!
@@ -3141,19 +3140,19 @@ void CategorizePreviews(ENGC *engc) {
 
     flgs = RUN_FE2C(engc->MCT_EXAC, MSG_BGST, 0);
     flgs = (flgs & FCS_ENBL)? (flgs & FCS_MARK)? 2 : 1 : 0;
-    for (elem = 0, indx = 0; indx < engc->lcnt; indx++) {
+    for (elem = 0, indx = 0; indx < engc->libs.size; indx++) {
         for (iter = 0; iter < engc->ctgs.size; iter++)
             if (engc->ctgs._[iter].flgs & flgs) {
                 temp.hash = engc->ctgs._[iter].hash;
-                elem = bsearch(&temp, engc->libs[indx].ctgs._,
-                                engc->libs[indx].ctgs.size,
-                                sizeof(*engc->libs->ctgs._), ctgscmp);
+                elem = bsearch(&temp, engc->libs._[indx].ctgs._,
+                                engc->libs._[indx].ctgs.size,
+                                sizeof(*engc->libs._[0].ctgs._), ctgscmp);
                 if (!!elem ^ (flgs - 1))
                     break;
             }
-        engc->libs[indx].wctx.icnt =
-            ((!elem & !!flgs) ^ (engc->libs[indx].wctx.icnt < 0))?
-            -engc->libs[indx].wctx.icnt - 1 : engc->libs[indx].wctx.icnt;
+        engc->libs._[indx].wctx.icnt =
+            ((!elem & !!flgs) ^ (engc->libs._[indx].wctx.icnt < 0))?
+            -engc->libs._[indx].wctx.icnt - 1 : engc->libs._[indx].wctx.icnt;
     }
     RecountSelectedLibs(engc);
     RUN_FE2C(engc->MCT_CHAR, MSG_WSZC, 0);
@@ -3163,14 +3162,14 @@ void CategorizePreviews(ENGC *engc) {
 
 void DisplayPreviews(ENGC *engc, long yoff, long ydim, long ywnd) {
     long iter = 0, show = -1, ycap, yspi, apos[2];
-    LINF *ulib = engc->libs;
+    LINF *ulib = &engc->libs._[0];
 
-    if (!engc->lcnt || !ulib->capt.fe2c)
+    if (!engc->libs.size || !ulib->capt.fe2c)
         return;
 
     ycap = (uint16_t)(RUN_FE2C(ulib->capt, MSG__GSZ, 0) >> 16);
     yspi = (uint16_t)(RUN_FE2C(ulib->spin, MSG__GSZ, 0) >> 16);
-    for (; iter < engc->lcnt; show = -1, ulib = engc->libs + ++iter) {
+    for (; iter < engc->libs.size; show = -1, ulib = &engc->libs._[++iter]) {
         apos[0] = ulib->wctx.yold + ulib->wctx.ymin - ulib->wctx.ymax;
         if ((ulib->wctx.ymax >= yoff) && (ulib->wctx.ymin <= yoff + ywnd)) {
             ulib->wctx.yold = ulib->wctx.ymax;
@@ -3207,26 +3206,26 @@ void DisplayPreviews(ENGC *engc, long yoff, long ydim, long ywnd) {
 
 intptr_t RearrangePreviews(ENGC *engc, long skip, long xdim, long ydim) {
     long xinc, yinc, ymax, ycap, yspi, iter, line;
-    LINF *ulib = engc->libs;
+    LINF *ulib = &engc->libs._[0];
 
-    if (!engc->lcnt || !ulib->capt.fe2c)
+    if (!engc->libs.size || !ulib->capt.fe2c)
         return -1;
 
     xinc = skip;
     line = yinc = ymax = 0;
     ycap = (uint16_t)(RUN_FE2C(ulib->capt, MSG__GSZ, 0) >> 16);
     yspi = (uint16_t)(RUN_FE2C(ulib->spin, MSG__GSZ, 0) >> 16);
-    for (iter = 0; iter <= engc->lcnt; ulib = engc->libs + ++iter) {
-        if ((iter < engc->lcnt) && (ulib->wctx.icnt < 0))
+    for (iter = 0; iter <= engc->libs.size; ulib = &engc->libs._[++iter]) {
+        if ((iter < engc->libs.size) && (ulib->wctx.icnt < 0))
             continue; /// skipping disabled libraries
-        if ((iter < engc->lcnt) && (xinc + skip - ulib->pict.xdim <= xdim)) {
+        if ((iter < engc->libs.size) && (xinc + skip - ulib->pict.xdim <= xdim)) {
             xinc += skip - ulib->pict.xdim;
             ymax = (-ulib->pict.ydim > ymax)? -ulib->pict.ydim : ymax;
             continue;
         }
         /// if we are here, either the line is full or the array ended
-        for (xinc = skip, ulib = engc->libs + line;
-             line < iter; ulib = engc->libs + ++line) {
+        for (xinc = skip, ulib = &engc->libs._[line];
+             line < iter; ulib = &engc->libs._[++line]) {
             if (ulib->wctx.icnt >= 0) {
                 ulib->wctx.ymax = yinc + ymax + ycap + yspi;
                 ulib->wctx.ymin = yinc;
@@ -3235,7 +3234,7 @@ intptr_t RearrangePreviews(ENGC *engc, long skip, long xdim, long ydim) {
             }
         }
         yinc += ymax + ycap + yspi + skip;
-        if (iter < engc->lcnt) {
+        if (iter < engc->libs.size) {
             xinc = skip + skip - ulib->pict.xdim;
             ymax = -ulib->pict.ydim;
         }
@@ -3423,13 +3422,13 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 long spin;
 
                 data = RUN_FE2C(engc->MCT_SPEC, MSG_NGET, 0);
-                for (cmsg = 0; cmsg < engc->lcnt; cmsg++)
-                    if (engc->libs[cmsg].wctx.icnt >= 0) {
-                        spin = engc->libs[cmsg].wctx.icnt;
+                for (cmsg = 0; cmsg < engc->libs.size; cmsg++)
+                    if (engc->libs._[cmsg].wctx.icnt >= 0) {
+                        spin = engc->libs._[cmsg].wctx.icnt;
                         spin = (spin + data > 0)? spin + data : 0;
-                        if (engc->libs[cmsg].spin.fe2c)
-                            RUN_FE2C(engc->libs[cmsg].spin, MSG_NSET, spin);
-                        RUN_FC2E(engc->libs[cmsg].spin, MSG_NSET, spin);
+                        if (engc->libs._[cmsg].spin.fe2c)
+                            RUN_FE2C(engc->libs._[cmsg].spin, MSG_NSET, spin);
+                        RUN_FC2E(engc->libs._[cmsg].spin, MSG_NSET, spin);
                     }
             }
             break;
@@ -3516,14 +3515,14 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             intptr_t icon;
             long ilen, *irnd, *iput;
 
-            irnd = calloc(engc->lcnt, sizeof(*irnd));
-            iput = calloc(engc->lcnt, sizeof(*iput));
+            irnd = calloc(engc->libs.size, sizeof(*irnd));
+            iput = calloc(engc->libs.size, sizeof(*iput));
 
             /// checking if random choice is enabled
             if ((cmsg = RUN_FE2C(engc->MCT_BDUP, MSG_BGST, 0)) & FCS_ENBL) {
                 /// indexing random-capable libraries
-                for (ilen = icon = 0; icon < engc->lcnt; icon++)
-                    if (engc->libs[icon].wctx.icnt == 0)
+                for (ilen = icon = 0; icon < engc->libs.size; icon++)
+                    if (engc->libs._[icon].wctx.icnt == 0)
                         iput[ilen++] = icon;
                 /// iterating over the requested random sprites count
                 for (icon = RUN_FE2C(engc->MCT_RGPU, MSG_NGET, 0);
@@ -3533,14 +3532,14 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                         iput[data] = iput[ilen];
                 }
                 /// finally, adding the computed random values to ICNTs
-                for (icon = 0; icon < engc->lcnt; icon++)
-                    engc->libs[icon].wctx.icnt += irnd[icon];
+                for (icon = 0; icon < engc->libs.size; icon++)
+                    engc->libs._[icon].wctx.icnt += irnd[icon];
             }
             /// is there anything selected? let`s find out
-            for (icon = 0; icon < engc->lcnt; icon++)
-                if (engc->libs[icon].wctx.icnt > 0)
+            for (icon = 0; icon < engc->libs.size; icon++)
+                if (engc->libs._[icon].wctx.icnt > 0)
                     break;
-            if (icon >= engc->lcnt) {
+            if (icon >= engc->libs.size) {
                 /// [TODO:] do we need to show messages here?
 //                rMessage("Nothing selected!", 0, 0);
                 free(irnd);
@@ -3548,15 +3547,15 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 break;
             }
             /// counting the number of selected libraries
-            for (cmsg = icon = 0; icon < engc->lcnt; icon++)
-                if (engc->libs[icon].wctx.icnt > 0)
+            for (cmsg = icon = 0; icon < engc->libs.size; icon++)
+                if (engc->libs._[icon].wctx.icnt > 0)
                     cmsg++;
             SetProgress(engc, TXT_LOAD, 0, cmsg);
 
             cEngineCallback(engc->engd, ECB_LOAD, ~0);
-            for (data = icon = 0; icon < engc->lcnt; icon++)
-                if (engc->libs[icon].wctx.icnt > 0) {
-                    LoadLib(&engc->libs[icon], engc->engd);
+            for (data = icon = 0; icon < engc->libs.size; icon++)
+                if (engc->libs._[icon].wctx.icnt > 0) {
+                    LoadLib(&engc->libs._[icon], engc->engd);
                     SetProgress(engc, TXT_LOAD, ++data, cmsg);
                     RUN_FE2C(engc->MCT_SELE, MSG_PPOS, data);
                 }
@@ -3564,20 +3563,16 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                                  MainIcon, ELA_LOAD, 0);
             cEngineCallback(engc->engd, ECB_LOAD, 0);
 
-            for (libs = engc->libs, icon = 0; icon < engc->lcnt; icon++)
-                if (AppendSpriteArr(&engc->libs[icon], engc)) {
+            for (libs = engc->libs._, icon = 0; icon < engc->libs.size; icon++)
+                if (AppendSpriteArr(&engc->libs._[icon], engc)) {
                     /// revert random ICNT
-                    engc->libs[icon].wctx.icnt -= irnd[icon];
-                    if (++libs <= &engc->libs[icon])
-                        CTR_ASSIGN(libs[-1], engc->libs[icon]);
+                    engc->libs._[icon].wctx.icnt -= irnd[icon];
+                    if (++libs <= &engc->libs._[icon])
+                        CTR_ASSIGN(libs[-1], engc->libs._[icon]);
                 }
             free(irnd);
             free(iput);
-            if (libs - engc->libs < engc->lcnt) {
-                engc->lcnt = libs - engc->libs;
-                engc->libs = realloc(engc->libs,
-                                     engc->lcnt * sizeof(*engc->libs));
-            }
+            CTR_V_MGET(engc->libs, libs - engc->libs._, 1);
             igif.fcnt = 0;
             igif.xdim = engc->idim.x;
             igif.ydim = engc->idim.y;
@@ -3994,9 +3989,9 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                                           "Desktop-Ponies", "master",
                                           "Content", fptr) || ypos));
     free(fptr);
-    engc.blgp = calloc(engc.lcnt + 1, sizeof(*engc.blgp));
+    engc.blgp = calloc(engc.libs.size + 1, sizeof(*engc.blgp));
     /// sort engine`s libraries by name, initialize the rendering engine
-    qsort(engc.libs, engc.lcnt, sizeof(*engc.libs), linfcmp);
+    CTR_V_SORT(engc.libs, linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc.engd);
 
     for (indx = 0; indx < engc.ctgs.size; indx++)
@@ -4004,8 +3999,8 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     RUN_FE2C(engc.MCT_OGRP, MSG__TXT, (intptr_t)engc.tran[TXT_OGRP]);
 
     /// now constructing previews
-    for (ulib = engc.libs, indx = 0; indx < engc.lcnt;
-         ulib = engc.libs + ++indx) {
+    for (ulib = &engc.libs._[0], indx = 0; indx < engc.libs.size;
+         ulib = &engc.libs._[++indx]) {
         if (!ulib->barr._[0].unit[0].fcnt) {
             ulib->barr._[0].unit[0].fcnt = 1;
             temp = ExtractLastDirs((char*)ulib->barr._[0].unit[0].time, 2);
@@ -4018,22 +4013,22 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
             LINF *iter, temp;
 
             if ((temp.name = (char*)ulib->barr._[elem].trgt)
-            &&  (iter = bsearch(&temp, engc.libs, engc.lcnt,
-                                sizeof(*engc.libs), linfcmp)))
-                ulib->barr._[elem].trgt = iter - engc.libs + 1;
+            &&  (iter = bsearch(&temp, engc.libs._, engc.libs.size,
+                                 sizeof(*engc.libs._), linfcmp)))
+                ulib->barr._[elem].trgt = iter - engc.libs._ + 1;
             else
                 ulib->barr._[elem].trgt = 0;
             free(temp.name);
         }
         /// initial library preparations complete, reporting progress
-        SetProgress(&engc, TXT_LOAD, indx, engc.lcnt);
+        SetProgress(&engc, TXT_LOAD, indx, engc.libs.size);
     }
     cEngineCallback(engc.engd, ECB_LOAD, 0);
     cEngineCallback(engc.engd, ECB_LOAD, ~0);
 
     /// still constructing previews
-    for (ulib = engc.libs, indx = 0; indx < engc.lcnt;
-         ulib = engc.libs + ++indx) {
+    for (ulib = &engc.libs._[0], indx = 0; indx < engc.libs.size;
+         ulib = &engc.libs._[++indx]) {
         xpos = ulib->barr._[0].unit[0].xdim;
         xpos = (xico > xpos)? xico : xpos;
         ulib->pict = (CTRL){&engc.MCT_CHAR, (intptr_t)engc.engd, indx,
@@ -4133,8 +4128,8 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
 
     RUN_FE2C(engc.MCT_CHAR, MSG__SHW, 0);
 
-    for (ulib = &engc.libs[indx = 0]; indx < engc.lcnt;
-         ulib = &engc.libs[++indx]) {
+    for (ulib = &engc.libs._[indx = 0]; indx < engc.libs.size;
+         ulib = &engc.libs._[++indx]) {
         rFreeControl(&ulib->pict);
         rFreeControl(&ulib->spin);
         rFreeControl(&ulib->capt);
@@ -4146,11 +4141,11 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     FreeMenu(&engc.mctx);
     FreeLocalization(&engc.tran);
 
-    for (; engc.lcnt; engc.lcnt--)
-        FreeLib(&engc.libs[engc.lcnt - 1]);
-    free(engc.libs);
+    for (long iter = 0; iter < engc.libs.size; iter++)
+        FreeLib(&engc.libs._[iter]);
+    CTR_V_MGET(engc.libs);
 
-    for (unsigned iter = 0; iter < engc.ctgs.size; iter++)
+    for (long iter = 0; iter < engc.ctgs.size; iter++)
         free(engc.ctgs._[iter].name);
     CTR_V_MGET(engc.ctgs);
 
