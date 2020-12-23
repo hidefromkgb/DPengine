@@ -531,13 +531,13 @@ void ButtonSwitch(GtkToggleButton *butn, gpointer data) {
 void ListItemSwitch(GtkCellRendererToggle *cell, gchar *path, gpointer data) {
     CTRL *ctrl = (CTRL*)data;
     GtkTreeIter iter;
-    gboolean bool;
+    gboolean bbbb;
 
     gtk_tree_model_get_iter_from_string(GTK_TREE_MODEL(ctrl->priv[2]),
                                        &iter, path);
-    gtk_tree_model_get(GTK_TREE_MODEL(ctrl->priv[2]), &iter, 0, &bool, -1);
-    ctrl->fc2e(ctrl, MSG_LSST, (strtol(path, 0, 10) << 1) | ((bool)? 0 : 1));
-    gtk_list_store_set(GTK_LIST_STORE(ctrl->priv[2]), &iter, 0, !bool, -1);
+    gtk_tree_model_get(GTK_TREE_MODEL(ctrl->priv[2]), &iter, 0, &bbbb, -1);
+    ctrl->fc2e(ctrl, MSG_LSST, (strtol(path, 0, 10) << 1) | ((bbbb)? 0 : 1));
+    gtk_list_store_set(GTK_LIST_STORE(ctrl->priv[2]), &iter, 0, !bbbb, -1);
 }
 
 
@@ -546,9 +546,9 @@ gboolean ListItemUpdate(GtkTreeModel *tree, GtkTreePath *path,
                         GtkTreeIter *iter, gpointer data) {
     CTRL *ctrl = (CTRL*)data;
     char *pstr = gtk_tree_path_to_string(path);
-    gboolean bool = ctrl->fc2e(ctrl, MSG_LGST, strtol(pstr, 0, 10));
+    gboolean bbbb = ctrl->fc2e(ctrl, MSG_LGST, strtol(pstr, 0, 10));
 
-    gtk_list_store_set(GTK_LIST_STORE(ctrl->priv[2]), iter, 0, bool, -1);
+    gtk_list_store_set(GTK_LIST_STORE(ctrl->priv[2]), iter, 0, bbbb, -1);
     g_free(pstr);
     return FALSE;
 }

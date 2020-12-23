@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <limits.h>
 #include "exec.h"
+#include "ctr/std_ctrs.h"
 #include "zip/zip_load.h"
 
 /// a macro to count the capacity of static arrays
@@ -332,10 +333,10 @@ typedef struct {
              bovr,  /// mouseover behaviours extracted from BARR
              bdrg;  /// drag behaviours extracted from BARR
     ENGC    *engc;  /// parent engine
-    CTGS    *ctgs;  /// library categories (hashed and sorted)
-    BINF    *barr,  /// available behaviours ordered by name hash
-            *earr,  /// available effects ordered by parent bhv. name hash
-           **bslp;  /// sleep behaviours extracted from BARR
+    CTR_V(CTGS) ctgs;  /// library categories (hashed and sorted)
+    CTR_V(BINF) barr,  /// available behaviours ordered by name hash
+                earr;  /// available effects ordered by parent bhv. name hash
+    BINF   **bslp;  /// sleep behaviours extracted from BARR
     char   **bimp,  /// image paths for behaviours (0 if loaded)
            **eimp,  /// image paths for effects (0 if loaded)
             *path,  /// the folder from which the library was built
@@ -346,10 +347,7 @@ typedef struct {
     long     nsay,  /// template speech ID + 1 (0 if no speech)
              nslp,  /// number of sleep behaviours
              prev,  /// preview index in sorted BARR
-             ccnt,  /// categories count
              zcnt,  /// nonzero probability behaviours count
-             bcnt,  /// total behaviours count
-             ecnt,  /// total effects count
              nnam,  /// [ description line length in uint8_t`s               ]
              noff;  /// [ maximum description line offset                    ]
     struct {
@@ -411,7 +409,7 @@ struct ENGC {
     T4FV     *data; /// main display sequence passed to the renderer
     ENGD     *engd; /// rendering engine handle
     LINF     *libs; /// sprite libraries array
-    CTGS     *ctgs; /// categories array
+    CTR_V(CTGS) ctgs; /// categories array
     PICT     *pcur, /// the sprite currently picked
              *povr, /// the sprite with cursor over it
             **parr, /// on-screen sprite pointers array
@@ -421,7 +419,6 @@ struct ENGC {
     uint32_t *seed, /// random number generator seed
              *blgp, /// boundaries of library groups in sorted PARR
               lcnt, /// libraries count
-              ccnt, /// categories count
               pcnt, /// on-screen sprites count (may differ every frame)
               pmax, /// max. PARR capacity (realloc on exceed)
               ftmp; /// temporary storage for engine flags
@@ -1312,27 +1309,27 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
         free(conf);
 
         engc->libs = realloc(engc->libs, ++engc->lcnt * sizeof(*engc->libs));
-        engc->libs[engc->lcnt - 1] = (LINF){};
+        CTR_ASSIGN(engc->libs[engc->lcnt - 1]);
         libs = &engc->libs[engc->lcnt - 1];
         libs->engc = engc;
         libs->path = fptr;
 
         fptr = file;
-        libs->bcnt = libs->ecnt = 0;
+        bcnt = ecnt = 0;
         while ((conf = SplitLine(&fptr, '\n', 1)))
             switch (DetermineType(&conf)) {
                 case SVT_SAYS:
                 case SVT_EFCT:
-                    libs->ecnt++;
+                    ecnt++;
                     break;
 
                 case SVT_BHVR:
-                    libs->bcnt++;
+                    bcnt++;
                     break;
             }
 
-        if ((bcnt = libs->bcnt)) {
-            libs->barr = calloc(bcnt,     sizeof(*libs->barr));
+        if (bcnt) {
+            CTR_V_MGET(libs->barr, bcnt);
             libs->bimp = calloc(bcnt * 2, sizeof(*libs->bimp));
         }
         else {
@@ -1342,8 +1339,8 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
             free(file);
             return;
         }
-        if ((ecnt = libs->ecnt)) {
-            libs->earr = calloc(ecnt,     sizeof(*libs->earr));
+        if (ecnt) {
+            CTR_V_MGET(libs->earr, ecnt);
             libs->eimp = calloc(ecnt * 2, sizeof(*libs->eimp));
         }
         fptr = file;
@@ -1356,20 +1353,20 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     break;
 
                 case SVT_SAYS:
-                    ParseSpeech(&libs->earr[ecnt], libs->path,
+                    ParseSpeech(&libs->earr._[ecnt], libs->path,
                                 &libs->eimp[ecnt * 2], &conf);
                     libs->nsay++;
                     ecnt++;
                     break;
 
                 case SVT_EFCT:
-                    ParseEffect(&libs->earr[ecnt], libs->path,
+                    ParseEffect(&libs->earr._[ecnt], libs->path,
                                 &libs->eimp[ecnt * 2], &conf);
                     ecnt++;
                     break;
 
                 case SVT_BHVR:
-                    ParseBehaviour(&libs->barr[bcnt], libs->path,
+                    ParseBehaviour(&libs->barr._[bcnt], libs->path,
                                    &libs->bimp[bcnt * 2], &conf);
                     bcnt++;
                     break;
@@ -1381,48 +1378,44 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                 case SVT_CTGS:
                     while ((temp = ToLower(Dequote(GET_TEMP(&conf)), 0))) {
                         *temp = toupper(*temp); /// capitalizing first letter
-                        hash = HashLine(temp, 0);
-                        if (++libs->ccnt > ccnt)
-                            libs->ctgs = realloc(libs->ctgs,
-                                         sizeof(*libs->ctgs) * (ccnt += 32));
-                        libs->ctgs[libs->ccnt - 1] =
-                            (CTGS){hash, 0, Dequote(temp)};
+                        CTR_V_PUSH(libs->ctgs,
+                                  ((CTGS){HashLine(temp, 0), 0, temp}), 8);
                     }
                     break;
             }
         if (!libs->name)
             libs->name = strdup(path);
-        if (libs->ctgs) {
+        if (libs->ctgs.size) {
             /// sorting categories, removing duplicates, truncating the memory
-            qsort(libs->ctgs, libs->ccnt, sizeof(*libs->ctgs), ctgscmp);
-            for (bcnt = ccnt = 1; ccnt < libs->ccnt; ccnt++)
-                if (libs->ctgs[ccnt - 1].hash != libs->ctgs[ccnt].hash)
+            CTR_V_SORT(libs->ctgs, ctgscmp);
+            for (bcnt = ccnt = 1; ccnt < libs->ctgs.size; ccnt++)
+                if (libs->ctgs._[ccnt - 1].hash != libs->ctgs._[ccnt].hash)
                     if (bcnt++ != ccnt)
-                        libs->ctgs[bcnt - 1] = libs->ctgs[ccnt];
-            if (libs->ccnt != bcnt)
-                libs->ctgs = realloc(libs->ctgs,
-                                    (libs->ccnt = bcnt) * sizeof(*libs->ctgs));
+                        libs->ctgs._[bcnt - 1] = libs->ctgs._[ccnt];
+            if (CTR_V_CGET(libs->ctgs) > bcnt)
+                CTR_V_MGET(libs->ctgs, bcnt, 1);
             /// now looking for categories previously unknown
-            for (hash = ccnt = 0; ccnt < libs->ccnt; ccnt++)
-                if ((ctgs = bsearch(&libs->ctgs[ccnt], engc->ctgs, engc->ccnt,
-                                    sizeof(*engc->ctgs), ctgscmp)))
-                    libs->ctgs[ccnt] = (CTGS){0, 0, ctgs->name};
+            for (hash = ccnt = 0; ccnt < libs->ctgs.size; ccnt++)
+                if ((ctgs = bsearch(&libs->ctgs._[ccnt], engc->ctgs._,
+                                     engc->ctgs.size, sizeof(*engc->ctgs._),
+                                     ctgscmp)))
+                    libs->ctgs._[ccnt] = (CTGS){0, 0, ctgs->name};
                 else
                     hash++;
             /// some categories need to be added to the global category base
             if (hash)
-                engc->ctgs = realloc(engc->ctgs,
-                                    (engc->ccnt += hash) * sizeof(*ctgs));
-            ctgs = engc->ctgs + engc->ccnt - hash;
-            for (ccnt = 0; ccnt < libs->ccnt; ccnt++)
-                if (!libs->ctgs[ccnt].hash)
-                    libs->ctgs[ccnt].hash = HashLine(libs->ctgs[ccnt].name, 0);
+                CTR_V_MGET(engc->ctgs, engc->ctgs.size + hash);
+            ctgs = engc->ctgs._ + engc->ctgs.size - hash;
+            for (ccnt = 0; ccnt < libs->ctgs.size; ccnt++)
+                if (!libs->ctgs._[ccnt].hash)
+                    libs->ctgs._[ccnt].hash =
+                        HashLine(libs->ctgs._[ccnt].name, 0);
                 else {
-                    libs->ctgs[ccnt].name = strdup(libs->ctgs[ccnt].name);
-                    *ctgs++ = libs->ctgs[ccnt];
+                    libs->ctgs._[ccnt].name = strdup(libs->ctgs._[ccnt].name);
+                    *ctgs++ = libs->ctgs._[ccnt];
                 }
             if (hash)
-                qsort(engc->ctgs, engc->ccnt, sizeof(*engc->ctgs), ctgscmp);
+                CTR_V_SORT(engc->ctgs, ctgscmp);
         }
         free(file);
         conf = 0;
@@ -1440,24 +1433,24 @@ void FreeBhvGroup(BGRP *bgrp) {
 }
 
 void FreeLib(LINF *elem) {
-    long iter = elem->bcnt * 2;
+    long iter = elem->barr.size * 2;
 
     while (elem->bimp || elem->eimp) {
         if (elem->bimp)
             while (iter)
                 free(elem->bimp[--iter]);
         free(elem->bimp);
-        iter = elem->ecnt * 2;
+        iter = elem->earr.size * 2;
         elem->bimp = elem->eimp;
         elem->eimp = 0;
     }
-    free(elem->ctgs); /// nothing to free inside CTGS:
-                      /// category names were copied from the engine
+    CTR_V_MGET(elem->barr);
+    CTR_V_MGET(elem->earr);
+    CTR_V_MGET(elem->ctgs); /// nothing to free inside CTGS:
+                            /// category names were copied from the engine
     free(elem->path);
     free(elem->name);
     free(elem->scrl);
-    free(elem->barr);
-    free(elem->earr);
     free(elem->bslp);
     FreeBhvGroup(&elem->srnd);
     FreeBhvGroup(&elem->bbhv);
@@ -1470,25 +1463,25 @@ void FreeLib(LINF *elem) {
 
 
 void LoadLib(LINF *elem, ENGD *engd) {
-    long iter, indx, ncnt, xdim, ydim, lsrc, ldst;
+    long iter, indx, xdim, ydim, lsrc, ldst;
     char **nimp, clrs[32];
     uint32_t *bptr;
     uint8_t *name;
-    BINF *narr;
+    CTR_V(BINF) *narr;
     AINF *temp;
 
     if (!elem->bimp || (elem->wctx.icnt <= 0))
         return;
     for (indx = 0; indx <= 1; indx++) {
-        narr =  (indx)? elem->earr : elem->barr;
-        nimp =  (indx)? elem->eimp : elem->bimp;
-        ncnt = ((indx)? elem->ecnt : elem->bcnt) * 2;
-        for (iter = 0; iter < ncnt; iter++)
+        narr = (indx)? (typeof(narr))&elem->earr : (typeof(narr))&elem->barr;
+        nimp = (indx)? elem->eimp : elem->bimp;
+        for (iter = 0; iter < narr->size * 2; iter++)
             if (nimp[iter]) {
-                if (!(narr[iter >> 1].flgs & EFF_SAYS)) {
+                if (!(narr->_[iter >> 1].flgs & EFF_SAYS)) {
                     name = (uint8_t*)ExtractLastDirs(nimp[iter], 2);
-                    cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
-                                         name, nimp[iter], ELA_DISK, free);
+                    auto curr = &narr->_[iter >> 1].unit[iter & 1];
+                    cEngineLoadAnimAsync(engd, curr, name, nimp[iter],
+                                         ELA_DISK, free);
                 }
                 else {
                     sprintf(clrs, "#%08X / #%08X: ", elem->fgsc, elem->bgsc);
@@ -1496,8 +1489,8 @@ void LoadLib(LINF *elem, ENGD *engd) {
                     ydim = strlen((char*)name) + 1;
                     temp = realloc(nimp[iter], sizeof(*temp));
                     temp->time = (uint32_t*)(name + 23);
-                    temp->xdim = elem->barr[0].unit[0].xdim << 1;
-                    temp->ydim = elem->barr[0].unit[0].ydim >> 1;
+                    temp->xdim = elem->barr._[0].unit[0].xdim << 1;
+                    temp->ydim = elem->barr._[0].unit[0].ydim >> 1;
                     xdim = RUN_FE2C(elem->engc->MCT_CAPT,
                                     MSG_WTGD, (intptr_t)temp);
                     /// don`t forget to allocate horizontal space for
@@ -1572,8 +1565,9 @@ void LoadLib(LINF *elem, ENGD *engd) {
                     temp->ydim &= 0xFFFF;
                     *(temp->time = (uint32_t*)(temp + 1)) = 0;
                     temp->fcnt = 1;
-                    cEngineLoadAnimAsync(engd, &narr[iter >> 1].unit[iter & 1],
-                                         name, temp, ELA_AINF, free);
+                    auto curr = &narr->_[iter >> 1].unit[iter & 1];
+                    cEngineLoadAnimAsync(engd, curr, name, temp,
+                                         ELA_AINF, free);
                 }
                 nimp[iter] = 0;
             }
@@ -1671,10 +1665,10 @@ void FollowParent(ENGC *engc, PICT *pict, T2IV *move) {
         dist = (move->x | move->y)? 1.0 : 0.0;
     }
     else {
-        parr = &pict->ulib->barr[pict->indx >> 1];
-        barr = &pict->boss->ulib->barr[pict->boss->indx >> 1];
+        parr = &pict->ulib->barr._[pict->indx >> 1];
+        barr = &pict->boss->ulib->barr._[pict->boss->indx >> 1];
         for (iter = 0; iter <= 1; iter++) {
-            oarr = &pict->ulib->barr[(pict->iovr >> (iter << 4)) & 0xFFFF];
+            oarr = &pict->ulib->barr._[(pict->iovr >> (iter << 4)) & 0xFFFF];
             dest.x = ClampToBounds(pict->boss->offs.x
                                  + barr->cntr[pict->boss->indx & 1].x
                               - (((parr->flgs & BHV_MIRR)
@@ -1726,12 +1720,12 @@ void MoveToParent(PICT *pict, uint32_t *seed) {
 
     if (seed) {
         /// parent behaviour animation
-        anim[0] = &pict->boss->ulib->barr[pict->boss->indx >> 1].
-                                     unit[pict->boss->indx &  1];
+        anim[0] = &pict->boss->ulib->barr._[pict->boss->indx >> 1].
+                                       unit[pict->boss->indx &  1];
         /// effect animation
-        anim[1] = &pict->ulib->earr[pict->indx >> 1].unit[pict->indx & 1];
+        anim[1] = &pict->ulib->earr._[pict->indx >> 1].unit[pict->indx & 1];
         /// read centering and placement for the current effect
-        desc = pict->ulib->earr[pict->indx >> 1].flgs
+        desc = pict->ulib->earr._[pict->indx >> 1].flgs
              >> ((pict->indx & 1) << 3); /// direction was inherited from BOSS
         #define CALC(d) ((d[desc & EFF_AAAA] >= 0.0)? d[desc & EFF_AAAA]   \
                        : (float)(RNG_Load(seed) & 0xFFF) * 0.000244140625) \
@@ -1786,7 +1780,7 @@ long SpawnEffect(PICT **retn, PICT *from, uint32_t *seed,
     /// ^^^^ along these there is a third way, when an effect gets reused,
     /// and no new effects are created; this keeps sprite count in bounds
 
-    binf = &(*retn)->ulib->earr[(*retn)->indx >> 1];
+    binf = &(*retn)->ulib->earr._[(*retn)->indx >> 1];
     (*retn)->fram = -1; /// this means:
     (*retn)->tfrm =  0; /// "update me to 0-th frame ASAP!"
     /// effect respawn time; DMAX = 0 means "do not respawn"
@@ -1822,10 +1816,10 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
     if (flgs & CBF_NEXT)
         pict->indx = next;
     else {
-        if (ulib->barr[pict->indx >> 1].link)
-            pict->indx = (ulib->barr[pict->indx >> 1].link - 1) << 1;
+        if (ulib->barr._[pict->indx >> 1].link)
+            pict->indx = (ulib->barr._[pict->indx >> 1].link - 1) << 1;
         else {
-            seed = ulib->barr[pict->indx >> 1].igrp;
+            seed = ulib->barr._[pict->indx >> 1].igrp;
             lbgn = (seed)? ulib->bbhv.narr[seed - 1] : 0;
             lend = ulib->bbhv.narr[seed];
             seed = RNG_Load(engc->seed) % ulib->bbhv.barr[lend - 1]->prob;
@@ -1841,10 +1835,10 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
                     lbgn = (lend + lbgn + 2) >> 1;
                 else
                     lend = (lend + lbgn + 0) >> 1;
-            pict->indx = (ulib->bbhv.barr[lbgn] - ulib->barr) << 1;
+            pict->indx = (ulib->bbhv.barr[lbgn] - ulib->barr._) << 1;
         }
     }
-    binf = &pict->ulib->barr[pict->indx >> 1];
+    binf = &pict->ulib->barr._[pict->indx >> 1];
     if (flgs & CBF_INIT) {
         /// this is the first time this sprite appears; let`s put it somewhere
         lbgn = binf->cntr[pict->indx & 1].x << 1;
@@ -1854,9 +1848,9 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
     }
     else {
         /// re-center the upcoming sprite based on the previous center
-        pict->offs.x += pict->ulib->barr[prev >> 1].cntr[prev & 1].x
+        pict->offs.x += pict->ulib->barr._[prev >> 1].cntr[prev & 1].x
                      -  binf->cntr[pict->indx & 1].x;
-        pict->offs.y -= pict->ulib->barr[prev >> 1].cntr[prev & 1].y
+        pict->offs.y -= pict->ulib->barr._[prev >> 1].cntr[prev & 1].y
                      -  binf->cntr[pict->indx & 1].y;
     }
     pict->fram = -1; /// this means:
@@ -1873,7 +1867,7 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
                                   + engc->blgp[binf->trgt - 1]];
         for (pict->iovr = prev = 0; prev <= 1; prev++) {
             if (binf->obfm[prev])
-                oinf = &pict->ulib->barr[binf->obfm[prev] - 1];
+                oinf = &pict->ulib->barr._[binf->obfm[prev] - 1];
             else {
                 seed = (prev)? pict->ulib->bmov.narr[binf->igrp]
                      - ((binf->igrp)? pict->ulib->bmov.narr[binf->igrp - 1] : 0)
@@ -1882,12 +1876,12 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
                 oinf = (prev)? pict->ulib->bmov.barr[RNG_Load(engc->seed) % seed]
                              : pict->ulib->bsta.barr[RNG_Load(engc->seed) % seed];
             }
-            pict->iovr |= (oinf - pict->ulib->barr) << (prev << 4);
+            pict->iovr |= (oinf - pict->ulib->barr._) << (prev << 4);
         }
         pict->flgs = ((pict->move.x == 0.0) && (pict->move.y == 0.0))?
                       (pict->flgs | PIF_STOP) : (pict->flgs & ~PIF_STOP);
         prev = pict->iovr >> ((pict->flgs & PIF_STOP)? 0 : 16);
-        oinf = &pict->ulib->barr[prev & 0xFFFF];
+        oinf = &pict->ulib->barr._[prev & 0xFFFF];
         /// re-center again (there`s no better way, since the override)
         pict->offs.x += binf->cntr[pict->indx & 1].x
                      -  oinf->cntr[pict->indx & 1].x;
@@ -1964,9 +1958,9 @@ void ChooseBehaviour(ENGC *engc, PICT *pict, uint32_t next, uint32_t flgs) {
 long RandByGrp(uint32_t *seed, PICT *pict, BGRP *bgrp) {
     uint32_t indx, flgs;
 
-    indx = bgrp->narr[flgs = pict->ulib->barr[pict->indx >> 1].igrp];
+    indx = bgrp->narr[flgs = pict->ulib->barr._[pict->indx >> 1].igrp];
     indx -= (flgs = (flgs)? bgrp->narr[flgs - 1] : 0);
-    return bgrp->barr[flgs + RNG_Load(seed) % indx] - pict->ulib->barr;
+    return bgrp->barr[flgs + RNG_Load(seed) % indx] - pict->ulib->barr._;
 }
 
 long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
@@ -1996,7 +1990,7 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
             case PIF_SLPM:
                 /// compatible with RandByGrp() if all sleeping IGRP equal zero !!!
                 /// [TODO:] deduplicate
-                indx = ulib->bslp[RNG_Load(engc->seed) % ulib->nslp] - ulib->barr;
+                indx = ulib->bslp[RNG_Load(engc->seed) % ulib->nslp] - ulib->barr._;
                 break;
 
             case PIF_TPL1:
@@ -2008,8 +2002,8 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
             temp = *pict;
             ChooseBehaviour(engc, &temp, (indx << 1) | (temp.indx & 1),
                             CBF_NEXT | CBF_DNSE);
-            anim = (AINF){temp.ulib->barr[temp.indx >> 1].
-                                     unit[temp.indx &  1].uuid,
+            anim = (AINF){temp.ulib->barr._[temp.indx >> 1].
+                                       unit[temp.indx &  1].uuid,
                           engc->ppos.x - temp.offs.x,
                           engc->ppos.y - temp.offs.y, 0};
             cEngineCallback(engc->engd, ECB_TEST, (intptr_t)&anim);
@@ -2029,17 +2023,17 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
 
 
 
-long Truncate(BINF **base, long rcnt) {
-    BINF *root = *base, *iter = root - 1;
+long Truncate(CTR_V(BINF) *base) {
+    BINF *root = base->_, *iter = root - 1;
     long indx;
 
-    for (indx = 0; indx < rcnt; indx++)
+    for (indx = 0; indx < base->size; indx++)
         if ((root[indx].unit[0].uuid | root[indx].unit[1].uuid)
         &&  (++iter != &root[indx]))
             *iter = root[indx];
-    if ((indx = iter - root + 1) < rcnt)
-        *base = realloc(root, (rcnt = indx) * sizeof(*root));
-    return rcnt;
+    if ((indx = iter - root + 1) < base->size)
+        CTR_V_MGET(*base, indx, 1);
+    return base->size;
 }
 
 
@@ -2050,20 +2044,20 @@ void ExtractStaMov(LINF *elem, BGRP *bgrp, long *fill, long gcnt, long move) {
     bgrp->narr = calloc(gcnt, sizeof(*bgrp->narr));
     for (indx = 0; indx < gcnt; indx++)
         fill[indx] = 0;
-    for (indx = 0; indx < elem->bcnt; indx++)
-        if ((elem->barr[indx].move == 0.0) == !move)
-            fill[elem->barr[indx].igrp]++;
+    for (indx = 0; indx < elem->barr.size; indx++)
+        if ((elem->barr._[indx].move == 0.0) == !move)
+            fill[elem->barr._[indx].igrp]++;
     bgrp->narr[0] = fill[0] = (fill[0])? fill[0] : 1;
     for (indx = 1; indx < gcnt; indx++)
         bgrp->narr[indx] = bgrp->narr[indx - 1] + ((fill[indx])? fill[indx] : fill[0]);
     bgrp->barr = calloc(bgrp->narr[gcnt - 1], sizeof(*bgrp->barr));
-    for (indx = 0; indx < elem->bcnt; indx++)
-        if ((elem->barr[indx].move == 0.0) == !move)
-            bgrp->barr[bgrp->narr[elem->barr[indx].igrp] - fill[elem->barr[indx].igrp]--] = &elem->barr[indx];
+    for (indx = 0; indx < elem->barr.size; indx++)
+        if ((elem->barr._[indx].move == 0.0) == !move)
+            bgrp->barr[bgrp->narr[elem->barr._[indx].igrp] - fill[elem->barr._[indx].igrp]--] = &elem->barr._[indx];
     /// if there are absolutely no elements in group 0, assign the preview:
     /// it can not get any worse now, anyway
     if (!bgrp->barr[0])
-        bgrp->barr[0] = &elem->barr[elem->prev];
+        bgrp->barr[0] = &elem->barr._[elem->prev];
     for (--gcnt; gcnt; gcnt--)
         if (!bgrp->barr[bgrp->narr[gcnt - 1]])
             for (indx = 0; indx < bgrp->narr[0]; indx++)
@@ -2084,10 +2078,10 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
 
     if (elem->bimp || elem->eimp) {
         turn = 0;
-        indx = elem->bcnt * 2;
+        indx = elem->barr.size * 2;
         while (indx && !turn)
             turn |= !!elem->bimp[--indx];
-        indx = elem->ecnt * 2;
+        indx = elem->earr.size * 2;
         while (indx && !turn)
             turn |= !!elem->eimp[--indx];
 
@@ -2101,100 +2095,103 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         elem->bimp = elem->eimp = 0;
 
         /// saving preview name hash
-        temp.name = elem->barr[elem->prev].name;
+        temp.name = elem->barr._[elem->prev].name;
 
         /// shortening all behaviours and effects to save memory
-        if (!(elem->bcnt = Truncate(&elem->barr, elem->bcnt))) {
+        if (!Truncate(&elem->barr)) {
             /// freeing the library in case it`s got no behaviours
             FreeLib(elem);
-            *elem = (LINF){};
+            CTR_ASSIGN(*elem);
             return 0;
         }
-        elem->ecnt = Truncate(&elem->earr, elem->ecnt);
-        qsort(elem->earr, elem->ecnt, sizeof(*elem->earr), namecmp);
+        Truncate(&elem->earr);
+        CTR_V_SORT(elem->earr, namecmp);
 
         if (elem->nsay) {
-            for (indx = elem->ecnt - 1; indx >= 0; indx--)
-                if (elem->earr[indx].flgs & EFF_SAYS) {
+            for (indx = elem->earr.size - 1; indx >= 0; indx--)
+                if (elem->earr._[indx].flgs & EFF_SAYS) {
                     elem->nsay = indx + 1;
                     break;
                 }
             /// [TODO:] deduplicate BSAY and ESAY loops right below!
 
             /// resolving speeches said on behaviour start
-            qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), bsaycmp);
-            for (indx = elem->bcnt - 1; indx >= 0; indx--)
-                elem->barr[indx].temp = 0;
-            for (indx = elem->ecnt - 1; indx >= 0; indx--)
-                if ((elem->earr[indx].flgs & EFF_SAYS)
-                &&  (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
-                                     sizeof(*elem->barr), bsaycmp))) {
-                    for (turn = iter - elem->barr + 1; (turn < elem->bcnt) &&
-                        (elem->barr[turn].bsay == iter->bsay); turn++)
-                        elem->barr[turn].temp = indx + 1;
-                    for (turn = iter - elem->barr - 1; (turn >= 0) &&
-                        (elem->barr[turn].bsay == iter->bsay); turn--)
-                        elem->barr[turn].temp = indx + 1;
+            CTR_V_SORT(elem->barr, bsaycmp);
+            for (indx = elem->barr.size - 1; indx >= 0; indx--)
+                elem->barr._[indx].temp = 0;
+            for (indx = elem->earr.size - 1; indx >= 0; indx--)
+                if ((elem->earr._[indx].flgs & EFF_SAYS)
+                &&  (iter = bsearch(&elem->earr._[indx], elem->barr._,
+                                     elem->barr.size, sizeof(*elem->barr._),
+                                     bsaycmp))) {
+                    for (turn = iter - elem->barr._ + 1;
+                        (turn < elem->barr.size) && (elem->barr._[turn].bsay == iter->bsay); turn++)
+                        elem->barr._[turn].temp = indx + 1;
+                    for (turn = iter - elem->barr._ - 1;
+                        (turn >= 0) && (elem->barr._[turn].bsay == iter->bsay); turn--)
+                        elem->barr._[turn].temp = indx + 1;
                     iter->temp = indx + 1;
                 }
-            for (indx = elem->bcnt - 1; indx >= 0; indx--)
-                elem->barr[indx].bsay = elem->barr[indx].temp;
+            for (indx = elem->barr.size - 1; indx >= 0; indx--)
+                elem->barr._[indx].bsay = elem->barr._[indx].temp;
             /// resolving speeches said on behaviour end
-            qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), esaycmp);
-            for (indx = elem->bcnt - 1; indx >= 0; indx--)
-                elem->barr[indx].temp = 0;
-            for (indx = elem->ecnt - 1; indx >= 0; indx--)
-                if ((elem->earr[indx].flgs & EFF_SAYS)
-                &&  (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
-                                     sizeof(*elem->barr), esaycmp))) {
-                    for (turn = iter - elem->barr + 1; (turn < elem->bcnt) &&
-                        (elem->barr[turn].esay == iter->esay); turn++)
-                        elem->barr[turn].temp = indx + 1;
-                    for (turn = iter - elem->barr - 1; (turn >= 0) &&
-                        (elem->barr[turn].esay == iter->esay); turn--)
-                        elem->barr[turn].temp = indx + 1;
+            CTR_V_SORT(elem->barr, esaycmp);
+            for (indx = elem->earr.size - 1; indx >= 0; indx--)
+                elem->barr._[indx].temp = 0;
+            for (indx = elem->earr.size - 1; indx >= 0; indx--)
+                if ((elem->earr._[indx].flgs & EFF_SAYS)
+                &&  (iter = bsearch(&elem->earr._[indx], elem->barr._,
+                                     elem->barr.size, sizeof(*elem->barr._),
+                                     esaycmp))) {
+                    for (turn = iter - elem->barr._ + 1;
+                        (turn < elem->barr.size) && (elem->barr._[turn].esay == iter->esay); turn++)
+                        elem->barr._[turn].temp = indx + 1;
+                    for (turn = iter - elem->barr._ - 1;
+                        (turn >= 0) && (elem->barr._[turn].esay == iter->esay); turn--)
+                        elem->barr._[turn].temp = indx + 1;
                     iter->temp = indx + 1;
                 }
-            for (indx = elem->bcnt - 1; indx >= 0; indx--)
-                elem->barr[indx].esay = elem->barr[indx].temp;
+            for (indx = elem->barr.size - 1; indx >= 0; indx--)
+                elem->barr._[indx].esay = elem->barr._[indx].temp;
         }
         /// determining the effect count and min. index for every behaviour
         /// (note that some behaviours may have no effects)
-        qsort(elem->barr, elem->bcnt, sizeof(*elem->barr), namecmp);
-        for (indx = elem->ecnt - 1; indx >= 0; indx--)
-            if (!(elem->earr[indx].flgs & EFF_SAYS)
-            &&   (iter = bsearch(&elem->earr[indx], elem->barr, elem->bcnt,
-                                  sizeof(*elem->barr), namecmp))) {
+        CTR_V_SORT(elem->barr, namecmp);
+        for (indx = (long)elem->earr.size - 1; indx >= 0; indx--)
+            if (!(elem->earr._[indx].flgs & EFF_SAYS)
+            &&   (iter = bsearch(&elem->earr._[indx], elem->barr._,
+                                  elem->barr.size, sizeof(*elem->barr._),
+                                  namecmp))) {
                 iter->ieff = indx;
                 iter->neff++;
             }
         /// retrieving the new preview position
-        if ((iter = bsearch(&temp, elem->barr, elem->bcnt,
-                            sizeof(*elem->barr), namecmp)))
-            elem->prev = iter - elem->barr;
+        if ((iter = bsearch(&temp, elem->barr._, elem->barr.size,
+                             sizeof(*elem->barr._), namecmp)))
+            elem->prev = iter - elem->barr._;
         /// iterating over all behaviours
-        for (indx = 0; indx < elem->bcnt; indx++) {
+        for (indx = 0; indx < elem->barr.size; indx++) {
             /// resolving the linked behaviour, if any
-            if ((temp.name = elem->barr[indx].link)) {
-                if ((iter = bsearch(&temp, elem->barr, elem->bcnt,
-                                    sizeof(*elem->barr), namecmp)))
-                    elem->barr[indx].link = iter - elem->barr + 1;
+            if ((temp.name = elem->barr._[indx].link)) {
+                if ((iter = bsearch(&temp, elem->barr._, elem->barr.size,
+                                     sizeof(*elem->barr._), namecmp)))
+                    elem->barr._[indx].link = iter - elem->barr._ + 1;
                 else
-                    elem->barr[indx].link = 0;
+                    elem->barr._[indx].link = 0;
             }
             /// resolving behaviour overrides, if any
             for (turn = 0; turn <= 1; turn++)
-                if ((temp.name = elem->barr[indx].obfm[turn])) {
-                    if ((iter = bsearch(&temp, elem->barr, elem->bcnt,
-                                        sizeof(*elem->barr), namecmp)))
-                        elem->barr[indx].obfm[turn] = iter - elem->barr + 1;
+                if ((temp.name = elem->barr._[indx].obfm[turn])) {
+                    if ((iter = bsearch(&temp, elem->barr._, elem->barr.size,
+                                         sizeof(*elem->barr._), namecmp)))
+                        elem->barr._[indx].obfm[turn] = iter - elem->barr._ + 1;
                     else {
                         /// no such behaviour, need to select automatically
-                        elem->barr[indx].obfm[turn] = 0;
+                        elem->barr._[indx].obfm[turn] = 0;
                     }
                 }
             /// resolving image centers if unset (only possible here!)
-            for (iter = &elem->barr[indx], turn = 0; turn <= 1; turn++)
+            for (iter = &elem->barr._[indx], turn = 0; turn <= 1; turn++)
                 if (!(iter->cntr[turn].x | iter->cntr[turn].y))
                     iter->cntr[turn] = (T2IV){{iter->unit[turn].xdim >> 1,
                                                iter->unit[turn].ydim >> 1}};
@@ -2206,33 +2203,33 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         /// [TODO:] deduplicate
 
         /// populating SRND::BARR with random speeches, sorting by group number
-        elem->srnd.barr = malloc(elem->ecnt * sizeof(*elem->srnd.barr));
-        for (turn = indx = 0; indx < elem->ecnt; indx++)
-            if ((elem->earr[indx].flgs & EFF_SAYS) && elem->earr[indx].prob)
-                elem->srnd.barr[turn++] = &elem->earr[indx];
+        elem->srnd.barr = malloc(elem->earr.size * sizeof(*elem->srnd.barr));
+        for (turn = indx = 0; indx < elem->earr.size; indx++)
+            if ((elem->earr._[indx].flgs & EFF_SAYS) && elem->earr._[indx].prob)
+                elem->srnd.barr[turn++] = &elem->earr._[indx];
         qsort(elem->srnd.barr, turn, sizeof(*elem->srnd.barr), igrpcmp);
 
         /// populating BBHV::BARR with all behaviours, sorting by group number
-        elem->bbhv.barr = malloc(elem->bcnt * sizeof(*elem->bbhv.barr));
-        for (indx = 0; indx < elem->bcnt; indx++)
-            elem->bbhv.barr[indx] = &elem->barr[indx];
-        qsort(elem->bbhv.barr, elem->bcnt, sizeof(*elem->bbhv.barr), igrpcmp);
+        elem->bbhv.barr = malloc(elem->barr.size * sizeof(*elem->bbhv.barr));
+        for (indx = 0; indx < elem->barr.size; indx++)
+            elem->bbhv.barr[indx] = &elem->barr._[indx];
+        qsort(elem->bbhv.barr, elem->barr.size, sizeof(*elem->bbhv.barr), igrpcmp);
 
         if (!turn) { /// turn = random speech count
             free(elem->srnd.barr);
             elem->srnd.barr = 0;
         }
         else {
-            ggrp = malloc(elem->ecnt * sizeof(*ggrp));
+            ggrp = malloc(elem->earr.size * sizeof(*ggrp));
             ggrp[0] = elem->srnd.barr[0]->igrp;
             for (gcnt = indx = 1; indx < turn; indx++)
                 if (igrpcmp(&elem->srnd.barr[indx],
                             &elem->srnd.barr[indx - 1]))
                     ggrp[gcnt++] = elem->srnd.barr[indx]->igrp;
 
-            bgrp = malloc(elem->bcnt * sizeof(*bgrp));
+            bgrp = malloc(elem->barr.size * sizeof(*bgrp));
             bgrp[0] = elem->bbhv.barr[0]->igrp;
-            for (bcnt = indx = 1; indx < elem->bcnt; indx++)
+            for (bcnt = indx = 1; indx < elem->barr.size; indx++)
                 if (igrpcmp(&elem->bbhv.barr[indx],
                             &elem->bbhv.barr[indx - 1]))
                     bgrp[bcnt++] = elem->bbhv.barr[indx]->igrp;
@@ -2270,9 +2267,11 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             for (indx = 0; indx < turn; indx++)
                 if (elem->srnd.barr[indx]->igrp >= INT32_MAX)
                     break;
-            if (indx < turn)
-                elem->srnd.barr = realloc(elem->srnd.barr, (turn = indx)
-                                        * sizeof(*elem->srnd.barr));
+            if (indx < turn) {
+                turn = indx;
+                elem->srnd.barr =
+                    realloc(elem->srnd.barr, indx * sizeof(*elem->srnd.barr));
+            }
             if (!turn) {
                 free(elem->srnd.barr);
                 elem->srnd.barr = 0;
@@ -2289,7 +2288,7 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         }
 
         /// counting groups + normalizing their indices to [0; GCNT) interval
-        for (gcnt = turn = indx = 0; indx < elem->bcnt; indx++) {
+        for (gcnt = turn = indx = 0; indx < elem->barr.size; indx++) {
             if (elem->bbhv.barr[indx]->igrp != turn) {
                 turn = elem->bbhv.barr[indx]->igrp;
                 gcnt++;
@@ -2302,9 +2301,9 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             elem->srnd.narr = calloc(gcnt, sizeof(*elem->srnd.narr));
 
         /// populating BBHV::BARR with nonzero-probability behaviours
-        for (elem->zcnt = indx = 0; indx < elem->bcnt; indx++)
-            if (elem->barr[indx].prob)
-                elem->bbhv.barr[elem->zcnt++] = &elem->barr[indx];
+        for (elem->zcnt = indx = 0; indx < elem->barr.size; indx++)
+            if (elem->barr._[indx].prob)
+                elem->bbhv.barr[elem->zcnt++] = &elem->barr._[indx];
         elem->bbhv.barr = realloc(elem->bbhv.barr, elem->zcnt * sizeof(*elem->bbhv.barr));
         /// sorting BBHV::BARR by normalized group index
         qsort(elem->bbhv.barr, elem->zcnt, sizeof(*elem->bbhv.barr), igrpcmp);
@@ -2330,43 +2329,43 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         ExtractStaMov(elem, &elem->bmov, fill, gcnt, 1);
 
         /// extracting sleep behaviours
-        for (elem->nslp = qmax = turn = indx = 0; indx < elem->bcnt; indx++) {
-            if (elem->barr[indx].move < elem->barr[qmax].move)
+        for (elem->nslp = qmax = turn = indx = 0; indx < elem->barr.size; indx++) {
+            if (elem->barr._[indx].move < elem->barr._[qmax].move)
                 qmax = indx; /// QMAX := index of the slowest moving sprite
-            if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
+            if ((elem->barr._[indx].flgs & BHV_MMMM) == BHV_SLPM)
                 elem->nslp++;
-            else if (elem->barr[indx].prob
-                 && !elem->barr[indx].trgt && !elem->barr[indx].move)
+            else if (elem->barr._[indx].prob
+                 && !elem->barr._[indx].trgt && !elem->barr._[indx].move)
                 turn++;
         }
         elem->bslp = calloc((!elem->nslp)? (!turn)? 1 : turn : elem->nslp,
                               sizeof(*elem->bslp));
         if (elem->nslp)
-            for (elem->nslp = indx = 0; indx < elem->bcnt; indx++) {
-                if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
-                    elem->bslp[elem->nslp++] = &elem->barr[indx];
+            for (elem->nslp = indx = 0; indx < elem->barr.size; indx++) {
+                if ((elem->barr._[indx].flgs & BHV_MMMM) == BHV_SLPM)
+                    elem->bslp[elem->nslp++] = &elem->barr._[indx];
             }
         else if (turn)
-            for (elem->nslp = indx = 0; indx < elem->bcnt; indx++) {
-                if (elem->barr[indx].prob
-                && !elem->barr[indx].trgt && !elem->barr[indx].move)
-                    elem->bslp[elem->nslp++] = &elem->barr[indx];
+            for (elem->nslp = indx = 0; indx < elem->barr.size; indx++) {
+                if (elem->barr._[indx].prob
+                && !elem->barr._[indx].trgt && !elem->barr._[indx].move)
+                    elem->bslp[elem->nslp++] = &elem->barr._[indx];
             }
         else
-            elem->bslp[(elem->nslp = 1) - 1] = &elem->barr[qmax];
+            elem->bslp[(elem->nslp = 1) - 1] = &elem->barr._[qmax];
 
         /// extracting mouseover behaviours
         elem->bovr.narr = calloc(gcnt, sizeof(*elem->bovr.narr));
         for (indx = 0; indx < gcnt; indx++)
             fill[indx] = 0;
-        for (qmax = indx = 0; indx < elem->bcnt; indx++) {
-            if (elem->barr[indx].move < elem->barr[qmax].move)
+        for (qmax = indx = 0; indx < elem->barr.size; indx++) {
+            if (elem->barr._[indx].move < elem->barr._[qmax].move)
                 qmax = indx;
-            if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_OVRM)
-                elem->bovr.narr[elem->barr[indx].igrp]++;
-            else if (elem->barr[indx].prob
-                 && !elem->barr[indx].trgt && !elem->barr[indx].move)
-                fill[elem->barr[indx].igrp]--;
+            if ((elem->barr._[indx].flgs & BHV_MMMM) == BHV_OVRM)
+                elem->bovr.narr[elem->barr._[indx].igrp]++;
+            else if (elem->barr._[indx].prob
+                 && !elem->barr._[indx].trgt && !elem->barr._[indx].move)
+                fill[elem->barr._[indx].igrp]--;
         }
         for (indx = 0; indx < gcnt; indx++) {
             if (elem->bovr.narr[indx] > 0)
@@ -2381,15 +2380,15 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                           elem->bovr.narr[indx] : -elem->bovr.narr[indx];
         }
         elem->bovr.barr = calloc(elem->bovr.narr[gcnt - 1], sizeof(*elem->bovr.barr));
-        elem->bovr.barr[0] = &elem->barr[qmax];
-        for (indx = 0; indx < elem->bcnt; indx++) {
-            qmax = fill[elem->barr[indx].igrp];
+        elem->bovr.barr[0] = &elem->barr._[qmax];
+        for (indx = 0; indx < elem->barr.size; indx++) {
+            qmax = fill[elem->barr._[indx].igrp];
             if (((qmax > 0) &&
-                ((elem->barr[indx].flgs & BHV_MMMM) == BHV_OVRM))
-            ||  ((qmax < 0) && elem->barr[indx].prob &&
-                 !elem->barr[indx].trgt && !elem->barr[indx].move)) {
-                elem->bovr.barr[((qmax > 0)? qmax : -qmax) - 1] = &elem->barr[indx];
-                fill[elem->barr[indx].igrp] = qmax - ((qmax > 0)? 1 : -1);
+                ((elem->barr._[indx].flgs & BHV_MMMM) == BHV_OVRM))
+            ||  ((qmax < 0) && elem->barr._[indx].prob &&
+                 !elem->barr._[indx].trgt && !elem->barr._[indx].move)) {
+                elem->bovr.barr[((qmax > 0)? qmax : -qmax) - 1] = &elem->barr._[indx];
+                fill[elem->barr._[indx].igrp] = qmax - ((qmax > 0)? 1 : -1);
             }
         }
         qmax = 0;
@@ -2403,11 +2402,11 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         elem->bdrg.narr = calloc(gcnt, sizeof(*elem->bdrg.narr));
         for (indx = 0; indx < gcnt; indx++)
             fill[indx] = 0;
-        for (indx = 0; indx < elem->bcnt; indx++)
-            if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_DRGM)
-                elem->bdrg.narr[elem->barr[indx].igrp]++;
-            else if ((elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
-                fill[elem->barr[indx].igrp]--;
+        for (indx = 0; indx < elem->barr.size; indx++)
+            if ((elem->barr._[indx].flgs & BHV_MMMM) == BHV_DRGM)
+                elem->bdrg.narr[elem->barr._[indx].igrp]++;
+            else if ((elem->barr._[indx].flgs & BHV_MMMM) == BHV_SLPM)
+                fill[elem->barr._[indx].igrp]--;
         for (indx = 0; indx < gcnt; indx++) {
             if (elem->bdrg.narr[indx] > 0)
                 fill[indx] = elem->bdrg.narr[indx];
@@ -2426,20 +2425,20 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                 for (; qmax < elem->bdrg.narr[indx];)
                     elem->bdrg.barr[qmax++] = elem->bovr.barr[turn++];
             }
-        for (indx = 0; indx < elem->bcnt; indx++)
-            if ((fill[qmax = elem->barr[indx].igrp] > 0)
-            &&  (elem->barr[indx].flgs & BHV_MMMM) == BHV_DRGM)
+        for (indx = 0; indx < elem->barr.size; indx++)
+            if ((fill[qmax = elem->barr._[indx].igrp] > 0)
+            &&  (elem->barr._[indx].flgs & BHV_MMMM) == BHV_DRGM)
                 elem->bdrg.barr[elem->bdrg.narr[qmax] - --fill[qmax] - 1] =
-                    &elem->barr[indx];
+                    &elem->barr._[indx];
             else if ((fill[qmax] < 0)
-                 &&  (elem->barr[indx].flgs & BHV_MMMM) == BHV_SLPM)
+                 &&  (elem->barr._[indx].flgs & BHV_MMMM) == BHV_SLPM)
                 elem->bdrg.barr[elem->bdrg.narr[qmax] + ++fill[qmax] - 1] =
-                    &elem->barr[indx];
+                    &elem->barr._[indx];
 
         /// fixing one-sided effects and speeches, if any
-        for (indx = 0; indx < elem->ecnt; indx++)
-            if (!elem->earr[indx].unit[1].time)
-                elem->earr[indx].unit[1] = elem->earr[indx].unit[0];
+        for (indx = 0; indx < elem->earr.size; indx++)
+            if (!elem->earr._[indx].unit[1].time)
+                elem->earr._[indx].unit[1] = elem->earr._[indx].unit[0];
 
         free(fill);
     }
@@ -2451,12 +2450,12 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
     /// (Q = 1 when repeat delay D = 0; otherwise, Q = ceil(((E)? E : B) / D)
     /// where E is effect duration and B is maximum behaviour duration)
     /// note that E / D is # of effects created per effect expiration window
-    for (qmax = (elem->nsay)? 1 : 0, indx = 0; indx < elem->bcnt; indx++)
-        for (turn = 0; turn < elem->barr[indx].neff; turn++)
-            if (!(iter = &elem->earr[elem->barr[indx].ieff + turn])->dmax)
+    for (qmax = (elem->nsay)? 1 : 0, indx = 0; indx < elem->barr.size; indx++)
+        for (turn = 0; turn < elem->barr._[indx].neff; turn++)
+            if (!(iter = &elem->earr._[elem->barr._[indx].ieff + turn])->dmax)
                 qmax += 2; /// > 1, as ChooseBehaviour() runs before SortByY()
             else
-                qmax += 2 + ((iter->dmin)? iter->dmin : elem->barr[indx].dmax)
+                qmax += 2 + ((iter->dmin)? iter->dmin : elem->barr._[indx].dmax)
                           / iter->dmax;
     engc->pmax += elem->wctx.icnt * (qmax + 1); /// +1 for the sprite itself
     engc->parr = realloc(engc->parr, engc->pmax * sizeof(*engc->parr));
@@ -2840,8 +2839,8 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
     for (indx = 0; indx < engc->pcnt; indx++) {
         if (!(pict = engc->parr[indx]))
             continue;
-        binf = (pict->flgs & PIF_EFCT)? &pict->ulib->earr[pict->indx >> 1]
-                                      : &pict->ulib->barr[pict->indx >> 1];
+        binf = (pict->flgs & PIF_EFCT)? &pict->ulib->earr._[pict->indx >> 1]
+                                      : &pict->ulib->barr._[pict->indx >> 1];
         anim = &binf->unit[pict->indx & 1];
         if (pict->flgs & PIF_EFCT) {
             /// effect
@@ -2882,7 +2881,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
             else if (engc->ccur.flgs & CSF_ESAY) { /// ...wrong, this is a speech!
                 if ((pict->ipre ^ pict->boss->indx) & ~1) {
                     /// the parent behaviour has changed; updating
-                    btmp = pict->boss->ulib->barr;
+                    btmp = pict->boss->ulib->barr._;
                     if (!(elem = btmp[pict->boss->indx >> 1].bsay))
                         elem = btmp[pict->ipre >> 1].esay;
                     if (elem) { /// do not spawn new speech but reuse old
@@ -2897,7 +2896,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                     /// the group corresponding to the parent`s current one
                     ltmp = pict->boss->ulib;
                     elem = (!ltmp->srnd.narr[0] || (RNG_Load(engc->seed) & 1))?
-                             ltmp->barr[pict->boss->indx >> 1].igrp : 0;
+                             ltmp->barr._[pict->boss->indx >> 1].igrp : 0;
                     tran = (elem)? ltmp->srnd.narr[elem - 1] : 0;
                     if (!(elem = ltmp->srnd.narr[elem] - tran)) {
                         elem = ltmp->srnd.narr[0];
@@ -2912,7 +2911,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                         /// it`s possible to choose a random speech; choosing
                         tran += RNG_Load(engc->seed) % elem;
                         SpawnEffect(&engc->parr[indx], pict->boss, engc->seed,
-                                     ltmp->srnd.barr[tran] - ltmp->earr,
+                                     ltmp->srnd.barr[tran] - ltmp->earr._,
                                      engc->tcur + binf->dmax, 0);
                         pict->tmov = engc->tcur + binf->dmax;
                     }
@@ -2930,7 +2929,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
              || ((pict->fram >= anim->fcnt) && !(binf->flgs & ANI_LOOP))) {
             /// behaviour that needs being changed
             ChooseBehaviour(engc, pict, 0, 0);
-            binf = &pict->ulib->barr[pict->indx >> 1];
+            binf = &pict->ulib->barr._[pict->indx >> 1];
         }
         /// correcting BINF in case it has overrides
         /// (either got them from ChooseBehaviour() or from the start)
@@ -2954,7 +2953,7 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                 FollowParent(engc, pict,
                             ((engc->ppos.z ^ attr) & UFR_KEYB)? &bmov : 0);
             elem = pict->iovr >> ((pict->flgs & PIF_STOP)? 0 : 16);
-            binf = &pict->ulib->barr[elem & 0xFFFF];
+            binf = &pict->ulib->barr._[elem & 0xFFFF];
         }
         anim = &binf->unit[pict->indx & 1];
         /// update the current frame, both for effects and behaviours;
@@ -2999,12 +2998,12 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                     /// the sprites which cannot be selected with mouse
         else {
             if (pict->flgs & PIF_EFCT)
-                binf = &pict->ulib->earr[pict->indx >> 1];
+                binf = &pict->ulib->earr._[pict->indx >> 1];
             else {
                 attr = (pict->boss || (pict->flgs & (PIF_TPL1 | PIF_TPL2)))?
                        (pict->iovr >> ((pict->flgs & PIF_STOP)? 0 : 16))
                      : (pict->indx >> 1);
-                binf = &pict->ulib->barr[attr & 0xFFFF];
+                binf = &pict->ulib->barr._[attr & 0xFFFF];
             }
             engc->data[indx + elem] =
                 (T4FV){{pict->offs.x, pict->offs.y, pict->fram,
@@ -3137,7 +3136,7 @@ void UpdPreview(intptr_t data, uint64_t time) {
 
     for (iter = data = 0; data < engc->lcnt; data++) {
         ulib = &engc->libs[data];
-        if (!(anim = ulib->barr[ulib->prev].unit)->fcnt || !ulib->capt.fe2c)
+        if (!(anim = ulib->barr._[ulib->prev].unit)->fcnt || !ulib->capt.fe2c)
             continue; /// this preview has been loaded incorrectly, skipping
         if (ulib->noff && (time > ulib->wctx.ttxt)) { /// update text!
             if (++ulib->wctx.ioff >= ulib->noff)
@@ -3173,12 +3172,12 @@ void CategorizePreviews(ENGC *engc) {
     flgs = RUN_FE2C(engc->MCT_EXAC, MSG_BGST, 0);
     flgs = (flgs & FCS_ENBL)? (flgs & FCS_MARK)? 2 : 1 : 0;
     for (elem = 0, indx = 0; indx < engc->lcnt; indx++) {
-        for (iter = 0; iter < engc->ccnt; iter++)
-            if (engc->ctgs[iter].flgs & flgs) {
-                temp.hash = engc->ctgs[iter].hash;
-                elem = bsearch(&temp, engc->libs[indx].ctgs,
-                                engc->libs[indx].ccnt,
-                                sizeof(*engc->libs->ctgs), ctgscmp);
+        for (iter = 0; iter < engc->ctgs.size; iter++)
+            if (engc->ctgs._[iter].flgs & flgs) {
+                temp.hash = engc->ctgs._[iter].hash;
+                elem = bsearch(&temp, engc->libs[indx].ctgs._,
+                                engc->libs[indx].ctgs.size,
+                                sizeof(*engc->libs->ctgs._), ctgscmp);
                 if (!!elem ^ (flgs - 1))
                     break;
             }
@@ -3432,7 +3431,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if (cmsg == MSG_LGST) {
                 cmsg = RUN_FE2C(((ENGC*)ctrl->data)->MCT_EXAC, MSG_BGST, 0);
                 cmsg = (cmsg & FCS_MARK)? 2 : 1;
-                return (((ENGC*)ctrl->data)->ctgs[data].flgs & cmsg)? 1 : 0;
+                return (((ENGC*)ctrl->data)->ctgs._[data].flgs & cmsg)? 1 : 0;
             }
             else if (cmsg == MSG_LSST) {
                 ENGC *engc = (ENGC*)ctrl->data;
@@ -3440,9 +3439,9 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
                 cmsg = RUN_FE2C(engc->MCT_EXAC, MSG_BGST, 0);
                 cmsg = (cmsg & FCS_MARK)? 2 : 1;
-                prev = (engc->ctgs[data >> 1].flgs & cmsg)? 1 : 0;
-                engc->ctgs[data >> 1].flgs &= ~cmsg;
-                engc->ctgs[data >> 1].flgs |= (data & 1)? cmsg : 0;
+                prev = (engc->ctgs._[data >> 1].flgs & cmsg)? 1 : 0;
+                engc->ctgs._[data >> 1].flgs &= ~cmsg;
+                engc->ctgs._[data >> 1].flgs |= (data & 1)? cmsg : 0;
                 CategorizePreviews(engc);
                 return prev;
             }
@@ -3600,7 +3599,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                     /// revert random ICNT
                     engc->libs[icon].wctx.icnt -= irnd[icon];
                     if (++libs <= &engc->libs[icon])
-                        libs[-1] = engc->libs[icon];
+                        CTR_ASSIGN(libs[-1], engc->libs[icon]);
                 }
             free(irnd);
             free(iput);
@@ -4030,8 +4029,8 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     qsort(engc.libs, engc.lcnt, sizeof(*engc.libs), linfcmp);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc.engd);
 
-    for (indx = 0; indx < engc.ccnt; indx++)
-        RUN_FE2C(engc.MCT_OGRP, MSG_LADD, (intptr_t)engc.ctgs[indx].name);
+    for (indx = 0; indx < engc.ctgs.size; indx++)
+        RUN_FE2C(engc.MCT_OGRP, MSG_LADD, (intptr_t)engc.ctgs._[indx].name);
     RUN_FE2C(engc.MCT_OGRP, MSG__TXT, (intptr_t)engc.tran[TXT_OGRP]);
 
     /// now constructing previews
@@ -4039,20 +4038,20 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
          ulib = engc.libs + ++indx) {
         if (ulib->bimp && ulib->bimp[0]) {
             temp = ExtractLastDirs(ulib->bimp[0], 2);
-            cEngineLoadAnimAsync(engc.engd, &ulib->barr[0].unit[0],
+            cEngineLoadAnimAsync(engc.engd, &ulib->barr._[0].unit[0],
                                 (uint8_t*)temp, ulib->bimp[0], ELA_DISK, free);
             ulib->bimp[0] = 0;
         }
         /// and resolving follow targets for all behaviours in this library
-        for (elem = 0; elem < ulib->bcnt; elem++) {
+        for (elem = 0; elem < ulib->barr.size; elem++) {
             LINF *iter, temp;
 
-            if ((temp.name = (char*)ulib->barr[elem].trgt)
+            if ((temp.name = (char*)ulib->barr._[elem].trgt)
             &&  (iter = bsearch(&temp, engc.libs, engc.lcnt,
                                 sizeof(*engc.libs), linfcmp)))
-                ulib->barr[elem].trgt = iter - engc.libs + 1;
+                ulib->barr._[elem].trgt = iter - engc.libs + 1;
             else
-                ulib->barr[elem].trgt = 0;
+                ulib->barr._[elem].trgt = 0;
             free(temp.name);
         }
         /// initial library preparations complete, reporting progress
@@ -4064,12 +4063,12 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     /// still constructing previews
     for (ulib = engc.libs, indx = 0; indx < engc.lcnt;
          ulib = engc.libs + ++indx) {
-        xpos = ulib->barr[0].unit[0].xdim;
+        xpos = ulib->barr._[0].unit[0].xdim;
         xpos = (xico > xpos)? xico : xpos;
         ulib->pict = (CTRL){&engc.MCT_CHAR, (intptr_t)engc.engd, indx,
                              FCT_IBOX, 0, 0, -xpos,
-                             (ulib->barr[0].unit[0].ydim)?
-                            -(long)ulib->barr[0].unit[0].ydim : -1, FC2EI};
+                             (ulib->barr._[0].unit[0].ydim)?
+                            -(long)ulib->barr._[0].unit[0].ydim : -1, FC2EI};
         ulib->spin = (CTRL){&engc.MCT_CHAR, (intptr_t)ulib, indx,
                              FCT_SPIN, 0, 0, -xpos, 3, FC2EI};
         ulib->capt = (CTRL){&engc.MCT_CHAR, (intptr_t)ulib, indx,
@@ -4101,9 +4100,9 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
         /// the library and the "colored speech" flag is set
         if (ulib->nsay && (engc.ccur.flgs & CSF_ECLR)) {
             atmp.fcnt = 0;
-            atmp.xdim = ulib->barr[0].unit[0].xdim;
-            atmp.ydim = ulib->barr[0].unit[0].ydim;
-            atmp.uuid = ulib->barr[0].unit[0].uuid;
+            atmp.xdim = ulib->barr._[0].unit[0].xdim;
+            atmp.ydim = ulib->barr._[0].unit[0].ydim;
+            atmp.uuid = ulib->barr._[0].unit[0].uuid;
             atmp.time =
                 calloc(xpos = atmp.xdim * atmp.ydim, sizeof(*atmp.time));
             cEngineCallback(engc.engd, ECB_DRAW, (intptr_t)&atmp);
@@ -4180,9 +4179,9 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
         FreeLib(&engc.libs[engc.lcnt - 1]);
     free(engc.libs);
 
-    for (; engc.ccnt; engc.ccnt--)
-        free(engc.ctgs[engc.ccnt - 1].name);
-    free(engc.ctgs);
+    for (unsigned iter = 0; iter < engc.ctgs.size; iter++)
+        free(engc.ctgs._[iter].name);
+    CTR_V_MGET(engc.ctgs);
 
     cEngineCallback(engc.engd, ECB_QUIT, 0);
 

@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdint.h>
 
 #define LIB_OPEN __attribute__((visibility("default")))
