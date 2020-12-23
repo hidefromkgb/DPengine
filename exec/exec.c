@@ -332,20 +332,17 @@ typedef struct {
              bmov,  /// moving behaviours extracted from BARR
              bovr,  /// mouseover behaviours extracted from BARR
              bdrg;  /// drag behaviours extracted from BARR
-    ENGC    *engc;  /// parent engine
     CTR_V(CTGS) ctgs;  /// library categories (hashed and sorted)
     CTR_V(BINF) barr,  /// available behaviours ordered by name hash
                 earr;  /// available effects ordered by parent bhv. name hash
-    BINF   **bslp;  /// sleep behaviours extracted from BARR
-    char   **bimp,  /// image paths for behaviours (0 if loaded)
-           **eimp,  /// image paths for effects (0 if loaded)
-            *path,  /// the folder from which the library was built
+    CTR_V(BINF*) bslp;  /// sleep behaviours extracted from BARR
+    ENGC    *engc;  /// parent engine
+    char    *path,  /// the folder from which the library was built
             *name,  /// human-readable name (may differ from PATH!)
             *scrl;  /// index-prepended name adapted for scrolling
     uint32_t fgsc,  /// foreground speech color
              bgsc;  /// background speech color
     long     nsay,  /// template speech ID + 1 (0 if no speech)
-             nslp,  /// number of sleep behaviours
              prev,  /// preview index in sorted BARR
              zcnt,  /// nonzero probability behaviours count
              nnam,  /// [ description line length in uint8_t`s               ]
@@ -1070,15 +1067,13 @@ int ctgscmp(const void *a, const void *b) {
     iter = bsearch(&elem, list, countof(list), sizeof(elem), uintcmp); \
     if ((elem = (iter)? iter - list + 1 : 0))
 
-void MakeSpritePair(char **dest, char *path, char **conf) {
-    long iter;
-
-    for (iter = 0; iter <= 1; iter++)
-        dest[iter] = Concatenate(0, path, DEF_DSEP,
-                                 Dequote(SplitLine(conf, DEF_TSEP, 0)));
+void MakeSpritePair(BINF *retn, char *path, char **conf) {
+    for (long iter = 0; iter <= 1; iter++)
+        retn->unit[iter].time = (uint32_t*)Concatenate(
+            0, path, DEF_DSEP, Dequote(SplitLine(conf, DEF_TSEP, 0)));
 }
 
-void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
+void ParseBehaviour(BINF *retn, char *path, char **conf) {
     static uint32_t
         uBMT[] = {BMT_HORM, BMT_ALLM, BMT_VERM, BMT_DRGM, BMT_HNDM, BMT_SLPM,
                   BMT_HNVM, BMT_DIAM, BMT_OVRM, BMT_DNVM, BMT_NONM},
@@ -1112,7 +1107,7 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
 
     /// right-sided image...................................................... !def
     /// left-sided image....................................................... !def
-    MakeSpritePair(imgp, path, conf);
+    MakeSpritePair(retn, path, conf);
 
     /// possible movement directions...........................................  def = All
     IF_BIN_FIND(elem, uBMT, conf)
@@ -1195,7 +1190,7 @@ void ParseBehaviour(BINF *retn, char *path, char **imgp, char **conf) {
         SET_FLAG(retn->flgs, temp, FOT_MIRR, BHV_MIRR);
 }
 
-void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
+void ParseEffect(BINF *retn, char *path, char **conf) {
     static uint32_t
         uEMT[] = {EMT_CNRA, EMT_RNDA, EMT_CNTA, EMT_CNLA, EMT_BTMA, EMT_BNLA,
                   EMT_TOPA, EMT_BNRA, EMT_RCLA, EMT_TNLA, EMT_TNRA},
@@ -1216,7 +1211,7 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
 
     /// right-sided image...................................................... !def
     /// left-sided image....................................................... !def
-    MakeSpritePair(imgp, path, conf);
+    MakeSpritePair(retn, path, conf);
 
     /// duration in sec........................................................  def = 5
     if (TRY_TEMP(conf))
@@ -1251,7 +1246,7 @@ void ParseEffect(BINF *retn, char *path, char **imgp, char **conf) {
         SET_FLAG(retn->flgs, temp, VAL_FALS, ANI_LOOP);
 }
 
-void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
+void ParseSpeech(BINF *retn, char *path, char **conf) {
     /// speeches are nothing more than additional effect sprites!
     char *temp;
 
@@ -1268,16 +1263,16 @@ void ParseSpeech(BINF *retn, char *path, char **imgp, char **conf) {
 
     /// speech text............................................................ !def
     if ((*(*conf)++ == '"') && (temp = SplitLine(conf, '"', 0))) {
-        imgp[0] = Concatenate(0, temp);
-        imgp[1] = 0;
+        retn->unit[0].time = (uint32_t*)Concatenate(0, temp);
+        retn->unit[1].time = 0;
         (*conf) += (**conf == DEF_TSEP)? 1 : 0;
         /// DMAX is 10000 by default and does not change, whereas DMIN
         /// depends on the text length; in DP it equals (L / 15) seconds
-        retn->dmin = (1000.0 / 15.0) * strlen(imgp[0]);
+        retn->dmin = (1000.0 / 15.0) * strlen((char*)retn->unit[0].time);
         retn->dmin = (retn->dmin)? retn->dmin : FRM_WAIT;
     }
     else {
-        imgp[0] = imgp[1] = 0;
+        retn->unit[0].time = retn->unit[1].time = 0;
         return;
     }
     /// sound files............................................................  def = ""
@@ -1328,20 +1323,14 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     break;
             }
 
-        if (bcnt) {
-            CTR_V_MGET(libs->barr, bcnt);
-            libs->bimp = calloc(bcnt * 2, sizeof(*libs->bimp));
-        }
-        else {
+        CTR_V_MGET(libs->earr, ecnt);
+        CTR_V_MGET(libs->barr, bcnt);
+        if (!libs->barr.size) {
             /// no behaviours found, the library is broken; stopping
             engc->lcnt--;
             free(libs->path);
             free(file);
             return;
-        }
-        if (ecnt) {
-            CTR_V_MGET(libs->earr, ecnt);
-            libs->eimp = calloc(ecnt * 2, sizeof(*libs->eimp));
         }
         fptr = file;
         libs->nsay = bcnt = ecnt = 0;
@@ -1353,21 +1342,18 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     break;
 
                 case SVT_SAYS:
-                    ParseSpeech(&libs->earr._[ecnt], libs->path,
-                                &libs->eimp[ecnt * 2], &conf);
+                    ParseSpeech(&libs->earr._[ecnt], libs->path, &conf);
                     libs->nsay++;
                     ecnt++;
                     break;
 
                 case SVT_EFCT:
-                    ParseEffect(&libs->earr._[ecnt], libs->path,
-                                &libs->eimp[ecnt * 2], &conf);
+                    ParseEffect(&libs->earr._[ecnt], libs->path, &conf);
                     ecnt++;
                     break;
 
                 case SVT_BHVR:
-                    ParseBehaviour(&libs->barr._[bcnt], libs->path,
-                                   &libs->bimp[bcnt * 2], &conf);
+                    ParseBehaviour(&libs->barr._[bcnt], libs->path, &conf);
                     bcnt++;
                     break;
 
@@ -1433,25 +1419,18 @@ void FreeBhvGroup(BGRP *bgrp) {
 }
 
 void FreeLib(LINF *elem) {
-    long iter = elem->barr.size * 2;
-
-    while (elem->bimp || elem->eimp) {
-        if (elem->bimp)
-            while (iter)
-                free(elem->bimp[--iter]);
-        free(elem->bimp);
-        iter = elem->earr.size * 2;
-        elem->bimp = elem->eimp;
-        elem->eimp = 0;
+    for (auto narr = &elem->barr; narr->size; narr = &elem->earr) {
+        for (long iter = 0; iter < narr->size * 2; iter++)
+            if (!narr->_[iter >> 1].unit[iter & 1].fcnt)
+                free(narr->_[iter >> 1].unit[iter & 1].time);
+        CTR_V_MGET(*narr);
     }
-    CTR_V_MGET(elem->barr);
-    CTR_V_MGET(elem->earr);
+    CTR_V_MGET(elem->bslp);
     CTR_V_MGET(elem->ctgs); /// nothing to free inside CTGS:
                             /// category names were copied from the engine
     free(elem->path);
     free(elem->name);
     free(elem->scrl);
-    free(elem->bslp);
     FreeBhvGroup(&elem->srnd);
     FreeBhvGroup(&elem->bbhv);
     FreeBhvGroup(&elem->bsta);
@@ -1464,30 +1443,31 @@ void FreeLib(LINF *elem) {
 
 void LoadLib(LINF *elem, ENGD *engd) {
     long iter, indx, xdim, ydim, lsrc, ldst;
-    char **nimp, clrs[32];
+    char clrs[32];
     uint32_t *bptr;
     uint8_t *name;
     CTR_V(BINF) *narr;
     AINF *temp;
 
-    if (!elem->bimp || (elem->wctx.icnt <= 0))
+    if (elem->bslp.size || (elem->wctx.icnt <= 0))
         return;
     for (indx = 0; indx <= 1; indx++) {
         narr = (indx)? (typeof(narr))&elem->earr : (typeof(narr))&elem->barr;
-        nimp = (indx)? elem->eimp : elem->bimp;
-        for (iter = 0; iter < narr->size * 2; iter++)
-            if (nimp[iter]) {
+        for (iter = 0; iter < narr->size * 2; iter++) {
+            auto curr = &narr->_[iter >> 1].unit[iter & 1];
+
+            if (!curr->fcnt) {
+                curr->fcnt = 1;
                 if (!(narr->_[iter >> 1].flgs & EFF_SAYS)) {
-                    name = (uint8_t*)ExtractLastDirs(nimp[iter], 2);
-                    auto curr = &narr->_[iter >> 1].unit[iter & 1];
-                    cEngineLoadAnimAsync(engd, curr, name, nimp[iter],
+                    name = (uint8_t*)ExtractLastDirs((char*)curr->time, 2);
+                    cEngineLoadAnimAsync(engd, curr, name, curr->time,
                                          ELA_DISK, free);
                 }
                 else {
                     sprintf(clrs, "#%08X / #%08X: ", elem->fgsc, elem->bgsc);
-                    name = (uint8_t*)Concatenate(0, clrs, nimp[iter]);
+                    name = (uint8_t*)Concatenate(0, clrs, curr->time);
                     ydim = strlen((char*)name) + 1;
-                    temp = realloc(nimp[iter], sizeof(*temp));
+                    temp = realloc(curr->time, sizeof(*temp));
                     temp->time = (uint32_t*)(name + 23);
                     temp->xdim = elem->barr._[0].unit[0].xdim << 1;
                     temp->ydim = elem->barr._[0].unit[0].ydim >> 1;
@@ -1565,12 +1545,11 @@ void LoadLib(LINF *elem, ENGD *engd) {
                     temp->ydim &= 0xFFFF;
                     *(temp->time = (uint32_t*)(temp + 1)) = 0;
                     temp->fcnt = 1;
-                    auto curr = &narr->_[iter >> 1].unit[iter & 1];
                     cEngineLoadAnimAsync(engd, curr, name, temp,
                                          ELA_AINF, free);
                 }
-                nimp[iter] = 0;
             }
+        }
     }
 }
 
@@ -1990,7 +1969,7 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
             case PIF_SLPM:
                 /// compatible with RandByGrp() if all sleeping IGRP equal zero !!!
                 /// [TODO:] deduplicate
-                indx = ulib->bslp[RNG_Load(engc->seed) % ulib->nslp] - ulib->barr._;
+                indx = ulib->bslp._[RNG_Load(engc->seed) % ulib->bslp.size] - ulib->barr._;
                 break;
 
             case PIF_TPL1:
@@ -2076,23 +2055,15 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
     int32_t *cgrp, *bgrp, *ggrp;
     BINF temp, *iter;
 
-    if (elem->bimp || elem->eimp) {
-        turn = 0;
-        indx = elem->barr.size * 2;
-        while (indx && !turn)
-            turn |= !!elem->bimp[--indx];
-        indx = elem->earr.size * 2;
-        while (indx && !turn)
-            turn |= !!elem->eimp[--indx];
+    if (!elem->bslp.size) {  /// not even 1 sleep behaviour? pending init
+        for (indx = elem->barr.size * 2, turn = 0; indx && !turn;
+             --indx, turn |= !elem->barr._[indx >> 1].unit[indx & 1].fcnt);
+        for (indx = elem->earr.size * 2;           indx && !turn;
+             --indx, turn |= !elem->earr._[indx >> 1].unit[indx & 1].fcnt);
 
         /// skip the lib if it`s got animations pending upload
         if (turn)
             return -1;
-
-        /// string arrays exist, but are empty? we`ve got an unprepared lib!
-        free(elem->bimp);
-        free(elem->eimp);
-        elem->bimp = elem->eimp = 0;
 
         /// saving preview name hash
         temp.name = elem->barr._[elem->prev].name;
@@ -2329,30 +2300,29 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         ExtractStaMov(elem, &elem->bmov, fill, gcnt, 1);
 
         /// extracting sleep behaviours
-        for (elem->nslp = qmax = turn = indx = 0; indx < elem->barr.size; indx++) {
+        for (next = qmax = turn = indx = 0; indx < elem->barr.size; indx++) {
             if (elem->barr._[indx].move < elem->barr._[qmax].move)
                 qmax = indx; /// QMAX := index of the slowest moving sprite
             if ((elem->barr._[indx].flgs & BHV_MMMM) == BHV_SLPM)
-                elem->nslp++;
+                next++;
             else if (elem->barr._[indx].prob
                  && !elem->barr._[indx].trgt && !elem->barr._[indx].move)
                 turn++;
         }
-        elem->bslp = calloc((!elem->nslp)? (!turn)? 1 : turn : elem->nslp,
-                              sizeof(*elem->bslp));
-        if (elem->nslp)
-            for (elem->nslp = indx = 0; indx < elem->barr.size; indx++) {
+        CTR_V_MGET(elem->bslp, (!next) ? (!turn) ? 1 : turn : next);
+        if (next)
+            for (next = indx = 0; indx < elem->barr.size; indx++) {
                 if ((elem->barr._[indx].flgs & BHV_MMMM) == BHV_SLPM)
-                    elem->bslp[elem->nslp++] = &elem->barr._[indx];
+                    elem->bslp._[next++] = &elem->barr._[indx];
             }
         else if (turn)
-            for (elem->nslp = indx = 0; indx < elem->barr.size; indx++) {
+            for (next = indx = 0; indx < elem->barr.size; indx++) {
                 if (elem->barr._[indx].prob
                 && !elem->barr._[indx].trgt && !elem->barr._[indx].move)
-                    elem->bslp[elem->nslp++] = &elem->barr._[indx];
+                    elem->bslp._[next++] = &elem->barr._[indx];
             }
         else
-            elem->bslp[(elem->nslp = 1) - 1] = &elem->barr._[qmax];
+            elem->bslp._[0] = &elem->barr._[qmax];
 
         /// extracting mouseover behaviours
         elem->bovr.narr = calloc(gcnt, sizeof(*elem->bovr.narr));
@@ -4036,11 +4006,12 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     /// now constructing previews
     for (ulib = engc.libs, indx = 0; indx < engc.lcnt;
          ulib = engc.libs + ++indx) {
-        if (ulib->bimp && ulib->bimp[0]) {
-            temp = ExtractLastDirs(ulib->bimp[0], 2);
+        if (!ulib->barr._[0].unit[0].fcnt) {
+            ulib->barr._[0].unit[0].fcnt = 1;
+            temp = ExtractLastDirs((char*)ulib->barr._[0].unit[0].time, 2);
             cEngineLoadAnimAsync(engc.engd, &ulib->barr._[0].unit[0],
-                                (uint8_t*)temp, ulib->bimp[0], ELA_DISK, free);
-            ulib->bimp[0] = 0;
+                                (uint8_t*)temp, ulib->barr._[0].unit[0].time,
+                                 ELA_DISK, free);
         }
         /// and resolving follow targets for all behaviours in this library
         for (elem = 0; elem < ulib->barr.size; elem++) {
