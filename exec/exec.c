@@ -404,9 +404,9 @@ struct ENGC {
     CTRL     *mctl, /// GUI controls array (main window)
              *octl; /// GUI controls array (options window)
     T4FV     *data; /// main display sequence passed to the renderer
-    ENGD     *engd; /// rendering engine handle
     CTR_V(LINF) libs; /// sprite libraries array
     CTR_V(CTGS) ctgs; /// categories array
+    ENGD     *engd; /// rendering engine handle
     PICT     *pcur, /// the sprite currently picked
              *povr, /// the sprite with cursor over it
             **parr, /// on-screen sprite pointers array
@@ -2001,21 +2001,6 @@ long SpecialBehaviour(ENGC *engc, PICT *pict, uint32_t mode) {
 
 
 
-long Truncate(CTR_V(BINF) *base) {
-    BINF *root = base->_, *iter = root - 1;
-    long indx;
-
-    for (indx = 0; indx < base->size; indx++)
-        if ((root[indx].unit[0].uuid | root[indx].unit[1].uuid)
-        &&  (++iter != &root[indx]))
-            *iter = root[indx];
-    if ((indx = iter - root + 1) < base->size)
-        CTR_V_MGET(*base, indx, 1);
-    return base->size;
-}
-
-
-
 void ExtractStaMov(LINF *elem, BGRP *bgrp, long *fill, long gcnt, long move) {
     long indx;
 
@@ -2068,14 +2053,17 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
         temp.name = elem->barr._[elem->prev].name;
 
         /// shortening all behaviours and effects to save memory
-        if (!Truncate(&elem->barr)) {
+        #define T(e) (e->unit[0].uuid | e->unit[1].uuid)
+        CTR_V_FLTR(elem->barr, T);
+        CTR_V_FLTR(elem->earr, T);
+        #undef T
+        CTR_V_SORT(elem->earr, namecmp);
+        if (!elem->barr.size) {
             /// freeing the library in case it`s got no behaviours
             FreeLib(elem);
             CTR_ASSIGN(*elem);
             return 0;
         }
-        Truncate(&elem->earr);
-        CTR_V_SORT(elem->earr, namecmp);
 
         if (elem->nsay) {
             for (indx = elem->earr.size - 1; indx >= 0; indx--)
@@ -3563,6 +3551,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                                  MainIcon, ELA_LOAD, 0);
             cEngineCallback(engc->engd, ECB_LOAD, 0);
 
+            /// [TODO:] adapt for CTR_V_FLTR
             for (libs = engc->libs._, icon = 0; icon < engc->libs.size; icon++)
                 if (AppendSpriteArr(&engc->libs._[icon], engc)) {
                     /// revert random ICNT
