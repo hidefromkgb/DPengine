@@ -292,12 +292,10 @@ typedef struct {
           igrp;     /// behaviour group index
     float move;     /// movement speed in pixels per frame
     intptr_t trgt;  /// follow target library index (0 if empty)
-    uint32_t temp,  /// temporary storage
-             name,  /// BHV: name hash; EFF: target index
+    uint32_t name,  /// BHV: name hash; EFF: target index
              flgs,  /// BHV/EFF: flags
              link,  /// linked behaviour index
-             bsay,  /// index of the speech said at the beginning
-             esay,  /// index of the speech said at the end
+          bsay[2],  /// indices of the speeches said at the beginning & end
           obfm[2];  /// indices for override behaviours for follow mode
                     /// ([0] = static, [1] = moving)
 } BINF;
@@ -629,6 +627,38 @@ void SetProgress(ENGC *engc, long tran, long frac, long full) {
 
 
 
+int igrpcmp(const void *a, const void *b) {
+    int64_t retn = (int64_t)(*(BINF**)a)->igrp - (int64_t)(*(BINF**)b)->igrp;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
+}
+
+int namecmp(const void *a, const void *b) {
+    int64_t retn = (int64_t)((BINF*)a)->name - (int64_t)((BINF*)b)->name;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
+}
+
+int say0cmp(const void *a, const void *b) {
+    int64_t retn = (int64_t)((BINF*)a)->bsay[0] - (int64_t)((BINF*)b)->bsay[0];
+    return (retn)? (retn < 0)? -1 : 1 : 0;
+}
+
+int say1cmp(const void *a, const void *b) {
+    int64_t retn = (int64_t)((BINF*)a)->bsay[1] - (int64_t)((BINF*)b)->bsay[1];
+    return (retn)? (retn < 0)? -1 : 1 : 0;
+}
+
+int uintcmp(const void *a, const void *b) {
+    int64_t retn = (int64_t)*(uint32_t*)a - (int64_t)*(uint32_t*)b;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
+}
+
+int ctgscmp(const void *a, const void *b) {
+    int64_t retn = (int64_t)((CTGS*)a)->hash - (int64_t)((CTGS*)b)->hash;
+    return (retn)? (retn < 0)? -1 : 1 : 0;
+}
+
+
+
 bool LibReady(LINF *elem) {
     return !!elem->bslp.size;  /// each LINF needs at least one sleep behaviour
 }
@@ -657,6 +687,16 @@ AINF *UnitFromBINF(BINF *base, long indx) {
 
 AINF *UnitFromLib(BVEC *base, long indx) {
     return UnitFromBINF(BINFFromLib(base, indx), indx);
+}
+
+
+
+uint32_t GetPosByNameHash(uint32_t hash, BVEC *base) {
+    BINF *iter = 0, temp = {.name = hash};
+
+    return ((temp.name) && (iter = bsearch(&temp, base->_, base->size,
+                                            sizeof(*base->_), namecmp)))
+         ? iter - base->_ + 1 : 0;
 }
 
 
@@ -984,7 +1024,7 @@ long TryGetFromGithub(ENGC *engc, char *user, char *auth,
 /// Mersenne random number generator
 
 void RNG_Free(uint32_t **seed) {
-    realloc(*seed, 0);
+    *seed = realloc(*seed, 0);
     *seed = 0;
 }
 
@@ -1060,36 +1100,6 @@ char *GetNextLine(char **file) {
 
 
 
-int igrpcmp(const void *a, const void *b) {
-    int64_t retn = (int64_t)(*(BINF**)a)->igrp - (int64_t)(*(BINF**)b)->igrp;
-    return (retn)? (retn < 0)? -1 : 1 : 0;
-}
-
-int namecmp(const void *a, const void *b) {
-    int64_t retn = (int64_t)((BINF*)a)->name - (int64_t)((BINF*)b)->name;
-    return (retn)? (retn < 0)? -1 : 1 : 0;
-}
-
-int esaycmp(const void *a, const void *b) {
-    int64_t retn = (int64_t)((BINF*)a)->esay - (int64_t)((BINF*)b)->esay;
-    return (retn)? (retn < 0)? -1 : 1 : 0;
-}
-
-int bsaycmp(const void *a, const void *b) {
-    int64_t retn = (int64_t)((BINF*)a)->bsay - (int64_t)((BINF*)b)->bsay;
-    return (retn)? (retn < 0)? -1 : 1 : 0;
-}
-
-int uintcmp(const void *a, const void *b) {
-    int64_t retn = (int64_t)*(uint32_t*)a - (int64_t)*(uint32_t*)b;
-    return (retn)? (retn < 0)? -1 : 1 : 0;
-}
-
-int ctgscmp(const void *a, const void *b) {
-    int64_t retn = (int64_t)((CTGS*)a)->hash - (int64_t)((CTGS*)b)->hash;
-    return (retn)? (retn < 0)? -1 : 1 : 0;
-}
-
 #define GET_TEMP(conf) (temp = SplitLine(conf, DEF_TSEP, 0))
 
 #define TRY_TEMP(conf) (GET_TEMP(conf) && *temp)
@@ -1118,8 +1128,8 @@ void ParseBehaviour(BINF *retn, char *path, char **conf) {
     char *temp;
 
     /// defaults          (neff, ieff, igrp)---v--v--v
-    *retn = (BINF){{}, {}, {}, 0, 5000, 15000, 0, 0, 0, 0.1 * FRM_WAIT, 0, 0, 0,
-                   BHV_ALLM | ANI_LOOP, 0, 0, 0, {}};
+    *retn = (BINF){{}, {}, {}, 0, 5000, 15000, 0, 0, 0, 0.1 * FRM_WAIT, 0, 0,
+                   BHV_ALLM | ANI_LOOP, 0, {}, {}};
 
     /// behaviour name......................................................... !def
     retn->name = HashLine(Dequote(GET_TEMP(conf)), 0);
@@ -1160,12 +1170,12 @@ void ParseBehaviour(BINF *retn, char *path, char **conf) {
     /// speech said on behaviour start.........................................  def = ""
     if (TRY_TEMP(conf)) { /// for the meaning of '\r' see ParseSpeech
         (temp = Dequote(temp))[-1] = '\r';
-        retn->bsay = (*temp)? HashLine(ToLower(temp - 1, 0), 0) : 0;
+        retn->bsay[0] = (*temp)? HashLine(ToLower(temp - 1, 0), 0) : 0;
     }
     /// speech said on behaviour end...........................................  def = ""
     if (TRY_TEMP(conf)) { /// for the meaning of '\r' see ParseSpeech
         (temp = Dequote(temp))[-1] = '\r';
-        retn->esay = (*temp)? HashLine(ToLower(temp - 1, 0), 0) : 0;
+        retn->bsay[1] = (*temp)? HashLine(ToLower(temp - 1, 0), 0) : 0;
     }
     /// flag to never execute this behaviour at random.........................  def = False
     if (TRY_TEMP(conf))
@@ -1235,8 +1245,8 @@ void ParseEffect(BINF *retn, char *path, char **conf) {
     char *temp;
 
     /// defaults      (neff, ieff, igrp)---v--v--v
-    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0, 0,
-                   ANI_LOOP | EFF_STAY | (EFF_RNDA * 0x1111), 0, 0, 0, {}};
+    *retn = (BINF){{}, {}, {}, 0, 5000, 0, 0, 0, 0, 0.0, 0, 0,
+                   ANI_LOOP | EFF_STAY | (EFF_RNDA * 0x1111), 0, {}, {}};
 
     /// effect name (skipped intentionally).................................... !def
     if (TRY_TEMP(conf)) {};
@@ -1286,15 +1296,16 @@ void ParseSpeech(BINF *retn, char *path, char **conf) {
     char *temp;
 
     /// defaults               v---(prob)   v--v--v---(neff, ieff, igrp)
-    *retn = (BINF){{}, {}, {}, 1, 0, 10000, 0, 0, 0, 0.0, 0, 0, 0,
+    *retn = (BINF){{}, {}, {}, 1, 0, 10000, 0, 0, 0, 0.0, 0, 0,
                   (EFF_TOPA << 0) | (EFF_BTMA << 4) | EFF_SAYS
-                | (EFF_TOPA << 8) | (EFF_BTMA << 12), 0, 0, 0, {}};
+                | (EFF_TOPA << 8) | (EFF_BTMA << 12), 0, {}, {}};
 
     /// speech name............................................................ !def
     /// N.B.: we prepend speech names with '\r' so that they
     ///       don`t occasionally match some behaviour names!
     (temp = Dequote(GET_TEMP(conf)))[-1] = '\r';
-    retn->name = retn->bsay = retn->esay = HashLine(ToLower(temp - 1, 0), 0);
+    retn->name = retn->bsay[0] = retn->bsay[1] =
+        HashLine(ToLower(temp - 1, 0), 0);
 
     /// speech text............................................................ !def
     if ((*(*conf)++ == '"') && (temp = SplitLine(conf, '"', 0))) {
@@ -1408,7 +1419,7 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
             libs->name = strdup(path);
         if (libs->ctgs.size) {
             /// sorting categories, removing duplicates, truncating the memory
-            CTR_V_SORT(libs->ctgs, ctgscmp);
+            CTR_V_SORT(libs->ctgs, ctgscmp, 0, libs->ctgs.size);
             for (bcnt = ccnt = 1; ccnt < libs->ctgs.size; ccnt++)
                 if (libs->ctgs._[ccnt - 1].hash != libs->ctgs._[ccnt].hash)
                     if (bcnt++ != ccnt)
@@ -1436,7 +1447,7 @@ void AppendLib(ENGC *engc, char *pcnf, char *base, char *path) {
                     *ctgs++ = libs->ctgs._[ccnt];
                 }
             if (hash)
-                CTR_V_SORT(engc->ctgs, ctgscmp);
+                CTR_V_SORT(engc->ctgs, ctgscmp, 0, engc->ctgs.size);
         }
         free(file);
         conf = 0;
@@ -2071,7 +2082,6 @@ void ExtractStaMov(LINF *elem, BGRP *bgrp, long *fill, long gcnt, long move) {
 long AppendSpriteArr(LINF *elem, ENGC *engc) {
     long indx, turn, next, qmax, gcnt, bcnt, *fill;
     int32_t *cgrp, *bgrp, *ggrp;
-    BINF temp, *iter;
 
     if (!LibReady(elem)) {
         for (indx = elem->barr.size * 2, turn = 0; indx && !turn;
@@ -2084,20 +2094,19 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
             return -1;
 
         /// saving preview name hash
-        temp.name = elem->barr._[elem->prev].name;
-
+        next = elem->barr._[elem->prev].name;
         /// shortening all behaviours and effects to save memory
         #define T(e) (UnitFromBINF(e, 0)->uuid | UnitFromBINF(e, 1)->uuid)
         CTR_V_FLTR(elem->barr, T);
         CTR_V_FLTR(elem->earr, T);
         #undef T
-        CTR_V_SORT(elem->earr, namecmp);
         if (!elem->barr.size) {
             /// freeing the library in case it`s got no behaviours
             FreeLib(elem);
             CTR_ASSIGN(*elem);
             return 0;
         }
+        CTR_V_SORT(elem->earr, namecmp, 0, elem->earr.size);
 
         if (elem->nsay) {
             for (indx = elem->earr.size - 1; indx >= 0; indx--)
@@ -2105,83 +2114,72 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
                     elem->nsay = indx + 1;
                     break;
                 }
-            /// [TODO:] deduplicate BSAY and ESAY loops right below!
+            CTR_V(uint32_t) temp = {};
+            CTR_V_MGET(temp, elem->barr.size);
+            int (*cmps[])(const void *, const void *) = {say0cmp, say1cmp};
 
-            /// resolving speeches said on behaviour start
-            CTR_V_SORT(elem->barr, bsaycmp);
-            for (indx = elem->barr.size - 1; indx >= 0; indx--)
-                elem->barr._[indx].temp = 0;
-            for (indx = elem->earr.size - 1; indx >= 0; indx--)
-                if ((elem->earr._[indx].flgs & EFF_SAYS)
-                &&  (iter = bsearch(&elem->earr._[indx], elem->barr._,
-                                     elem->barr.size, sizeof(*elem->barr._),
-                                     bsaycmp))) {
-                    for (turn = iter - elem->barr._ + 1;
-                        (turn < elem->barr.size) && (elem->barr._[turn].bsay == iter->bsay); turn++)
-                        elem->barr._[turn].temp = indx + 1;
-                    for (turn = iter - elem->barr._ - 1;
-                        (turn >= 0) && (elem->barr._[turn].bsay == iter->bsay); turn--)
-                        elem->barr._[turn].temp = indx + 1;
-                    iter->temp = indx + 1;
-                }
-            for (indx = elem->barr.size - 1; indx >= 0; indx--)
-                elem->barr._[indx].bsay = elem->barr._[indx].temp;
-            /// resolving speeches said on behaviour end
-            CTR_V_SORT(elem->barr, esaycmp);
-            for (indx = elem->earr.size - 1; indx >= 0; indx--)
-                elem->barr._[indx].temp = 0;
-            for (indx = elem->earr.size - 1; indx >= 0; indx--)
-                if ((elem->earr._[indx].flgs & EFF_SAYS)
-                &&  (iter = bsearch(&elem->earr._[indx], elem->barr._,
-                                     elem->barr.size, sizeof(*elem->barr._),
-                                     esaycmp))) {
-                    for (turn = iter - elem->barr._ + 1;
-                        (turn < elem->barr.size) && (elem->barr._[turn].esay == iter->esay); turn++)
-                        elem->barr._[turn].temp = indx + 1;
-                    for (turn = iter - elem->barr._ - 1;
-                        (turn >= 0) && (elem->barr._[turn].esay == iter->esay); turn--)
-                        elem->barr._[turn].temp = indx + 1;
-                    iter->temp = indx + 1;
-                }
-            for (indx = elem->barr.size - 1; indx >= 0; indx--)
-                elem->barr._[indx].esay = elem->barr._[indx].temp;
+            /// resolving speeches said on behaviour start & end
+            for (unsigned func = 0; func <= 1; func++) {
+                BINF *iter;
+                CTR_V_SORT(elem->barr, cmps[func], 0, elem->barr.size);
+                for (indx = temp.size; indx > 0; temp._[--indx] = 0);
+                for (indx = elem->earr.size - 1; indx >= 0; indx--)
+                    if ((elem->earr._[indx].flgs & EFF_SAYS)
+                    &&  (iter = bsearch(&elem->earr._[indx], elem->barr._,
+                                         elem->barr.size, sizeof(*elem->barr._),
+                                         cmps[func]))) {
+                        /// the element we found might have siblings around it
+                        /**
+                        turn = iter - elem->barr._;
+                        #define T(e) (e->bsay[func] != iter->bsay[func])
+                        next = CTR_V_FIND(elem->barr, T, turn + 1, elem->barr.size);
+                        turn = CTR_V_FIND(elem->barr, T, turn - 1, -1);
+                        #undef T
+                        for (turn = ((turn) ? turn - 1 : 0);
+                             turn < ((next) ? next : elem->barr.size);
+                             temp._[turn++] = indx + 1);
+                        //**/
+                        //**
+                        for (turn = iter - elem->barr._ + 1; /// looking forward
+                            (turn < elem->barr.size) &&
+                            (elem->barr._[turn].bsay[func] == iter->bsay[func]);
+                             temp._[turn++] = indx + 1);
+                        for (turn = iter - elem->barr._ - 1; /// looking back
+                            (turn >= 0) &&
+                            (elem->barr._[turn].bsay[func] == iter->bsay[func]);
+                             temp._[turn--] = indx + 1);
+                        temp._[iter - elem->barr._] = indx + 1;
+                        //**/
+                    }
+                for (indx = elem->barr.size - 1; indx >= 0; indx--)
+                    elem->barr._[indx].bsay[func] = temp._[indx];
+            }
+            CTR_V_MGET(temp);
         }
+
+        CTR_V_SORT(elem->barr, namecmp, 0, elem->barr.size);
+
+        /// retrieving the new preview position (-1 since we can`t get a 0)
+        elem->prev = GetPosByNameHash(next, &elem->barr) - 1;
+
         /// determining the effect count and min. index for every behaviour
         /// (note that some behaviours may have no effects)
-        CTR_V_SORT(elem->barr, namecmp);
         for (indx = (long)elem->earr.size - 1; indx >= 0; indx--)
             if (!(elem->earr._[indx].flgs & EFF_SAYS)
-            &&   (iter = bsearch(&elem->earr._[indx], elem->barr._,
-                                  elem->barr.size, sizeof(*elem->barr._),
-                                  namecmp))) {
-                iter->ieff = indx;
-                iter->neff++;
+            && (turn = GetPosByNameHash(elem->earr._[indx].name, &elem->barr))) {
+                elem->barr._[turn - 1].ieff = indx;
+                elem->barr._[turn - 1].neff++;
             }
-        /// retrieving the new preview position
-        if ((iter = bsearch(&temp, elem->barr._, elem->barr.size,
-                             sizeof(*elem->barr._), namecmp)))
-            elem->prev = iter - elem->barr._;
+
         /// iterating over all behaviours
         for (indx = 0; indx < elem->barr.size; indx++) {
-            /// resolving the linked behaviour, if any
-            if ((temp.name = elem->barr._[indx].link)) {
-                if ((iter = bsearch(&temp, elem->barr._, elem->barr.size,
-                                     sizeof(*elem->barr._), namecmp)))
-                    elem->barr._[indx].link = iter - elem->barr._ + 1;
-                else
-                    elem->barr._[indx].link = 0;
-            }
-            /// resolving behaviour overrides, if any
+            elem->barr._[indx].link =  /// get the linked bhv, if any
+                GetPosByNameHash(elem->barr._[indx].link, &elem->barr);
+
             for (turn = 0; turn <= 1; turn++)
-                if ((temp.name = elem->barr._[indx].obfm[turn])) {
-                    if ((iter = bsearch(&temp, elem->barr._, elem->barr.size,
-                                         sizeof(*elem->barr._), namecmp)))
-                        elem->barr._[indx].obfm[turn] = iter - elem->barr._ + 1;
-                    else {
-                        /// no such behaviour, need to select automatically
-                        elem->barr._[indx].obfm[turn] = 0;
-                    }
-                }
+                elem->barr._[indx].obfm[turn] =  /// get bhv overrides, if any
+                    GetPosByNameHash(elem->barr._[indx].obfm[turn], &elem->barr);
+
             /// resolving image centers if unset (only possible here!)
             for (turn = 0; turn <= 1; turn++) {
                 auto anim = UnitFromLib(&elem->barr, 2 * indx + turn);
@@ -2444,6 +2442,7 @@ long AppendSpriteArr(LINF *elem, ENGC *engc) {
     /// (Q = 1 when repeat delay D = 0; otherwise, Q = ceil(((E)? E : B) / D)
     /// where E is effect duration and B is maximum behaviour duration)
     /// note that E / D is # of effects created per effect expiration window
+    BINF *iter;
     for (qmax = (elem->nsay)? 1 : 0, indx = 0; indx < elem->barr.size; indx++)
         for (turn = 0; turn < elem->barr._[indx].neff; turn++)
             if (!(iter = &elem->earr._[elem->barr._[indx].ieff + turn])->dmax)
@@ -2877,8 +2876,8 @@ uint32_t eUpdFrame(ENGD *engd, T4FV **data, uint32_t *size,
                     /// the parent behaviour has changed; updating
                     auto curr = BINFFromLib(&pict->boss->ulib->barr,
                                              pict->boss->indx);
-                    if (!(elem = curr->bsay))
-                        elem = curr->esay;
+                    if (!(elem = curr->bsay[0]))
+                        elem = curr->bsay[1];
                     if (elem) { /// do not spawn new speech but reuse old
                         pict->flgs &= ~PIF_IRES;
                         SpawnEffect(&engc->parr[indx], pict->boss, engc->seed,
@@ -4019,7 +4018,7 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     free(fptr);
     engc.blgp = calloc(engc.libs.size + 1, sizeof(*engc.blgp));
     /// sort engine`s libraries by name, initialize the rendering engine
-    CTR_V_SORT(engc.libs, linfcmp);
+    CTR_V_SORT(engc.libs, linfcmp, 0, engc.libs.size);
     cEngineCallback(0, ECB_INIT, (intptr_t)&engc.engd);
 
     for (indx = 0; indx < engc.ctgs.size; indx++)
