@@ -37,7 +37,7 @@ typedef struct _TREE {
         };
         struct {
             /// filename tree element
-            typeof(((AINF*)0)->uuid) turn;
+            __typeof__(((AINF*)0)->uuid) turn;
             char *path;
             DEST *dest;
             struct _TREE *epix;
@@ -585,7 +585,7 @@ uint32_t RecolorPalette(BGRA *bpal, char *file, long size) {
     if (bpal && file)
         for (apal  = file + size -  sizeof(*amap);
              apal >= file;  apal -= sizeof(*amap))
-            for (amap = (typeof(amap))apal, size = 0; size < 256; size++)
+            for (amap = (__typeof__(amap))apal, size = 0; size < 256; size++)
                 if ((bpal[size].chnl[0] == amap->srcb)
                 &&  (bpal[size].chnl[1] == amap->srcg)
                 &&  (bpal[size].chnl[2] == amap->srcr)

@@ -13,6 +13,8 @@
 [submodule "exec/zip"]
 	path = exec/zip
 	url = https://github.com/hidefromkgb/zip_load
+	branch = master
 [submodule "exec/ctr"]
 	path = exec/ctr
-	url = git@github.com:hidefromkgb/std_ctrs.git
+	url = https://github.com/hidefromkgb/std_ctrs
+	branch = main

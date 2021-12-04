@@ -478,7 +478,7 @@ char *_Concatenate(char **retn, ...) {
     long size = 1;
 
     va_start(list, retn);
-    while ((temp = va_arg(list, typeof(temp))))
+    while ((temp = va_arg(list, __typeof__(temp))))
         size += strlen(temp);
     va_end(list);
 
@@ -493,7 +493,7 @@ char *_Concatenate(char **retn, ...) {
     }
 
     va_start(list, retn);
-    while ((temp = va_arg(list, typeof(temp))))
+    while ((temp = va_arg(list, __typeof__(temp))))
         strcat(head, temp);
     va_end(list);
 
