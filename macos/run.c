@@ -61,23 +61,23 @@ NSMenu *Submenu(MENU *menu, id base) {
         return 0;
 
     NSMenuItem *item;
-    NSMenu *retn = init(alloc(NSMenu()));
+    NSMenu *retn = init(alloc(_(NSMenu)));
     NSImage *cbtn, *rbtn;
     NSString *text, *null = MAC_MakeString(0);
 
-    cbtn = imageNamed_(NSImage(), text = MAC_MakeString("NSMenuCheckmark"));
+    cbtn = imageNamed_(_(NSImage), text = MAC_MakeString("NSMenuCheckmark"));
     MAC_FreeString(text);
-    rbtn = imageNamed_(NSImage(), text = MAC_MakeString("NSMenuRadio"));
+    rbtn = imageNamed_(_(NSImage), text = MAC_MakeString("NSMenuRadio"));
     MAC_FreeString(text);
     setAutoenablesItems_(retn, false);
     while (menu->text) {
         if (!*menu->text) {
-            item = separatorItem(NSMenuItem());
+            item = separatorItem(_(NSMenuItem));
             addItem_(retn, item);
         }
         else {
             item = initWithTitle_action_keyEquivalent_
-                       (alloc(NSMenuItem()), text = MAC_MakeString(menu->text),
+                       (alloc(_(NSMenuItem)), text = MAC_MakeString(menu->text),
                         ActionSelector(), null);
             MAC_FreeString(text);
             if (menu->flgs & MFL_CCHK) {
@@ -114,12 +114,12 @@ void rOpenContextMenu(MENU *tmpl) {
     mode = (NSArray*)CFArrayCreate(kCFAllocatorDefault,
                                   (const void**)&NSRunLoopCommonModes, 1, 0);
     performSelector_target_argument_order_modes_
-        (currentRunLoop(NSRunLoop()), ActionSelector(), base, base, 1, mode);
+        (currentRunLoop(_(NSRunLoop)), ActionSelector(), base, base, 1, mode);
     CFRelease(mode);
 }
 
 void OpenMenu(MENU *tmpl, id base) {
-    NSPoint dptr = mouseLocation(NSEvent());
+    NSPoint dptr = mouseLocation(_(NSEvent));
     NSMenu *menu;
 
     popUpMenuPositioningItem_atLocation_inView_
@@ -165,7 +165,7 @@ long rMessage(char *text, char *head, char *byes, char *bnay) {
     NSAlert *mbox;
     long retn;
 
-    setAlertStyle_(mbox = init(alloc(NSAlert())), NSInformationalAlertStyle);
+    setAlertStyle_(mbox = init(alloc(_(NSAlert))), NSInformationalAlertStyle);
     addButtonWithTitle_(mbox, tttt = MAC_MakeString(byes));
     MAC_FreeString(tttt);
     if (bnay) {
@@ -196,8 +196,8 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
     NSButton *ibtn;
     void **retn = malloc(2 * sizeof(*retn));
 
-    pict = initWithCGImage_size_(alloc(NSImage()), iref, (NSSize){});
-    retn[0] = statusItemWithLength_(systemStatusBar(NSStatusBar()),
+    pict = initWithCGImage_size_(alloc(_(NSImage)), iref, (NSSize){});
+    retn[0] = statusItemWithLength_(systemStatusBar(_(NSStatusBar)),
                                     NSVariableStatusItemLength);
     retain(retn[0]);
     retn[1] = init(alloc(MAC_LoadClass(CLS_TRAY)));
@@ -224,7 +224,7 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
 void rFreeTrayIcon(intptr_t icon) {
     void **retn = (void**)icon;
 
-    removeStatusItem_(systemStatusBar(NSStatusBar()), retn[0]);
+    removeStatusItem_(systemStatusBar(_(NSStatusBar)), retn[0]);
     release(retn[0]);
     release(retn[1]);
     free(retn);
@@ -338,7 +338,7 @@ char *ChooseFileDir(CTRL *root, char *file, char *fext) {
     NSURL *idir;
 
     file = strdup(file);
-    setAllowsMultipleSelection_(cfdp = openPanel(NSOpenPanel()), false);
+    setAllowsMultipleSelection_(cfdp = openPanel(_(NSOpenPanel)), false);
     setCanChooseDirectories_(cfdp, !fext);
     setCanChooseFiles_(cfdp, !!fext);
     if (fext) {
@@ -532,7 +532,7 @@ void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
 
     tmrp = MAC_MakeTimer(fram, TmrFunc, user);
     while (root->priv[2])
-        run(sharedApplication(NSApplication()));
+        run(sharedApplication(_(NSApplication)));
     MAC_FreeTimer(tmrp);
 }
 
@@ -544,15 +544,15 @@ NSSize GetStringSize(NSString *text, NSSize area) {
     NSTextStorage *stor;
     NSRect retn;
 
-    mlay = init(alloc(NSLayoutManager()));
-    stor = initWithString_(alloc(NSTextStorage()), text);
-    ctxt = initWithContainerSize_(alloc(NSTextContainer()),
+    mlay = init(alloc(_(NSLayoutManager)));
+    stor = initWithString_(alloc(_(NSTextStorage)), text);
+    ctxt = initWithContainerSize_(alloc(_(NSTextContainer)),
                                  (NSSize){area.width, CGFLOAT_MAX});
     setLineFragmentPadding_(ctxt, 0.0);
     addTextContainer_(mlay, ctxt);
     addLayoutManager_(stor, mlay);
     addAttribute_value_range_(stor, NSFontAttributeName,
-        (id)systemFontOfSize_(NSFont(), systemFontSize(NSFont())),
+        (id)systemFontOfSize_(_(NSFont), systemFontSize(_(NSFont))),
             CFRangeMake(0, CFStringGetLength(text)));
     glyphRangeForTextContainer_(mlay, ctxt);
     retn = usedRectForTextContainer_(mlay, ctxt);
@@ -613,8 +613,8 @@ bool MAC_Handler(OnKeys, void *ctrl, NSView *view, SEL what) {
     static SEL MoveUp = 0, MoveDown = 0;
 
     if (!MoveUp) {
-        MoveUp = moveUp_();
-        MoveDown = moveDown_();
+        MoveUp = _(moveUp_);
+        MoveDown = _(moveDown_);
     }
     if ((what == MoveDown) || (what == MoveUp)) {
         CTRL *ctrl = 0;
@@ -645,7 +645,7 @@ bool MAC_Handler(OnKeys, void *ctrl, NSView *view, SEL what) {
 intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__SHW: {
-            NSApplication *thrd = sharedApplication(NSApplication());
+            NSApplication *thrd = sharedApplication(_(NSApplication));
 
             if (!data)
                 orderOut_((NSWindow*)ctrl->priv[0], thrd);
@@ -674,7 +674,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             ctrl->priv[1] =  (uint16_t)scrn.size.width
                           | ((uint32_t)scrn.size.height << 16);
             area = frameRectForContentRect_((NSWindow*)ctrl->priv[0], scrn);
-            scrn = visibleFrame(mainScreen(NSScreen()));
+            scrn = visibleFrame(mainScreen(_(NSScreen)));
             area.origin.x = 0.5 * (scrn.size.width  - area.size.width )
                           + scrn.origin.x;
             area.origin.y = 0.5 * (scrn.size.height - area.size.height)
@@ -691,7 +691,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             uint8_t cfnt[4] = {anim->fcnt >> 16, anim->fcnt >> 8, anim->fcnt};
             CGContextRef ctxt;
             CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
-            NSAutoreleasePool *pool = init(alloc(NSAutoreleasePool()));
+            NSAutoreleasePool *pool = init(alloc(_(NSAutoreleasePool)));
             NSMutableParagraphStyle *psty;
             NSDictionary *dict;
             NSString *text;
@@ -707,17 +707,17 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                              - (uint8_t)(anim->ydim >> 24) + mrgn;
             rect.origin.y = (uint16_t)anim->ydim
                           - rect.origin.y - rect.size.height;
-            lockFocus(itmp = initWithSize_(alloc(NSImage()), rect.size));
-            font = systemFontOfSize_(NSFont(), systemFontSize(NSFont()));
-            psty = init(alloc(NSMutableParagraphStyle()));
+            lockFocus(itmp = initWithSize_(alloc(_(NSImage)), rect.size));
+            font = systemFontOfSize_(_(NSFont), systemFontSize(_(NSFont)));
+            psty = init(alloc(_(NSMutableParagraphStyle)));
             setAlignment_(psty, NSCenterTextAlignment);
             text = MAC_MakeString((char*)anim->time);
             dict = MAC_MakeDict(NSFontAttributeName, font,
                                 NSParagraphStyleAttributeName, psty,
                                 NSForegroundColorAttributeName,
                                 colorWithDeviceRed_green_blue_alpha_
-                                    (NSColor(), invc * cfnt[0], invc * cfnt[1],
-                                                invc * cfnt[2], 1.0));
+                                    (_(NSColor), invc * cfnt[0], invc * cfnt[1],
+                                                 invc * cfnt[2], 1.0));
             drawInRect_withAttributes_(text, (NSRect){{}, rect.size}, dict);
             MAC_FreeString(text);
             MAC_FreeDict(dict);
@@ -1024,8 +1024,8 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
         case MSG__ENB:
             setTextColor_((NSTextField*)ctrl->priv[1],
-                          (data)? controlTextColor(NSColor())
-                                : disabledControlTextColor(NSColor()));
+                          (data)? controlTextColor(_(NSColor))
+                                : disabledControlTextColor(_(NSColor)));
             break;
 
         case MSG__SHW:
@@ -1182,7 +1182,7 @@ void rFreeControl(CTRL *ctrl) {
 
         case FCT_SBOX:
             removeObserver_name_object_
-                (defaultCenter(NSNotificationCenter()),
+                (defaultCenter(_(NSNotificationCenter)),
                 (id)ctrl->priv[7], NSViewBoundsDidChangeNotification,
                 (id)contentView((NSScrollView*)ctrl->priv[0]));
             release((NSView*)ctrl->priv[7]);
@@ -1270,11 +1270,10 @@ void MAC_Handler(OnScroll, NSNotification *nscr) {
 }
 
 void MAC_Handler(PBoxDraw, NSRect rect) {
-    struct objc_super prev = {self, class(NSProgressIndicator())};
     CTRL *ctrl = 0;
 
+    super_drawRect_(self, rect);
     MAC_GetIvar(self, VAR_DATA, &ctrl);
-    objc_msgSendSuper(&prev, drawRect_(), rect);
     rect = frame((NSProgressIndicator*)ctrl->priv[0]);
     rect.origin.y = ctrl->priv[4];
     rect.origin.x = 0;
@@ -1308,7 +1307,7 @@ void MAC_Handler(IBoxDraw, NSRect rect) {
     CGContextFlush((CGContextRef)ctrl->priv[1]);
     ctrl->fc2e(ctrl, MSG_IFRM, (intptr_t)&anim);
     pict = CGBitmapContextCreateImage((CGContextRef)ctrl->priv[1]);
-    CGContextDrawImage(graphicsPort(currentContext(NSGraphicsContext())),
+    CGContextDrawImage(graphicsPort(currentContext(_(NSGraphicsContext))),
                        area, pict);
     CGImageRelease(pict);
 }
@@ -1329,7 +1328,7 @@ bool MAC_Handler(OnClose) {
     if (ctrl->fc2e(ctrl, MSG_WEND, 0)) {
         retn = true;
         ctrl->priv[2] = 0;
-        stop_(sharedApplication(NSApplication()), self);
+        stop_(sharedApplication(_(NSApplication)), self);
     }
     return retn;
 }
@@ -1362,7 +1361,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
         CGFloat ffsz;
 
         ctrl->fe2c = FE2CW;
-        gwnd = systemFontOfSize_(NSFont(), ffsz = systemFontSize(NSFont()));
+        gwnd = systemFontOfSize_(_(NSFont), ffsz = systemFontSize(_(NSFont)));
         ctrl->priv[2] =  (uint16_t)round(0.45 * maximumAdvancement(gwnd).width)
                       | ((uint32_t)round(0.60 * ffsz) << 16);
 
@@ -1378,7 +1377,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
              | ((ctrl->flgs & FSW_SIZE)? NSMiniaturizableWindowMask
                                        | NSResizableWindowMask : 0);
         gwnd = initWithContentRect_styleMask_backing_defer_
-                   (alloc(NSWindow()), dims, flgs,
+                   (alloc(_(NSWindow)), dims, flgs,
                     kCGBackingStoreBuffered, false);
 
         ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_WNDW)));
@@ -1423,7 +1422,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 setAlignment_(cell(gwnd),
                              (ctrl->flgs & FST_CNTR)? NSCenterTextAlignment
                                                     : NSLeftTextAlignment);
-                addSubview_(gwnd = init(alloc(NSView())),
+                addSubview_(gwnd = init(alloc(_(NSView))),
                            (NSView*)ctrl->priv[1]);
                 break;
             }
@@ -1460,7 +1459,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 NSSize spin;
 
                 ctrl->fe2c = FE2CN;
-                gwnd = init(alloc(NSView()));
+                gwnd = init(alloc(_(NSView)));
                 ctrl->priv[3] = root->priv[5];
                 ctrl->priv[6] = (intptr_t)init(alloc(MAC_LoadClass(CLS_SPIN)));
                 ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_TEXT)));
@@ -1495,7 +1494,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
 
                 ctrl->fe2c = FE2CL;
                 temp.size = dims.size;
-                gwnd = init(alloc(NSScrollView()));
+                gwnd = init(alloc(_(NSScrollView)));
                 ctrl->priv[1] = (intptr_t)MAC_LoadClass(CLS_CELL);
                 ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_LIST)));
                 MAC_SetIvar((NSTableView*)ctrl->priv[7], VAR_DATA, ctrl);
@@ -1505,7 +1504,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                              (NSTableView*)ctrl->priv[7]);
                 setFrame_((NSTableView*)ctrl->priv[7], temp);
 
-                ctrl->priv[6] = (intptr_t)init(alloc(NSTableColumn()));
+                ctrl->priv[6] = (intptr_t)init(alloc(_(NSTableColumn)));
                 setStringValue_(headerCell((NSTableColumn*)ctrl->priv[6]),
                                 capt = MAC_MakeString(0));
                 MAC_FreeString(capt);
@@ -1524,7 +1523,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                               | ((uint32_t)dims.size.height << 16);
                 ctrl->priv[2] =  (uint16_t)dims.origin.x
                               | ((uint32_t)dims.origin.y << 16);
-                gwnd = init(alloc(NSScrollView()));
+                gwnd = init(alloc(_(NSScrollView)));
                 setDrawsBackground_(gwnd, false);
                 setHasVerticalScroller_(gwnd, true);
                 setPostsBoundsChangedNotifications_(contentView(gwnd), true);
@@ -1532,7 +1531,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 MAC_SetIvar((NSView*)ctrl->priv[7], VAR_DATA, ctrl);
                 setDocumentView_(gwnd, (NSView*)ctrl->priv[7]);
                 addObserver_selector_name_object_
-                    (defaultCenter(NSNotificationCenter()), (id)ctrl->priv[7],
+                    (defaultCenter(_(NSNotificationCenter)), (id)ctrl->priv[7],
                      ActionSelector(), NSViewBoundsDidChangeNotification,
                     (id)contentView(gwnd));
                 break;
@@ -1566,16 +1565,16 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 MAC_SetIvar(gwnd, VAR_DATA, ctrl);
                 setIndeterminate_(gwnd, false);
                 setWantsLayer_(gwnd, true);
-                psty = init(alloc(NSMutableParagraphStyle()));
+                psty = init(alloc(_(NSMutableParagraphStyle)));
                 setAlignment_(psty, NSCenterTextAlignment);
-                ffsz = systemFontSize(NSFont()) * 0.85;
+                ffsz = systemFontSize(_(NSFont)) * 0.85;
 #ifndef MAC_OLD
                 if (MAC_10_10_PLUS) {
                     scaleUnitSquareToSize_(gwnd, (NSSize){2.0, 2.0});
                     ffsz *= 0.5;
                 }
 #endif
-                font = systemFontOfSize_(NSFont(), ffsz);
+                font = systemFontOfSize_(_(NSFont), ffsz);
                 ctrl->priv[5] = (intptr_t)MAC_MakeDict
                     (NSFontAttributeName, font,
                      NSParagraphStyleAttributeName, psty);
@@ -1629,39 +1628,39 @@ int main(int argc, char *argv[]) {
     #define CLS_MAKE(n, p, ...) \
         MAC_MakeClass(n, p, MAC_TempArray(VAR_DATA), \
                             MAC_TempArray(__VA_ARGS__))
-    NSAutoreleasePool *pool = init(alloc(NSAutoreleasePool()));
+    NSAutoreleasePool *pool = init(alloc(_(NSAutoreleasePool)));
     Class scls[] = {
-        CLS_MAKE(CLS_CELL, (MAC_10_07_PLUS)? NSButton() : NSButtonCell(),
+        CLS_MAKE(CLS_CELL, (MAC_10_07_PLUS)? _(NSButton) : _(NSButtonCell),
                  ActionSelector(), OnListButton),
-        CLS_MAKE(CLS_TRAY, NSObject(),
+        CLS_MAKE(CLS_TRAY, _(NSObject),
                  ActionSelector(), OnTray),
-        CLS_MAKE(CLS_MENU, NSObject(),
+        CLS_MAKE(CLS_MENU, _(NSObject),
                  ActionSelector(), OnMenu),
-        CLS_MAKE(CLS_WNDW, NSView(),
-                 windowShouldClose_(), OnClose,
-                 windowDidResize_(), OnSize, isFlipped(), OnTrue),
-        CLS_MAKE(CLS_TEXT, NSTextField(),
+        CLS_MAKE(CLS_WNDW, _(NSView),
+                 _(windowShouldClose_), OnClose,
+                 _(windowDidResize_), OnSize, _(isFlipped), OnTrue),
+        CLS_MAKE(CLS_TEXT, _(NSTextField),
                  ActionSelector(), OnEdit,
-                 control_textView_doCommandBySelector_(), OnKeys),
-        CLS_MAKE(CLS_BUTN, NSButton(),
+                 _(control_textView_doCommandBySelector_), OnKeys),
+        CLS_MAKE(CLS_BUTN, _(NSButton),
                  ActionSelector(), OnButton),
-        CLS_MAKE(CLS_SPIN, NSStepper(),
+        CLS_MAKE(CLS_SPIN, _(NSStepper),
                  ActionSelector(), OnSpin),
-        CLS_MAKE(CLS_LIST, NSTableView(),
-                (MAC_10_07_PLUS)? tableView_viewForTableColumn_row_()
-               : tableView_dataCellForTableColumn_row_(),        OnValue,
-                 tableView_objectValueForTableColumn_row_(),     OnValueOld,
-                 tableView_setObjectValue_forTableColumn_row_(), OnReset,
-                 numberOfRowsInTableView_(),                     OnRows),
-        CLS_MAKE(CLS_PBAR, NSProgressIndicator(),
-                 drawRect_(), PBoxDraw),
-        CLS_MAKE(CLS_SBOX, NSView(),
+        CLS_MAKE(CLS_LIST, _(NSTableView),
+                (MAC_10_07_PLUS)? _(tableView_viewForTableColumn_row_)
+               : _(tableView_dataCellForTableColumn_row_),        OnValue,
+                 _(tableView_objectValueForTableColumn_row_),     OnValueOld,
+                 _(tableView_setObjectValue_forTableColumn_row_), OnReset,
+                 _(numberOfRowsInTableView_),                     OnRows),
+        CLS_MAKE(CLS_PBAR, _(NSProgressIndicator),
+                 _(drawRect_), PBoxDraw),
+        CLS_MAKE(CLS_SBOX, _(NSView),
                  ActionSelector(), OnScroll,
-                 isFlipped(), OnTrue),
-        CLS_MAKE(CLS_IBOX, NSView(),
-                 drawRect_(), IBoxDraw),
-        CLS_MAKE(CLS_FRMT, NSNumberFormatter(),
-                 isPartialStringValid_newEditingString_errorDescription_(),
+                 _(isFlipped), OnTrue),
+        CLS_MAKE(CLS_IBOX, _(NSView),
+                 _(drawRect_), IBoxDraw),
+        CLS_MAKE(CLS_FRMT, _(NSNumberFormatter),
+                 _(isPartialStringValid_newEditingString_errorDescription_),
                  OnValidate)
     };
     void (*CSIC)(pthread_t (*func)()) =
@@ -1676,7 +1675,7 @@ int main(int argc, char *argv[]) {
     CGFloat icon;
     NSRect dims;
 
-//    setBool_forKey_(standardUserDefaults(NSUserDefaults()),
+//    setBool_forKey_(standardUserDefaults(_(NSUserDefaults)),
 //                    false, CFSTR("NSShowNonLocalizedStrings"));
 
     if (!MAC_10_07_PLUS) {
@@ -1687,12 +1686,12 @@ int main(int argc, char *argv[]) {
         CSLC(lockfunc);
     }
     curl_global_init(CURL_GLOBAL_DEFAULT);
-    setActivationPolicy_(sharedApplication(NSApplication()),
+    setActivationPolicy_(sharedApplication(_(NSApplication)),
                          NSApplicationActivationPolicyAccessory);
-    home = MAC_LoadString(bundlePath(mainBundle(NSBundle())));
+    home = MAC_LoadString(bundlePath(mainBundle(_(NSBundle))));
     strcat(home = realloc(home, 64 + strlen(home)), "/Contents/Resources");
 
-    urls = URLsForDirectory_inDomains_(defaultManager(NSFileManager()),
+    urls = URLsForDirectory_inDomains_(defaultManager(_(NSFileManager)),
                                        NSApplicationSupportDirectory,
                                        NSUserDomainMask);
     path = (NSString*)CFURLCopyFileSystemPath
@@ -1703,8 +1702,8 @@ int main(int argc, char *argv[]) {
         printf("WARNING: cannot create '%s'!", conf);
     MAC_FreeString(path);
 
-    dims = visibleFrame(mainScreen(NSScreen()));
-    icon = thickness(systemStatusBar(NSStatusBar()));
+    dims = visibleFrame(mainScreen(_(NSScreen)));
+    icon = thickness(systemStatusBar(_(NSStatusBar)));
 
     eExecuteEngine(conf, home, icon, icon, dims.origin.x, dims.origin.y,
                    dims.size.width  + dims.origin.x,

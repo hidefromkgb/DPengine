@@ -37,15 +37,15 @@ uint64_t lTimeFunc() {
 
 
 void lRestartEngine(ENGD *engd) {
-    NSApplication *thrd = sharedApplication(NSApplication());
+    NSApplication *thrd = sharedApplication(_(NSApplication));
     NSEvent *post;
 
     /// if called from inside a timer context, bump an event to the loop
     /// to ensure that it did process the stop notification we just sent;
     /// if not in a timer context, a dummy event will be rejected anyway
     post = otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2_
-               (NSEvent(), NSApplicationDefined, (NSPoint){},
-                           NSApplicationDefined, 0, 0, 0, 0, 0, 0);
+               (_(NSEvent), NSApplicationDefined, (NSPoint){},
+                            NSApplicationDefined, 0, 0, 0, 0, 0, 0);
     stop_(thrd, post);
     postEvent_atStart_(thrd, post, true);
 }
@@ -53,7 +53,7 @@ void lRestartEngine(ENGD *engd) {
 
 
 void lShowMainWindow(ENGD *engd, long show) {
-    NSApplication *thrd = sharedApplication(NSApplication());
+    NSApplication *thrd = sharedApplication(_(NSApplication));
     intptr_t *data;
 
     cEngineCallback(engd, ECB_GUSR, (intptr_t)&data);
@@ -183,8 +183,8 @@ void OnCalc(CFRunLoopObserverRef runp, CFRunLoopActivity acti, void *user) {
     cEngineCallback((ENGD*)user, ECB_GUSR, (intptr_t)&data);
     draw = (DRAW*)data[0];
 
-    dptr = mouseLocation(NSEvent());
-    attr = pressedMouseButtons(NSEvent());
+    dptr = mouseLocation(_(NSEvent));
+    attr = pressedMouseButtons(_(NSEvent));
 
     /// [TODO:] properly determine if the window is active
     attr = ((attr & 1)? UFR_LBTN : 0) | ((attr & 2)? UFR_RBTN : 0)
@@ -236,7 +236,7 @@ void MAC_Handler(OnDraw, NSRect rect) {
         flushBuffer(openGLContext(draw->view));
     else {
         iref = CGBitmapContextCreateImage(draw->hctx);
-        ctxt = graphicsPort(currentContext(NSGraphicsContext()));
+        ctxt = graphicsPort(currentContext(_(NSGraphicsContext)));
         CGContextSetBlendMode(ctxt, kCGBlendModeCopy);
         CGContextDrawImage
             (ctxt, (NSRect){{0, 0}, {draw->xdim, draw->ydim}}, iref);
@@ -266,14 +266,14 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     MAC_FreeString(scib);
 
     data[0] = (intptr_t)&draw;
-    draw.hand = pointingHandCursor(NSCursor());
+    draw.hand = pointingHandCursor(_(NSCursor));
     draw.attr = 0;
     draw.xdim = xdim - xpos;
     draw.ydim = ydim - ypos;
     dims = (NSRect){{0, 0}, {draw.xdim, draw.ydim}};
 
-    pool = init(alloc(NSAutoreleasePool()));
-    thrd = sharedApplication(NSApplication());
+    pool = init(alloc(_(NSAutoreleasePool)));
+    thrd = sharedApplication(_(NSApplication));
     if (~flgs & COM_RGPU) {
         long line = draw.xdim * sizeof(**bptr);
         CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
@@ -284,9 +284,9 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                                               | kCGBitmapByteOrder32Little);
         CGColorSpaceRelease(drgb);
 
-        view = MAC_MakeClass(SUB_VDLG, NSView(), MAC_TempArray(VAR_ENGD),
-                             MAC_TempArray(drawRect_(), OnDraw,
-                                           isOpaque(), OnOpaq));
+        view = MAC_MakeClass(SUB_VDLG, _(NSView), MAC_TempArray(VAR_ENGD),
+                             MAC_TempArray(_(drawRect_), OnDraw,
+                                           _(isOpaque), OnOpaq));
         draw.view = init(alloc(view));
         setFrame_(draw.view, dims);
     }
@@ -296,10 +296,10 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
         NSOpenGLPixelFormat *pfmt;
         NSOpenGLContext *ctxt;
 
-        pfmt = initWithAttributes_(alloc(NSOpenGLPixelFormat()), attr);
-        view = MAC_MakeClass(SUB_VDLG, NSOpenGLView(), MAC_TempArray(VAR_ENGD),
-                             MAC_TempArray(drawRect_(), OnDraw,
-                                           isOpaque(), OnOpaq));
+        pfmt = initWithAttributes_(alloc(_(NSOpenGLPixelFormat)), attr);
+        view = MAC_MakeClass(SUB_VDLG, _(NSOpenGLView), MAC_TempArray(VAR_ENGD),
+                             MAC_TempArray(_(drawRect_), OnDraw,
+                                           _(isOpaque), OnOpaq));
         draw.view =
             (NSView*)initWithFrame_pixelFormat_(alloc(view), dims, pfmt);
         makeCurrentContext(ctxt = openGLContext(draw.view));
@@ -313,14 +313,14 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
     /// [TODO:] NSNonactivatingPanelMask is flagged for deprecation in 10.12
     ///         so a suitable alternative has to be found
     draw.hwnd = initWithContentRect_styleMask_backing_defer_
-                    (alloc(NSPanel()), dims, NSBorderlessWindowMask
+                    (alloc(_(NSPanel)), dims, NSBorderlessWindowMask
                                            | NSNonactivatingPanelMask,
                      kCGBackingStoreBuffered, false);
 
     setContentView_(draw.hwnd, draw.view);
     setDelegate_(draw.hwnd, draw.view);
     setLevel_(draw.hwnd, NSMainMenuWindowLevel + 1);
-    setBackgroundColor_(draw.hwnd, clearColor(NSColor()));
+    setBackgroundColor_(draw.hwnd, clearColor(_(NSColor)));
     setHasShadow_(draw.hwnd, false);
     setOpaque_(draw.hwnd, false);
 
