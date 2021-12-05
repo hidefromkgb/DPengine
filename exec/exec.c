@@ -1516,7 +1516,7 @@ void LoadLib(LINF *elem, ENGD *engd) {
                     temp = realloc(curr->time, sizeof(*temp));
                     temp->time = (uint32_t*)(name + 23);
                     temp->xdim = UnitFromLib(&elem->barr, 0)->xdim << 1;
-                    temp->ydim = UnitFromLib(&elem->barr, 0)->ydim >> 1;
+                    temp->ydim = UnitFromLib(&elem->barr, 0)->ydim << 3;
                     xdim = RUN_FE2C(elem->engc->MCT_CAPT,
                                     MSG_WTGD, (intptr_t)temp);
                     /// don`t forget to allocate horizontal space for
@@ -3981,8 +3981,8 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     xico = (uint16_t)RUN_FE2C(engc.MCT_SPEC, MSG__GSZ, 0);
     /// getting the width of a single space character
     atmp.xdim = atmp.ydim = 0;
-    atmp.time = (uint32_t*)" ";
-    yico = (uint16_t)RUN_FE2C(engc.MCT_CAPT, MSG_WTGD, (intptr_t)&atmp);
+    atmp.time = (uint32_t*)"    ";
+    yico = 0.25 * (uint16_t)RUN_FE2C(engc.MCT_CAPT, MSG_WTGD, (intptr_t)&atmp);
     /// showing the scroll window
     engc.MCT_CHAR.fc2e = FC2EM;
     RUN_FE2C(engc.MCT_CHAR, MSG__SHW, 1);

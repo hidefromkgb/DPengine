@@ -12,6 +12,8 @@
 
 
 
+#define auto __auto_type
+
 #define CLS_CELL "lNSX" /** class name for list box cell **/
 #define CLS_TRAY "lNSR" /** class name for tray icon **/
 #define CLS_MENU "lNSM" /** class name for menu responder **/
@@ -538,28 +540,47 @@ void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
 
 
 
-NSSize GetStringSize(NSString *text, NSSize area) {
-    NSLayoutManager *mlay;
-    NSTextContainer *ctxt;
-    NSTextStorage *stor;
-    NSRect retn;
+NSSize GetStringSize(char *text, NSString **corr, CGFloat xmax) {
+    const NSFont *font = CTFontCreateUIFontForLanguage(
+                             kCTFontUIFontSystem, systemFontSize(_(NSFont)), 0);
+    const auto ydim = CTFontGetAscent(font) + CTFontGetDescent(font)
+                                            + CTFontGetLeading(font) + 0.625;
+    const auto cstr = MAC_MakeString(text);
+    const auto nchr = CFStringGetLength(cstr) + 1;
+    UniChar *cuni = calloc(nchr, sizeof(UniChar));
+    CGGlyph *glyf = calloc(nchr, sizeof(CGGlyph));
+    CGSize *adva = calloc(nchr, sizeof(CGSize));
+    CFStringGetCharacters(cstr, (CFRange){0, nchr - 1}, cuni);
+    CFRelease(cstr);
+    cuni[nchr - 1] = ' ';
+    CTFontGetGlyphsForCharacters(font, cuni, glyf, nchr);
+    CTFontGetAdvancesForGlyphs(
+        font, kCTFontOrientationDefault, glyf, adva, nchr);
+    CFRelease(font);
+    free(glyf);
 
-    mlay = init(alloc(_(NSLayoutManager)));
-    stor = initWithString_(alloc(_(NSTextStorage)), text);
-    ctxt = initWithContainerSize_(alloc(_(NSTextContainer)),
-                                 (NSSize){area.width, CGFLOAT_MAX});
-    setLineFragmentPadding_(ctxt, 0.0);
-    addTextContainer_(mlay, ctxt);
-    addLayoutManager_(stor, mlay);
-    addAttribute_value_range_(stor, NSFontAttributeName,
-        (id)systemFontOfSize_(_(NSFont), systemFontSize(_(NSFont))),
-            CFRangeMake(0, CFStringGetLength(text)));
-    glyphRangeForTextContainer_(mlay, ctxt);
-    retn = usedRectForTextContainer_(mlay, ctxt);
-    release(stor);
-    release(mlay);
-    release(ctxt);
-    return retn.size;
+    NSSize retn = {ydim, ydim};
+    CGFloat xlin = 0, xwrd = 0;
+    for (unsigned word = 0, n = 0; n < nchr; n++) {
+        xlin += adva[n].width;
+        if (cuni[n] == ' ') {
+            if (xlin > xmax) {
+                cuni[(word)? word - 1 : n] = '\n';
+                retn.width = (retn.width > xwrd)? retn.width : xwrd;
+                retn.height += ydim;
+                xlin -= xwrd;
+            }
+            xwrd = xlin;
+            word = n + 1;
+        }
+    }
+    retn.width = (retn.width > xlin)? retn.width : xlin;
+    retn.width = (retn.width < xmax)? retn.width : xmax;
+    if (corr)
+        *corr = (NSString*)CFStringCreateWithCharacters(0, cuni, nchr - 1);
+    free(adva);
+    free(cuni);
+    return retn;
 }
 
 void MoveControl(CTRL *ctrl, intptr_t data) {
@@ -695,8 +716,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             NSMutableParagraphStyle *psty;
             NSDictionary *dict;
             NSString *text;
-            NSImage *itmp;
-            NSFont *font;
+            const NSFont *font;
 
             NSRect rect = {{(uint8_t)(anim->xdim >> 16) - mrgn,
                             (uint8_t)(anim->ydim >> 16) - mrgn}};
@@ -707,47 +727,55 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                              - (uint8_t)(anim->ydim >> 24) + mrgn;
             rect.origin.y = (uint16_t)anim->ydim
                           - rect.origin.y - rect.size.height;
-            lockFocus(itmp = initWithSize_(alloc(_(NSImage)), rect.size));
-            font = systemFontOfSize_(_(NSFont), systemFontSize(_(NSFont)));
+            font = CTFontCreateUIFontForLanguage(
+                       kCTFontUIFontSystem, systemFontSize(_(NSFont)), 0);
             psty = init(alloc(_(NSMutableParagraphStyle)));
             setAlignment_(psty, NSCenterTextAlignment);
+
             text = MAC_MakeString((char*)anim->time);
             dict = MAC_MakeDict(NSFontAttributeName, font,
                                 NSParagraphStyleAttributeName, psty,
                                 NSForegroundColorAttributeName,
-                                colorWithDeviceRed_green_blue_alpha_
-                                    (_(NSColor), invc * cfnt[0], invc * cfnt[1],
-                                                 invc * cfnt[2], 1.0));
-            drawInRect_withAttributes_(text, (NSRect){{}, rect.size}, dict);
-            MAC_FreeString(text);
-            MAC_FreeDict(dict);
-            unlockFocus(itmp);
-            release(psty);
+                                colorWithDeviceRed_green_blue_alpha_(
+                                    _(NSColor), invc * cfnt[0], invc * cfnt[1],
+                                                invc * cfnt[2], 1.0));
+            auto attr = CFAttributedStringCreate(0, text, dict);
+            auto fset = CTFramesetterCreateWithAttributedString(attr);
+            auto path = CGPathCreateWithRect(rect, 0);
+            auto fram = CTFramesetterCreateFrame(fset, (CFRange){}, path, 0);
+
             ctxt = CGBitmapContextCreate
                        ((void*)anim->uuid, (uint16_t)anim->xdim,
                         (uint16_t)anim->ydim, CHAR_BIT,
                         (uint16_t)anim->xdim * sizeof(uint32_t),
                          drgb, kCGImageAlphaPremultipliedFirst
                              | kCGBitmapByteOrder32Little);
-            CGContextDrawImage(ctxt, rect,
-                CGImageForProposedRect_context_hints_(itmp, 0, 0, 0));
+
+            CGContextSetAllowsFontSubpixelQuantization(ctxt, false);
+            CGContextSetAllowsFontSubpixelPositioning(ctxt, false);
+            CGContextSetAllowsFontSmoothing(ctxt, false);
+            CTFrameDraw(fram, ctxt);
+
             CGContextRelease(ctxt);
+            CFRelease(fram);
+            CFRelease(path);
+            CFRelease(fset);
+            CFRelease(attr);
+            MAC_FreeString(text);
+            MAC_FreeDict(dict);
+            CFRelease(font);
+            release(psty);
             CGColorSpaceRelease(drgb);
-            release(itmp);
             release(pool); /// for CGImage and NSColor
             break;
         }
         case MSG_WTGD: {
             AINF *anim = (AINF*)data;
-            NSString *text;
-            NSSize size;
-
-            size = GetStringSize(text = MAC_MakeString((char*)anim->time),
-                       (NSSize){(anim->xdim > 0)? anim->xdim : CGFLOAT_MAX,
-                                (anim->ydim > 0)? anim->ydim : CGFLOAT_MAX});
-            MAC_FreeString(text);
-            return (uint16_t)round(size.width)
-                | ((uint32_t)round(size.height) << 16);
+            CGFloat edge = (anim->xdim > 0)? anim->xdim : CGFLOAT_MAX;
+            NSSize size = GetStringSize((char*)anim->time, 0, edge);
+            edge = (anim->ydim > 0)? anim->ydim : CGFLOAT_MAX;
+            edge = (size.height < edge)? size.height : edge;
+            return (uint16_t)round(size.width) | ((uint32_t)round(edge) << 16);
         }
     }
     return 0;
@@ -762,7 +790,7 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 ///  3: NSString with label text
 ///  4: vertical offset of the label
 ///  5: NSDictionary with centering attributes and font
-///  6:
+///  6: CTFontRef to be released later
 ///  7:
 intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
@@ -807,38 +835,13 @@ intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (cmsg) {
         case MSG__TXT: {
             NSString *capt;
-            NSRect rect;
             NSSize dims;
-            char *temp;
-            long prev, size, iter;
 
             if ((ctrl->flgs & FCT_TTTT) != FCT_BUTN)
                 capt = MAC_MakeString((char*)data);
-            else {
-                rect = frame((NSButton*)ctrl->priv[0]);
-                size = strlen((char*)data);
-                strcpy(temp = calloc(1, 2 + size), (char*)data);
-                temp[size] = ' ';
-                for (prev = size = iter = 0; temp[iter]; iter++)
-                    if (temp[iter] == ' ') {
-                        temp[iter] = 0;
-                        capt = MAC_MakeString(&temp[prev]);
-                        dims = GetStringSize(capt, (NSSize){CGFLOAT_MAX,
-                                                            CGFLOAT_MAX});
-                        MAC_FreeString(capt);
-                        temp[iter] = ' ';
-                        if (size + dims.width >= rect.size.width) {
-                            if (prev)
-                                temp[prev] = '\n';
-                            size = 0;
-                        }
-                        prev = iter;
-                        size += dims.width;
-                    }
-                temp[iter - 1] = 0;
-                capt = MAC_MakeString(temp);
-                free(temp);
-            }
+            else
+                dims = GetStringSize((char*)data, &capt,
+                                     frame((id)ctrl->priv[0]).size.width);
             setTitle_((NSButton*)ctrl->priv[0], capt);
             MAC_FreeString(capt);
             break;
@@ -1003,13 +1006,13 @@ intptr_t FE2CT(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 | ((uint32_t)rect.size.height << 16);
         }
         case MSG__TXT: {
-            NSRect rect, real = {{}, {CGFLOAT_MAX, CGFLOAT_MAX}};
+            NSRect rect, real = {};
             NSString *capt;
 
             capt = MAC_MakeString((char*)data);
             setStringValue_((NSTextField*)ctrl->priv[1], capt);
-            real.size = GetStringSize(capt, real.size);
             MAC_FreeString(capt);
+            real.size = GetStringSize((char*)data, 0, CGFLOAT_MAX);
             real.size.width *= 2;  /// to guarantee that the string will fit
             real.size.height += 2; /// why 2? no idea! [TODO:] compute in RT
             rect = frame((NSView*)ctrl->priv[0]);
@@ -1197,6 +1200,7 @@ void rFreeControl(CTRL *ctrl) {
         case FCT_PBAR:
             /// releasing text attributes and the string
             MAC_FreeDict((NSDictionary*)ctrl->priv[5]);
+            CFRelease((NSFont*)ctrl->priv[6]);
             if (ctrl->priv[3])
                 MAC_FreeString((NSString*)ctrl->priv[3]);
             break;
@@ -1361,9 +1365,12 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
         CGFloat ffsz;
 
         ctrl->fe2c = FE2CW;
-        gwnd = systemFontOfSize_(_(NSFont), ffsz = systemFontSize(_(NSFont)));
+        ffsz = systemFontSize(_(NSFont));
+        gwnd = (void*)CTFontCreateUIFontForLanguage(
+                          kCTFontUIFontSystem, ffsz, 0);
         ctrl->priv[2] =  (uint16_t)round(0.45 * maximumAdvancement(gwnd).width)
                       | ((uint32_t)round(0.60 * ffsz) << 16);
+        CFRelease(gwnd);
 
         ctrl->priv[5] = (intptr_t)init(alloc(MAC_LoadClass(CLS_FRMT)));
         setFormatterBehavior_((NSNumberFormatter*)ctrl->priv[5],
@@ -1379,6 +1386,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
         gwnd = initWithContentRect_styleMask_backing_defer_
                    (alloc(_(NSWindow)), dims, flgs,
                     kCGBackingStoreBuffered, false);
+        setLevel_(gwnd, NSMainMenuWindowLevel + 1);
 
         ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_WNDW)));
         setContentView_(gwnd, (NSView*)ctrl->priv[7]);
@@ -1557,7 +1565,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
             }
             case FCT_PBAR: {
                 CGFloat ffsz;
-                NSFont *font;
                 NSMutableParagraphStyle *psty;
 
                 ctrl->fe2c = FE2CP;
@@ -1574,9 +1581,10 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                     ffsz *= 0.5;
                 }
 #endif
-                font = systemFontOfSize_(_(NSFont), ffsz);
+                ctrl->priv[6] = (intptr_t)CTFontCreateUIFontForLanguage(
+                                              kCTFontUIFontSystem, ffsz, 0);
                 ctrl->priv[5] = (intptr_t)MAC_MakeDict
-                    (NSFontAttributeName, font,
+                    (NSFontAttributeName, ctrl->priv[6],
                      NSParagraphStyleAttributeName, psty);
                 release(psty);
                 ctrl->priv[4] = 0.5 * (dims.size.height - ffsz) - 1.0;
