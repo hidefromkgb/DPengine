@@ -26,9 +26,7 @@ RelJoined: lrelease
 RelJoined: erelease
 RelJoined: LCXFLAGS += -s -flto -Wl,--build-id=none
 RelJoined: jlink
-RelJoined:
-	strip -R .eh_frame -R .gnu.version -R .comment $(EOUT)
-	if type upx >/dev/null 2>&1; then upx -qq $(EOUT); fi
+RelJoined: estrip
 
 DbgJoined: ldebug
 DbgJoined: edebug
@@ -38,6 +36,7 @@ RelLibOnly: LCFLAGS += -fPIC
 RelLibOnly: lrelease
 RelLibOnly: LCXFLAGS += -s -Wl,--build-id=none
 RelLibOnly: llink
+RelLibOnly: lstrip
 
 DbgLibOnly: LCFLAGS += -fPIC
 DbgLibOnly: ldebug
@@ -47,8 +46,7 @@ RelSplit: RelLibOnly
 RelSplit: erelease
 RelSplit: ECXFLAGS += -s -Wl,--build-id=none
 RelSplit: elink
-RelSplit:
-	if type upx >/dev/null 2>&1; then upx -qq $(EOUT) $(LOUT); fi
+RelSplit: estrip
 
 DbgSplit: DbgLibOnly
 DbgSplit: edebug
@@ -82,6 +80,14 @@ clean:
 	rm -f $(LOUT) $(EOUT)
 	rm -rf $(OBJDIR)
 
+lstrip: llink
+	strip -R .eh_frame -R .gnu.version -R .comment $(LOUT)
+	if type upx >/dev/null 2>&1; then upx -qq $(LOUT); fi
+
+estrip: elink
+	strip -R .eh_frame -R .gnu.version -R .comment $(EOUT)
+	if type upx >/dev/null 2>&1; then upx -qq $(EOUT); fi
+
 lbuild:
 $(OBJDIR)/core/core.o: ../core/core.c
 	mkdir -p $(OBJDIR)/core
@@ -104,8 +110,11 @@ $(OBJDIR)/run.o: run.c
 	mkdir -p $(OBJDIR)
 	$(CC) $(ECFLAGS) $(EINC) -c run.c -o $(OBJDIR)/run.o
 
+jlink: ELIB = $(LLIB)
+jlink: EOBJ += $(LOBJ)
+jlink: ECXFLAGS = $(LCXFLAGS)
 jlink: $(LOBJ) $(EOBJ)
-	$(CX) $(LOBJ) $(EOBJ) $(LCXFLAGS) -o $(EOUT) $(LLIB)
+jlink: elink $(EOBJ)
 
 llink: LCXFLAGS += -shared
 llink: $(LOBJ)
