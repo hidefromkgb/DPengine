@@ -1275,9 +1275,18 @@ void MAC_Handler(OnScroll, NSNotification *nscr) {
 uint32_t SysColor(NSColor *sclr) {
     CGFloat rgba[4];
     auto conv = colorUsingColorSpaceName_(sclr, NSDeviceRGBColorSpace);
-    getRed_green_blue_alpha_(conv, &rgba[0], &rgba[1], &rgba[2], &rgba[3]);
-    return ((uint8_t)(rgba[2] * 255) <<  0) | ((uint8_t)(rgba[1] * 255) << 8)
-         | ((uint8_t)(rgba[0] * 255) << 16) | ((uint8_t)(rgba[3] * 255) << 24);
+    getRed_green_blue_alpha_(conv, &rgba[2], &rgba[1], &rgba[0], &rgba[3]);
+    if (currentControlTint(_(NSColor)) == NSGraphiteControlTint)
+        rgba[2] = rgba[1] = rgba[0] =
+            0.2126 * rgba[2] + 0.7152 * rgba[1] + 0.0722 * rgba[0];
+    return ((uint8_t)(rgba[0] * 255) <<  0) | ((uint8_t)(rgba[1] * 255) << 8)
+         | ((uint8_t)(rgba[2] * 255) << 16) | ((uint8_t)(rgba[3] * 255) << 24);
+}
+
+uint32_t DimmerColor(uint32_t csrc, CGFloat fdim) {
+    union { uint32_t u; uint8_t b[4]; } c = {.u = csrc};
+    return ((uint8_t)(fdim * c.b[0]) <<  0) | ((uint8_t)(fdim * c.b[1]) << 8)
+         | ((uint8_t)(fdim * c.b[2]) << 16) | ((uint8_t)(c.b[3]) << 24);
 }
 
 void MAC_Handler(PBoxDraw, NSRect rect) {
@@ -1294,13 +1303,13 @@ void MAC_Handler(PBoxDraw, NSRect rect) {
                        ydim = mult * rect.size.height,
                        xthr = 1 + (xdim - 1) * ctrl->priv[1] / ctrl->priv[2];
         const bool iskw = isKeyWindow(window(self));
-        const uint32_t scbe = SysColor(disabledControlTextColor(_(NSColor))),   /// border, empty,  enabled+disabled
-               scbf = (iskw)? SysColor(keyboardFocusIndicatorColor(_(NSColor))) /// border, filled, enabled
-                            : SysColor(headerTextColor(_(NSColor))),            /// border, filled, disabled
-                       scae = SysColor(gridColor(_(NSColor))),                  /// area,   empty,  enabled+disabled
-               scaf = (iskw)? SysColor(selectedControlColor(_(NSColor)))        /// area,   filled, enabled
-                            : SysColor(disabledControlTextColor(_(NSColor)));   /// area,   filled, disabled
+        const uint32_t scae = SysColor(gridColor(_(NSColor))),
+               scaf = (iskw)? SysColor(selectedControlColor(_(NSColor)))
+                            : SysColor(disabledControlTextColor(_(NSColor))),
+                       scbe = DimmerColor(scae, 0.85),
+                       scbf = DimmerColor(scaf, 0.85);
         uint32_t *bptr = calloc(xdim * ydim, sizeof(uint32_t));
+        /// [sc: syscolor][a/b: area/border][e/f: empty/filled]
         for (unsigned y = 2; y < ydim - 2; y++)
             for (unsigned x = 2; x < xdim - 2; x++)
                 bptr[xdim * y + x] = (x < xthr)? scaf : scae;
