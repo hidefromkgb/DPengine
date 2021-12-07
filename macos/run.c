@@ -541,8 +541,7 @@ void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
 
 
 NSSize GetStringSize(char *text, NSString **corr, CGFloat xmax) {
-    const NSFont *font = CTFontCreateUIFontForLanguage(
-                             kCTFontUIFontSystem, systemFontSize(_(NSFont)), 0);
+    const auto font = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, 0, 0);
     const auto ydim = CTFontGetAscent(font) + CTFontGetDescent(font)
                                             + CTFontGetLeading(font) + 0.625;
     const auto cstr = MAC_MakeString(text);
@@ -706,67 +705,67 @@ intptr_t FE2CW(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
         }
         case MSG_WTDA: {
-            const double mrgn = 1.0, /// text margins; [TODO:] get in RT
-                         invc = 1.0 / 255.0; /// to convert color channels
-            AINF *anim = (AINF*)data;
-            uint8_t cfnt[4] = {anim->fcnt >> 16, anim->fcnt >> 8, anim->fcnt};
-            CGContextRef ctxt;
-            CGColorSpaceRef drgb = CGColorSpaceCreateDeviceRGB();
-            NSAutoreleasePool *pool = init(alloc(_(NSAutoreleasePool)));
-            NSMutableParagraphStyle *psty;
-            NSDictionary *dict;
-            NSString *text;
-            const NSFont *font;
-
+            const auto anim = (AINF*)data;
+            const CGFloat cfnt[] = {1.0 / 255 * (uint8_t)(anim->fcnt >> 16),
+                                    1.0 / 255 * (uint8_t)(anim->fcnt >> 8),
+                                    1.0 / 255 * (uint8_t)(anim->fcnt), 1.0};
+            const CGFloat mrgn = 1.0; /// text margins; [TODO:] get in RT
             NSRect rect = {{(uint8_t)(anim->xdim >> 16) - mrgn,
                             (uint8_t)(anim->ydim >> 16) - mrgn}};
-
             rect.size.width  = (uint16_t)anim->xdim - rect.origin.x
                              - (uint8_t)(anim->xdim >> 24) + mrgn;
             rect.size.height = (uint16_t)anim->ydim - rect.origin.y
                              - (uint8_t)(anim->ydim >> 24) + mrgn;
             rect.origin.y = (uint16_t)anim->ydim
                           - rect.origin.y - rect.size.height;
-            font = CTFontCreateUIFontForLanguage(
-                       kCTFontUIFontSystem, systemFontSize(_(NSFont)), 0);
-            psty = init(alloc(_(NSMutableParagraphStyle)));
-            setAlignment_(psty, NSCenterTextAlignment);
 
-            text = MAC_MakeString((char*)anim->time);
-            dict = MAC_MakeDict(NSFontAttributeName, font,
-                                NSParagraphStyleAttributeName, psty,
-                                NSForegroundColorAttributeName,
-                                colorWithDeviceRed_green_blue_alpha_(
-                                    _(NSColor), invc * cfnt[0], invc * cfnt[1],
-                                                invc * cfnt[2], 1.0));
+            auto pool = init(alloc(_(NSAutoreleasePool)));
+            auto rgba = colorWithDeviceRed_green_blue_alpha_(
+                            _(NSColor), cfnt[0], cfnt[1], cfnt[2], cfnt[3]);
+            auto font = CTFontCreateUIFontForLanguage(
+                            kCTFontUIFontSystem, 0, 0);
+            auto psty = init(alloc(_(NSMutableParagraphStyle)));
+            setAlignment_(psty, NSCenterTextAlignment);
+            auto dict = MAC_MakeDict(NSFontAttributeName, font,
+                                     NSParagraphStyleAttributeName, psty,
+                                     NSForegroundColorAttributeName, rgba);
+            /// for the rare case (10.6, 10.7, etc.) when the color of the
+            /// text to be drawn is governed by the CGContext`s fill color
+            /// instead of NSForegroundColorAttributeName from the string:
+            rgba = (NSColor*)CGColorCreateGenericRGB(
+                                 cfnt[0], cfnt[1], cfnt[2], cfnt[3]);
+
+            auto text = MAC_MakeString((char*)anim->time);
             auto attr = CFAttributedStringCreate(0, text, dict);
             auto fset = CTFramesetterCreateWithAttributedString(attr);
             auto path = CGPathCreateWithRect(rect, 0);
             auto fram = CTFramesetterCreateFrame(fset, (CFRange){}, path, 0);
 
-            ctxt = CGBitmapContextCreate
-                       ((void*)anim->uuid, (uint16_t)anim->xdim,
-                        (uint16_t)anim->ydim, CHAR_BIT,
-                        (uint16_t)anim->xdim * sizeof(uint32_t),
-                         drgb, kCGImageAlphaPremultipliedFirst
-                             | kCGBitmapByteOrder32Little);
-
+            auto drgb = CGColorSpaceCreateDeviceRGB();
+            auto ctxt = CGBitmapContextCreate
+                            ((void*)anim->uuid, (uint16_t)anim->xdim,
+                             (uint16_t)anim->ydim, CHAR_BIT,
+                             (uint16_t)anim->xdim * sizeof(uint32_t),
+                              drgb, kCGImageAlphaPremultipliedFirst
+                                  | kCGBitmapByteOrder32Little);
+            CGContextSetFillColorWithColor(ctxt, (CGColorRef)rgba);
             CGContextSetAllowsFontSubpixelQuantization(ctxt, false);
             CGContextSetAllowsFontSubpixelPositioning(ctxt, false);
             CGContextSetAllowsFontSmoothing(ctxt, false);
             CTFrameDraw(fram, ctxt);
 
             CGContextRelease(ctxt);
+            CGColorSpaceRelease(drgb);
             CFRelease(fram);
-            CFRelease(path);
             CFRelease(fset);
             CFRelease(attr);
+            CFRelease(rgba);
+            CGPathRelease(path);
             MAC_FreeString(text);
             MAC_FreeDict(dict);
             CFRelease(font);
             release(psty);
-            CGColorSpaceRelease(drgb);
-            release(pool); /// for CGImage and NSColor
+            release(pool); /// for NSColor
             break;
         }
         case MSG_WTGD: {
@@ -1273,21 +1272,58 @@ void MAC_Handler(OnScroll, NSNotification *nscr) {
     ctrl->fc2e(ctrl, MSG_SGIP, ctrl->fe2c(ctrl, MSG_SGIP, 0));
 }
 
+uint32_t SysColor(NSColor *sclr) {
+    CGFloat rgba[4];
+    auto conv = colorUsingColorSpaceName_(sclr, NSDeviceRGBColorSpace);
+    getRed_green_blue_alpha_(conv, &rgba[0], &rgba[1], &rgba[2], &rgba[3]);
+    return ((uint8_t)(rgba[2] * 255) <<  0) | ((uint8_t)(rgba[1] * 255) << 8)
+         | ((uint8_t)(rgba[0] * 255) << 16) | ((uint8_t)(rgba[3] * 255) << 24);
+}
+
 void MAC_Handler(PBoxDraw, NSRect rect) {
     CTRL *ctrl = 0;
 
-    super_drawRect_(self, rect);
     MAC_GetIvar(self, VAR_DATA, &ctrl);
-    rect = frame((NSProgressIndicator*)ctrl->priv[0]);
-    rect.origin.y = ctrl->priv[4];
-    rect.origin.x = 0;
-#ifndef MAC_OLD
-    if (MAC_10_10_PLUS) {
-        rect.origin.y *= 0.25;
-        rect.size.width *= 0.5;
-        rect.size.height *= 0.5;
+    if (!MAC_10_10_PLUS)
+        super_drawRect_(self, rect);
+    else {
+        /// native 10.1x progressbars are too thin for text, so we have
+        /// to draw actual bars from scratch; thanks for nothing, MacOS
+        const CGFloat mult = backingScaleFactor(mainScreen(_(NSScreen)));
+        const unsigned xdim = mult * rect.size.width,
+                       ydim = mult * rect.size.height,
+                       xthr = 1 + (xdim - 1) * ctrl->priv[1] / ctrl->priv[2];
+        const bool iskw = isKeyWindow(window(self));
+        const uint32_t scbe = SysColor(disabledControlTextColor(_(NSColor))),   /// border, empty,  enabled+disabled
+               scbf = (iskw)? SysColor(keyboardFocusIndicatorColor(_(NSColor))) /// border, filled, enabled
+                            : SysColor(headerTextColor(_(NSColor))),            /// border, filled, disabled
+                       scae = SysColor(gridColor(_(NSColor))),                  /// area,   empty,  enabled+disabled
+               scaf = (iskw)? SysColor(selectedControlColor(_(NSColor)))        /// area,   filled, enabled
+                            : SysColor(disabledControlTextColor(_(NSColor)));   /// area,   filled, disabled
+        uint32_t *bptr = calloc(xdim * ydim, sizeof(uint32_t));
+        for (unsigned y = 2; y < ydim - 2; y++)
+            for (unsigned x = 2; x < xdim - 2; x++)
+                bptr[xdim * y + x] = (x < xthr)? scaf : scae;
+        for (unsigned x = 1; x < xdim - 1; x++)
+            bptr[xdim * 1 + x] = bptr[xdim * (ydim - 2) + x] =
+                (x < xthr)? scbf : scbe;
+        for (unsigned y = 2; y < ydim - 2; y++) {
+            bptr[xdim * y + 1] = (1 < xthr)? scbf : scbe;
+            bptr[xdim * y + (xdim - 2)] = ((xdim - 2) < xthr)? scbf : scbe;
+        }
+        auto drgb = CGColorSpaceCreateDeviceRGB();
+        auto flgs = kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
+        auto bctx = CGBitmapContextCreate(bptr, xdim, ydim, CHAR_BIT,
+                                          xdim * sizeof(uint32_t), drgb, flgs);
+        auto bimg = CGBitmapContextCreateImage(bctx);
+        CGContextDrawImage(graphicsPort(currentContext(_(NSGraphicsContext))),
+                           rect, bimg);
+        CGImageRelease(bimg);
+        CGContextRelease(bctx);
+        CGColorSpaceRelease(drgb);
+        free(bptr);
     }
-#endif
+    rect.origin.y += ctrl->priv[4];
     drawInRect_withAttributes_((void*)ctrl->priv[3], rect,
                                (NSDictionary*)ctrl->priv[5]);
 }
@@ -1361,16 +1397,12 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
     gwnd = 0;
     root = ctrl->prev;
     if ((ctrl->flgs & FCT_TTTT) == FCT_WNDW) {
-        NSInteger flgs;
-        CGFloat ffsz;
-
         ctrl->fe2c = FE2CW;
-        ffsz = systemFontSize(_(NSFont));
-        gwnd = (void*)CTFontCreateUIFontForLanguage(
-                          kCTFontUIFontSystem, ffsz, 0);
-        ctrl->priv[2] =  (uint16_t)round(0.45 * maximumAdvancement(gwnd).width)
-                      | ((uint32_t)round(0.60 * ffsz) << 16);
-        CFRelease(gwnd);
+        auto font = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, 0, 0);
+        auto size = (uint16_t*)&ctrl->priv[2];
+        size[0] = round(0.45 * maximumAdvancement((id)font).width);
+        size[1] = round(0.60 * CTFontGetSize(font));
+        CFRelease(font);
 
         ctrl->priv[5] = (intptr_t)init(alloc(MAC_LoadClass(CLS_FRMT)));
         setFormatterBehavior_((NSNumberFormatter*)ctrl->priv[5],
@@ -1380,9 +1412,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
         setPartialStringValidationEnabled_((NSNumberFormatter*)ctrl->priv[5],
                                             true);
         dims = (NSRect){};
-        flgs = NSClosableWindowMask | NSTitledWindowMask
-             | ((ctrl->flgs & FSW_SIZE)? NSMiniaturizableWindowMask
-                                       | NSResizableWindowMask : 0);
+        auto flgs = NSClosableWindowMask | NSTitledWindowMask
+                  | ((ctrl->flgs & FSW_SIZE)? NSMiniaturizableWindowMask
+                                            | NSResizableWindowMask : 0);
         gwnd = initWithContentRect_styleMask_backing_defer_
                    (alloc(_(NSWindow)), dims, flgs,
                     kCGBackingStoreBuffered, false);
@@ -1575,12 +1607,6 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 psty = init(alloc(_(NSMutableParagraphStyle)));
                 setAlignment_(psty, NSCenterTextAlignment);
                 ffsz = systemFontSize(_(NSFont)) * 0.85;
-#ifndef MAC_OLD
-                if (MAC_10_10_PLUS) {
-                    scaleUnitSquareToSize_(gwnd, (NSSize){2.0, 2.0});
-                    ffsz *= 0.5;
-                }
-#endif
                 ctrl->priv[6] = (intptr_t)CTFontCreateUIFontForLanguage(
                                               kCTFontUIFontSystem, ffsz, 0);
                 ctrl->priv[5] = (intptr_t)MAC_MakeDict
