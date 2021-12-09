@@ -1298,28 +1298,31 @@ void MAC_Handler(PBoxDraw, NSRect rect) {
     else {
         /// native 10.1x progressbars are too thin for text, so we have
         /// to draw actual bars from scratch; thanks for nothing, MacOS
-        const CGFloat mult = backingScaleFactor(mainScreen(_(NSScreen)));
-        const unsigned xdim = mult * rect.size.width,
-                       ydim = mult * rect.size.height,
-                       xthr = 1 + (xdim - 1) * ctrl->priv[1] / ctrl->priv[2];
+        const unsigned
+            line = round(backingScaleFactor(mainScreen(_(NSScreen)))),
+            xdim = line * rect.size.width, ydim = line * rect.size.height,
+            xthr = xdim * ctrl->priv[1] / ctrl->priv[2];
         const bool iskw = isKeyWindow(window(self));
-        const uint32_t scae = SysColor(gridColor(_(NSColor))),
-               scaf = (iskw)? SysColor(selectedControlColor(_(NSColor)))
-                            : SysColor(disabledControlTextColor(_(NSColor))),
-                       scbe = DimmerColor(scae, 0.85),
-                       scbf = DimmerColor(scaf, 0.85);
+        const uint32_t
+            scae = SysColor(gridColor(_(NSColor))),
+            scaf = (iskw)? SysColor(selectedControlColor(_(NSColor)))
+                         : SysColor(disabledControlTextColor(_(NSColor))),
+            scbe = DimmerColor(scae, 0.875), scbf = DimmerColor(scaf, 0.875);
         uint32_t *bptr = calloc(xdim * ydim, sizeof(uint32_t));
         /// [sc: syscolor][a/b: area/border][e/f: empty/filled]
-        for (unsigned y = 2; y < ydim - 2; y++)
-            for (unsigned x = 2; x < xdim - 2; x++)
+        for (unsigned y = line; y < ydim - line; y++)
+            for (unsigned x = line; x < xdim - line; x++)
                 bptr[xdim * y + x] = (x < xthr)? scaf : scae;
-        for (unsigned x = 1; x < xdim - 1; x++)
-            bptr[xdim * 1 + x] = bptr[xdim * (ydim - 2) + x] =
-                (x < xthr)? scbf : scbe;
-        for (unsigned y = 2; y < ydim - 2; y++) {
-            bptr[xdim * y + 1] = (1 < xthr)? scbf : scbe;
-            bptr[xdim * y + (xdim - 2)] = ((xdim - 2) < xthr)? scbf : scbe;
-        }
+        for (unsigned y = 0; y < line; y++)
+            for (unsigned x = 0; x < xdim; x++)
+                bptr[xdim * y + x] = bptr[xdim * (ydim - 1 - y) + x] =
+                    (x < xthr)? scbf : scbe;
+        for (unsigned y = line; y < ydim - line; y++)
+            for (unsigned x = 0; x < line; x++) {
+                bptr[xdim * y + x] = (x < xthr)? scbf : scbe;
+                bptr[xdim * y + (xdim - 1 - x)] =
+                    ((xdim - 1 - x) < xthr)? scbf : scbe;
+            }
         auto drgb = CGColorSpaceCreateDeviceRGB();
         auto flgs = kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
         auto bctx = CGBitmapContextCreate(bptr, xdim, ydim, CHAR_BIT,

@@ -6,46 +6,87 @@
 		<Option makefile_is_custom="1" />
 		<Option execution_dir="." />
 		<Option compiler="gcc" />
-		<Option virtualFolders="src/;src/run/;src/run/exec/;src/run/exec/loc/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/load/;src/lib/core/gif/load/;src/run/exec/zip/;src/
-run/exec/ctr/;" />
+		<Option virtualFolders="src/;src/run/;src/run/exec/;src/run/exec/loc/;src/lib/;src/lib/core/;src/lib/core/gif/;src/lib/core/ogl/;src/lib/core/ogl/load/;src/lib/core/gif/load/;src/run/exec/zip/;src/run/exec/ctr/;" />
 		<Build>
-			<Target title="RelJoined">
+			<Target title="RelJoined64">
 				<Option output="../macos.app/Contents/MacOS/DPE" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Option use_console_runner="0" />
 			</Target>
-			<Target title="DbgJoined">
+			<Target title="DbgJoined64">
 				<Option output="../macos.app/Contents/MacOS/DPE" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Option use_console_runner="0" />
 			</Target>
-			<Target title="RelSplit">
+			<Target title="RelSplit64">
 				<Option output="./engine" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
 				<Option type="3" />
 				<Option compiler="gcc" />
-				<Option host_application="./macos.app/Contents/MacOS/DPE" />
+				<Option host_application="../macos.app/Contents/MacOS/DPE" />
 				<Option run_host_application_in_terminal="1" />
 			</Target>
-			<Target title="DbgSplit">
+			<Target title="DbgSplit64">
 				<Option output="./engine" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
 				<Option type="3" />
 				<Option compiler="gcc" />
-				<Option host_application="./macos.app/Contents/MacOS/DPE" />
+				<Option host_application="../macos.app/Contents/MacOS/DPE" />
 				<Option run_host_application_in_terminal="1" />
 			</Target>
-			<Target title="RelLibOnly">
+			<Target title="RelLibOnly64">
 				<Option output="./engine" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
 				<Option type="3" />
 				<Option compiler="gcc" />
 			</Target>
-			<Target title="DbgLibOnly">
+			<Target title="DbgLibOnly64">
+				<Option output="./engine" prefix_auto="1" extension_auto="1" />
+				<Option working_dir=".." />
+				<Option type="3" />
+				<Option compiler="gcc" />
+			</Target>
+			<Target title="RelJoined32">
+				<Option output="../macos.app/Contents/MacOS/DPE" prefix_auto="1" extension_auto="1" />
+				<Option working_dir=".." />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Option use_console_runner="0" />
+			</Target>
+			<Target title="DbgJoined32">
+				<Option output="../macos.app/Contents/MacOS/DPE" prefix_auto="1" extension_auto="1" />
+				<Option working_dir=".." />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Option use_console_runner="0" />
+			</Target>
+			<Target title="RelSplit32">
+				<Option output="./engine" prefix_auto="1" extension_auto="1" />
+				<Option working_dir=".." />
+				<Option type="3" />
+				<Option compiler="gcc" />
+				<Option host_application="../macos.app/Contents/MacOS/DPE" />
+				<Option run_host_application_in_terminal="1" />
+			</Target>
+			<Target title="DbgSplit32">
+				<Option output="./engine" prefix_auto="1" extension_auto="1" />
+				<Option working_dir=".." />
+				<Option type="3" />
+				<Option compiler="gcc" />
+				<Option host_application="../macos.app/Contents/MacOS/DPE" />
+				<Option run_host_application_in_terminal="1" />
+			</Target>
+			<Target title="RelLibOnly32">
+				<Option output="./engine" prefix_auto="1" extension_auto="1" />
+				<Option working_dir=".." />
+				<Option type="3" />
+				<Option compiler="gcc" />
+			</Target>
+			<Target title="DbgLibOnly32">
 				<Option output="./engine" prefix_auto="1" extension_auto="1" />
 				<Option working_dir=".." />
 				<Option type="3" />
