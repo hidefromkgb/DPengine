@@ -6,22 +6,22 @@ written in C and GLSL and focused on performance. Don\`t trust GitHub if it
 shows ObjC in the list of used languages, it\`s pure C.
 
 **[WARNING:]** This repo contains submodules (core/gif/load/, core/ogl/load/,
-exec/zip/, macos/load/), so don\`t forget to specify `--recursive` when
-doing a `git clone`! As for GitHub ZIP downloader, unfortunately it still
+exec/ctr/, exec/zip/, macos/load/), so don\`t forget to specify `--recursive`
+when doing a `git clone`! As for GitHub ZIP downloader, unfortunately it still
 [doesn\`t support](https://stackoverflow.com/q/12936014) submodules as of now,
 so downloading a ZIP instead of cloning yields an incomplete copy.
 
 Win32 GUI (as seen on Windows 98 SE):
 
-![Win32](https://www.ponychan.net/fan/src/1466830858097.png)
+<img src="https://www.ponychan.net/fan/src/1466830858097.png" />
 
 Linux GUI (as seen on Arch Linux 4.6):
 
-![Linux](https://www.ponychan.net/fan/src/1466929218785.png)
+<img src="https://www.ponychan.net/fan/src/1466929218785.png" />
 
-MacOS GUI (as seen on 10.10 Yosemite):
+MacOS GUI (as seen on 10.15 Catalina, Dark UI mode):
 
-![MacOS](https://www.ponychan.net/fan/src/1470521199962.png)
+<img src="https://ponychan.net/fan/src/1639599741249.png" width="765" />
 
 To run properly, DPE requires the
 [DP animation base](https://github.com/RoosterDragon/Desktop-Ponies/tree/master/Content),
@@ -68,12 +68,10 @@ The task at hand is to implement the remaining DP features missing from DPE:
 
 Some functionality is not present in DP but would also be nice to have:
 
-1. ~~Add colors to speech bubbles, make default colors configurable~~
 1. Implement the "alias method" for behaviours
 1. Parallelize sprite processing in frontend
 1. Move rendering options from tray menu to tab 3
 1. Add OS-specific options to tab 3
-1. Do something with networking on Win9x and WinXP
 
 ## License
 
