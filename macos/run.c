@@ -1283,10 +1283,22 @@ uint32_t SysColor(NSColor *sclr) {
          | ((uint8_t)(rgba[2] * 255) << 16) | ((uint8_t)(rgba[3] * 255) << 24);
 }
 
-uint32_t DimmerColor(uint32_t csrc, CGFloat fdim) {
+uint32_t ScColor(uint32_t csrc, CGFloat acoe, CGFloat bcoe) {
     union { uint32_t u; uint8_t b[4]; } c = {.u = csrc};
-    return ((uint8_t)(fdim * c.b[0]) <<  0) | ((uint8_t)(fdim * c.b[1]) << 8)
-         | ((uint8_t)(fdim * c.b[2]) << 16) | ((uint8_t)(c.b[3]) << 24);
+    if (c.b[3] == 0xFF)
+        return ((uint8_t)(acoe * c.b[1]) <<  8) | ((uint8_t)(acoe * c.b[0]))
+             | ((uint8_t)(acoe * c.b[2]) << 16) | (c.b[3] << 24);
+    else
+        return (c.b[2] << 16) | (c.b[1] << 8) | (c.b[0])
+             | ((uint8_t)(bcoe * c.b[3]) << 24);
+}
+
+bool IsDarkMode() {
+    if (!MAC_10_14_PLUS)
+        return false;
+    static const auto dark = MAC_ConstString("Dark");
+    auto eapp = name(effectiveAppearance(sharedApplication(_(NSApplication))));
+    return CFStringFind(eapp, dark, kCFCompareCaseInsensitive).length;
 }
 
 void MAC_Handler(PBoxDraw, NSRect rect) {
@@ -1302,12 +1314,15 @@ void MAC_Handler(PBoxDraw, NSRect rect) {
             line = round(backingScaleFactor(mainScreen(_(NSScreen)))),
             xdim = line * rect.size.width, ydim = line * rect.size.height,
             xthr = xdim * ctrl->priv[1] / ctrl->priv[2];
-        const bool iskw = isKeyWindow(window(self));
+        const bool isdm = IsDarkMode(),
+                   iskw = isKeyWindow(window(self));
+        const CGFloat acoe = (isdm)? 1.25 : 0.875,
+                      bcoe = (isdm)? 1.75 : 0.875;
         const uint32_t
             scae = SysColor(gridColor(_(NSColor))),
             scaf = (iskw)? SysColor(selectedControlColor(_(NSColor)))
                          : SysColor(disabledControlTextColor(_(NSColor))),
-            scbe = DimmerColor(scae, 0.875), scbf = DimmerColor(scaf, 0.875);
+            scbe = ScColor(scae, acoe, bcoe), scbf = ScColor(scaf, acoe, bcoe);
         uint32_t *bptr = calloc(xdim * ydim, sizeof(uint32_t));
         /// [sc: syscolor][a/b: area/border][e/f: empty/filled]
         for (unsigned y = line; y < ydim - line; y++)
@@ -1623,7 +1638,9 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                                               kCTFontUIFontSystem, ffsz, 0);
                 ctrl->priv[5] = (intptr_t)MAC_MakeDict
                     (NSFontAttributeName, ctrl->priv[6],
-                     NSParagraphStyleAttributeName, psty);
+                     NSParagraphStyleAttributeName, psty,
+                     NSForegroundColorAttributeName,
+                     controlTextColor(_(NSColor)));
                 release(psty);
                 ctrl->priv[4] = 0.5 * (dims.size.height - ffsz) - 1.0;
                 break;
@@ -1722,7 +1739,7 @@ int main(int argc, char *argv[]) {
     NSRect dims;
 
 //    setBool_forKey_(standardUserDefaults(_(NSUserDefaults)),
-//                    false, CFSTR("NSShowNonLocalizedStrings"));
+//                    false, MAC_ConstString("NSShowNonLocalizedStrings"));
 
     if (!MAC_10_07_PLUS) {
         pmtx = calloc(cmtx = CNLK(), sizeof(*pmtx));
