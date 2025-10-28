@@ -9,7 +9,9 @@
 #include <unistd.h>
 #include <engine.h>
 
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /** default config directory    **/ #define DEF_OPTS "/DesktopPonies"
 /** default core config         **/ #define DEF_CORE "/core.conf"
@@ -161,3 +163,7 @@ char *rChooseFile(CTRL *root, char *fext, char *file);
 char *rFindFile(intptr_t data);
 char *rLoadFile(char *name, long *size);
 MENU *rOSSpecificMenu(void *engc);
+
+#ifdef __cplusplus
+} /// extern "C"
+#endif
