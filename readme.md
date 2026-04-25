@@ -13,15 +13,15 @@ so downloading a ZIP instead of cloning yields an incomplete copy.
 
 Win32 GUI (as seen on Windows 98 SE):
 
-<img src="https://www.ponychan.net/fan/src/1466830858097.png" />
+<img src="https://github.com/user-attachments/assets/5df90f3a-58d4-4533-96be-f4ff07acaee3" />
 
 Linux GUI (as seen on Arch Linux 4.6):
 
-<img src="https://www.ponychan.net/fan/src/1466929218785.png" />
+<img src="https://github.com/user-attachments/assets/d4fe651d-94e2-4a47-94b5-0a7201e080db" />
 
 MacOS GUI (as seen on 10.15 Catalina, Dark UI mode):
 
-<img src="https://ponychan.net/fan/src/1639599741249.png" width="765" />
+<img src="https://github.com/user-attachments/assets/a497c8de-22fe-4cf5-9416-4588bc8b288c" />
 
 To run properly, DPE requires the
 [DP animation base](https://github.com/RoosterDragon/Desktop-Ponies/tree/master/Content),
