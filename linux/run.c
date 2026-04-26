@@ -507,14 +507,20 @@ void LabelSize(GtkWidget *gwnd, GdkRectangle *rect, gpointer data) {
 
 
 void ButtonSize(GtkWidget *gwnd, GdkRectangle *rect, gpointer data) {
-    PangoLayout *play = gtk_label_get_layout(GTK_LABEL(data));
-    PangoRectangle prec;
+    CTRL *ctrl = (CTRL*)data;
 
-    pango_layout_set_width(play, (rect->width - 8) * PANGO_SCALE);
-    pango_layout_set_height(play, rect->height * PANGO_SCALE);
-    pango_layout_get_pixel_extents(play, 0, &prec);
-    gtk_widget_set_size_request(GTK_WIDGET(data), prec.width, prec.height);
-    gtk_widget_queue_draw(GTK_WIDGET(data));
+    if (((uint16_t)(ctrl->priv[1] >> 16) != rect->height)
+    ||  ((uint16_t)(ctrl->priv[1]      ) != rect->width)) {
+        ctrl->priv[1] = (uint16_t)rect->width | ((uint32_t)rect->height << 16);
+        PangoLayout *play = gtk_label_get_layout(GTK_LABEL(ctrl->priv[7]));
+        PangoRectangle prec;
+        pango_layout_set_width(play, (rect->width - 8) * PANGO_SCALE);
+        pango_layout_set_height(play, rect->height * PANGO_SCALE);
+        pango_layout_get_pixel_extents(play, 0, &prec);
+        gtk_widget_set_size_request(
+                GTK_WIDGET(ctrl->priv[7]), prec.width, prec.height);
+        gtk_widget_queue_draw(GTK_WIDGET(ctrl->priv[7]));
+    }
 }
 
 
@@ -768,7 +774,7 @@ intptr_t FE2CP(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 /// PRIV:
 ///  0: GtkWidget (container)
-///  1:
+///  1: ((width) | (height << 16)) for buttons, undefined otherwise
 ///  2:
 ///  3:
 ///  4:
@@ -1154,6 +1160,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
             case FCT_BUTN:
                 gwnd = gtk_button_new();
                 ctrl->fe2c = FE2CX;
+                ctrl->priv[1] = 0;
                 ctrl->priv[7] = (intptr_t)gtk_label_new(0);
                 gtk_widget_show(GTK_WIDGET(ctrl->priv[7]));
                 gtk_label_set_line_wrap(GTK_LABEL(ctrl->priv[7]), TRUE);
@@ -1162,7 +1169,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                 gtk_container_add(GTK_CONTAINER(gwnd),
                                   GTK_WIDGET(ctrl->priv[7]));
                 g_signal_connect(G_OBJECT(gwnd), "size-allocate",
-                                 G_CALLBACK(ButtonSize), (void*)ctrl->priv[7]);
+                                 G_CALLBACK(ButtonSize), (void*)ctrl);
                 g_signal_connect(G_OBJECT(gwnd), "clicked",
                                  G_CALLBACK(ButtonSwitch), ctrl);
                 if (ctrl->flgs & FSB_DFLT) {
