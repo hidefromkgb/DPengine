@@ -17,10 +17,10 @@
     #define INCBIN(file, pvar)     \
     __asm__(                       \
         ".section .data;"          \
-        ".global _"#pvar";"        \
-        "_"#pvar":"                \
-        ".incbin \""file"\";"      \
-        "_"#pvar"_end:"            \
+        ".global _" #pvar ";"      \
+        "_" #pvar ":"              \
+        ".incbin \"" file "\";"    \
+        "_" #pvar "_end:"          \
         ".byte 0;"                 \
         ".align 4;"                \
         ".section .text;"          \
@@ -30,10 +30,10 @@
     #define INCBIN(file, pvar)     \
     __asm__(                       \
         ".section __DATA,__data\n" \
-        ".globl _"#pvar"\n"        \
-        "_"#pvar":\n"              \
-        ".incbin \""file"\"\n"     \
-        "_"#pvar"_end:\n"          \
+        ".globl _" #pvar "\n"      \
+        "_" #pvar ":\n"            \
+        ".incbin \"" file "\"\n"   \
+        "_" #pvar "_end:\n"        \
         ".byte 0\n"                \
         ".align 4\n"               \
         ".section __TEXT,__text\n" \
@@ -43,10 +43,10 @@
     #define INCBIN(file, pvar)     \
     __asm__(                       \
         ".pushsection .data;"      \
-        ".global "#pvar";"         \
-        #pvar":"                   \
-        ".incbin \""file"\";"      \
-        #pvar"_end:"               \
+        ".global " #pvar ";"       \
+        #pvar ":"                  \
+        ".incbin \"" file "\";"    \
+        #pvar "_end:"              \
         ".byte 0;"                 \
         ".align 4;"                \
         ".popsection;"             \

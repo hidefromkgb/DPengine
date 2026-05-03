@@ -168,7 +168,7 @@ void rFreeTrayIcon(intptr_t icon) {
 
 
 
-intptr_t rFindMake(char *base) {
+intptr_t rFindMake(const char *base) {
     FIND *find;
 
     find = calloc(1, sizeof(*find));
@@ -200,7 +200,7 @@ char *rFindFile(intptr_t data) {
 
 
 
-char *rLoadFile(char *name, long *size) {
+char *rLoadFile(const char *name, long *size) {
     char *retn = 0;
     long file, flen;
 
@@ -1301,9 +1301,7 @@ void lockfunc(int mode, int indx, const char *file, int line) {
 
 
 
-void _start() {
-    /** the stack MUST be aligned to a 256-bit (32-byte) boundary: **/
-    __attribute__((aligned(32))) volatile uint32_t size = 32;
+int main() {
     char *home, *conf;
     GdkScreen *gscr;
     gint xdim, ydim, cmtx;
@@ -1316,7 +1314,7 @@ void _start() {
     curl_global_init(CURL_GLOBAL_DEFAULT);
     if (!(home = getenv("HOME")))
         home = getpwuid(getuid())->pw_dir;
-    conf = calloc(strlen(home) + size, sizeof(*conf));
+    conf = calloc(strlen(home) + 32, sizeof(*conf));
     strcat(conf, home);
     strcat(conf, "/.config");
     rMakeDir(conf, 0);
@@ -1336,5 +1334,4 @@ void _start() {
     for (xdim = 0; xdim < cmtx; xdim++)
         pthread_mutex_destroy(&pmtx[xdim]);
     free(pmtx);
-    exit(0);
 }

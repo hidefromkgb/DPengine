@@ -21,14 +21,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL Linux)
     pkg_check_modules(GTKGLEXT REQUIRED gtkglext-1.0 gtkglext-x11-1.0)
     add_compile_definitions(GTK_DISABLE_DEPRECATED)
 
-    set(COMMON_INCLUDE_DIRS ${GTK_INCLUDE_DIRS} ${GTKGLEXT_INCLUDE_DIRS})
+    set(COMMON_INCLUDE_DIRS ${GTK_INCLUDE_DIRS} ${GTKGLEXT_INCLUDE_DIRS} core)
     set(COMMON_LIBRARY_DIRS ${GTK_LIBRARY_DIRS} ${GTKGLEXT_LIBRARY_DIRS})
     set(LIB_LIBRARIES ${GTK_LIBRARIES} ${GTKGLEXT_LIBRARIES} Xrender X11 GL)
     set(EXE_LIBRARIES ${GTK_LIBRARIES} ${GTKGLEXT_LIBRARIES} m curl ssl crypto)
 
     add_compile_options(-ffunction-sections -fdata-sections -fno-stack-protector
 			-pthread -Wall)
-    add_link_options(-nostartfiles -Wl,--gc-sections)
+    add_link_options(-Wl,--gc-sections)
 
     set(RLS_MAKE_FLAGS -O2 -fexpensive-optimizations -fvisibility=hidden
 		       -fno-unwind-tables -fno-asynchronous-unwind-tables)

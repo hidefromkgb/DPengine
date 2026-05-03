@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 /** default config directory    **/ #define DEF_OPTS "/DesktopPonies"
-/** default core config         **/ #define DEF_CORE "/core.conf"
+/** default core config         **/ #define DEF_CORE "core.conf"
 /** default anim directory      **/ #define DEF_FLDR "Content"
 /** default config file         **/ #define DEF_CONF "pony.ini"
 
@@ -139,7 +139,7 @@ void  eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
 
 /// external functions, have to be implemented or imported
 intptr_t rMakeParallel(UPRE func, long size);
-intptr_t rFindMake(char *base);
+intptr_t rFindMake(const char *base);
 intptr_t rMakeHTTPS(char *user, char *serv);
 intptr_t rMakeTrayIcon(MENU *mctx, char *text,
                        uint32_t *data, long xdim, long ydim);
@@ -161,7 +161,7 @@ char *rConvertUTF8(char *utf8);
 char *rChooseDir(CTRL *root, char *base);
 char *rChooseFile(CTRL *root, char *fext, char *file);
 char *rFindFile(intptr_t data);
-char *rLoadFile(char *name, long *size);
+char *rLoadFile(const char *name, long *size);
 MENU *rOSSpecificMenu(void *engc);
 
 #ifdef __cplusplus

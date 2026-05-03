@@ -1,71 +1,84 @@
 #include <algorithm>
 #include <cassert>
+#include <charconv>
+#include <functional>
+#include <initializer_list>
 #include <string>
+#include <string_view>
+#include <variant>
 #include <vector>
 #include "exec.h"
 #include "zip/zip_load.h"
 
 
 
-/// a macro to count the capacity of static arrays
-#define countof(a) (sizeof(a) / sizeof(*(a)))
-
 /// FE2C / FC2E helper macros
 #define RUN_FE2C(trgt, cmsg, data) trgt.fe2c(&trgt, cmsg, data)
 #define RUN_FC2E(trgt, cmsg, data) trgt.fc2e(&trgt, cmsg, data)
 
-/** convert degrees to radians  **/ #define DTR_CONV (M_PI / 180.0)
-/** convert radians to degrees  **/ #define RTD_CONV (1.0 / DTR_CONV)
+/** convert degrees to radians  **/
+#define DTR_CONV (M_PI / 180.0)
+/** convert radians to degrees  **/
+#define RTD_CONV (1.0 / DTR_CONV)
 
-/** default comment character   **/ #define DEF_CMNT '\''
-/** default token separator     **/ #define DEF_TSEP ','
-/** default dir slash (string)  **/ #define DEF_DSEP "/"
+/// default comment character
+#define DEF_CMNT '\''
+/// default end-of-line character
+#define DEF_CRLF '\n'
+/// non-default end-of-line character
+#define DEF_LFCR '\r'
+/// default quotation character - inhibits tokenization
+#define DEF_QUOT '"'
+/// default token separator
+#define DEF_TSEP ','
+/// default dir slash (string)
+#define DEF_DSEP "/"
 
 /// /// /// /// /// /// /// /// /// ENGC.MCTL array indices
-/**                             **/ #define MCT_CAPT mctl[ 0]
-/**                             **/ #define MCT_FLTR mctl[ 1]
-/**                             **/ #define MCT_EXAC mctl[ 2]
-/**                             **/ #define MCT_OGRP mctl[ 3]
-/**                             **/ #define MCT_SGRP mctl[ 4]
-/**                             **/ #define MCT_SPEC mctl[ 5]
-/**                             **/ #define MCT_BADD mctl[ 6]
-/**                             **/ #define MCT_SRND mctl[ 7]
-/**                             **/ #define MCT_RGPU mctl[ 8]
-/**                             **/ #define MCT_BDUP mctl[ 9]
-/**                             **/ #define MCT_SELE mctl[10]
-/**                             **/ #define MCT_OPTS mctl[11]
-/**                             **/ #define MCT_GOGO mctl[12]
-/**                             **/ #define MCT_CHAR mctl[13]
+#define MCT_CAPT mctl[ 0]
+#define MCT_FLTR mctl[ 1]
+#define MCT_EXAC mctl[ 2]
+#define MCT_OGRP mctl[ 3]
+#define MCT_SGRP mctl[ 4]
+#define MCT_SPEC mctl[ 5]
+#define MCT_BADD mctl[ 6]
+#define MCT_SRND mctl[ 7]
+#define MCT_RGPU mctl[ 8]
+#define MCT_BDUP mctl[ 9]
+#define MCT_SELE mctl[10]
+#define MCT_OPTS mctl[11]
+#define MCT_GOGO mctl[12]
+#define MCT_CHAR mctl[13]
 
 /// /// /// /// /// /// /// /// /// ENGC.OCTL array indices
-/**                             **/ #define OCT_OPTS octl[ 0]
-/**                             **/ #define OCT_UONR octl[ 1]
-/**                             **/ #define OCT_ETOP octl[ 2]
-/**                             **/ #define OCT_EEFF octl[ 3]
-/**                             **/ #define OCT_EINT octl[ 4]
-/**                             **/ #define OCT_ESAY octl[ 5]
-/**                             **/ #define OCT_ECLR octl[ 6]
-/**                             **/ #define OCT_ERCH octl[ 7]
-/**                             **/ #define OCT_NRUN octl[ 8]
-/**                             **/ #define OCT_TRUN octl[ 9]
-/**                             **/ #define OCT_NSCA octl[10]
-/**                             **/ #define OCT_TSCA octl[11]
-/**                             **/ #define OCT_NDIL octl[12]
-/**                             **/ #define OCT_TDIL octl[13]
-/**                             **/ #define OCT_NSAY octl[14]
-/**                             **/ #define OCT_TSAY octl[15]
-/**                             **/ #define OCT_NCDR octl[16]
-/**                             **/ #define OCT_TCDR octl[17]
-/**                             **/ #define OCT_LCHO octl[20]
-/**                             **/ #define OCT_LREL octl[21]
-/**                             **/ #define OCT_LRES octl[22]
-/**                             **/ #define OCT_LGUI octl[23]
-/**                             **/ #define OCT_BCHO octl[26]
-/**                             **/ #define OCT_BREL octl[27]
-/**                             **/ #define OCT_BRES octl[28]
-/**                             **/ #define OCT_BDIR octl[29]
-/**                             **/ #define OCT_FREL octl[31]
-/**                             **/ #define OCT_FRES octl[32]
+#define OCT_OPTS octl[ 0]
+#define OCT_UONR octl[ 1]
+#define OCT_ETOP octl[ 2]
+#define OCT_EEFF octl[ 3]
+#define OCT_EINT octl[ 4]
+#define OCT_ESAY octl[ 5]
+#define OCT_ECLR octl[ 6]
+#define OCT_ERCH octl[ 7]
+#define OCT_NRUN octl[ 8]
+#define OCT_TRUN octl[ 9]
+#define OCT_NSCA octl[10]
+#define OCT_TSCA octl[11]
+#define OCT_NDIL octl[12]
+#define OCT_TDIL octl[13]
+#define OCT_NSAY octl[14]
+#define OCT_TSAY octl[15]
+#define OCT_NCDR octl[16]
+#define OCT_TCDR octl[17]
+#define OCT_LCHO octl[20]
+#define OCT_LREL octl[21]
+#define OCT_LRES octl[22]
+#define OCT_LGUI octl[23]
+#define OCT_BCHO octl[26]
+#define OCT_BREL octl[27]
+#define OCT_BRES octl[28]
+#define OCT_BDIR octl[29]
+#define OCT_FREL octl[31]
+#define OCT_FRES octl[32]
 
 enum {
 /** framerate limiter in msec   **/ FRM_WAIT = 40,
@@ -219,186 +232,177 @@ operator^=(T &a, T b) { return (T)((uint32_t&)(a) ^= (uint32_t)(b)); }
 
 
 
-float StrToFloat(char *data) {
-    char temp[32] = {};
-    double retn = 0.0;
-    long iter = 0;
-
-    while ((iter < 31) && *data) {
-        if ((*data != '.') && (*data != ',')) {
-            if ((retn > 0.0) && (*data >= '0') && (*data <= '9'))
-                retn *= 0.1;
-            temp[iter++] = *data;
-        }
-        else if (retn == 0.0)
-            retn = 1.0;
-        data++;
-    }
-    return ((retn > 0.0)? retn : 1.0) * strtol(temp, 0, 10);
+static inline void utf8_skip_char(std::string_view &str) {
+    static const char skip[] = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 6};
+    str.remove_prefix((str[0] & 0x80) ? skip[(str[0] >> 2) & 0x0F] : 1);
 }
 
-char *ExtractLastDirs(char *path, long dcnt) {
-    long iter;
-
-    if (path && ((iter = strlen(path)) > 0)) {
-        while (--iter)
-            if ((path[iter] == '/') && !--dcnt) {
-                ++iter;
-                break;
-            }
-        path += iter;
-    }
-    return path;
-}
-
-#define Concatenate(retn, ...) _Concatenate(retn, ##__VA_ARGS__, (char*)0)
-char *_Concatenate(char **retn, ...) {
-    va_list list;
-    char *head, *temp;
-    long size = 1;
-
-    va_start(list, retn);
-    while ((temp = va_arg(list, __typeof__(temp))))
-        size += strlen(temp);
-    va_end(list);
-
-    if (!retn)
-        head = (char*)calloc(1, size);
-    else {
-        head = *retn;
-        head = (char*)realloc(head, size += (head)? strlen(head) : 0);
-        if (!*retn)
-            *head = 0;
-        *retn = head;
-    }
-
-    va_start(list, retn);
-    while ((temp = va_arg(list, __typeof__(temp))))
-        strcat(head, temp);
-    va_end(list);
-
-    return head;
-}
-
-/// [TODO:] make this mess UTF8-compliant
-char *ToLower(char *uppr, long size) {
-    long iter;
-
-    if (uppr) {
-        if (!size)
-            size = strlen(uppr);
-        for (iter = 0; iter < size; iter++)
-            uppr[iter] = tolower(uppr[iter]);
-    }
-    return uppr;
-}
-
-char *Reslash(char *conv) {
-    long iter;
-
-    if (conv)
-        for (iter = 0; conv[iter]; iter++)
-            if (conv[iter] == '\\')
-                conv[iter] = '/';
-    return conv;
-}
-
-char *Dequote(char *quot) {
-    long size;
-
-    if (!quot || !(size = strlen(quot)))
-        return 0;
-
-    if (*quot == '"') {
-        quot++;
-        size--;
-    }
-    if (quot[size - 1] == '"')
-        quot[size - 1] = '\0';
-
-    return quot;
-}
-
-char *SkipCharUTF8(char *line) {
-    static char skip[] = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 6};
-    return line + ((*line & 0x80)? skip[((*line) >> 2) & 0x0F] : 1);
-}
-
-long WhitespaceUTF8(char *line) {
-    switch (line[0]) {
-        case '\x09':
-        case '\x20':
-            return !0;
+bool utf8_is_wspace(const std::string_view &str) {
+    const auto size = str.size();
+    if (size == 0) return false;
+    switch (str[0]) {
+        case '\x09': case '\x20': return true;
         case '\xC2':
-            return !!(line[1] == '\xA0');
+            return (size > 1) && (str[1] == '\xA0');
         case '\xE1':
-            return !!((line[1] == '\x9A') && (line[2] == '\x80'));
+            return (size > 2) && (str[1] == '\x9A') && (str[2] == '\x80');
         case '\xE3':
-            return !!((line[1] == '\x80') && (line[2] == '\x80'));
+            return (size > 2) && (str[1] == '\x80') && (str[2] == '\x80');
         case '\xEF':
-            return !!((line[1] == '\xBB') && (line[2] == '\xBF'));
+            return (size > 2) && (str[1] == '\xBB') && (str[2] == '\xBF');
         case '\xE2':
-            switch (line[1]) {
-                case '\x81': return !!(line[2] == '\x9F');
+            if (size <= 2) return false;
+            switch (str[1]) {
+                case '\x81': return str[2] == '\x9F';
                 case '\x80':
-                    switch (line[2]) {
+                    switch (str[2]) {
                         case '\x80': case '\x81': case '\x82': case '\x83':
                         case '\x84': case '\x85': case '\x86': case '\x87':
                         case '\x88': case '\x89': case '\x8A': case '\x8B':
-                        case '\xAF': return !0;
+                        case '\xAF': return true;
                     }
             }
     }
-    return 0;
+    return false;
 }
 
-char *SplitLine(char **tail, char tsep, long keep) {
-    char *retn, *temp, *iter = *tail;
+std::string concat_path(const std::initializer_list<const std::string> &list) {
+    std::string retn;
+    for (auto &str : list) retn += (!retn.empty()) ? DEF_DSEP + str : str;
+    return retn;
+}
 
-    if (*tail) {
-        while (WhitespaceUTF8(iter))
-            iter = SkipCharUTF8(iter);
-        if (*iter) {
-            if (!(*tail = strchr(iter, tsep)))
-                *tail = iter + strlen(iter);
-            temp = retn = iter;
-            while (iter < *tail) {
-                if (!WhitespaceUTF8(iter))
-                    temp = iter;
-                iter = SkipCharUTF8(iter);
-            }
-            *tail = (**tail)? SkipCharUTF8(*tail) : 0;
-            if (*temp) {
-                if (*temp != tsep)
-                    temp = SkipCharUTF8(temp);
-                if (!keep)
-                    *temp = 0;
-            }
-            return retn;
-        }
-        *tail = 0;
+static inline constexpr char ascii_to_lower(char c) {
+    return ((c >= 'A') && (c <= 'Z')) ? c + ('a' - 'A') : c;
+}
+
+static inline constexpr char ascii_to_upper(char c) {
+    return ((c >= 'a') && (c <= 'z')) ? c - ('a' - 'A') : c;
+}
+
+std::string ascii_to_lower(const std::string_view &str) {
+    std::string retn(str);
+    for (auto &c : retn) c = ascii_to_lower(c);
+    return retn;
+}
+
+std::string ascii_to_upper(const std::string_view &str) {
+    std::string retn(str);
+    for (auto &c : retn) c = ascii_to_upper(c);
+    return retn;
+}
+
+size_t constexpr str_hash(const std::string_view &str, bool ascii2low = true) {
+    size_t retn = (str.size()) ? 14695981039346656037uLL : 0uLL;
+    const size_t mult = 1099511628211uLL;
+    if (ascii2low)
+        for (auto c : str) retn = (retn ^ (size_t)ascii_to_lower(c)) * mult;
+    else
+        for (auto c : str) retn = (retn ^ (size_t)c) * mult;
+    return retn;
+}
+
+using token_t = std::pair<std::string_view, std::string_view>;
+bool is_empty(const token_t &t) { return t.first.empty() && t.second.empty(); }
+
+token_t next_token(const std::string_view &str,
+        char c = DEF_CMNT, char s = DEF_TSEP, char q = DEF_QUOT) {
+    assert(s != q);
+    auto sep = s;
+    auto iter = str;
+    while (utf8_is_wspace(iter)) utf8_skip_char(iter);
+    // abort if token begins with comment char
+    if (iter.empty() || (iter[0] == c)) return {};
+    // look for the next quote instead of separator if token begins with quote
+    if (iter[0] == q) {
+        utf8_skip_char(iter);
+        sep = q;
     }
-    return *tail;
+    auto found = iter.find(sep);
+    if (found == std::string_view::npos) return {iter, {}};
+    std::string_view token((found > 0) ? iter.data() : nullptr, found);
+    iter.remove_prefix(found + sizeof(sep));
+    if (sep != s) {
+        found = iter.find(s);
+        if (found == std::string_view::npos) iter = {};
+        else iter.remove_prefix(found + sizeof(s));
+        //if (found > 0) printf("'%s': tokens delimited past quotes!\n");
+    }
+    return {token, iter};
 }
 
-size_t HashLine(char *line) { return std::hash<std::string>{}(line); }
+template <typename T>
+T process_map(token_t &line, const std::unordered_map<std::string, T> &map,
+        T def, char s = DEF_TSEP, char q = DEF_QUOT) {
+    line = next_token(line.second, 0, s, q);
+    auto it = map.find(ascii_to_lower(line.first));
+    return (it != map.end()) ? it->second : def;
+}
 
+bool process_bool(
+        token_t &line, bool def, char s = DEF_TSEP, char q = DEF_QUOT) {
+    static std::unordered_map<std::string, bool>
+        map = { {"false", false}, {"true", true}, };
+    return process_map(line, map, def, s, q);
+}
 
+float process_float(
+        token_t &line, float def, char s = DEF_TSEP, char q = DEF_QUOT) {
+    line = next_token(line.second, 0, s, q);
+    std::from_chars(
+            line.first.data(), line.first.data() + line.first.size(), def);
+    return def;
+}
 
-class nocopy {
+std::vector<std::string_view> process_array(token_t &line,
+        char s = DEF_TSEP, char q = DEF_QUOT, char bgn = '{', char end = '}') {
+    std::vector<std::string_view> retn;
+    line = next_token(line.second, 0, bgn, 0);
+    if (line.second.empty()) { // no array beginning detected, array = {token}
+        line = next_token(line.first, 0, s, q);
+        return {line.first};
+    }
+    line = next_token(line.second, 0, end, 0);
+    for (token_t iter({}, line.first); !is_empty(iter);
+            iter = next_token(iter.second, 0, s, q))
+        if (!iter.first.empty()) retn.emplace_back(iter.first);
+    line = next_token(line.second, 0, s, q);
+    return retn;
+}
+
+T2IV process_quoted_int_pair(token_t &line,
+        T2IV def, char s = DEF_TSEP, char q = DEF_QUOT) {
+    auto pair = process_array(line, s, 0, q, q);
+    if (pair.size() > 0)
+        std::from_chars(pair[0].data(), pair[0].data() + pair[0].size(), def.x);
+    if (pair.size() > 1)
+        std::from_chars(pair[1].data(), pair[1].data() + pair[1].size(), def.y);
+    return def;
+}
+
+std::string process_string(
+        token_t &line, char s = DEF_TSEP, char q = DEF_QUOT) {
+    line = next_token(line.second, 0, s, q);
+    return std::string(line.first);
+}
+
+class no_copy_t {
 public:
-    nocopy() = default;
-    nocopy(nocopy&) = delete;                  /// non construction-copyable
-    nocopy(const nocopy&) = delete;            /// non construction-copyable
-    nocopy& operator=(nocopy&) = delete;       /// non copyable
-    nocopy& operator=(const nocopy&) = delete; /// non copyable
+    no_copy_t() = default;
+    no_copy_t(no_copy_t&) = delete;       /// non construction-copyable
+    no_copy_t(const no_copy_t&) = delete; /// non construction-copyable
+    no_copy_t& operator=(no_copy_t&) = delete;       /// non copyable
+    no_copy_t& operator=(const no_copy_t&) = delete; /// non copyable
 };
 
-class library;
+class library_t;
+class speech_t;
+class effect_t;
+class behaviour_t;
 
-class unit : public nocopy {
+class unit_t : public no_copy_t {
 private:
-    enum state_flags { /// is_ready & !is_primary == this side is a copy
+    enum state_flags_t { /// is_ready & !is_primary == this side is a copy
         empty        = 0,
         is_primary   = 1 << 0,
         is_scheduled = 1 << 1,
@@ -406,60 +410,64 @@ private:
         from_path    = 1 << 4,
         fake_center  = 1 << 5,
     };
-    state_flags flags_[2];
-    AINF image_[2];
-    T2IV center_[2];
+    struct {
+        state_flags_t flags_;
+        AINF image_;
+        T2IV center_;
+    } sides_[2];
     bool loop_;
-    ENGD &engd_;
-    library &library_;
 
     static void finalize(void *data) {
         data = ((uint8_t*)data) - sizeof(intptr_t);
-        *((state_flags*)data) &= ~is_scheduled;
-        *((state_flags*)data) |= is_ready;
+        *((state_flags_t*)data) &= ~is_scheduled;
+        *((state_flags_t*)data) |= is_ready;
         free(data);
     }
     void remove(bool left) {
-        assert(!(flags_[left] & is_scheduled));
-        if (!(flags_[left] & is_ready) && image_[left].time)
-            finalize(image_[left].time);
-        image_[left] = (AINF){};
-        flags_[left] = empty;
+        auto &side = sides_[left];
+        assert(!(side.flags_ & is_scheduled));
+        if (!(side.flags_ & is_ready) && side.image_.time)
+            finalize(side.image_.time);
+        side.image_ = (AINF){};
+        side.flags_ = empty;
     }
     void add_source(bool left) {
         remove(left);
-        flags_[left] |= is_primary;
+        auto &side = sides_[left];
+        side.flags_ |= is_primary;
     }
 
 protected:
     void set_center(bool left, const T2IV &center) {
-        center_[left] = center;
+        auto &side = sides_[left];
+        side.center_ = center;
         if ((center.x != 0) || (center.y != 0))
-            flags_[left] |= fake_center;
+            side.flags_ |= fake_center;
         else
-            flags_[left] &= ~fake_center;
+            side.flags_ &= ~fake_center;
     }
     void set_primary(bool left, bool what) {
+        auto &side = sides_[left];
         if (what)
-            flags_[left] |= is_primary;
+            side.flags_ |= is_primary;
         else
-            flags_[left] &= ~is_primary;
+            side.flags_ &= ~is_primary;
     }
 
 public:
-    unit(ENGD &engd, library &l): flags_{empty, empty}, image_{}, center_{},
-        loop_(true), engd_(engd), library_(l) {}
-    ~unit() { remove(false); remove(true); }
+    unit_t(): sides_(), loop_(true) {}
+    ~unit_t() { remove(false); remove(true); }
 
     void add_source(bool left, const std::string &name) {
         add_source(left);
         /// here we prepare a structure that contains the string above byte 0,
         /// and a pointer to the corresponding flags below byte 0
+        auto &side = sides_[left];
         char *retn = (char*)malloc(name.size() + 1 + sizeof(intptr_t));
         strncpy(retn + sizeof(intptr_t), name.c_str(), name.size() + 1);
-        *((intptr_t*)retn) = (intptr_t)(&flags_[left]);
-        image_[left].time = (uint32_t*)(retn + sizeof(intptr_t));
-        flags_[left] |= from_path;
+        *((intptr_t*)retn) = (intptr_t)(&side.flags_);
+        side.image_.time = (uint32_t*)(retn + sizeof(intptr_t));
+        side.flags_ |= from_path;
     }
     void add_source(bool left, const std::string &name, uint32_t xdim,
                     uint32_t ydim, const std::function<void(uint32_t*)> &draw) {
@@ -472,7 +480,8 @@ public:
         /// +time: name
         auto data = malloc(sizeof(intptr_t) + sizeof(AINF) + name.size() + 1
                          + sizeof(uint32_t) * (xdim * ydim + 1));
-        *((intptr_t*)data) = (intptr_t)(&flags_[left]);
+        auto &side = sides_[left];
+        *((intptr_t*)data) = (intptr_t)(&side.flags_);
         auto anim = (AINF*)(((intptr_t*)data) + 1);
         anim->uuid = (intptr_t)(anim + 1);
         anim->time = ((uint32_t*)anim->uuid) + xdim * ydim;
@@ -480,40 +489,43 @@ public:
         anim->ydim = ydim;
         anim->time[0] = 0; /// single frame only for this image type
         strncpy((char*)(anim->time + 1), name.c_str(), name.size() + 1);
-        image_[left].time = (uint32_t*)anim;
+        side.image_.time = (uint32_t*)anim;
         draw((uint32_t*)anim->uuid); /// drawing something in the buffer
     }
-    void schedule_load(bool left) {
-        if (!(flags_[left] & is_ready) && (flags_[left] & is_primary)) {
-            flags_[left] |= is_scheduled;
-            if (flags_[left] & from_path) {
-                auto temp = ExtractLastDirs((char*)image_[left].time, 2);
-                cEngineLoadAnimAsync(&engd_, &image_[left], (uint8_t*)temp,
-                                     image_[left].time, ELA_DISK, finalize);
+    void schedule_load(ENGD *engd, bool left) {
+        auto &side = sides_[left];
+        if (!(side.flags_ & is_ready) && (side.flags_ & is_primary)) {
+            side.flags_ |= is_scheduled;
+            if (side.flags_ & from_path) {
+                //auto temp = ExtractLastDirs((char*)side.image_.time, 2);
+                //cEngineLoadAnimAsync(engd, &side.image_, (uint8_t*)temp,
+                //                     side.image_.time, ELA_DISK, finalize);
             }
-            else if (auto anim = (AINF*)image_[left].time) {
+            else if (auto anim = (AINF*)side.image_.time) {
                 auto name = (uint8_t*)(anim->time + 1);
-                cEngineLoadAnimAsync(&engd_, &image_[left], name, anim,
+                cEngineLoadAnimAsync(engd, &side.image_, name, anim,
                                      ELA_AINF, finalize);
             }
         }
     }
     T2IV dims(bool left) {
-        return (T2IV){(int32_t)image_[left].xdim, (int32_t)image_[left].ydim};
+        auto &side = sides_[left];
+        return (T2IV){{(int32_t)side.image_.xdim, (int32_t)side.image_.ydim}};
     }
     uint32_t next_frame(bool left, uint32_t curr) {
-        return (curr + 1 >= image_[left].fcnt) ? (loop_) ? 0 : curr : curr + 1;
+        auto &side = sides_[left];
+        return (curr + 1 >= side.image_.fcnt) ? (loop_) ? 0 : curr : curr + 1;
     }
     bool is_empty() {
-        return !(flags_[0] & is_primary) && !(flags_[1] & is_primary);
+        return !(sides_[0].flags_ & is_primary)
+            && !(sides_[1].flags_ & is_primary);
     }
-    library &get_library() { return library_; }
     void set_loop(bool loop) { loop_ = loop; }
 };
 
-class effect : public unit {
+class effect_t : public unit_t {
 protected:
-    enum gravity_flags {
+    enum gravity_flags_t {
         top_left     = 1,
         top          = 2,
         top_right    = 3,
@@ -527,138 +539,111 @@ protected:
         not_center   = 11,
     };
     struct {
-        gravity_flags placement:4;
-        gravity_flags centering:4;
+        gravity_flags_t placement:4;
+        gravity_flags_t centering:4;
     } flags_[2];
+    std::string parent_name_;
     bool skip_; /// no such flag in effects, it is here for speeches
     bool parent_follow_;
     uint32_t duration_;
     uint32_t respawn_;
-    size_t parent_name_;
 
 public:
-    effect(ENGD &engd, library &l):
-        unit(engd, l), flags_{{any, any}, {any, any}}, skip_(true),
-        parent_follow_(false), duration_(5000), respawn_(0), parent_name_(0) {}
-    effect(ENGD &engd, library &l, const std::string &path, char **conf):
-        effect(engd, l) {
-        static std::unordered_map<std::string, gravity_flags> gravity = {
-            {"any",            any        }, {"any-not_center", not_center  },
-            {"top_left",       top_left   }, {"top_right",      top_right   },
-            {"top",            top        }, {"bottom",         bottom      },
-            {"bottom_left",    bottom_left}, {"bottom_right",   bottom_right},
-            {"left",           center_left}, {"right",          center_right},
-            {"center",         center     },
-        };
-        static std::unordered_map<std::string, bool>
-            booleans = { {"false", false}, {"true", true}, };
-        auto GET_TEMP = [](char **conf) { return SplitLine(conf, DEF_TSEP, 0); };
-        char *temp;
+    class input_t {
+    public:
+        std::string name;
+        std::string bhv;
+        std::string right_image;
+        std::string left_image;
+        float duration = 5.f;
+        float repeat_delay = 0.f;
+        gravity_flags_t placement_right = gravity_flags_t::any;
+        gravity_flags_t centering_right = gravity_flags_t::any;
+        gravity_flags_t placement_left = gravity_flags_t::any;
+        gravity_flags_t centering_left = gravity_flags_t::any;
+        bool follow = false;
+        bool prevent_loop = false;
 
-        /// effect name (skipped intentionally)................................ !def
-        if ((temp = GET_TEMP(conf)) && *temp) {};
-
-        /// behaviour name..................................................... !def
-        parent_name_ = HashLine(ToLower(Dequote(GET_TEMP(conf)), 0));
-
-        /// right-sided image.................................................. !def
-        /// left-sided image................................................... !def
-        for (unsigned iter = 0; iter <= 1; iter++) {
-            auto name = path + DEF_DSEP + Dequote(SplitLine(conf, DEF_TSEP, 0));
-            add_source(iter, name);
+        input_t(const std::string_view &str) {
+            static std::unordered_map<std::string, gravity_flags_t> gravity = {
+                {"any",         any        }, {"any-not_center", not_center  },
+                {"top_left",    top_left   }, {"top_right",      top_right   },
+                {"top",         top        }, {"bottom",         bottom      },
+                {"bottom_left", bottom_left}, {"bottom_right",   bottom_right},
+                {"left",        center_left}, {"right",          center_right},
+                {"center",      center     },
+            };
+            token_t line({}, str);
+            name = process_string(line);
+            bhv = process_string(line);
+            right_image = process_string(line);
+            left_image = process_string(line);
+            duration = process_float(line, duration);
+            repeat_delay = process_float(line, repeat_delay);
+            placement_right = process_map(line, gravity, placement_right);
+            centering_right = process_map(line, gravity, centering_right);
+            placement_left = process_map(line, gravity, placement_left);
+            centering_left = process_map(line, gravity, centering_left);
+            follow = process_bool(line, follow);
+            prevent_loop = process_bool(line, prevent_loop);
         }
-
-        /// duration in sec....................................................  def = 5
-        if ((temp = GET_TEMP(conf)) && *temp)
-            duration_ = StrToFloat(temp) * 1000.0;
-
-        /// respawn in sec.....................................................  def = 0 (no respawn)
-        if ((temp = GET_TEMP(conf)) && *temp)
-            respawn_ = StrToFloat(temp) * 1000.0;
-
-        /// possible right placements..........................................  def = Any
-        ToLower(temp = GET_TEMP(conf), 0);
-        if (gravity.find(temp) != gravity.end())
-            flags_[0].placement = gravity[temp];
-
-        /// possible right centerings..........................................  def = Any
-        ToLower(temp = GET_TEMP(conf), 0);
-        if (gravity.find(temp) != gravity.end())
-            flags_[0].centering = gravity[temp];
-
-        /// possible left placements...........................................  def = Any
-        ToLower(temp = GET_TEMP(conf), 0);
-        if (gravity.find(temp) != gravity.end())
-            flags_[1].placement = gravity[temp];
-
-        /// possible left centerings...........................................  def = Any
-        ToLower(temp = GET_TEMP(conf), 0);
-        if (gravity.find(temp) != gravity.end())
-            flags_[1].centering = gravity[temp];
-
-        /// flag to follow parent..............................................  def = False
-        if (ToLower(temp = GET_TEMP(conf), 0) && (booleans.find(temp) != booleans.end()))
-            parent_follow_ = booleans[ToLower(temp, 0)];
-
-        /// flag to prevent animation looping..................................  def = False
-        if (ToLower(temp = GET_TEMP(conf), 0) && (booleans.find(temp) != booleans.end()))
-            set_loop(!booleans[ToLower(temp, 0)]);
+        bool validate() const {
+            bool okay = !name.empty();
+            okay &= !bhv.empty();
+            okay &= !right_image.empty();
+            okay &= !left_image.empty();
+            return okay;
+        }
+    };
+    /*
+    effect_t():
+        flags_{{any, any}, {any, any}}, parent_name_(), skip_(true),
+        parent_follow_(false), duration_(5000), respawn_(0) {}
+    */
+    effect_t(const input_t &input) {
     }
 };
 
-class speech : public effect {
+class speech_t : public unit_t {
 private:
     std::string text_;
     uint32_t group_;
     size_t name_;
 
 public:
-    speech(ENGD &engd, library &l):
-        effect(engd, l), text_(), group_(0), name_(0) {
+    class input_t {
+    public:
+        std::string name;
+        std::string text;
+        std::string sound_file;
+        bool skip = false;
+        int group = 0;
+
+        input_t(const std::string_view &str) {
+            token_t line({}, str);
+            name = process_string(line);
+            text = process_string(line);
+            auto sound_files = process_array(line);
+            if (!sound_files.empty()) sound_file = sound_files[0];
+            skip = process_bool(line, skip);
+            group = process_float(line, group);
+        }
+        bool validate() const { return !text.empty(); }
+    };
+    /*
+    speech_t(): text_(), group_(0), name_(0) {
         flags_[0] = flags_[1] = {bottom, top};
         respawn_ = 10000;
         skip_ = false;
     }
-    speech(ENGD &engd, library &l, const std::string &path, char **conf):
-        speech(engd, l) {
-        static std::unordered_map<std::string, bool>
-            booleans = { {"false", false}, {"true", true}, };
-        auto GET_TEMP = [](char **conf) { return SplitLine(conf, DEF_TSEP, 0); };
-        char *temp;
-
-        /// speech name........................................................ !def
-        name_ = HashLine(ToLower(Dequote(GET_TEMP(conf)), 0));
-
-        /// speech text........................................................ !def
-        if ((*(*conf)++ != '"') || !(temp = SplitLine(conf, '"', 0)))
-            return;
-        else {
-            text_ = temp;
-            (*conf) += (**conf == DEF_TSEP)? 1 : 0;
-            /// respawn_ is 10000 by default and does not change, but duration_
-            /// depends on the text length; in DP it equals (L / 15) seconds
-            duration_ = std::max((uint32_t)FRM_WAIT,
-                                 (uint32_t)text_.size() * 1000 / 15);
-            set_primary(false, true);
-        }
-        /// sound files........................................................  def = ""
-        if ((*(*conf)++ == '{') && (temp = SplitLine(conf, '}', 0))) {
-            /// [TODO:] stop ignoring sounds
-            (*conf) += (**conf == DEF_TSEP)? 1 : 0;
-        }
-        /// flag to never execute this speech at random........................  def = False
-        if (ToLower(temp = GET_TEMP(conf), 0) && (booleans.find(temp) != booleans.end()))
-            skip_ = booleans[temp];
-
-        /// behaviour group index..............................................  def = 0
-        if ((temp = GET_TEMP(conf)) && *temp)
-            group_ = std::max(0.f, StrToFloat(temp));
+    //*/
+    speech_t(const input_t &input) {
     }
 };
 
-class behaviour : public unit {
+class behaviour_t : public unit_t {
 private:
-    enum movement_flags {
+    enum movement_flags_t {
         none      = (1 << 0),
         mouse     = (1 << 1),
         drag      = (1 << 2),
@@ -671,7 +656,7 @@ private:
         diag_vert = diag | vert,
         all       = diag | horz | vert,
     };
-    enum state_flags {
+    enum state_flags_t {
         empty                 = 0,
         has_linked_beh        = (1 << 0),
         has_start_speech      = (1 << 1),
@@ -682,13 +667,12 @@ private:
         has_follow_moving_beh = (1 << 6),
         mirror_target_offsets = (1 << 7),
     };
-    size_t name_;
     uint32_t probability_;
     uint32_t max_duration_;
     uint32_t min_duration_;
     float movement_speed_;
-    movement_flags movement_;
-    std::vector<effect> effects_;
+    movement_flags_t movement_;
+    std::vector<effect_t> effects_;
     size_t linked_beh_name_;
     size_t start_speech_name_;
     size_t end_speech_name_;
@@ -697,273 +681,238 @@ private:
     size_t follow_static_beh_;
     size_t follow_moving_beh_;
     uint32_t group_;
-    state_flags flags_;
+    state_flags_t flags_;
 
 public:
-    behaviour(ENGD &engd, library &l):
-        unit(engd, l), name_(0), probability_(0), max_duration_(15000),
+    class input_t {
+    public:
+        std::string name;
+        float chance = 0.f;
+        float max_duration = 15.f;
+        float min_duration = 5.f;
+        float speed = 3.f;
+        std::string right_image;
+        std::string left_image;
+        movement_flags_t movement = movement_flags_t::all;
+        std::string linked_bhv_str; behaviour_t *linked_bhv = nullptr;
+        std::string bgn_speech_str; speech_t *bgn_speech = nullptr;
+        std::string end_speech_str; speech_t *end_speech = nullptr;
+        bool skip = false;
+        T2IV target_xy = {{0, 0}};
+        std::string follow_target_str; library_t *follow_target = nullptr;
+        bool auto_follow_img = true;
+        std::string follow_stop_bhv_str; behaviour_t *follow_stop_bhv = nullptr;
+        std::string follow_mov_bhv_str; behaviour_t *follow_mov_bhv = nullptr;
+        T2IV right_img_center = {{0, 0}};
+        T2IV left_img_center = {{0, 0}};
+        bool prevent_loop = false;
+        int group = 0;
+        bool follow_offset_type_mirror = false;
+
+        input_t(const std::string_view &str) {
+            static std::unordered_map<std::string, bool>
+                followflg = { {"false", false}, {"true",   true},
+                              {"fixed", false}, {"mirror", true}, };
+            static std::unordered_map<std::string, movement_flags_t> moveflg = {
+                {"horizontal_vertical", horz_vert}, {"horizontal_only",horz},
+                {"diagonal_horizontal", diag_horz}, {"vertical_only",  vert},
+                {"diagonal_vertical",   diag_vert}, {"diagonal_only",  diag},
+                {"mouseover",           mouse    }, {"dragged",        drag},
+                {"sleep",               sleep    }, {"all",            all },
+                {"none",                none     },
+            };
+            token_t line({}, str);
+            name = process_string(line);
+            chance = process_float(line, chance);
+            max_duration = process_float(line, max_duration);
+            min_duration = process_float(line, min_duration);
+            speed = process_float(line, speed);
+            right_image = process_string(line);
+            left_image = process_string(line);
+            movement = process_map(line, moveflg, movement);
+            linked_bhv_str = process_string(line);
+            bgn_speech_str = process_string(line);
+            end_speech_str = process_string(line);
+            skip = process_bool(line, skip);
+            target_xy.x = process_float(line, target_xy.x);
+            target_xy.y = process_float(line, target_xy.y);
+            follow_target_str = process_string(line);
+            auto_follow_img = process_bool(line, auto_follow_img);
+            follow_stop_bhv_str = process_string(line);
+            follow_mov_bhv_str = process_string(line);
+            right_img_center = process_quoted_int_pair(line, right_img_center);
+            left_img_center = process_quoted_int_pair(line, left_img_center);
+            prevent_loop = process_bool(line, prevent_loop);
+            group = process_float(line, group);
+            follow_offset_type_mirror
+                    = process_map(line, followflg, follow_offset_type_mirror);
+        }
+        bool validate() const {
+            bool okay = !name.empty();
+            okay &= !right_image.empty();
+            okay &= !left_image.empty();
+            return okay;
+        }
+    };
+    /*
+    behaviour_t(library_t &l):
+        unit_t(l), probability_(0), max_duration_(15000),
         min_duration_(5000), movement_speed_(0.1 * FRM_WAIT), movement_(all),
         linked_beh_name_(0), start_speech_name_(0), end_speech_name_(0),
         follow_target_coords_{}, follow_target_name_(0), follow_static_beh_(0),
         follow_moving_beh_(0), group_(0), flags_(empty) {}
-    behaviour(ENGD &engd, library &l, const std::string &path, char **conf):
-        behaviour(engd, l) {
-        static std::unordered_map<std::string, movement_flags> movement = {
-            {"horizontal_vertical", horz_vert}, {"horizontal_only",horz},
-            {"diagonal_horizontal", diag_horz}, {"vertical_only",  vert},
-            {"diagonal_vertical",   diag_vert}, {"diagonal_only",  diag},
-            {"mouseover",           mouse    }, {"dragged",        drag},
-            {"sleep",               sleep    }, {"all",            all },
-            {"none",                none     },
-        };
-        static std::unordered_map<std::string, bool>
-            booleans = { {"false", false}, {"true",   true},
-                         {"fixed", false}, {"mirror", true}, };
-        auto GET_TEMP = [](char **conf) { return SplitLine(conf, DEF_TSEP, 0); };
-        char *temp;
-
-        /// behaviour name..................................................... !def
-        name_ = HashLine(ToLower(Dequote(GET_TEMP(conf)), 0));
-
-        /// probability of this behaviour......................................  def = 0
-        if ((temp = GET_TEMP(conf)) && *temp)
-            probability_ = std::clamp(StrToFloat(temp) * 1000.0, 0.0, 1000.0);
-
-        /// maximum duration in sec............................................  def = 15
-        if ((temp = GET_TEMP(conf)) && *temp)
-            max_duration_ = StrToFloat(temp) * 1000.0;
-
-        /// minimum duration in sec............................................  def = 5
-        if ((temp = GET_TEMP(conf)) && *temp)
-            min_duration_ = StrToFloat(temp) * 1000.0;
-
-        /// movement speed (*100/3 for pix/sec)................................  def = 3
-        if ((temp = GET_TEMP(conf)) && *temp)
-            movement_speed_ = StrToFloat(temp) * FRM_WAIT * 0.1 / 3.0;
-
-        /// right-sided image.................................................. !def
-        /// left-sided image................................................... !def
-        for (unsigned iter = 0; iter <= 1; iter++) {
-            auto name = path + DEF_DSEP + Dequote(SplitLine(conf, DEF_TSEP, 0));
-            add_source(iter, name);
-        }
-
-        /// possible movement directions.......................................  def = All
-        if (ToLower(temp = GET_TEMP(conf), 0) && (movement.find(temp) != movement.end()))
-            movement_ = movement[temp];
-        if (!(movement_ & all)) /// zeroing the speed if the movement is static
-            movement_speed_ = 0.0;
-
-        /// linked behaviour name..............................................  def = ""
-        if ((temp = GET_TEMP(conf)) && *temp) {
-            flags_ |= has_linked_beh;
-            linked_beh_name_ = HashLine(ToLower(Dequote(temp), 0));
-        }
-        /// speech said on behaviour start.....................................  def = ""
-        if ((temp = GET_TEMP(conf)) && *temp) {
-            flags_ |= has_start_speech;
-            start_speech_name_ = HashLine(ToLower(Dequote(temp), 0));
-        }
-        /// speech said on behaviour end.......................................  def = ""
-        if ((temp = GET_TEMP(conf)) && *temp) {
-            flags_ |= has_end_speech;
-            end_speech_name_ = HashLine(ToLower(Dequote(temp), 0));
-        }
-        /// flag to never execute this behaviour at random.....................  def = False
-        if (ToLower(temp = GET_TEMP(conf), 0) && (booleans.find(temp) != booleans.end()))
-            probability_ *= !booleans[temp];
-
-        /// X target to follow.................................................  def = 0
-        if ((temp = GET_TEMP(conf)) && *temp)
-            follow_target_coords_.x = StrToFloat(temp);
-
-        /// Y target to follow.................................................  def = 0
-        if ((temp = GET_TEMP(conf)) && *temp)
-            follow_target_coords_.y = StrToFloat(temp);
-
-        /// name of the target.................................................  def = ""
-        if ((temp = GET_TEMP(conf)) && *temp) {
-            flags_ |= has_target;
-            follow_target_name_ = HashLine(ToLower(Dequote(temp), 0));
-        }
-        /// automatically determine the images to use when following...........  def = True
-        if (ToLower(temp = GET_TEMP(conf), 0) && (booleans.find(temp) != booleans.end()))
-            flags_ |= (booleans[temp]) ? empty : manual_follow_images;
-
-        /// static behaviour for follow mode...................................  def = ""
-        if ((temp = GET_TEMP(conf)) && *temp) {
-            flags_ |= has_follow_static_beh;
-            follow_static_beh_ = HashLine(Dequote(temp));
-        }
-        /// moving behaviour for follow mode...................................  def = ""
-        if ((temp = GET_TEMP(conf)) && *temp) {
-            flags_ |= has_follow_moving_beh;
-            follow_moving_beh_ = HashLine(Dequote(temp));
-        }
-        /// right image center (natural center if "0,0").......................  def = "0,0"
-        if ((temp = GET_TEMP(conf)) && *temp) {
-            T2IV center;
-            center.x = StrToFloat(Dequote(temp));
-            center.y = StrToFloat(Dequote(GET_TEMP(conf)));
-            set_center(false, center);
-        }
-        /// left image center (natural center if "0,0")........................  def = "0,0"
-        if ((temp = GET_TEMP(conf)) && *temp) {
-            T2IV center;
-            center.x = StrToFloat(Dequote(temp));
-            center.y = StrToFloat(Dequote(GET_TEMP(conf)));
-            set_center(true, center);
-        }
-        /// flag to prevent animation looping..................................  def = False
-        if (ToLower(temp = GET_TEMP(conf), 0) && (booleans.find(temp) != booleans.end()))
-            set_loop(!booleans[temp]);
-
-        /// behaviour group index..............................................  def = 0
-        if ((temp = GET_TEMP(conf)) && *temp)
-            group_ = std::max(0.f, StrToFloat(temp));
-
-        /// whether target offset shall be mirrored............................  def = Fixed
-        if (ToLower(temp = GET_TEMP(conf), 0) && (booleans.find(temp) != booleans.end()))
-            flags_ |= (booleans[temp]) ? mirror_target_offsets : empty;
+    //*/
+    behaviour_t(const input_t &input) {
     }
 };
 
-class spritebank : public nocopy {
+class sprite_bank_t : public no_copy_t {
 public:
-    class sprite {
+    class sprite_t {
     private:
         uint32_t index_;
-        library *library_;
+        library_t *library_;
         uint32_t parent_; /// unique identifier of the parent sprite (0 if none)
 
     public:
-        void select(behaviour &b, bool left) {
-            library_ = &b.get_library();
+        void select(behaviour_t &b, bool left) {
+//            library_ = &b.get_library();
 //            index_ = library_->locate(b);
         }
-        sprite() {}
+        sprite_t() {}
     };
 
     void step() {}
 
 private:
-    std::vector<sprite> sprites_;
+    std::vector<sprite_t> sprites_;
     std::vector<T4FV> output_;
 };
 
-class library : public nocopy {
+class interaction_t : public no_copy_t {
 private:
-    struct groups {
-        std::vector<speech*> random_speeches;
-        std::vector<behaviour*> nonzero_prob;
-        std::vector<behaviour*> stationary;
-        std::vector<behaviour*> moving;
-        std::vector<behaviour*> mouseover;
-        std::vector<behaviour*> dragged;
-        std::vector<behaviour*> sleep;
+public:
+    class input_t {
+    public:
+        std::string name;
+        float chance = 0.f;
+        float proximity = 125.f;
+        std::vector<std::string> targets_str; std::vector<library_t*> targets;
+        bool target_activation_all = false;
+        std::vector<std::string> bhv;
+        float reactivation_delay = 60.f;
+
+        input_t(const std::string_view &str) {
+            static std::unordered_map<std::string, bool> activations = {
+                {"true", true}, {"false",  false}, {"any", false},
+                {"all",  true}, {"random", false}, {"one", false},
+            };
+            token_t line({}, str);
+            name = process_string(line);
+            chance = process_float(line, chance);
+            proximity = process_float(line, proximity);
+            auto tgt_s = process_array(line);
+            targets_str = std::vector<std::string>(tgt_s.begin(), tgt_s.end());
+            target_activation_all
+                    = process_map(line, activations, target_activation_all);
+            auto bhv_s = process_array(line);
+            bhv = std::vector<std::string>(bhv_s.begin(), bhv_s.end());
+            reactivation_delay = process_float(line, reactivation_delay);
+        }
+        bool validate() const {
+            bool okay = !targets_str.empty();
+            okay &= !bhv.empty();
+            for (auto &t : targets_str) okay &= !t.empty();
+            for (auto &b : bhv) okay &= !b.empty();
+            return okay;
+        }
+    };
+    interaction_t(const input_t &input) {
+    }
+};
+
+class library_t : public no_copy_t {
+private:
+    struct groups_t {
+        std::vector<const speech_t*> random_speeches;
+        std::vector<const behaviour_t*> nonzero_prob;
+        std::vector<const behaviour_t*> stationary;
+        std::vector<const behaviour_t*> moving;
+        std::vector<const behaviour_t*> mouseover;
+        std::vector<const behaviour_t*> dragged;
+        std::vector<const behaviour_t*> sleep;
     };
     ENGC &engc_;    /// parent engine
     CTRL imagebox_; /// image box control to preview the sprite
     CTRL charname_; /// character name just below the image box
     CTRL spinner_;  /// spin control to set ICNT
-    std::vector<behaviour> behaviours_;
-    std::vector<effect> effects_;
-    std::vector<speech> speeches_;
-    std::unordered_map<uint32_t, groups> groups_;
+    std::unordered_map<std::string, behaviour_t> behaviours_;
+    std::vector<effect_t> effects_;
+    std::vector<speech_t> speeches_;
+    std::unordered_map<uint32_t, groups_t> groups_;
     std::vector<std::string> categories_;
     std::string library_path_;
     std::string readable_name_;
     std::string scrollable_name_;
     uint32_t speech_foreground_;
     uint32_t speech_background_;
-    spritebank::sprite preview_;
+    sprite_bank_t::sprite_t preview_;
 
 public:
-    library(ENGC &engc, const std::string &base, const std::string &path):
-        engc_(engc), library_path_(base + path), readable_name_(path) {
-        if (auto file = rLoadFile((library_path_ + name).c_str(), 0)) {
-            auto fptr = file;
+    class input_t {
+    public:
+        static constexpr char* config_name = (char*)"pony.ini";
 
-            while ((conf = GetNextLine(&fptr)))
-                switch (DetermineType(&conf)) {
-                    case SVT_NAME: /// weird, but DP does not use this field
-//                        readable_name_ = GET_TEMP(&conf);
-                        break;
+        std::string name;
+        std::vector<std::string> categories;
+        std::vector<speech_t::input_t> speeches;
+        std::vector<effect_t::input_t> effects;
+        std::vector<behaviour_t::input_t> behaviours;
+        std::vector<interaction_t::input_t> interactions;
 
-                    case SVT_SAYS:
-                        ParseSpeech(&libs->earr._[ecnt], libs->path, &conf);
-                        libs->nsay++;
-                        ecnt++;
-                        break;
-
-                    case SVT_EFCT:
-                        ParseEffect(&libs->earr._[ecnt], libs->path, &conf);
-                        ecnt++;
-                        break;
-
-                    case SVT_BHVR:
-                        ParseBehaviour(&libs->barr._[bcnt], libs->path, &conf);
-                        bcnt++;
-                        break;
-
-                    case SVT_BGRP:
-                        /// doesn`t help much, skipping
-                        break;
-
-                    case SVT_CTGS:
-                        while ((temp = ToLower(Dequote(GET_TEMP(&conf)), 0))) {
-                            *temp = toupper(*temp); /// capitalizing first letter
-                            CTR_V_PUSH(libs->ctgs,
-                                      ((CTGS){HashLine(temp, 0), 0, temp}), 8);
-                        }
-                        break;
-                }
-            if (!libs->name)
-                libs->name = strdup(path);
-            if (libs->ctgs.size) {
-                /// sorting categories, removing duplicates, truncating the memory
-                CTR_V_SORT(libs->ctgs, ctgscmp, 0, libs->ctgs.size);
-                for (bcnt = ccnt = 1; ccnt < libs->ctgs.size; ccnt++)
-                    if (libs->ctgs._[ccnt - 1].hash != libs->ctgs._[ccnt].hash)
-                        if (bcnt++ != ccnt)
-                            libs->ctgs._[bcnt - 1] = libs->ctgs._[ccnt];
-                if (CTR_V_CGET(libs->ctgs) > bcnt)
-                    CTR_V_MGET(libs->ctgs, bcnt, 1);
-                /// now looking for categories previously unknown
-                for (hash = ccnt = 0; ccnt < libs->ctgs.size; ccnt++)
-                    if ((ctgs = bsearch(&libs->ctgs._[ccnt], engc->ctgs._,
-                                         engc->ctgs.size, sizeof(*engc->ctgs._),
-                                         ctgscmp)))
-                        libs->ctgs._[ccnt] = (CTGS){0, 0, ctgs->name};
-                    else
-                        hash++;
-                /// some categories need to be added to the global category base
-                if (hash)
-                    CTR_V_MGET(engc->ctgs, engc->ctgs.size + hash);
-                ctgs = engc->ctgs._ + engc->ctgs.size - hash;
-                for (ccnt = 0; ccnt < libs->ctgs.size; ccnt++)
-                    if (!libs->ctgs._[ccnt].hash)
-                        libs->ctgs._[ccnt].hash =
-                            HashLine(libs->ctgs._[ccnt].name, 0);
-                    else {
-                        libs->ctgs._[ccnt].name = strdup(libs->ctgs._[ccnt].name);
-                        *ctgs++ = libs->ctgs._[ccnt];
+        input_t(const std::string &base, const std::string &dir) {
+            auto config = concat_path(
+                    {base, dir, library_t::input_t::config_name});
+            if (auto file = rLoadFile(config.c_str(), nullptr)) {
+                name = dir;
+                for (token_t text({}, file); !is_empty(text);
+                        text = next_token(text.second, 0, DEF_CRLF, 0)) {
+                    if (!text.first.empty() && (text.first.back() == DEF_LFCR))
+                        text.first.remove_suffix(sizeof(DEF_LFCR));
+                    auto line = next_token(text.first);
+                    switch (str_hash(line.first)) {
+                        //case str_hash("Name"):
+                        //case str_hash("BehaviorGroup"):
+                        default: break;
+                        case str_hash("Categories"):
+                            for (line.first = {}; !is_empty(line);
+                                    line = next_token(line.second, 0))
+                                if (!line.first.empty()) {
+                                    auto category = ascii_to_lower(line.first);
+                                    category[0] = ascii_to_upper(category[0]);
+                                    categories.emplace_back(category);
+                                }
+                            break;
+                        case str_hash("Behavior"):
+                            behaviours.emplace_back(line.second);
+                            break;
+                        case str_hash("Effect"):
+                            effects.emplace_back(line.second);
+                            break;
+                        case str_hash("Speak"):
+                            speeches.emplace_back(line.second);
+                            break;
+                        case str_hash("Interaction"):
+                            interactions.emplace_back(line.second);
+                            break;
                     }
-                if (hash)
-                    CTR_V_SORT(engc->ctgs, ctgscmp, 0, engc->ctgs.size);
-            }
-            free(file);
-
-
-
-            if (!libs->barr.size) {
-                /// no behaviours found, the library is broken; stopping
+                }
                 free(file);
-                free(libs->path);
-                CTR_V_MGET(engc->libs, engc->libs.size - 1);
-                return;
             }
         }
+    };
+    library_t(ENGC &engc, const std::string &base, const std::string &path):
+        engc_(engc), library_path_(base + path), readable_name_(path) {
     }
 };
 
@@ -1021,4 +970,34 @@ void  eProcessMenuItem(MENU *item) {
 
 void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                     long  xpos, long  ypos, ulong xdim, ulong ydim) {
+    std::vector<library_t::input_t> libs;
+    if (fcnf) {
+        std::string base;
+        auto config = concat_path({fcnf, DEF_CORE});
+        if (auto file = rLoadFile(config.c_str(), nullptr)) {
+            for (token_t text({}, file); !is_empty(text);
+                    text = next_token(text.second, 0, DEF_CRLF, 0)) {
+                if (!text.first.empty() && (text.first.back() == DEF_LFCR))
+                    text.first.remove_suffix(sizeof(DEF_LFCR));
+                auto line = next_token(text.first);
+                switch (str_hash(line.first)) {
+                    default: break;
+                    case str_hash("Content"):
+                        line = next_token(line.second, 0);
+                        base = concat_path(
+                                {std::string(line.first), "Content", "Ponies"});
+                        break;
+                }
+            }
+            free(file);
+            auto find = rFindMake(base.c_str());
+            while (!!(file = rFindFile(find))) {
+                libs.emplace_back(library_t::input_t(base, file));
+                free(file);
+            }
+        }
+    }
+    for (auto &l : libs) {
+        printf("%s\n", l.name.c_str());
+    }
 }
