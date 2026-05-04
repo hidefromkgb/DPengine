@@ -33,7 +33,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL Linux)
     set(RLS_MAKE_FLAGS -O2 -fexpensive-optimizations -fvisibility=hidden
 		       -fno-unwind-tables -fno-asynchronous-unwind-tables)
     set(RLS_LINK_FLAGS -s -Wl,--build-id=none)
-    set(DBG_MAKE_FLAGS -g)
+    set(DBG_MAKE_FLAGS -g -DDEV_MODE)
     set(DBG_LINK_FLAGS)
 elseif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
     set(OS_SRC macos)
