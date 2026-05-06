@@ -312,7 +312,9 @@ public:
             }
         data_[0].alias = size;
     }
-    uint32_t choose(uint32_t seed) const {
+    size_t size() const { return data_.size(); }
+
+    uint32_t random_selection(uint32_t seed) const {
         if (data_.empty()) return 0;
         uint32_t i = seed % data_[0].alias; // == seed % size
         bool alias = (seed / data_[0].alias) % data_[0].prob >= data_[i].prob;
@@ -490,6 +492,28 @@ template <typename T>
 using ptr_map_t = std::unordered_map<std::string, std::pair<int, T*>>;
 using bhv_map_t = ptr_map_t<behaviour_t>;
 
+template <bool allow_empty, typename T>
+inline T random_selection(const std::vector<T> &v, uint32_t *seed) {
+    if constexpr (!allow_empty) {
+        assert(!v.empty());
+    } else if (v.empty()) {
+        return T{};
+    }
+    return v[(v.size() > 1) ? RNG_Load(seed) % v.size() : 0];
+};
+
+template <bool allow_empty, typename T>
+inline T weighted_random_selection(
+        const std::vector<T> &v, const weighted_rng_t &weight, uint32_t *seed) {
+    assert(weight.size() == v.size());
+    if constexpr (!allow_empty) {
+        assert(!v.empty());
+    } else if (v.empty()) {
+        return T{};
+    }
+    return v[(v.size() > 1) ? weight.random_selection(RNG_Load(seed)) : 0];
+};
+
 
 
 class no_copy_t {
@@ -630,47 +654,49 @@ public:
 };
 
 class effect_t : public unit_t {
-private:
+public:
     enum gravity_flags_t {
-        top_left     = 1,
-        top          = 2,
-        top_right    = 3,
-        center_left  = 4,
-        center       = 5,
-        center_right = 6,
-        bottom_left  = 7,
-        bottom       = 8,
-        bottom_right = 9,
-        any          = 10,
-        not_center   = 11,
-        __reserved_0 = 12,
-        __reserved_1 = 13,
-        __reserved_2 = 14,
-        __reserved_3 = 15,
+        top_left     = 0,
+        top          = 1,
+        top_right    = 2,
+        center_left  = 3,
+        center       = 4,
+        center_right = 5,
+        bottom_left  = 6,
+        bottom       = 7,
+        bottom_right = 8,
+        any          = 9,
+        not_center   = 10,
     };
+
+protected:
     struct {
         gravity_flags_t placement:4;
         gravity_flags_t centering:4;
-    } flags_[2];
-    bool parent_follow_;
-    uint32_t duration_;
-    uint32_t respawn_;
+    } gravity_flags_[2];
+    T2IV duration_; // u = duration, v = repeat_delay
+    bool follow_;
+    std::vector<T2IV> gravity_[2];
+
+    inline T2IV select_gravity(bool left, uint32_t *seed) const {
+        return random_selection<false>(gravity_[left], seed);
+    }
 
 public:
     class input_t {
     public:
         std::string name;                                        // NOT USED
         std::string bhv;                                         // USED
-        std::string right_image;                                 // NOT USED
-        std::string left_image;                                  // NOT USED
-        float duration = 5.f;                                    // NOT USED
-        float repeat_delay = 0.f;                                // NOT USED
-        gravity_flags_t placement_right = gravity_flags_t::any;  // NOT USED
-        gravity_flags_t centering_right = gravity_flags_t::any;  // NOT USED
-        gravity_flags_t placement_left = gravity_flags_t::any;   // NOT USED
-        gravity_flags_t centering_left = gravity_flags_t::any;   // NOT USED
-        bool follow = false;                                     // NOT USED
-        bool prevent_loop = false;                               // NOT USED
+        std::string right_image;                                 // USED
+        std::string left_image;                                  // USED
+        float duration = 5.f;                                    // USED
+        float repeat_delay = 0.f;                                // USED
+        gravity_flags_t placement_right = gravity_flags_t::any;  // USED
+        gravity_flags_t centering_right = gravity_flags_t::any;  // USED
+        gravity_flags_t placement_left = gravity_flags_t::any;   // USED
+        gravity_flags_t centering_left = gravity_flags_t::any;   // USED
+        bool follow = false;                                     // USED
+        bool prevent_loop = false;                               // USED
 
         input_t() = default;
         input_t(const std::string_view &str) {
@@ -709,19 +735,62 @@ public:
     input_t debug_;
 #endif // DEV_MODE
 
-    effect_t(const input_t &in) {
+    effect_t(const input_t &in, const std::string &path)
+    : gravity_flags_{{in.placement_right, in.centering_right},
+                     {in.placement_left, in.centering_left}}
+    , duration_{{int32_t(in.duration * 1000.f),
+                 int32_t(in.repeat_delay * 1000.f)}}
+    , follow_(in.follow) {
 #ifdef DEV_MODE
         debug_ = in;
 #endif // DEV_MODE
+        if (!path.empty()) {
+            add_source(false, concat_path({path, in.right_image}));
+            add_source(true, concat_path({path, in.left_image}));
+        }
+        set_loop(!in.prevent_loop);
+    }
+
+    // TODO: check if everything is correct with both horz and vert axes
+    void finalize(T2IV bhv_right_size, T2IV bhv_left_size) {
+        auto process_side = [](gravity_flags_t geff, gravity_flags_t gbhv,
+                T2IV eff, T2IV bhv) {
+            // depends on the order of elements in gravity_flags_t!
+            static const std::array<std::vector<gravity_flags_t>, 9 + 2> i = {{
+                {top_left    }, {top         }, {top_right   }, {center_left },
+                {center      }, {center_right}, {bottom_left }, {bottom      },
+                {bottom_right},
+                // any
+                {top_left    , top         , top_right   , center_left ,
+                 center      , center_right, bottom_left , bottom      ,
+                 bottom_right},
+                // not_center
+                {top_left    , top         , top_right   , center_left ,
+                 center_right, bottom_left , bottom      , bottom_right},
+            }};
+            // depends on the order of elements in gravity_flags_t!
+            static const std::array<T2IV, 9> g = {{
+                {{0, 2}}, {{1, 2}}, {{2, 2}}, {{0, 1}}, {{1, 1}},
+                {{2, 1}}, {{0, 0}}, {{1, 0}}, {{2, 0}},
+            }};
+            std::vector<T2IV> retn;
+            for (auto &b : i[gbhv])
+                for (auto &e : i[geff])
+                    retn.emplace_back(T2IV{{
+                                (g[b].x * bhv.x - g[e].x * eff.x) / 2,
+                                (g[b].y * bhv.y - g[e].y * eff.y) / 2}});
+            return retn;
+        };
+        gravity_[false] = process_side(gravity_flags_[false].centering,
+                gravity_flags_[false].placement, dims(false), bhv_right_size);
+        gravity_[true] = process_side(gravity_flags_[true].centering,
+                gravity_flags_[true].placement, dims(true), bhv_left_size);
     }
 };
 
 using eff_vec_t = ref_vec_t<effect_t::input_t>;
 
-class speech_t : public unit_t {
-private:
-    std::string sound_;
-
+class speech_t : public effect_t {
 public:
     class input_t {
     public:
@@ -748,10 +817,37 @@ public:
     input_t debug_;
 #endif // DEV_MODE
 
-    speech_t(const input_t &in) {
+private:
+    std::string sound_;
+
+    static effect_t::input_t convert_input(const speech_t::input_t &in) {
+        effect_t::input_t retn;
+        retn.name = in.name;
+        retn.bhv = "group = " + std::to_string(in.group) + ", skip = "
+                 + std::to_string(in.skip) + ", sound = " + in.sound;
+        retn.right_image = retn.left_image = in.text;
+        retn.duration = 0.5f + 0.065f * in.text.size();
+        // fixed value taken from DP codebase - only applies to random speech:
+        retn.repeat_delay = 10.f;
+        retn.placement_right = retn.placement_left = gravity_flags_t::top;
+        retn.centering_right = retn.centering_left = gravity_flags_t::bottom;
+        retn.follow = true;
+        retn.prevent_loop = true;
+        return retn;
+    }
+
+    static void render_text(uint32_t *data) {
+    }
+
+public:
+    speech_t(const input_t &in)
+    : effect_t(convert_input(in), std::string())
+    , sound_(in.sound) {
 #ifdef DEV_MODE
         debug_ = in;
 #endif // DEV_MODE
+        // TODO: call this one properly!
+        add_source(false, in.text, 1, 1, render_text);
     }
 };
 
@@ -851,12 +947,8 @@ public:
     // taken from library that match the BGN group, if start speech is absent)
     static uint16_t select_speech(uint32_t *seed, uint32_t chance,
             const behaviour_t &prev, const behaviour_t &curr) {
-        auto select = [](const std::vector<int16_t> &v, uint32_t *seed) {
-            if (v.empty()) return std::remove_reference_t<decltype(v[0])>(0);
-            return v[(v.size() > 1) ? RNG_Load(seed) % v.size() : 0];
-        };
-        auto bgn = select(curr.bgn_speech_idx_, seed);
-        auto end = select(prev.end_speech_idx_, seed);
+        auto bgn = random_selection<true>(curr.bgn_speech_idx_, seed);
+        auto end = random_selection<true>(prev.end_speech_idx_, seed);
         // priority in DP: 1. start speech; 2. end speech; 3. random speech;
         end = (bgn >= 0) ? (end >= 0) ? bgn : end : bgn;
         // TODO: fix the case when (end > 0) gets replaced with (bgn = 0);
@@ -912,7 +1004,8 @@ public:
         set_center(false, in.right_img_center);
         set_center(true, in.left_img_center);
         set_loop(!in.prevent_loop);
-        for (auto &e : ev) effects_.emplace_back(std::make_unique<effect_t>(e));
+        for (auto &e : ev)
+            effects_.emplace_back(std::make_unique<effect_t>(e, path));
     }
 };
 
