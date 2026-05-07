@@ -486,11 +486,22 @@ class behaviour_t;
 template <typename T>
 using ref_vec_t = std::vector<std::reference_wrapper<const T>>;
 using lib_vec_t = ref_vec_t<library_t>;
-using bhv_vec_t = ref_vec_t<behaviour_t>;
 
-template <typename T>
-using ptr_map_t = std::unordered_map<std::string, std::pair<int, T*>>;
-using bhv_map_t = ptr_map_t<behaviour_t>;
+using bhv_map_t = std::unordered_map<std::string, behaviour_t*>;
+
+enum movement_flags_t {
+    move_none      = (1 << 0),
+    move_mouse     = (1 << 1),
+    move_drag      = (1 << 2),
+    move_sleep     = (1 << 3),
+    move_horz      = (1 << 4),
+    move_vert      = (1 << 5),
+    move_diag      = (1 << 6),
+    move_horz_vert = move_horz | move_vert,
+    move_diag_horz = move_diag | move_horz,
+    move_diag_vert = move_diag | move_vert,
+    move_all       = move_diag | move_horz | move_vert,
+};
 
 template <bool allow_empty, typename T>
 inline T random_selection(const std::vector<T> &v, uint32_t *seed) {
@@ -523,6 +534,94 @@ public:
     no_copy_t(const no_copy_t&) = delete; /// non construction-copyable
     no_copy_t& operator=(no_copy_t&) = delete;       /// non copyable
     no_copy_t& operator=(const no_copy_t&) = delete; /// non copyable
+};
+
+class sprite_bank_t : public no_copy_t {
+public:
+    class sprite_t {
+    private:
+        uint32_t index_;
+        library_t *library_;
+        uint32_t parent_; /// unique identifier of the parent sprite (0 if none)
+
+    public:
+        void select(const behaviour_t &b, bool left) {
+//            library_ = &b.get_library();
+//            index_ = library_->locate(b);
+        }
+        sprite_t() {}
+    };
+
+    void step() {}
+
+private:
+    std::vector<sprite_t> sprites_;
+    std::vector<T4FV> output_;
+};
+
+class library_t : public no_copy_t {
+public:
+    using bhv_id_t = uint32_t;
+
+private:
+    enum bhv_type_t : uint32_t {
+        nonzero_prob = 0,
+        stationary = 1,
+        moving = 2,
+        mouseover = 3,
+        dragged = 4,
+        sleeping = 5,
+        max_ = 5 // needs to equal the largest index this enum has
+    };
+    // each behaviour within a library is uniquely identified by 3 numbers:
+    // - its 'native' group (the one it got from the config file)
+    // - its type (see library_t::group_t)
+    // - its index within the type array
+    union bhv_id_internal_t {
+        bhv_id_t _;
+        struct {
+            uint32_t index:15;
+            bhv_type_t type:3;
+            int32_t group:14;
+        };
+    };
+    struct group_t {
+        weighted_rng_t nonzero_weights;
+        ref_vec_t<behaviour_t> bhv[bhv_type_t::max_ + 1];
+
+        void append(const group_t &rhs) {
+            for (size_t i = 0; i <= bhv_type_t::max_; i++)
+                bhv[i].insert(
+                        bhv[i].end(), rhs.bhv[i].begin(), rhs.bhv[i].end());
+        }
+    };
+
+    std::string library_path_;
+    std::string readable_name_;
+    std::vector<std::unique_ptr<behaviour_t>> behaviours_;
+    std::vector<std::unique_ptr<speech_t>> speeches_;
+    // TODO: remap groups sequenitially and make this a vector?
+    std::unordered_map<int, group_t> groups_;
+    sprite_bank_t::sprite_t preview_;
+    CTRL imagebox_; /// image box control to preview the sprite
+    CTRL charname_; /// character name just below the image box
+    CTRL spinner_;  /// spin control to set ICNT
+
+    inline static bhv_id_t init_bhv_id(movement_flags_t move, int16_t group);
+
+    const speech_t *select_speech(uint32_t *seed, uint32_t chance,
+            bhv_id_t prev, bhv_id_t curr) const;
+
+public:
+    class input_t;
+
+    inline const behaviour_t *get(bhv_id_t id) const;
+
+    library_t(const std::string &path, const input_t &in, bhv_map_t &bhv_map);
+    const std::string &name() const { return readable_name_; }
+
+    void add_interaction() {
+    }
 };
 
 class unit_t : public no_copy_t {
@@ -654,8 +753,8 @@ public:
 };
 
 class effect_t : public unit_t {
-public:
-    enum gravity_flags_t {
+protected:
+    enum gravity_flags_t : uint8_t {
         top_left     = 0,
         top          = 1,
         top_right    = 2,
@@ -668,8 +767,6 @@ public:
         any          = 9,
         not_center   = 10,
     };
-
-protected:
     struct {
         gravity_flags_t placement:4;
         gravity_flags_t centering:4;
@@ -853,44 +950,30 @@ public:
 
 class behaviour_t : public unit_t {
 public:
-    enum movement_flags_t {
-        none      = (1 << 0),
-        mouse     = (1 << 1),
-        drag      = (1 << 2),
-        sleep     = (1 << 3),
-        horz      = (1 << 4),
-        vert      = (1 << 5),
-        diag      = (1 << 6),
-        horz_vert = horz | vert,
-        diag_horz = diag | horz,
-        diag_vert = diag | vert,
-        all       = diag | horz | vert,
-    };
-
     class input_t {
     public:
-        std::string name;                                   // USED
-        float chance = 0.f;                                 // USED
-        float max_duration = 15.f;                          // USED
-        float min_duration = 5.f;                           // USED
-        float speed = 3.f;                                  // USED
-        std::string right_image;                            // USED
-        std::string left_image;                             // USED
-        movement_flags_t movement = movement_flags_t::all;  // USED
-        std::string linked_bhv;                             // USED
-        std::string bgn_speech;                             // USED
-        std::string end_speech;                             // USED
-        bool skip = false;                                  // USED
-        T2IV target_xy = {{0, 0}};                          // USED
-        std::string follow_target;                          // USED
-        bool auto_follow_img = true;                        // USED
-        std::string follow_stop_bhv;                        // USED
-        std::string follow_mov_bhv;                         // USED
-        T2IV right_img_center = {{0, 0}};                   // USED
-        T2IV left_img_center = {{0, 0}};                    // USED
-        bool prevent_loop = false;                          // USED
-        int group = 0;                                      // USED
-        bool mirror_target_xy = false;                      // USED
+        std::string name;                      // USED
+        float chance = 0.f;                    // USED
+        float max_duration = 15.f;             // USED
+        float min_duration = 5.f;              // USED
+        float speed = 3.f;                     // USED
+        std::string right_image;               // USED
+        std::string left_image;                // USED
+        movement_flags_t movement = move_all;  // USED
+        std::string linked_bhv;                // USED
+        std::string bgn_speech;                // USED
+        std::string end_speech;                // USED
+        bool skip = false;                     // USED
+        T2IV target_xy = {{0, 0}};             // USED
+        std::string follow_target;             // USED
+        bool auto_follow_img = true;           // USED
+        std::string follow_stop_bhv;           // USED
+        std::string follow_mov_bhv;            // USED
+        T2IV right_img_center = {{0, 0}};      // USED
+        T2IV left_img_center = {{0, 0}};       // USED
+        bool prevent_loop = false;             // USED
+        int group = 0;                         // USED
+        bool mirror_target_xy = false;         // USED
 
         input_t() = default;
         input_t(const std::string_view &str) {
@@ -898,12 +981,12 @@ public:
                 followflg = { {"false", false}, {"true",   true},
                               {"fixed", false}, {"mirror", true}, };
             static std::unordered_map<std::string, movement_flags_t> moveflg = {
-                {"horizontal_vertical", horz_vert}, {"horizontal_only",horz},
-                {"diagonal_horizontal", diag_horz}, {"vertical_only",  vert},
-                {"diagonal_vertical",   diag_vert}, {"diagonal_only",  diag},
-                {"mouseover",           mouse    }, {"dragged",        drag},
-                {"sleep",               sleep    }, {"all",            all },
-                {"none",                none     },
+                {"horizontal_vertical", move_horz_vert}, {"horizontal_only",move_horz},
+                {"diagonal_horizontal", move_diag_horz}, {"vertical_only",  move_vert},
+                {"diagonal_vertical",   move_diag_vert}, {"diagonal_only",  move_diag},
+                {"mouseover",           move_mouse    }, {"dragged",        move_drag},
+                {"sleep",               move_sleep    }, {"all",            move_all },
+                {"none",                move_none     },
             };
             token_t line({}, str);
             name = process_string(line);
@@ -961,36 +1044,40 @@ public:
 #endif // DEV_MODE
 
 private:
-    int16_t group_;
-    int16_t follow_group_; // select moving/stationary follow images from here
+    library_t::bhv_id_t id_;
+    library_t::bhv_id_t linked_id_;
+    // follow_grp_id_ is only needed for its group info: have to
+    // pick moving/stationary follow images from this very group
+    library_t::bhv_id_t follow_grp_id_;
     T2IV duration_; // u = min, v = max
     float movement_speed_;
     movement_flags_t movement_;
     std::vector<int16_t> bgn_speech_idx_; // indices for speeches from library
     std::vector<int16_t> end_speech_idx_;
-    const behaviour_t *linked_bhv_;
     const library_t *follow_target_;
     T2IV follow_offset_[2];
     std::vector<std::unique_ptr<effect_t>> effects_;
 
 public:
-    //uint16_t group() const { return group_; }
-    void set_follow_group(int16_t group) { follow_group_ = group; }
+    library_t::bhv_id_t id() const { return id_; }
+    library_t::bhv_id_t linked_id() const { return linked_id_; }
+    library_t::bhv_id_t follow_grp_id() const { return follow_grp_id_; }
+
     void set_follow_target(const library_t *target) { follow_target_ = target; }
-    void set_linked_behaviour(const behaviour_t *linked) {
-        linked_bhv_ = linked;
-    }
-    behaviour_t(const input_t &in, const std::string &path, const eff_vec_t &ev,
+
+    behaviour_t(const input_t &in, library_t::bhv_id_t id,
+            library_t::bhv_id_t linked_id, library_t::bhv_id_t follow_grp_id,
+            const std::string &path, const eff_vec_t &effects,
             std::vector<int16_t> bgn_speech, std::vector<int16_t> end_speech)
-    : group_(in.group)
-    , follow_group_(in.group)
+    : id_(id)
+    , linked_id_(linked_id)
+    , follow_grp_id_(follow_grp_id)
     , duration_{{int32_t(std::min(in.min_duration, in.max_duration) * 1000.f),
                  int32_t(std::max(in.min_duration, in.max_duration) * 1000.f)}}
     , movement_speed_(in.speed * FRM_WAIT / 30.f)
     , movement_(in.movement)
     , bgn_speech_idx_(std::move(bgn_speech))
     , end_speech_idx_(std::move(end_speech))
-    , linked_bhv_(nullptr)
     , follow_target_(nullptr) {
 #ifdef DEV_MODE
         debug_ = in;
@@ -999,37 +1086,16 @@ public:
         follow_offset_[true] = (in.mirror_target_xy)
                 ? T2IV{{-in.target_xy.x, in.target_xy.y}}
                 : in.target_xy;
-        add_source(false, concat_path({path, in.right_image}));
-        add_source(true, concat_path({path, in.left_image}));
+        if (!path.empty()) {
+            add_source(false, concat_path({path, in.right_image}));
+            add_source(true, concat_path({path, in.left_image}));
+        }
         set_center(false, in.right_img_center);
         set_center(true, in.left_img_center);
         set_loop(!in.prevent_loop);
-        for (auto &e : ev)
+        for (auto &e : effects)
             effects_.emplace_back(std::make_unique<effect_t>(e, path));
     }
-};
-
-class sprite_bank_t : public no_copy_t {
-public:
-    class sprite_t {
-    private:
-        uint32_t index_;
-        library_t *library_;
-        uint32_t parent_; /// unique identifier of the parent sprite (0 if none)
-
-    public:
-        void select(behaviour_t &b, bool left) {
-//            library_ = &b.get_library();
-//            index_ = library_->locate(b);
-        }
-        sprite_t() {}
-    };
-
-    void step() {}
-
-private:
-    std::vector<sprite_t> sprites_;
-    std::vector<T4FV> output_;
 };
 
 class interaction_t : public no_copy_t {
@@ -1085,245 +1151,237 @@ public:
     }
 };
 
-class library_t : public no_copy_t {
-private:
-    struct group_t {
-        weighted_rng_t nonzero_weights;
-        bhv_vec_t nonzero_prob;
-        bhv_vec_t stationary;
-        bhv_vec_t moving;
-        bhv_vec_t mouseover;
-        bhv_vec_t dragged;
-        bhv_vec_t sleep;
-
-        void append(const group_t &rhs) {
-            #define APPEND(name) \
-                name.insert(name.end(), rhs.name.begin(), rhs.name.end())
-            APPEND(nonzero_prob);
-            APPEND(stationary);
-            APPEND(moving);
-            APPEND(mouseover);
-            APPEND(dragged);
-            APPEND(sleep);
-            #undef APPEND
-        }
-    };
-    CTRL imagebox_; /// image box control to preview the sprite
-    CTRL charname_; /// character name just below the image box
-    CTRL spinner_;  /// spin control to set ICNT
-    std::vector<std::unique_ptr<behaviour_t>> behaviours_;
-    std::vector<std::unique_ptr<speech_t>> speeches_;
-    // TODO: remap groups sequenitially and make this a vector?
-    std::unordered_map<int, group_t> groups_;
-    std::string library_path_;
-    std::string readable_name_;
-    std::string scrollable_name_;
-    sprite_bank_t::sprite_t preview_;
-
-    const speech_t *select_speech(uint32_t *seed, uint32_t chance,
-            const behaviour_t &prev, const behaviour_t &curr) {
-        auto index = behaviour_t::select_speech(seed, chance, prev, curr);
-        assert(index <= speeches_.size());
-        return (index > 0) ? speeches_[index - 1].get() : nullptr;
-    }
-
-    template <typename M, typename I, typename V>
-    void append_map(M &m, const I &in, const char *name, const char *ty, V v) {
-        auto iter = m.emplace(in.name, typename M::mapped_type(in.group, v));
-        if (!iter.second)
-            printf("[%s] WARNING, %s name collision: '%s'\n",
-                    name, ty, in.name.c_str());
-    }
-
+class library_t::input_t {
 public:
-    class input_t {
-    public:
-        static constexpr char* config_name = (char*)"pony.ini";
+    static constexpr char* config_name = (char*)"pony.ini";
 
-        std::string name;
-        std::vector<std::string> categories;
-        std::vector<speech_t::input_t> speeches;
-        std::vector<effect_t::input_t> effects;
-        std::vector<behaviour_t::input_t> behaviours;
-        std::vector<interaction_t::input_t> interactions;
+    std::string name;
+    std::vector<std::string> categories;
+    std::vector<speech_t::input_t> speeches;
+    std::vector<effect_t::input_t> effects;
+    std::vector<behaviour_t::input_t> behaviours;
+    std::vector<interaction_t::input_t> interactions;
 
-        input_t(const std::string &base, const std::string &dir) {
-            auto config = concat_path(
-                    {base, dir, library_t::input_t::config_name});
-            if (auto file = rLoadFile(config.c_str(), nullptr)) {
-                name = dir;
-                for (token_t text({}, file); !is_empty(text);
-                        text = next_token(text.second, 0, DEF_CRLF, 0)) {
-                    if (!text.first.empty() && (text.first.back() == DEF_LFCR))
-                        text.first.remove_suffix(sizeof(DEF_LFCR));
-                    auto line = next_token(text.first);
-                    switch (str_hash(line.first)) {
-                        //case str_hash("Name"):
-                        //case str_hash("BehaviorGroup"):
-                        default: break;
-                        case str_hash("Categories"):
-                            for (line.first = {}; !is_empty(line);
-                                    line = next_token(line.second, 0))
-                                if (!line.first.empty()) {
-                                    auto category = ascii_to_lower(line.first);
-                                    category[0] = ascii_to_upper(category[0]);
-                                    categories.emplace_back(category);
-                                }
-                            break;
-                        case str_hash("Behavior"):
-                            behaviours.emplace_back(line.second);
-                            break;
-                        case str_hash("Effect"):
-                            effects.emplace_back(line.second);
-                            break;
-                        case str_hash("Speak"):
-                            speeches.emplace_back(line.second);
-                            break;
-                        case str_hash("Interaction"):
-                            interactions.emplace_back(line.second);
-                            break;
-                    }
+    input_t(const std::string &base, const std::string &dir) {
+        auto config = concat_path(
+                {base, dir, library_t::input_t::config_name});
+        if (auto file = rLoadFile(config.c_str(), nullptr)) {
+            name = dir;
+            for (token_t text({}, file); !is_empty(text);
+                    text = next_token(text.second, 0, DEF_CRLF, 0)) {
+                if (!text.first.empty() && (text.first.back() == DEF_LFCR))
+                    text.first.remove_suffix(sizeof(DEF_LFCR));
+                auto line = next_token(text.first);
+                switch (str_hash(line.first)) {
+                    //case str_hash("Name"):
+                    //case str_hash("BehaviorGroup"):
+                    default: break;
+                    case str_hash("Categories"):
+                        for (line.first = {}; !is_empty(line);
+                                line = next_token(line.second, 0))
+                            if (!line.first.empty()) {
+                                auto category = ascii_to_lower(line.first);
+                                category[0] = ascii_to_upper(category[0]);
+                                categories.emplace_back(category);
+                            }
+                        break;
+                    case str_hash("Behavior"):
+                        behaviours.emplace_back(line.second);
+                        break;
+                    case str_hash("Effect"):
+                        effects.emplace_back(line.second);
+                        break;
+                    case str_hash("Speak"):
+                        speeches.emplace_back(line.second);
+                        break;
+                    case str_hash("Interaction"):
+                        interactions.emplace_back(line.second);
+                        break;
                 }
-                free(file);
             }
+            free(file);
         }
-    };
+    }
+};
 
-    library_t(const std::string &path, const input_t &in, bhv_map_t &bhv_map) {
-        std::unordered_map<std::string, std::pair<int, int>> spk_map;
-        std::unordered_map<int, std::vector<int>> grp_map;
-        std::unordered_map<std::string, eff_vec_t> effects;
-        eff_vec_t null;
+template <typename K, typename V>
+const std::remove_reference_t<V> *find_in_map(
+        const std::unordered_map<K, V> &map, const K &key) {
+    auto iter = map.find(key);
+    return (iter != map.end()) ? &iter->second : nullptr;
+}
 
-        library_path_ = path;
-        readable_name_ = in.name;
+library_t::library_t(
+        const std::string &path, const input_t &in, bhv_map_t &bhv_map)
+: library_path_(path)
+, readable_name_(in.name) {
+    std::unordered_map<std::string, eff_vec_t> effects;
+    std::unordered_map<std::string, int> spk_bhv_map;
+    std::unordered_map<int, std::vector<int>> spk_rnd_map;
+    std::unordered_map<std::string, library_t::bhv_id_t> bhv_id_map;
+    std::vector<library_t::bhv_id_t> bhv_id_vec;
+    eff_vec_t e_null;
 
-        for (auto &e : in.effects)
-            effects[e.bhv].emplace_back(e);
-        for (auto &s : in.speeches) {
+    // distributing effects configs by group
+    for (auto &e : in.effects)
+        effects[e.bhv].emplace_back(e);
+
+    // distributing behaviour-linked (< 0) and random (> 0) speeches
+    for (auto &s : in.speeches) {
+        const bool dejavu = spk_bhv_map.count(s.name);
+        if (dejavu)
+            printf("[%s] WARNING, speech name collision: '%s'%s\n",
+                    in.name.c_str(), s.name.c_str(),
+                    (s.skip) ? ", non-selectable (dropped)" : ", selectable");
+        if (!dejavu || !s.skip) {
             speeches_.emplace_back(std::make_unique<speech_t>(s));
-            append_map(spk_map, s, in.name.c_str(), "speech",
-                    -int(speeches_.size()));
-            if (!s.skip) grp_map[s.group].emplace_back(int(speeches_.size()));
+            spk_bhv_map.emplace(s.name, -int(speeches_.size()));
+            if (!s.skip)
+                spk_rnd_map[s.group].emplace_back(int(speeches_.size()));
         }
-        auto i0 = grp_map.find(0);
-        for (auto &b : in.behaviours) {
-            std::vector<int16_t> b_spk, e_spk;
-            auto ig = grp_map.find(b.group);
-            auto ib = spk_map.find(b.bgn_speech);
-            if (ib != spk_map.end()) { // found behaviour-specific start speech
-                b_spk.emplace_back(ib->second.second);
-            } else if ((ig != grp_map.end()) || (i0 != grp_map.end())) {
-                // no start speech found, substituting it with random speeches;
-                // no speech can belong to >1 group, don't look for duplicates
-                if (ig != grp_map.end())
-                    b_spk.insert(b_spk.end(),
-                            ig->second.begin(), ig->second.end());
-                if ((i0 != grp_map.end()) && (b.group != 0))
-                    b_spk.insert(b_spk.end(),
-                            i0->second.begin(), i0->second.end());
-            }
-            auto ie = spk_map.find(b.end_speech);
-            if (ie != spk_map.end()) { // found behaviour-specific end speech
-                e_spk.emplace_back(ie->second.second);
-            }
-            auto e = effects.find(b.name);
-            behaviours_.emplace_back(std::make_unique<behaviour_t>(b, path,
-                        (e != effects.end()) ? e->second : null, b_spk, e_spk));
-            append_map(bhv_map, b, in.name.c_str(), "behaviour",
-                    behaviours_.back().get());
-        }
+    }
 
-        grp_map.clear();
-        for (size_t i = 0; i < in.behaviours.size(); i++) {
-            auto &b = in.behaviours[i];
-            if ((!b.skip) && (b.chance > 0.f)) {
-                grp_map[b.group].emplace_back(b.chance * 10000.f);
-                groups_[b.group].nonzero_prob.emplace_back(*behaviours_[i]);
-            }
-            switch (b.movement) {
-                case behaviour_t::movement_flags_t::none:
-                    groups_[b.group].stationary.emplace_back(*behaviours_[i]);
-                    break;
-                case behaviour_t::movement_flags_t::mouse:
-                    groups_[b.group].mouseover.emplace_back(*behaviours_[i]);
-                    break;
-                case behaviour_t::movement_flags_t::drag:
-                    groups_[b.group].dragged.emplace_back(*behaviours_[i]);
-                    break;
-                case behaviour_t::movement_flags_t::sleep:
-                    groups_[b.group].sleep.emplace_back(*behaviours_[i]);
-                    break;
-                case behaviour_t::movement_flags_t::all:
-                case behaviour_t::movement_flags_t::horz:
-                case behaviour_t::movement_flags_t::vert:
-                case behaviour_t::movement_flags_t::diag:
-                case behaviour_t::movement_flags_t::horz_vert:
-                case behaviour_t::movement_flags_t::diag_horz:
-                case behaviour_t::movement_flags_t::diag_vert:
-                    groups_[b.group].moving.emplace_back(*behaviours_[i]);
-                    break;
-            }
+    // initializing the group structure for behaviours
+    std::unordered_map<int, std::array<int, bhv_type_t::max_ + 1>> bhv_grp;
+    for (auto &b : in.behaviours) {
+        bhv_id_internal_t iid{init_bhv_id(b.movement, b.group)};
+        if (!find_in_map(bhv_grp, iid.group)) bhv_grp[iid.group] = {};
+        iid.index += bhv_grp[iid.group][iid.type]++;
+        bhv_id_vec.emplace_back(iid._);
+        if (!b.name.empty() && !bhv_id_map.count(b.name)) {
+            bhv_id_map.emplace(b.name, iid._);
+        } else {
+            printf("[%s] WARNING, behaviour name collision: '%s'\n",
+                    in.name.c_str(), b.name.c_str());
         }
-        // adding random behaviours from group 0 (GroupAny) to all other groups
-        if (groups_.find(0) != groups_.end()) {
-            for (auto &g : grp_map) {
-                if (g.first == 0) continue;
-                g.second.insert(
-                        g.second.end(), grp_map[0].begin(), grp_map[0].end());
-                groups_[g.first].append(groups_[0]);
-            }
-        }
-        // initializing probability maps
-        for (auto &g : grp_map) {
-            assert(groups_[g.first].nonzero_prob.size() == g.second.size());
-            groups_[g.first].nonzero_weights = weighted_rng_t(g.second);
-        }
-        // creating special groups where follow images are to be taken from,
-        // also linking behaviours
-        for (size_t i = 0; i < in.behaviours.size(); i++) {
-            if (!in.behaviours[i].follow_target.empty()
-                    && !in.behaviours[i].auto_follow_img) {
-                group_t grp;
-                auto is = bhv_map.find(in.behaviours[i].follow_stop_bhv);
-                if (is != bhv_map.end())
-                    grp.stationary.emplace_back(*is->second.second);
+    }
 
-                auto im = bhv_map.find(in.behaviours[i].follow_mov_bhv);
-                if (im != bhv_map.end())
-                    grp.moving.emplace_back(*im->second.second);
+    auto i0 = find_in_map(spk_rnd_map, 0); // random speeches from group 0
 
-                if (!grp.moving.empty() && !grp.stationary.empty()) {
-                    groups_[-int16_t(i)] = std::move(grp);
-                    behaviours_[i]->set_follow_group(-int16_t(i));
-                } else {
-                    printf("[%s] WARNING, invalid custom follow behaviours in "
-                           "'%s', reverting to defaults\n",
-                            in.name.c_str(), in.behaviours[i].name.c_str());
-                }
+    // creating the behaviours
+    for (size_t i = 0; i < in.behaviours.size(); i++) {
+        std::vector<int16_t> b_spk, e_spk;
+        auto &b = in.behaviours[i];
+        auto ig = find_in_map(spk_rnd_map, b.group);
+        if (auto ib = find_in_map(spk_bhv_map, b.bgn_speech)) {
+            b_spk.emplace_back(*ib); // found behaviour-specific bgn speech
+        } else if (ig || i0) {
+            // no start speech found, substituting it with random speeches;
+            // no speech can belong to >1 group, don't look for duplicates
+            if (ig) b_spk.insert(b_spk.end(), ig->begin(), ig->end());
+            if (i0 && (b.group != 0))
+                b_spk.insert(b_spk.end(), i0->begin(), i0->end());
+        }
+        if (auto ie = find_in_map(spk_bhv_map, b.end_speech))
+            e_spk.emplace_back(*ie); // found behaviour-specific end speech
+
+        bhv_id_internal_t id = {bhv_id_vec[i]};
+        bhv_id_internal_t linked_id = {};
+        if (auto il = find_in_map(bhv_id_map, b.linked_bhv)) {
+            linked_id._ = *il;
+        } else if (!b.linked_bhv.empty()) {
+            printf("[%s] WARNING, invalid linked behaviour name in '%s'\n",
+                    in.name.c_str(), b.name.c_str());
+        }
+        auto is = find_in_map(bhv_id_map, b.follow_stop_bhv);
+        auto im = find_in_map(bhv_id_map, b.follow_mov_bhv);
+        bhv_id_internal_t follow_grp_id = {};
+        follow_grp_id.group = (is && im) ? -int16_t(i) : id.group;
+
+        auto ie = find_in_map(effects, b.name);
+        behaviours_.emplace_back(std::make_unique<behaviour_t>(b, id._,
+                    linked_id._, follow_grp_id._, path, (ie) ? *ie : e_null,
+                    b_spk, e_spk));
+        groups_[id.group].bhv[id.type].emplace_back(*behaviours_.back());
+        bhv_map.emplace(b.name, behaviours_.back().get());
+    }
+
+    std::unordered_map<int, std::vector<int>> prob_map;
+    for (size_t i = 0; i < in.behaviours.size(); i++) {
+        auto &b = in.behaviours[i];
+        if ((!b.skip) && (b.chance > 0.f)) {
+            prob_map[b.group].emplace_back(b.chance * 10000.f);
+            groups_[b.group].bhv[nonzero_prob].emplace_back(*behaviours_[i]);
+        }
+    }
+    // adding behaviours from group 0 (GroupAny) to all other groups
+    if (groups_.count(0))
+        for (auto &p : prob_map)
+            if (p.first != 0) {
+                p.second.insert(
+                        p.second.end(), prob_map[0].begin(), prob_map[0].end());
+                groups_[p.first].append(groups_[0]);
             }
-            auto il = bhv_map.find(in.behaviours[i].linked_bhv);
-            if (il != bhv_map.end()) {
-                behaviours_[i]->set_linked_behaviour(il->second.second);
-            } else if (!in.behaviours[i].linked_bhv.empty()) {
-                printf("[%s] WARNING, invalid linked behaviour name in '%s'\n",
+    // initializing probabilities
+    for (auto &p : prob_map) {
+        assert(groups_[p.first].bhv[nonzero_prob].size() == p.second.size());
+        groups_[p.first].nonzero_weights = weighted_rng_t(p.second);
+    }
+    // creating special groups where follow images are to be taken from
+    for (size_t i = 0; i < in.behaviours.size(); i++)
+        if (!in.behaviours[i].follow_target.empty()
+                && !in.behaviours[i].auto_follow_img) {
+            group_t grp;
+            if (auto is = find_in_map(
+                        bhv_map, in.behaviours[i].follow_stop_bhv))
+                grp.bhv[stationary].emplace_back(**is);
+            if (auto im = find_in_map(
+                        bhv_map, in.behaviours[i].follow_mov_bhv))
+                grp.bhv[moving].emplace_back(**im);
+
+            if (!grp.bhv[moving].empty() && !grp.bhv[stationary].empty()) {
+                groups_[-int16_t(i)] = std::move(grp);
+            } else {
+                printf("[%s] WARNING, invalid custom follow behaviours in "
+                       "'%s', reverting to defaults\n",
                         in.name.c_str(), in.behaviours[i].name.c_str());
             }
         }
 
-        printf("Total behaviours: %lu\n", behaviours_.size());
-        for (auto &g : groups_) {
-            printf("[%d] %lu + %lu + %lu + %lu + %lu + %lu\n", g.first,
-                    g.second.nonzero_prob.size(), g.second.stationary.size(),
-                    g.second.moving.size(), g.second.mouseover.size(),
-                    g.second.dragged.size(), g.second.sleep.size());
-        }
+    printf("Total behaviours: %lu\n", behaviours_.size());
+    for (auto &g : groups_) {
+        printf("[%d] %lu + %lu + %lu + %lu + %lu + %lu\n", g.first,
+            g.second.bhv[nonzero_prob].size(), g.second.bhv[stationary].size(),
+            g.second.bhv[moving].size(), g.second.bhv[mouseover].size(),
+            g.second.bhv[dragged].size(), g.second.bhv[sleeping].size());
     }
-    const std::string &name() const { return readable_name_; }
+}
 
-    void add_interaction() {
+library_t::bhv_id_t library_t::init_bhv_id(
+        movement_flags_t move, int16_t group) {
+    bhv_id_internal_t iid;
+    iid.index = 1;
+    switch (move) {
+        case move_none:  iid.type = stationary; break;
+        case move_mouse: iid.type = mouseover;  break;
+        case move_drag:  iid.type = dragged;    break;
+        case move_sleep: iid.type = sleeping;   break;
+        case move_all: case move_horz: case move_vert: case move_diag:
+        case move_horz_vert: case move_diag_horz: case move_diag_vert:
+            iid.type = moving;
+            break;
     }
-};
+    iid.group = group;
+    return iid._;
+}
+
+const behaviour_t *library_t::get(bhv_id_t id) const {
+    bhv_id_internal_t iid = {id};
+    if (!iid.index) return nullptr;
+    auto ig = groups_.find(iid.group);
+    if ((ig == groups_.end()) || (iid.index > ig->second.bhv[iid.type].size()))
+        return nullptr;
+    return &ig->second.bhv[iid.type][iid.index - 1].get();
+}
+
+const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
+        bhv_id_t prev, bhv_id_t curr) const {
+    auto b_prev = get(prev), b_curr = get(curr);
+    if (!b_prev || !b_curr) return nullptr;
+    auto index = behaviour_t::select_speech(seed, chance, *b_prev, *b_curr);
+    assert(index <= speeches_.size());
+    return (index > 0) ? speeches_[index - 1].get() : nullptr;
+}
 
 /// client configuration
 typedef struct {
@@ -1391,7 +1449,7 @@ void engine_t::build_library_structure(const std::string &base,
                 auto il = lib_map.find(ascii_to_lower(b.follow_target));
                 if (il != lib_map.end()) {
                     auto &bhv_map = lib_map[ascii_to_lower(i.name)].second;
-                    bhv_map[b.name].second->set_follow_target(il->second.first);
+                    bhv_map[b.name]->set_follow_target(il->second.first);
                 } else {
                     printf("[%s] WARNING, invalid follow target name in '%s'\n",
                             i.name.c_str(), b.name.c_str());
@@ -1426,9 +1484,9 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                     long  xpos, long  ypos, ulong xdim, ulong ydim) {
     engine_t engc;
     if (fcnf) {
-        std::string base;
         auto config = concat_path({fcnf, DEF_CORE});
         if (auto file = rLoadFile(config.c_str(), nullptr)) {
+            std::string base;
             for (token_t text({}, file); !is_empty(text);
                     text = next_token(text.second, 0, DEF_CRLF, 0)) {
                 if (!text.first.empty() && (text.first.back() == DEF_LFCR))
