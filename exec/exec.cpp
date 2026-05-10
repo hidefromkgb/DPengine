@@ -289,14 +289,13 @@ private:
 
 public:
     weighted_rng_t() = default;
-    weighted_rng_t(const std::vector<int> &weights) {
+    weighted_rng_t(const std::vector<uint32_t> &weights) {
         if (weights.empty()) return;
         uint32_t full = 0, over = 0, size = uint32_t(weights.size());
         data_.resize(size);
         for (uint32_t i = size; i > 0; i--) {
-            assert(weights[i - 1] > 0);
-            data_[i - 1] = {uint32_t(weights[i - 1]), 0, i - 1};
-            full += uint32_t(weights[i - 1]);
+            data_[i - 1] = {weights[i - 1], 0, i - 1};
+            full += weights[i - 1];
         }
         auto rev_prob = [](item_t &a, item_t &b) { return a.prob > b.prob; };
         std::sort(data_.begin(), data_.end(), rev_prob);
@@ -394,6 +393,12 @@ size_t constexpr str_hash(const std::string_view &str, bool ascii2low = true) {
     return retn;
 }
 
+template <typename K, typename V>
+inline const V *find_in_map(const std::unordered_map<K, V> &map, const K &key) {
+    auto iter = map.find(key);
+    return (iter != map.end()) ? &iter->second : nullptr;
+}
+
 using token_t = std::pair<std::string_view, std::string_view>;
 bool is_empty(const token_t &t) { return t.first.empty() && t.second.empty(); }
 
@@ -427,8 +432,8 @@ template <typename T>
 T process_map(token_t &line, const std::unordered_map<std::string, T> &map,
         T def, char s = DEF_TSEP, char q = DEF_QUOT) {
     line = next_token(line.second, 0, s, q);
-    auto it = map.find(ascii_to_lower(line.first));
-    return (it != map.end()) ? it->second : def;
+    auto it = find_in_map(map, ascii_to_lower(line.first));
+    return (it) ? *it : def;
 }
 
 bool process_bool(
@@ -482,25 +487,25 @@ class library_t;
 class speech_t;
 class effect_t;
 class behaviour_t;
+class interaction_t;
 
 template <typename T>
 using ref_vec_t = std::vector<std::reference_wrapper<const T>>;
-using lib_vec_t = ref_vec_t<library_t>;
 
 using bhv_map_t = std::unordered_map<std::string, behaviour_t*>;
 
 enum movement_flags_t {
-    move_none      = (1 << 0),
-    move_mouse     = (1 << 1),
-    move_drag      = (1 << 2),
-    move_sleep     = (1 << 3),
-    move_horz      = (1 << 4),
-    move_vert      = (1 << 5),
-    move_diag      = (1 << 6),
-    move_horz_vert = move_horz | move_vert,
-    move_diag_horz = move_diag | move_horz,
-    move_diag_vert = move_diag | move_vert,
-    move_all       = move_diag | move_horz | move_vert,
+    move_none  = (1 << 0),
+    move_mouse = (1 << 1),
+    move_drag  = (1 << 2),
+    move_sleep = (1 << 3),
+    move_horz  = (1 << 4),
+    move_vert  = (1 << 5),
+    move_diag  = (1 << 6),
+    move_hv    = move_horz | move_vert,
+    move_dh    = move_diag | move_horz,
+    move_dv    = move_diag | move_vert,
+    move_all   = move_diag | move_horz | move_vert,
 };
 
 template <bool allow_empty, typename T>
@@ -561,7 +566,13 @@ private:
 
 class library_t : public no_copy_t {
 public:
+    using lib_id_t = size_t;
     using bhv_id_t = uint32_t;
+    struct bhv_id_desc_t {
+        std::unordered_map<std::string, library_t::bhv_id_t> m;
+        std::vector<library_t::bhv_id_t> v;
+    };
+    using bhv_id_map_t = std::unordered_map<std::string, bhv_id_desc_t>;
 
 private:
     enum bhv_type_t : uint32_t {
@@ -587,7 +598,7 @@ private:
     };
     struct group_t {
         weighted_rng_t nonzero_weights;
-        ref_vec_t<behaviour_t> bhv[bhv_type_t::max_ + 1];
+        std::array<ref_vec_t<behaviour_t>, bhv_type_t::max_ + 1> bhv;
 
         void append(const group_t &rhs) {
             for (size_t i = 0; i <= bhv_type_t::max_; i++)
@@ -598,6 +609,7 @@ private:
 
     std::string library_path_;
     std::string readable_name_;
+    std::vector<std::unique_ptr<interaction_t>> interactions_;
     std::vector<std::unique_ptr<behaviour_t>> behaviours_;
     std::vector<std::unique_ptr<speech_t>> speeches_;
     // TODO: remap groups sequenitially and make this a vector?
@@ -617,71 +629,70 @@ public:
 
     inline const behaviour_t *get(bhv_id_t id) const;
 
-    library_t(const std::string &path, const input_t &in, bhv_map_t &bhv_map);
-    const std::string &name() const { return readable_name_; }
+    static bhv_id_desc_t build_bhv_id_desc(const input_t &in);
 
-    void add_interaction() {
-    }
+    library_t(const std::string &path, const input_t &in,
+            const bhv_id_map_t &bhv_id_map);
+    const std::string &name() const { return readable_name_; }
 };
 
 class unit_t : public no_copy_t {
 private:
-    enum state_flags_t { /// is_ready & !is_primary == this side is a copy
+    enum flags_t : uint32_t { /// is_ready & !is_primary == this side is a copy
         empty        = 0,
         is_primary   = 1 << 0,
-        is_scheduled = 1 << 1,
-        is_ready     = 1 << 2,
+        is_ready     = 1 << 1,
+        is_scheduled = 1 << 2,
         from_path    = 1 << 3,
         fake_center  = 1 << 4,
+        repeat       = 1 << 5,
     };
     struct {
-        state_flags_t flags_;
-        AINF image_;
-        T2IV center_;
+        flags_t flags_ = {};
+        AINF image_ = {};
+        T2IV center_ = {};
     } sides_[2];
-    bool loop_;
 
     static void finalize(void *data) {
         data = ((uint8_t*)data) - sizeof(intptr_t);
-        *((state_flags_t*)data) &= ~is_scheduled;
-        *((state_flags_t*)data) |= is_ready;
+        *((flags_t*)data) &= ~is_scheduled;
+        *((flags_t*)data) |= is_ready;
         free(data);
+    }
+    void set_flag(bool left, bool value, flags_t flag) {
+        auto &side = sides_[left];
+        if (value)
+            side.flags_ |= flag;
+        else
+            side.flags_ &= ~flag;
     }
     void remove(bool left) {
         auto &side = sides_[left];
         assert(!(side.flags_ & is_scheduled));
         if (!(side.flags_ & is_ready) && side.image_.time)
             finalize(side.image_.time);
-        side.image_ = (AINF){};
-        side.flags_ = empty;
+        side.image_ = {};
+        side.flags_ = {};
     }
     void add_source(bool left) {
         remove(left);
-        auto &side = sides_[left];
-        side.flags_ |= is_primary;
+        set_flag(left, true, is_primary);
     }
 
 protected:
-    void set_center(bool left, const T2IV &center) {
-        auto &side = sides_[left];
-        side.center_ = center;
-        if ((center.x != 0) || (center.y != 0))
-            side.flags_ |= fake_center;
-        else
-            side.flags_ &= ~fake_center;
-    }
-    void set_primary(bool left, bool what) {
-        auto &side = sides_[left];
-        if (what)
-            side.flags_ |= is_primary;
-        else
-            side.flags_ &= ~is_primary;
-    }
-
-public:
-    unit_t(): sides_(), loop_(true) {}
+    unit_t(): sides_{} {}
     ~unit_t() { remove(false); remove(true); }
 
+    void set_center(bool left, const T2IV &center) {
+        sides_[left].center_ = center;
+        set_flag(left, (center.x != 0) || (center.y != 0), fake_center);
+    }
+    void set_primary(bool left, bool what) {
+        set_flag(left, what, is_primary);
+    }
+    void set_loop(bool left, bool loop) {
+        set_flag(left, loop, repeat);
+    }
     void add_source(bool left, const std::string &name) {
         add_source(left);
         /// here we prepare a structure that contains the string above byte 0,
@@ -738,18 +749,19 @@ public:
         }
     }
     T2IV dims(bool left) {
-        auto &side = sides_[left];
-        return (T2IV){{(int32_t)side.image_.xdim, (int32_t)side.image_.ydim}};
+        return {{(int32_t)sides_[left].image_.xdim,
+                 (int32_t)sides_[left].image_.ydim}};
     }
     uint32_t next_frame(bool left, uint32_t curr) {
-        auto &side = sides_[left];
-        return (curr + 1 >= side.image_.fcnt) ? (loop_) ? 0 : curr : curr + 1;
+        return (curr + 1 >= sides_[left].image_.fcnt)
+                ? (sides_[left].flags_ & repeat) ? 0 : curr
+                : (curr + 1);
     }
     bool is_empty() {
+        // TODO: is this correct? there can be and will be full copies of anims
         return !(sides_[0].flags_ & is_primary)
             && !(sides_[1].flags_ & is_primary);
     }
-    void set_loop(bool loop) { loop_ = loop; }
 };
 
 class effect_t : public unit_t {
@@ -767,13 +779,13 @@ protected:
         any          = 9,
         not_center   = 10,
     };
-    struct {
+    const struct {
         gravity_flags_t placement:4;
         gravity_flags_t centering:4;
     } gravity_flags_[2];
-    T2IV duration_; // u = duration, v = repeat_delay
-    bool follow_;
-    std::vector<T2IV> gravity_[2];
+    const T2IV duration_; // u = duration, v = repeat_delay
+    const bool follow_;
+    std::vector<T2IV> gravity_[2]; // can't be made const: size unknown at init
 
     inline T2IV select_gravity(bool left, uint32_t *seed) const {
         return random_selection<false>(gravity_[left], seed);
@@ -807,7 +819,7 @@ public:
             };
             token_t line({}, str);
             name = process_string(line);
-            bhv = process_string(line);
+            bhv = ascii_to_lower(process_string(line));
             right_image = process_string(line);
             left_image = process_string(line);
             duration = process_float(line, duration);
@@ -835,8 +847,8 @@ public:
     effect_t(const input_t &in, const std::string &path)
     : gravity_flags_{{in.placement_right, in.centering_right},
                      {in.placement_left, in.centering_left}}
-    , duration_{{int32_t(in.duration * 1000.f),
-                 int32_t(in.repeat_delay * 1000.f)}}
+    , duration_{{(decltype(duration_.x))(1000.f * in.duration),
+                 (decltype(duration_.y))(1000.f * in.repeat_delay)}}
     , follow_(in.follow) {
 #ifdef DEV_MODE
         debug_ = in;
@@ -845,7 +857,8 @@ public:
             add_source(false, concat_path({path, in.right_image}));
             add_source(true, concat_path({path, in.left_image}));
         }
-        set_loop(!in.prevent_loop);
+        set_loop(false, !in.prevent_loop);
+        set_loop(true, !in.prevent_loop);
     }
 
     // TODO: check if everything is correct with both horz and vert axes
@@ -900,7 +913,7 @@ public:
         input_t() = default;
         input_t(const std::string_view &str) {
             token_t line({}, str);
-            name = process_string(line);
+            name = ascii_to_lower(process_string(line));
             text = process_string(line);
             auto sound_files = process_array(line);
             if (!sound_files.empty()) sound = sound_files[0];
@@ -915,7 +928,7 @@ public:
 #endif // DEV_MODE
 
 private:
-    std::string sound_;
+    const std::string sound_;
 
     static effect_t::input_t convert_input(const speech_t::input_t &in) {
         effect_t::input_t retn;
@@ -981,15 +994,15 @@ public:
                 followflg = { {"false", false}, {"true",   true},
                               {"fixed", false}, {"mirror", true}, };
             static std::unordered_map<std::string, movement_flags_t> moveflg = {
-                {"horizontal_vertical", move_horz_vert}, {"horizontal_only",move_horz},
-                {"diagonal_horizontal", move_diag_horz}, {"vertical_only",  move_vert},
-                {"diagonal_vertical",   move_diag_vert}, {"diagonal_only",  move_diag},
-                {"mouseover",           move_mouse    }, {"dragged",        move_drag},
-                {"sleep",               move_sleep    }, {"all",            move_all },
-                {"none",                move_none     },
+                {"horizontal_vertical", move_hv  }, {"mouseover", move_mouse},
+                {"diagonal_horizontal", move_dh  }, {"dragged",   move_drag },
+                {"diagonal_vertical",   move_dv  }, {"sleep",     move_sleep},
+                {"horizontal_only",     move_horz}, {"none",      move_none },
+                {"vertical_only",       move_vert}, {"all",       move_all  },
+                {"diagonal_only",       move_diag},
             };
             token_t line({}, str);
-            name = process_string(line);
+            name = ascii_to_lower(process_string(line));
             chance = process_float(line, chance);
             max_duration = process_float(line, max_duration);
             min_duration = process_float(line, min_duration);
@@ -997,16 +1010,16 @@ public:
             right_image = process_string(line);
             left_image = process_string(line);
             movement = process_map(line, moveflg, movement);
-            linked_bhv = process_string(line);
-            bgn_speech = process_string(line);
-            end_speech = process_string(line);
+            linked_bhv = ascii_to_lower(process_string(line));
+            bgn_speech = ascii_to_lower(process_string(line));
+            end_speech = ascii_to_lower(process_string(line));
             skip = process_bool(line, skip);
             target_xy.x = process_float(line, target_xy.x);
             target_xy.y = process_float(line, target_xy.y);
-            follow_target = process_string(line);
+            follow_target = ascii_to_lower(process_string(line));
             auto_follow_img = process_bool(line, auto_follow_img);
-            follow_stop_bhv = process_string(line);
-            follow_mov_bhv = process_string(line);
+            follow_stop_bhv = ascii_to_lower(process_string(line));
+            follow_mov_bhv = ascii_to_lower(process_string(line));
             right_img_center = process_quoted_int_pair(line, right_img_center);
             left_img_center = process_quoted_int_pair(line, left_img_center);
             prevent_loop = process_bool(line, prevent_loop);
@@ -1023,12 +1036,11 @@ public:
 
     // this is the whole speech switching logic from Desktop Ponies, trust me.
     // 0 means no speech, negatives are behaviour-specific speeches, positives
-    // are random speeches. this function never returns negatives, as they are
-    // only needed for internal reference. END can only contain negatives (end
-    // speech from behaviour, if present) or 0; BGN might contain 0, negatives
-    // (start speech from behaviour), or positives (pre-filled random speeches
-    // taken from library that match the BGN group, if start speech is absent)
-    static uint16_t select_speech(uint32_t *seed, uint32_t chance,
+    // are random speeches. END can only yield negatives (end speech from bhv,
+    // if present) or 0; BGN might yield 0, negatives (start speech from bhv),
+    // or positives (pre-filled random speeches taken from library that match
+    // the BGN group, if start speech is absent)
+    static int16_t select_speech(uint32_t *seed, uint32_t chance,
             const behaviour_t &prev, const behaviour_t &curr) {
         auto bgn = random_selection<true>(curr.bgn_speech_idx_, seed);
         auto end = random_selection<true>(prev.end_speech_idx_, seed);
@@ -1036,7 +1048,7 @@ public:
         end = (bgn >= 0) ? (end >= 0) ? bgn : end : bgn;
         // TODO: fix the case when (end > 0) gets replaced with (bgn = 0);
         //       at the time this is hypothetical, but can become relevant
-        return (end > 0) ? (RNG_Load(seed) < chance) ? end : 0 : -end;
+        return ((end < 0) || (RNG_Load(seed) < chance)) ? end : 0;
     }
 
 #ifdef DEV_MODE
@@ -1044,62 +1056,78 @@ public:
 #endif // DEV_MODE
 
 private:
-    library_t::bhv_id_t id_;
-    library_t::bhv_id_t linked_id_;
+    const library_t::bhv_id_t id_;
+    const library_t::bhv_id_t linked_id_;
     // follow_grp_id_ is only needed for its group info: have to
     // pick moving/stationary follow images from this very group
-    library_t::bhv_id_t follow_grp_id_;
-    T2IV duration_; // u = min, v = max
-    float movement_speed_;
-    movement_flags_t movement_;
-    std::vector<int16_t> bgn_speech_idx_; // indices for speeches from library
-    std::vector<int16_t> end_speech_idx_;
-    const library_t *follow_target_;
-    T2IV follow_offset_[2];
-    std::vector<std::unique_ptr<effect_t>> effects_;
+    const library_t::bhv_id_t follow_grp_id_;
+    const T2IV duration_; // u = min, v = max
+    const float movement_speed_;
+    const movement_flags_t movement_;
+    const std::vector<int16_t> bgn_speech_idx_; // speech indices from library
+    const std::vector<int16_t> end_speech_idx_;
+    const library_t::lib_id_t follow_tgt_;
+    const T2IV follow_offset_[2];
+    const std::vector<std::unique_ptr<effect_t>> effects_;
+
+    std::vector<std::unique_ptr<effect_t>> process_effects(
+            const std::string &path, const eff_vec_t &eff) {
+        std::vector<std::unique_ptr<effect_t>> retn;
+        for (auto &e : eff)
+            retn.emplace_back(std::make_unique<effect_t>(e, path));
+        return retn;
+    }
 
 public:
     library_t::bhv_id_t id() const { return id_; }
     library_t::bhv_id_t linked_id() const { return linked_id_; }
     library_t::bhv_id_t follow_grp_id() const { return follow_grp_id_; }
 
-    void set_follow_target(const library_t *target) { follow_target_ = target; }
-
     behaviour_t(const input_t &in, library_t::bhv_id_t id,
             library_t::bhv_id_t linked_id, library_t::bhv_id_t follow_grp_id,
-            const std::string &path, const eff_vec_t &effects,
-            std::vector<int16_t> bgn_speech, std::vector<int16_t> end_speech)
+            library_t::lib_id_t follow_tgt, const std::string &path,
+            std::vector<int16_t> bgn_speech, std::vector<int16_t> end_speech,
+            const eff_vec_t &eff)
     : id_(id)
     , linked_id_(linked_id)
     , follow_grp_id_(follow_grp_id)
-    , duration_{{int32_t(std::min(in.min_duration, in.max_duration) * 1000.f),
-                 int32_t(std::max(in.min_duration, in.max_duration) * 1000.f)}}
+    , duration_{{(decltype(duration_.x))(1000.f *
+                                std::min(in.min_duration, in.max_duration)),
+                 (decltype(duration_.y))(1000.f *
+                                std::max(in.min_duration, in.max_duration))}}
     , movement_speed_(in.speed * FRM_WAIT / 30.f)
     , movement_(in.movement)
     , bgn_speech_idx_(std::move(bgn_speech))
     , end_speech_idx_(std::move(end_speech))
-    , follow_target_(nullptr) {
+    , follow_tgt_(follow_tgt)
+    , follow_offset_{in.target_xy, (in.mirror_target_xy)
+                                       ? T2IV{{-in.target_xy.x, in.target_xy.y}}
+                                       : in.target_xy}
+    , effects_(process_effects(path, eff)) {
 #ifdef DEV_MODE
         debug_ = in;
 #endif // DEV_MODE
-        follow_offset_[false] = in.target_xy;
-        follow_offset_[true] = (in.mirror_target_xy)
-                ? T2IV{{-in.target_xy.x, in.target_xy.y}}
-                : in.target_xy;
         if (!path.empty()) {
             add_source(false, concat_path({path, in.right_image}));
             add_source(true, concat_path({path, in.left_image}));
         }
         set_center(false, in.right_img_center);
         set_center(true, in.left_img_center);
-        set_loop(!in.prevent_loop);
-        for (auto &e : effects)
-            effects_.emplace_back(std::make_unique<effect_t>(e, path));
+        set_loop(false, !in.prevent_loop);
+        set_loop(true, !in.prevent_loop);
     }
 };
 
 class interaction_t : public no_copy_t {
 private:
+    bool all_;
+    uint16_t proximity_;
+    uint32_t chance_;
+    const T2IV duration_; // u = duration (INT_MAX), v = reactivation delay
+    std::vector<library_t::bhv_id_t> initiator_;
+    std::unordered_map<library_t::lib_id_t, std::vector<library_t::bhv_id_t>>
+        targets_;
+
 public:
     class input_t {
     public:
@@ -1124,11 +1152,11 @@ public:
             chance = process_float(line, chance);
             proximity = process_float(line, proximity);
             auto tgt_s = process_array(line);
-            targets = std::vector<std::string>(tgt_s.begin(), tgt_s.end());
+            for (auto &t : tgt_s) targets.emplace_back(ascii_to_lower(t));
             target_activation_all
                     = process_map(line, activations, target_activation_all);
             auto bhv_s = process_array(line);
-            bhv = std::vector<std::string>(bhv_s.begin(), bhv_s.end());
+            for (auto &b : bhv_s) bhv.emplace_back(ascii_to_lower(b));
             reactivation_delay = process_float(line, reactivation_delay);
         }
         bool validate() const {
@@ -1144,10 +1172,41 @@ public:
     input_t debug_;
 #endif // DEV_MODE
 
-    interaction_t(const input_t &in) {
+    bool is_empty() const { return initiator_.empty() || targets_.empty(); }
+
+    interaction_t(const input_t &in, const std::string &lib_name,
+            const library_t::bhv_id_map_t &bhv_map)
+    : all_(in.target_activation_all)
+    , proximity_(in.proximity)
+    , chance_(double(uint32_t(~0)) * std::clamp(in.chance, 0.f, 1.f))
+    , duration_{{std::numeric_limits<decltype(duration_.x)>::max(),
+                (decltype(duration_.y))(1000.f * in.reactivation_delay)}} {
 #ifdef DEV_MODE
         debug_ = in;
 #endif // DEV_MODE
+        auto append_bhv = [&](const std::string &lib_id, bool target) {
+            auto &retn = (target) ? targets_[str_hash(lib_id)] : initiator_;
+            if (auto bhv_id_desc = find_in_map(bhv_map, lib_id))
+                for (auto &b : in.bhv)
+                    if (auto bhv_id = find_in_map(bhv_id_desc->m, b))
+                        retn.emplace_back(*bhv_id);
+            if (retn.empty()) {
+                printf("[%s] WARNING: no interaction behaviours with '%s' in "
+                       "'%s', target dropped\n",
+                        lib_name.c_str(), lib_id.c_str(), in.name.c_str());
+                return false;
+            }
+            return true;
+        };
+        if (append_bhv(lib_name, false)) {
+            for (auto &t : in.targets) append_bhv(t, true);
+            for (auto it = targets_.begin(); it != targets_.end(); )
+                it = (it->second.empty()) ? targets_.erase(it) : std::next(it);
+        }
+        if (is_empty())
+            printf("[%s] WARNING: no interaction behaviours in '%s', "
+                   "interaction dropped\n",
+                    lib_name.c_str(), in.name.c_str());
     }
 };
 
@@ -1204,31 +1263,49 @@ public:
     }
 };
 
-template <typename K, typename V>
-const std::remove_reference_t<V> *find_in_map(
-        const std::unordered_map<K, V> &map, const K &key) {
-    auto iter = map.find(key);
-    return (iter != map.end()) ? &iter->second : nullptr;
+library_t::bhv_id_desc_t library_t::build_bhv_id_desc(const input_t &in) {
+    std::unordered_map<int, std::array<int, bhv_type_t::max_ + 1>> bhv_grp;
+    bhv_id_desc_t retn;
+    for (auto &b : in.behaviours) {
+        bhv_id_internal_t iid{init_bhv_id(b.movement, b.group)};
+        if (!find_in_map(bhv_grp, iid.group)) bhv_grp[iid.group] = {};
+        iid.index += bhv_grp[iid.group][iid.type]++;
+        retn.v.emplace_back(iid._);
+        if (!b.name.empty() && !find_in_map(retn.m, b.name)) {
+            retn.m.emplace(b.name, iid._);
+        } else {
+            printf("[%s] WARNING, behaviour name collision: '%s'\n",
+                    in.name.c_str(), b.name.c_str());
+        }
+    }
+    return retn;
 }
 
-library_t::library_t(
-        const std::string &path, const input_t &in, bhv_map_t &bhv_map)
+library_t::library_t(const std::string &path, const input_t &in,
+        const bhv_id_map_t &bhv_id_map)
 : library_path_(path)
 , readable_name_(in.name) {
-    std::unordered_map<std::string, eff_vec_t> effects;
-    std::unordered_map<std::string, int> spk_bhv_map;
-    std::unordered_map<int, std::vector<int>> spk_rnd_map;
-    std::unordered_map<std::string, library_t::bhv_id_t> bhv_id_map;
-    std::vector<library_t::bhv_id_t> bhv_id_vec;
-    eff_vec_t e_null;
+    auto hashable_name = ascii_to_lower(in.name);
 
+    // processing the interactions
+    for (auto &i : in.interactions) {
+        auto it = std::make_unique<interaction_t>(i, hashable_name, bhv_id_map);
+        if (!it->is_empty())
+            interactions_.emplace_back(std::move(it));
+    }
     // distributing effects configs by group
+    std::unordered_map<std::string, eff_vec_t> effects;
     for (auto &e : in.effects)
         effects[e.bhv].emplace_back(e);
 
+    std::unordered_map<std::string, int> spk_bhv_map;
+    std::unordered_map<int, std::vector<int>> spk_rnd_map;
+    std::unordered_map<std::string, behaviour_t*> bhv_map;
+    eff_vec_t e_null;
+
     // distributing behaviour-linked (< 0) and random (> 0) speeches
     for (auto &s : in.speeches) {
-        const bool dejavu = spk_bhv_map.count(s.name);
+        auto dejavu = find_in_map(spk_bhv_map, s.name);
         if (dejavu)
             printf("[%s] WARNING, speech name collision: '%s'%s\n",
                     in.name.c_str(), s.name.c_str(),
@@ -1240,31 +1317,16 @@ library_t::library_t(
                 spk_rnd_map[s.group].emplace_back(int(speeches_.size()));
         }
     }
-
-    // initializing the group structure for behaviours
-    std::unordered_map<int, std::array<int, bhv_type_t::max_ + 1>> bhv_grp;
-    for (auto &b : in.behaviours) {
-        bhv_id_internal_t iid{init_bhv_id(b.movement, b.group)};
-        if (!find_in_map(bhv_grp, iid.group)) bhv_grp[iid.group] = {};
-        iid.index += bhv_grp[iid.group][iid.type]++;
-        bhv_id_vec.emplace_back(iid._);
-        if (!b.name.empty() && !bhv_id_map.count(b.name)) {
-            bhv_id_map.emplace(b.name, iid._);
-        } else {
-            printf("[%s] WARNING, behaviour name collision: '%s'\n",
-                    in.name.c_str(), b.name.c_str());
-        }
-    }
-
     auto i0 = find_in_map(spk_rnd_map, 0); // random speeches from group 0
 
     // creating the behaviours
+    auto &bhv_id_desc = *find_in_map(bhv_id_map, hashable_name);
     for (size_t i = 0; i < in.behaviours.size(); i++) {
         std::vector<int16_t> b_spk, e_spk;
         auto &b = in.behaviours[i];
         auto ig = find_in_map(spk_rnd_map, b.group);
         if (auto ib = find_in_map(spk_bhv_map, b.bgn_speech)) {
-            b_spk.emplace_back(*ib); // found behaviour-specific bgn speech
+            b_spk.emplace_back(*ib); // found behaviour-specific start speech
         } else if (ig || i0) {
             // no start speech found, substituting it with random speeches;
             // no speech can belong to >1 group, don't look for duplicates
@@ -1275,42 +1337,44 @@ library_t::library_t(
         if (auto ie = find_in_map(spk_bhv_map, b.end_speech))
             e_spk.emplace_back(*ie); // found behaviour-specific end speech
 
-        bhv_id_internal_t id = {bhv_id_vec[i]};
-        bhv_id_internal_t linked_id = {};
-        if (auto il = find_in_map(bhv_id_map, b.linked_bhv)) {
-            linked_id._ = *il;
+        bhv_id_internal_t iid{bhv_id_desc.v[i]};
+        bhv_id_internal_t linked_iid = {};
+        if (auto il = find_in_map(bhv_id_desc.m, b.linked_bhv)) {
+            linked_iid._ = *il;
         } else if (!b.linked_bhv.empty()) {
             printf("[%s] WARNING, invalid linked behaviour name in '%s'\n",
                     in.name.c_str(), b.name.c_str());
         }
-        auto is = find_in_map(bhv_id_map, b.follow_stop_bhv);
-        auto im = find_in_map(bhv_id_map, b.follow_mov_bhv);
-        bhv_id_internal_t follow_grp_id = {};
-        follow_grp_id.group = (is && im) ? -int16_t(i) : id.group;
+        auto is = find_in_map(bhv_id_desc.m, b.follow_stop_bhv);
+        auto im = find_in_map(bhv_id_desc.m, b.follow_mov_bhv);
+        bhv_id_internal_t follow_grp_iid = {};
+        follow_grp_iid.group = (is && im) ? -int16_t(i) : iid.group;
 
         auto ie = find_in_map(effects, b.name);
-        behaviours_.emplace_back(std::make_unique<behaviour_t>(b, id._,
-                    linked_id._, follow_grp_id._, path, (ie) ? *ie : e_null,
-                    b_spk, e_spk));
-        groups_[id.group].bhv[id.type].emplace_back(*behaviours_.back());
+        behaviours_.emplace_back(std::make_unique<behaviour_t>(b, iid._,
+                    linked_iid._, follow_grp_iid._, str_hash(b.follow_target),
+                    path, b_spk, e_spk, (ie) ? *ie : e_null));
+        groups_[iid.group].bhv[iid.type].emplace_back(*behaviours_.back());
         bhv_map.emplace(b.name, behaviours_.back().get());
+        assert(iid.index == groups_[iid.group].bhv[iid.type].size());
     }
 
-    std::unordered_map<int, std::vector<int>> prob_map;
+    std::unordered_map<int, std::vector<uint32_t>> prob_map;
     for (size_t i = 0; i < in.behaviours.size(); i++) {
         auto &b = in.behaviours[i];
         if ((!b.skip) && (b.chance > 0.f)) {
-            prob_map[b.group].emplace_back(b.chance * 10000.f);
+            prob_map[b.group].emplace_back(
+                    10000.f * std::clamp(b.chance, 0.f, 1.f));
             groups_[b.group].bhv[nonzero_prob].emplace_back(*behaviours_[i]);
         }
     }
     // adding behaviours from group 0 (GroupAny) to all other groups
-    if (groups_.count(0))
+    if (auto ig = find_in_map(groups_, 0))
         for (auto &p : prob_map)
             if (p.first != 0) {
                 p.second.insert(
                         p.second.end(), prob_map[0].begin(), prob_map[0].end());
-                groups_[p.first].append(groups_[0]);
+                groups_[p.first].append(*ig);
             }
     // initializing probabilities
     for (auto &p : prob_map) {
@@ -1347,8 +1411,7 @@ library_t::library_t(
     }
 }
 
-library_t::bhv_id_t library_t::init_bhv_id(
-        movement_flags_t move, int16_t group) {
+library_t::bhv_id_t library_t::init_bhv_id(movement_flags_t move, int16_t grp) {
     bhv_id_internal_t iid;
     iid.index = 1;
     switch (move) {
@@ -1356,22 +1419,20 @@ library_t::bhv_id_t library_t::init_bhv_id(
         case move_mouse: iid.type = mouseover;  break;
         case move_drag:  iid.type = dragged;    break;
         case move_sleep: iid.type = sleeping;   break;
-        case move_all: case move_horz: case move_vert: case move_diag:
-        case move_horz_vert: case move_diag_horz: case move_diag_vert:
-            iid.type = moving;
-            break;
+        case move_all: case move_dv: case move_horz: case move_diag:
+        case move_hv:  case move_dh: case move_vert: iid.type = moving; break;
     }
-    iid.group = group;
+    iid.group = grp;
     return iid._;
 }
 
 const behaviour_t *library_t::get(bhv_id_t id) const {
     bhv_id_internal_t iid = {id};
     if (!iid.index) return nullptr;
-    auto ig = groups_.find(iid.group);
-    if ((ig == groups_.end()) || (iid.index > ig->second.bhv[iid.type].size()))
-        return nullptr;
-    return &ig->second.bhv[iid.type][iid.index - 1].get();
+    auto ig = find_in_map(groups_, iid.group);
+    return (ig && (iid.index <= ig->bhv[iid.type].size()))
+            ? &ig->bhv[iid.type][iid.index - 1].get()
+            : nullptr;
 }
 
 const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
@@ -1379,8 +1440,8 @@ const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
     auto b_prev = get(prev), b_curr = get(curr);
     if (!b_prev || !b_curr) return nullptr;
     auto index = behaviour_t::select_speech(seed, chance, *b_prev, *b_curr);
-    assert(index <= speeches_.size());
-    return (index > 0) ? speeches_[index - 1].get() : nullptr;
+    assert(std::abs(index) <= speeches_.size());
+    return (index) ? speeches_[std::abs(index) - 1].get() : nullptr;
 }
 
 /// client configuration
@@ -1415,8 +1476,8 @@ private:
               ccur_, /// current configuration
               cini_; /// initial configuration read at the start
 
-    std::vector<std::unique_ptr<library_t>> libs_;
-    std::vector<lib_vec_t> categories_;
+    std::unordered_map<library_t::lib_id_t, std::unique_ptr<library_t>> libs_;
+    std::vector<std::vector<library_t::lib_id_t>> categories_;
 
 public:
     void build_library_structure(const std::string &path,
@@ -1425,52 +1486,45 @@ public:
 
 void engine_t::build_library_structure(const std::string &base,
         const std::vector<library_t::input_t> &ins) {
-    std::unordered_map<std::string, std::unordered_set<library_t*>> categories;
-    std::unordered_map<std::string, std::pair<library_t*, bhv_map_t>> lib_map;
+    std::unordered_map<std::string, std::unordered_set<library_t::lib_id_t>>
+        categories;
+    library_t::bhv_id_map_t bhv_id_map;
+
+    // construct the behaviour ID descriptors and draft categories for everyone
+    for (size_t i = 0; i < ins.size(); i++) {
+        auto ib = bhv_id_map.emplace(ascii_to_lower(ins[i].name),
+                    library_t::build_bhv_id_desc(ins[i]));
+        assert(ib.second); // make sure the library has a unique name
+        for (auto &c : ins[i].categories)
+            categories[c].emplace(str_hash(ins[i].name));
+    }
+
+    // process follow targets (nothing to do beside report missing ones)
+    for (auto &i : ins)
+        for (auto &b : i.behaviours)
+            if (!b.follow_target.empty())
+                if (!find_in_map(bhv_id_map, b.follow_target))
+                    printf("[%s] WARNING, invalid follow target name in '%s'\n",
+                            i.name.c_str(), b.name.c_str());
 
     // load the libraries
     for (size_t i = 0; i < ins.size(); i++) {
         printf("%s\n", ins[i].name.c_str());
-        bhv_map_t bhv_map;
         auto path = concat_path({base, ins[i].name});
-        libs_.emplace_back(std::make_unique<library_t>(path, ins[i], bhv_map));
-        auto il = lib_map.emplace(ascii_to_lower(ins[i].name),
-                    std::make_pair(libs_.back().get(), bhv_map));
-        assert(il.second); // make sure the library has a unique name in the map
-        ((void)il);
-        for (auto &c : ins[i].categories)
-            categories[c].emplace(libs_.back().get());
+        libs_.emplace(str_hash(ins[i].name),
+                std::make_unique<library_t>(path, ins[i], bhv_id_map));
     }
-
-    // process follow targets
-    for (auto &i : ins)
-        for (auto &b : i.behaviours)
-            if (!b.follow_target.empty()) {
-                auto il = lib_map.find(ascii_to_lower(b.follow_target));
-                if (il != lib_map.end()) {
-                    auto &bhv_map = lib_map[ascii_to_lower(i.name)].second;
-                    bhv_map[b.name]->set_follow_target(il->second.first);
-                } else {
-                    printf("[%s] WARNING, invalid follow target name in '%s'\n",
-                            i.name.c_str(), b.name.c_str());
-                }
-            }
-
-    // process interactions
-    // TODO: precompute the possible behaviours for each group in each of the
-    //       participants and put them in a map keyed by group ID
-    //for (size_t i = 0; i < ins.size(); i++)
-    //    for (auto &in : ins[i].interactions) {
-    //        libs_[i]->add_interaction();
-    //    }
 
     // process categories
     categories_.reserve(categories.size());
     for (auto &c : categories) {
         categories_.emplace_back();
-        for (auto &l : c.second) categories_.back().emplace_back(*l);
-        using T = lib_vec_t::value_type;
-        auto names = [](T &a, T &b) { return a.get().name() < b.get().name(); };
+        for (auto l : c.second) categories_.back().emplace_back(l);
+        auto names = [&](library_t::lib_id_t &a, library_t::lib_id_t &b) {
+            auto lib_a = find_in_map(libs_, a);
+            auto lib_b = find_in_map(libs_, b);
+            return (*lib_a)->name() < (*lib_b)->name();
+        };
         std::sort(categories_.back().begin(), categories_.back().end(), names);
         // TODO: associate names/indices with the list control
     }
@@ -1502,8 +1556,8 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                 }
             }
             free(file);
-            auto find = rFindMake(base.c_str());
             std::vector<library_t::input_t> ins;
+            auto find = rFindMake(base.c_str());
             while (!!(file = rFindFile(find))) {
                 ins.emplace_back(library_t::input_t(base, file));
                 free(file);
