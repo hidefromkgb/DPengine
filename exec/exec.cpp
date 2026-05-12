@@ -47,108 +47,53 @@
 #define DEF_DSEP "/"
 
 /// /// /// /// /// /// /// /// /// ENGC.MCTL array indices
-#define MCT_CAPT mctl[ 0]
-#define MCT_FLTR mctl[ 1]
-#define MCT_EXAC mctl[ 2]
-#define MCT_OGRP mctl[ 3]
-#define MCT_SGRP mctl[ 4]
-#define MCT_SPEC mctl[ 5]
-#define MCT_BADD mctl[ 6]
-#define MCT_SRND mctl[ 7]
-#define MCT_RGPU mctl[ 8]
-#define MCT_BDUP mctl[ 9]
-#define MCT_SELE mctl[10]
-#define MCT_OPTS mctl[11]
-#define MCT_GOGO mctl[12]
-#define MCT_CHAR mctl[13]
+#define MCT_CAPT mctl_[ 0]
+#define MCT_FLTR mctl_[ 1]
+#define MCT_EXAC mctl_[ 2]
+#define MCT_OGRP mctl_[ 3]
+#define MCT_SGRP mctl_[ 4]
+#define MCT_SPEC mctl_[ 5]
+#define MCT_BADD mctl_[ 6]
+#define MCT_SRND mctl_[ 7]
+#define MCT_RGPU mctl_[ 8]
+#define MCT_BDUP mctl_[ 9]
+#define MCT_SELE mctl_[10]
+#define MCT_OPTS mctl_[11]
+#define MCT_GOGO mctl_[12]
+#define MCT_CHAR mctl_[13]
 
 /// /// /// /// /// /// /// /// /// ENGC.OCTL array indices
-#define OCT_OPTS octl[ 0]
-#define OCT_UONR octl[ 1]
-#define OCT_ETOP octl[ 2]
-#define OCT_EEFF octl[ 3]
-#define OCT_EINT octl[ 4]
-#define OCT_ESAY octl[ 5]
-#define OCT_ECLR octl[ 6]
-#define OCT_ERCH octl[ 7]
-#define OCT_NRUN octl[ 8]
-#define OCT_TRUN octl[ 9]
-#define OCT_NSCA octl[10]
-#define OCT_TSCA octl[11]
-#define OCT_NDIL octl[12]
-#define OCT_TDIL octl[13]
-#define OCT_NSAY octl[14]
-#define OCT_TSAY octl[15]
-#define OCT_NCDR octl[16]
-#define OCT_TCDR octl[17]
-#define OCT_LCHO octl[20]
-#define OCT_LREL octl[21]
-#define OCT_LRES octl[22]
-#define OCT_LGUI octl[23]
-#define OCT_BCHO octl[26]
-#define OCT_BREL octl[27]
-#define OCT_BRES octl[28]
-#define OCT_BDIR octl[29]
-#define OCT_FREL octl[31]
-#define OCT_FRES octl[32]
+#define OCT_OPTS octl_[ 0]
+#define OCT_UONR octl_[ 1]
+#define OCT_ETOP octl_[ 2]
+#define OCT_EEFF octl_[ 3]
+#define OCT_EINT octl_[ 4]
+#define OCT_ESAY octl_[ 5]
+#define OCT_ECLR octl_[ 6]
+#define OCT_ERCH octl_[ 7]
+#define OCT_NRUN octl_[ 8]
+#define OCT_TRUN octl_[ 9]
+#define OCT_NSCA octl_[10]
+#define OCT_TSCA octl_[11]
+#define OCT_NDIL octl_[12]
+#define OCT_TDIL octl_[13]
+#define OCT_NSAY octl_[14]
+#define OCT_TSAY octl_[15]
+#define OCT_NCDR octl_[16]
+#define OCT_TCDR octl_[17]
+#define OCT_LCHO octl_[20]
+#define OCT_LREL octl_[21]
+#define OCT_LRES octl_[22]
+#define OCT_LGUI octl_[23]
+#define OCT_BCHO octl_[26]
+#define OCT_BREL octl_[27]
+#define OCT_BRES octl_[28]
+#define OCT_BDIR octl_[29]
+#define OCT_FREL octl_[31]
+#define OCT_FRES octl_[32]
 
 enum {
 /** framerate limiter in msec   **/ FRM_WAIT = 40,
-};
-enum {
-/// /// /// /// /// /// /// /// /// config file strings
-/** 'content'                   **/ CNF_BASE = 0x6558329A,
-/** 'language'                  **/ CNF_LANG = 0x1644959C,
-/** 'runstillupdate'            **/ CNF_RUNS = 0x7ECC31BE,
-/** 'basescale'                 **/ CNF_SCAL = 0x7A285DE0,
-/** 'timedilation'              **/ CNF_TDIL = 0x338D79CF,
-/** 'randomspeech'              **/ CNF_RSAY = 0x0C4A8F7D,
-/** 'cursordodge'               **/ CNF_PCDR = 0xD00CAB48,
-/** 'flags'                     **/ CNF_FLGS = 0x8ACE03CE,
-/** 'render'                    **/ CNF_RNDR = 0x3C9F6676,
-/** 'draw'                      **/ CNF_DRAW = 0xE7ABD6EE,
-/** 'show'                      **/ CNF_SHOW = 0x27D90DCD,
-/** 'gpu'                       **/ CNF_RGPU = 0x11927E83,
-/** 'opaque'                    **/ CNF_OPAQ = 0xD246CFE1,
-/** 'wbgra'                     **/ CNF_IBGR = 0xABF3B1E8,
-/** 'wpbo'                      **/ CNF_IPBO = 0x78FE3880,
-/** 'wregion'                   **/ CNF_IRGN = 0xDE0DCCBE,
-/** 'update'                    **/ CNF_UONR = 0xE4895181,
-/** 'topmost'                   **/ CNF_ETOP = 0x0622A23D,
-/** 'effects'                   **/ CNF_EEFF = 0xAB1F60DF,
-/** 'interaction'               **/ CNF_EINT = 0x3CD837AB,
-/** 'speech'                    **/ CNF_ESAY = 0x5E664BA6,
-/** 'cspeech'                   **/ CNF_ECLR = 0x32A64DBA,
-/** 'hover'                     **/ CNF_ERCH = 0x303621E9,
-};
-enum {
-/// /// /// /// /// /// /// /// /// this sprite is...
-/** ...an effect                **/ PIF_EFCT = 1 <<  0,
-/** ...inactive, but reserved   **/ PIF_IRES = 1 <<  1,
-/** ...stopped when following   **/ PIF_STOP = 1 <<  2,
-/** ..."asleep"                 **/ PIF_SLPM = 1 <<  3,
-/** ...dragged                  **/ PIF_DRGM = 1 <<  4,
-/** ...under cursor             **/ PIF_OVRM = 1 <<  5,
-/** ...controlled by Player 1   **/ PIF_TPL1 = 1 <<  6,
-/** ...controlled by Player 2   **/ PIF_TPL2 = 1 <<  7,
-/** [special modes` extractor]  **/ PIF_SPEC = PIF_SLPM | PIF_DRGM | PIF_OVRM,
-/** ["busy" sprites extractor]  **/ PIF_BUSY = PIF_SPEC | PIF_TPL1 | PIF_TPL2,
-};
-enum {
-/// /// /// /// /// /// /// /// /// flags for ChooseBehaviour
-/** first spawn of a sprite     **/ CBF_INIT = 1 <<  0,
-/** select a pre-set behaviour  **/ CBF_NEXT = 1 <<  1,
-/** do not spawn effects        **/ CBF_DNSE = 1 <<  2,
-};
-enum {
-/// /// /// /// /// /// /// /// /// client specific flags
-/** update the animation base   **/ CSF_UONR = 1 <<  0,
-/** engine window is top-most   **/ CSF_ETOP = 1 <<  1,
-/** behaviour effects are on    **/ CSF_EEFF = 1 <<  2,
-/** interactions are on         **/ CSF_EINT = 1 <<  3,
-/** speech bubbles are on       **/ CSF_ESAY = 1 <<  4,
-/** speech bubbles are colored  **/ CSF_ECLR = 1 <<  5,
-/** cursor hover reaction is on **/ CSF_ERCH = 1 <<  6,
 };
 enum {
 /// /// /// /// /// /// /// /// /// localized text constants
@@ -222,9 +167,6 @@ enum {
 /** OK                          **/ TXT_BYES,
 /** Cancel                      **/ TXT_BNAY,
 };
-
-/// engine data (client side), prototype
-typedef struct ENGC ENGC;
 
 /// flag enum support!
 template<class T> constexpr typename std::enable_if<std::is_enum_v<T>, T>::type
@@ -1419,8 +1361,8 @@ library_t::bhv_id_t library_t::init_bhv_id(movement_flags_t move, int16_t grp) {
         case move_mouse: iid.type = mouseover;  break;
         case move_drag:  iid.type = dragged;    break;
         case move_sleep: iid.type = sleeping;   break;
-        case move_all: case move_dv: case move_horz: case move_diag:
-        case move_hv:  case move_dh: case move_vert: iid.type = moving; break;
+        case move_all: case move_dh: case move_horz: case move_diag:
+        case move_hv:  case move_dv: case move_vert: iid.type = moving; break;
     }
     iid.group = grp;
     return iid._;
@@ -1445,44 +1387,658 @@ const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
 }
 
 /// client configuration
-typedef struct {
-    char    *lang,  /// name of the language file
-            *base;  /// path to the animation base
-    uint32_t flgs;  /// client-specific flags, e.g. effects +/- (CSF_ prefix)
-    int16_t nrun[3],/// \.
-            nsca[3],/// |.
-            ndil[3],/// |.
-            nsay[3],/// |. spinbox limits: [0] = min, [1] = pos, [2] = max
-            ncdr[3],/// |.
-            spec[3],/// |.
-            rgpu[3];/// /
-} CONF;
+class conf_t {
+public:
+    enum flags_t : uint32_t {
+        none        = 0,
+        draw        = 1 <<  0,
+        show        = 1 <<  1,
+        gpu         = 1 <<  2,
+        opaque      = 1 <<  3,
+        wbgra       = 1 <<  4,
+        wpbo        = 1 <<  5,
+        wregion     = 1 <<  6,
+        update      = 1 <<  7,
+        topmost     = 1 <<  8,
+        effects     = 1 <<  9,
+        interaction = 1 << 10,
+        speech      = 1 << 11,
+        cspeech     = 1 << 12,
+        hover       = 1 << 13,
+    };
+    class spin_t {
+    private:
+        int16_t curr_, min_, max_;
+    public:
+        spin_t() : curr_{}, min_{}, max_{} {};
+        spin_t(int16_t curr, int16_t min, int16_t max)
+            : curr_{std::clamp(curr, min, max)}, min_{min}, max_{max} {}
+        int16_t set(int16_t dist) {
+            return curr_ = (dist <= max_) ? (dist >= min_) ? dist : min_ : max_;
+        }
+        int16_t get() const { return curr_; }
+        int16_t move(int16_t dist) { return set(get() + dist); }
+    };
+    std::string lang;  // name of the language file
+    std::string base;  // path to the animation base
+    flags_t flgs = {};
+    spin_t nrun = spin_t(  5,    0,  1000); // runs between updates
+    spin_t nsca = spin_t(100,   25,   300); // base scaling factor
+    spin_t ndil = spin_t(100,   10,  1000); // time dilation factor
+    spin_t nsay = spin_t( 50,    0,   100); // random speech chance
+    spin_t ncdr = spin_t(  0,    0,  1000); // cursor dodge radius
+    spin_t spec = spin_t(  0, -100,   100); // group selection
+    spin_t rgpu = spin_t(  0,    0, 30000); // random selection
+};
 
 /// engine data (client side)
 class engine_t : public no_copy_t {
 private:
-    MENU     *mspr_, /// per-sprite context menu
-             *mctx_; /// engine`s main context menu
-    CTRL     *mctl_, /// GUI controls array (main window)
-             *octl_; /// GUI controls array (options window)
-    uint64_t  tcur_, /// current, dilation-adjusted timestamp
-              tpre_; /// previous raw timestamp
-    float     tacc_; /// partial timestamp accumulator
-    T3IV      ppos_; /// mouse pointer position (z = flags)
-    T2IV      dpos_, /// drawing area position
-              dims_, /// drawing area dimensions
-              idim_; /// tray icon dimensions
-    CONF      cdef_, /// default configuration
-              ccur_, /// current configuration
-              cini_; /// initial configuration read at the start
+    std::vector<MENU> mspr_; /// per-sprite context menu
+    std::vector<MENU> mctx_; /// engine`s main context menu
+    std::vector<CTRL> mctl_; /// GUI controls array (main window)
+    std::vector<CTRL> octl_; /// GUI controls array (options window)
+    std::string cfnm_; /// main configuration file path
+    uint64_t tcur_; /// current, dilation-adjusted timestamp
+    uint64_t tpre_; /// previous raw timestamp
+    float tacc_;  /// partial timestamp accumulator
+    T3IV ppos_;   /// mouse pointer position (z = flags)
+    T2IV tray_;   /// tray icon dimensions
+    T4IV area_;   /// drawing area position and dimensions
+    conf_t cdef_; /// default configuration
+    conf_t ccur_; /// current configuration
+    conf_t cini_; /// initial configuration read at the start
+    ENGD *engd_;
 
     std::unordered_map<library_t::lib_id_t, std::unique_ptr<library_t>> libs_;
     std::vector<std::vector<library_t::lib_id_t>> categories_;
 
+    T2IV get_min_preview_size() {
+        auto retn = RUN_FE2C(MCT_SPEC, MSG__GSZ, 0);
+        return {{uint16_t(retn), uint16_t(retn >> 16)}};
+    }
+
+    T2IV get_avg_font_size() {
+        AINF atmp{0, 0, 0, 0, (uint32_t*)"    " /* 4 spaces */};
+        auto retn = RUN_FE2C(MCT_CAPT, MSG_WTGD, (intptr_t)&atmp);
+        return {{int32_t(0.25f * uint16_t(retn)), uint16_t(retn >> 16)}};
+    }
+
 public:
+    engine_t(const std::string_view fcnf, const std::string_view base,
+            const T2IV tray, const T4IV area);
+
     void build_library_structure(const std::string &path,
             const std::vector<library_t::input_t> &ins);
 };
+
+intptr_t FC2EO(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+/*
+    static uint32_t uCSF[] = {CSF_UONR, CSF_ETOP, CSF_EEFF,
+                              CSF_EINT, CSF_ECLR, CSF_ESAY, CSF_ERCH};
+    uint32_t indx = 0;
+    char *temp;
+    ENGC *engc;
+
+    switch (ctrl->uuid) {
+        case TXT_OPTS:
+            if (cmsg == MSG_WEND)
+                ctrl->fe2c(ctrl, MSG__SHW, 0);
+            break;
+
+        case TXT_ERCH: indx++;
+        case TXT_ESAY: indx++;
+        case TXT_ECLR: indx++;
+        case TXT_EINT: indx++;
+        case TXT_EEFF: indx++;
+        case TXT_ETOP: indx++;
+        case TXT_UONR:
+            if (cmsg != MSG_BCLK)
+                break;
+            engc = (ENGC*)ctrl->data;
+            engc->ccur.flgs = (!data)? engc->ccur.flgs & ~uCSF[indx]
+                                     : engc->ccur.flgs |  uCSF[indx];
+            if (ctrl->uuid == TXT_ESAY) {
+                RUN_FE2C(engc->OCT_ECLR, MSG__ENB, data);
+                RUN_FE2C(engc->OCT_NSAY, MSG__ENB, data);
+                RUN_FE2C(engc->OCT_TSAY, MSG__ENB, data);
+            }
+            else if (ctrl->uuid == TXT_ERCH) {
+                RUN_FE2C(engc->OCT_NCDR, MSG__ENB, data);
+                RUN_FE2C(engc->OCT_TCDR, MSG__ENB, data);
+            }
+            break;
+
+        case TXT_RUNS:
+        case TXT_SCAL:
+        case TXT_TDIL:
+        case TXT_RSAY:
+        case TXT_PCDR:
+            if (cmsg == MSG_NSET)
+                ((int16_t*)ctrl->data)[1] =
+                    ClampToBounds(data, ((int16_t*)ctrl->data)[0],
+                                        ((int16_t*)ctrl->data)[2]);
+            break;
+
+        case TXT_CHOO:
+        case TXT_RELO:
+        case TXT_RESE:
+            if (cmsg != MSG_BCLK)
+                break;
+            engc = (ENGC*)ctrl->data;
+            if ((ctrl == &engc->OCT_FREL) || (ctrl == &engc->OCT_FRES)) {
+                CTRL *lctl, *bctl;
+
+                if (ctrl->uuid == TXT_RELO) {
+                    lctl = &engc->OCT_LREL;
+                    bctl = &engc->OCT_BREL;
+                    engc->ccur = engc->cini;
+                    engc->ccur.base = engc->ccur.lang = 0;
+                }
+                else {
+                    lctl = &engc->OCT_LRES;
+                    bctl = &engc->OCT_BRES;
+                    engc->ccur = engc->cdef;
+                    engc->ccur.base = engc->ccur.lang = 0;
+                }
+                lctl->fc2e(lctl, MSG_BCLK, 0);
+                bctl->fc2e(bctl, MSG_BCLK, 0);
+                UpdateOptionControls(engc, 0);
+                break;
+            }
+            if ((ctrl == &engc->OCT_LCHO)
+            ||  (ctrl == &engc->OCT_LREL) || (ctrl == &engc->OCT_LRES)) {
+                if ((temp = (ctrl->uuid == TXT_RELO)? engc->cini.lang : 0))
+                    temp = strdup(temp);
+                if ((ctrl->uuid != TXT_CHOO)
+                ||  (temp = Reslash(rChooseFile(ctrl, "lang",
+                                               (engc->ccur.lang)?
+                                                engc->ccur.lang : ""))))
+                    Relocalize(engc, temp);
+            }
+            else {
+                if ((temp = (ctrl->uuid == TXT_RELO)? engc->cini.base : 0))
+                    temp = strdup(temp);
+                if ((ctrl->uuid != TXT_CHOO)
+                ||  (temp = Reslash(rChooseDir(ctrl, engc->ccur.base)))) {
+                    free(engc->ccur.base);
+                    engc->ccur.base = (temp)? strdup(temp) : 0;
+                    RUN_FE2C(engc->OCT_BDIR, MSG__TXT,
+                            (intptr_t)((temp && strcmp(temp, engc->cdef.base))?
+                                        temp : engc->tran[TXT_DFLT]));
+                }
+            }
+            free(temp);
+            break;
+    }
+//*/
+    return 0;
+}
+
+intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    INCBIN("../exec/icon.gif", MainIcon);
+
+    switch (ctrl->uuid) {
+        case TXT_HEAD: {
+/*
+            auto engc = (engine_t*)ctrl->data;
+            intptr_t retn;
+            if (cmsg == MSG_SGIP)
+                DisplayPreviews(engc, data, ctrl->fe2c(ctrl, MSG_SGTH, 0),
+                               (uint32_t)ctrl->fe2c(ctrl, MSG__GSZ, 0) >> 16);
+            else if ((cmsg == MSG_SSID)
+                 && ((retn = RearrangePreviews(engc, 8, (uint16_t)data,
+                                              (uint16_t)(data >> 16))) >= 0))
+                return retn;
+//*/
+            break;
+        }
+        case TXT_OGRP: {
+/*
+            auto engc = (engine_t*)ctrl->data;
+            if (cmsg == MSG_LGST) {
+                cmsg = RUN_FE2C(engc->MCT_EXAC, MSG_BGST, 0);
+                cmsg = (cmsg & FCS_MARK)? 2 : 1;
+                return (engc->ctgs._[data].flgs & cmsg)? 1 : 0;
+            } else if (cmsg == MSG_LSST) {
+                intptr_t prev;
+                cmsg = RUN_FE2C(engc->MCT_EXAC, MSG_BGST, 0);
+                cmsg = (cmsg & FCS_MARK)? 2 : 1;
+                prev = (engc->ctgs._[data >> 1].flgs & cmsg)? 1 : 0;
+                engc->ctgs._[data >> 1].flgs &= ~cmsg;
+                engc->ctgs._[data >> 1].flgs |= (data & 1)? cmsg : 0;
+                CategorizePreviews(engc);
+                return prev;
+            }
+//*/
+            break;
+        }
+        case TXT_BADD:
+/*
+            if (cmsg == MSG_BCLK) {
+                auto engc = (engine_t*)ctrl->data;
+                long spin;
+                data = RUN_FE2C(engc->MCT_SPEC, MSG_NGET, 0);
+                for (cmsg = 0; cmsg < engc->libs.size; cmsg++)
+                    if (engc->libs._[cmsg].wctx.icnt >= 0) {
+                        spin = engc->libs._[cmsg].wctx.icnt;
+                        spin = (spin + data > 0)? spin + data : 0;
+                        if (engc->libs._[cmsg].spin.fe2c)
+                            RUN_FE2C(engc->libs._[cmsg].spin, MSG_NSET, spin);
+                        RUN_FC2E(engc->libs._[cmsg].spin, MSG_NSET, spin);
+                    }
+            }
+//*/
+            break;
+
+        case TXT_CAPT:
+/*
+            if (cmsg == MSG_WEND) {
+                ENGC *engc = (ENGC*)ctrl->data;
+                char *fptr, *file, *temp;
+
+                /// trying to write the animation base to its new location
+                if (engc->cini.base && engc->ccur.base) {
+                    fptr = strdup(engc->ccur.base);
+                    file = Concatenate(0, engc->cini.base, DEF_DSEP, DEF_FLDR);
+                    temp = Concatenate(0, engc->tran[TXT_BSAV],
+                                          "\n\n", file, "\n==>\n",
+                                          fptr, "\n\n", engc->tran[TXT_BDEL]);
+                    if (strcmp(engc->cini.base, engc->ccur.base)) {
+                        if (!rMessage(temp, engc->tran[TXT_BMOV],
+                                            engc->tran[TXT_BYES],
+                                            engc->tran[TXT_BNAY])) {
+                            free(fptr);
+                            fptr = 0;
+                        }
+                        if (!rMoveDir(file, fptr)) {
+                            free(temp);
+                            temp = Concatenate(0, engc->tran[TXT_BERR],
+                                                  "\n\n", file, "\n==>\n",
+                                                  (fptr)? fptr : "[X]");
+                            rMessage(temp, engc->tran[TXT_BMOV],
+                                           engc->tran[TXT_BYES], 0);
+                        }
+                    }
+                    free(temp);
+                    free(fptr);
+                    free(file);
+                }
+                return 1;
+            }
+            if ((cmsg == MSG_WSZC) && (((ENGC*)ctrl->data)->mctl))
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_CHAR, cmsg, data);
+//*/
+            break;
+
+        case TXT_FLTR:
+/*
+            if (cmsg == MSG_BCLK) {
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_EXAC, MSG__ENB, data);
+                CategorizePreviews((ENGC*)ctrl->data);
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_OGRP, MSG__ENB, data);
+            }
+//*/
+            break;
+
+        case TXT_EXAC:
+/*
+            if (cmsg == MSG_BCLK) {
+                ENGC *engc = (ENGC*)ctrl->data;
+
+                CategorizePreviews(engc);
+                RUN_FE2C(engc->MCT_OGRP, MSG__TXT,
+                        (intptr_t)engc->tran[(data)? TXT_AGRP : TXT_OGRP]);
+            }
+//*/
+            break;
+
+        case TXT_SRND:
+/*
+            if (cmsg == MSG_BCLK) {
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_RGPU, MSG__ENB, data);
+                RUN_FE2C(((ENGC*)ctrl->data)->MCT_BDUP, MSG__ENB, data);
+            }
+//*/
+            break;
+
+        case TXT_BDUP:
+            /// nothing goes here
+            break;
+
+        case TXT_OPTS:
+/*
+            if (cmsg == MSG_BCLK)
+                RUN_FE2C(((ENGC*)ctrl->data)->OCT_OPTS, MSG__SHW, 1);
+//*/
+            break;
+
+        case TXT_GOGO: {
+/*
+            if (cmsg != MSG_BCLK)
+                break;
+
+            LINF *libs;
+            ENGC *engc = ((ENGC*)ctrl->data);
+            AINF igif = {};
+            intptr_t icon;
+            long ilen, *irnd, *iput;
+
+            irnd = calloc(engc->libs.size, sizeof(*irnd));
+            iput = calloc(engc->libs.size, sizeof(*iput));
+
+            /// checking if random choice is enabled
+            if ((cmsg = RUN_FE2C(engc->MCT_BDUP, MSG_BGST, 0)) & FCS_ENBL) {
+                /// indexing random-capable libraries
+                for (ilen = icon = 0; icon < engc->libs.size; icon++)
+                    if (engc->libs._[icon].wctx.icnt == 0)
+                        iput[ilen++] = icon;
+                /// iterating over the requested random sprites count
+                for (icon = RUN_FE2C(engc->MCT_RGPU, MSG_NGET, 0);
+                    (icon > 0) && ilen; icon--) {
+                    irnd[iput[data = RNG_Load(engc->seed) % ilen]]++;
+                    if ((~cmsg & FCS_MARK) && (data < --ilen))
+                        iput[data] = iput[ilen];
+                }
+                /// finally, adding the computed random values to ICNTs
+                for (icon = 0; icon < engc->libs.size; icon++)
+                    engc->libs._[icon].wctx.icnt += irnd[icon];
+            }
+            /// is there anything selected? let`s find out
+            for (icon = 0; icon < engc->libs.size; icon++)
+                if (engc->libs._[icon].wctx.icnt > 0)
+                    break;
+            if (icon >= engc->libs.size) {
+                /// [TODO:] do we need to show messages here?
+//                rMessage("Nothing selected!", 0, 0);
+                free(irnd);
+                free(iput);
+                break;
+            }
+            /// counting the number of selected libraries
+            for (cmsg = icon = 0; icon < engc->libs.size; icon++)
+                if (engc->libs._[icon].wctx.icnt > 0)
+                    cmsg++;
+            SetProgress(engc, TXT_LOAD, 0, cmsg);
+
+            cEngineCallback(engc->engd, ECB_LOAD, ~0);
+            for (data = icon = 0; icon < engc->libs.size; icon++)
+                if (engc->libs._[icon].wctx.icnt > 0) {
+                    LoadLib(&engc->libs._[icon], engc->engd);
+                    SetProgress(engc, TXT_LOAD, ++data, cmsg);
+                    RUN_FE2C(engc->MCT_SELE, MSG_PPOS, data);
+                }
+            cEngineLoadAnimAsync(engc->engd, &igif, (uint8_t*)"/Icon/",
+                                 MainIcon, ELA_LOAD, 0);
+            cEngineCallback(engc->engd, ECB_LOAD, 0);
+
+            /// [TODO:] adapt for CTR_V_FLTR
+            for (libs = engc->libs._, icon = 0; icon < engc->libs.size; icon++)
+                if (AppendSpriteArr(&engc->libs._[icon], engc)) {
+                    /// revert random ICNT
+                    engc->libs._[icon].wctx.icnt -= irnd[icon];
+                    if (++libs <= &engc->libs._[icon])
+                        CTR_ASSIGN(libs[-1], engc->libs._[icon]);
+                }
+            free(irnd);
+            free(iput);
+            CTR_V_MGET(engc->libs, libs - engc->libs._, 1);
+            igif.fcnt = 0;
+            igif.xdim = engc->idim.x;
+            igif.ydim = engc->idim.y;
+            igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
+            cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
+            icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
+                                 igif.time, igif.xdim, igif.ydim);
+            free(igif.time);
+            RUN_FE2C(engc->MCT_CAPT, MSG__SHW, 0);
+            engc->pcur = engc->povr = 0;
+            engc->data = (engc->pmax)? calloc(engc->pmax,
+                                              sizeof(*engc->data)) : 0;
+            cEngineRunMainLoop(engc->engd, engc->dpos.x, engc->dpos.y,
+                               engc->dims.x + engc->dpos.x,
+                               engc->dims.y + engc->dpos.y, engc->ftmp,
+                               FRM_WAIT, (intptr_t)engc, eUpdFrame, eUpdFlags);
+            cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
+            free(engc->data);
+
+            rFreeTrayIcon(icon);
+            for (icon = 0; icon < engc->pcnt; icon++)
+                free(engc->parr[icon]);
+            free(engc->parr);
+            engc->parr = 0;
+            engc->pmax = engc->pcnt = 0;
+
+            /// finally showing the window
+            RecountSelectedLibs(engc);
+            RUN_FE2C(engc->MCT_CAPT, MSG__SHW, ~0);
+//*/
+            break;
+        }
+    }
+    return 0;
+}
+
+void FreeWindow(std::vector<CTRL> &window) {
+    long indx = 0;
+    while (window[indx].xdim | window[indx].ydim)
+        rFreeControl(&window[indx++]);
+    window = {};
+}
+
+void MakeWindow(std::vector<CTRL> &window) {
+    assert(!window.empty() && ((window[0].flgs & FCT_TTTT) == FCT_WNDW));
+    rMakeControl(&window[0], nullptr, nullptr); // creating the main window
+
+    long xmax = 0, ymax = 0, xoff = 0, yoff = 0;
+    for (size_t indx = 1; indx < window.size(); indx++) {
+        window[indx].prev = &window[0];
+        rMakeControl(&window[indx], &xoff, &yoff);
+        xmax = (xmax > xoff)? xmax : xoff;
+        ymax = (ymax > yoff)? ymax : yoff;
+    }
+    /// resizing and showing the window
+    RUN_FE2C(window[0], MSG_WSZC, (uint16_t)xmax | ((uint32_t)ymax << 16));
+}
+
+void UpdPreview(intptr_t data, uint64_t time) {
+    auto engc = (engine_t*)data;
+}
+
+engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
+        const T2IV tray, const T4IV area) {
+    #define CASE(what) {#what, conf_t::what}
+    static std::unordered_map<std::string, conf_t::flags_t> rndrflg = {
+        CASE(gpu), CASE(opaque), CASE(draw), CASE(show),
+        CASE(wpbo), CASE(wbgra), CASE(wregion),
+    };
+    static std::unordered_map<std::string, conf_t::flags_t> genflg = {
+        CASE(topmost), CASE(speech), CASE(cspeech), CASE(hover),
+        CASE(effects), CASE(update), CASE(interaction),
+    };
+    #undef CASE
+
+    int16_t runs = 0;
+    conf_t::flags_t render = conf_t::show | conf_t::draw | conf_t::gpu;
+    conf_t::flags_t general = conf_t::hover | conf_t::interaction
+            | conf_t::effects | conf_t::speech | conf_t::cspeech;
+
+    tray_ = tray;
+    area_ = area;
+    cdef_.base = cini_.base = base;
+    cdef_.flgs = cini_.flgs = general | render;
+
+    cfnm_ = (!fcnf.empty())
+            ? concat_path({std::string(fcnf), DEF_CORE})
+            : "";
+    if (auto file = (!cfnm_.empty())
+            ? rLoadFile(cfnm_.c_str(), nullptr)
+            : nullptr) {
+        for (token_t text({}, file); !is_empty(text);
+                text = next_token(text.second, 0, DEF_CRLF, 0)) {
+            if (!text.first.empty() && (text.first.back() == DEF_LFCR))
+                text.first.remove_suffix(sizeof(DEF_LFCR));
+            auto line = next_token(text.first);
+            switch (str_hash(line.first)) {
+                default: break;
+                case str_hash("Language"):
+                    break;
+                case str_hash("Content"):
+                    line = next_token(line.second, 0);
+                    if (line.first.empty()) {
+                        cini_.base = cdef_.base;
+                        break;
+                    }
+                    cini_.base = concat_path(
+                            {std::string(line.first), "Content", "Ponies"});
+                    break;
+                case str_hash("RunsTillUpdate"):
+                    cini_.nrun.set(process_float(line, cini_.nrun.get()));
+                    runs = process_float(line, runs);
+                    break;
+                case str_hash("BaseScale"):
+                    cini_.nsca.set(process_float(line, cini_.nsca.get()));
+                    break;
+                case str_hash("TimeDilation"):
+                    cini_.ndil.set(process_float(line, cini_.ndil.get()));
+                    break;
+                case str_hash("RandomSpeech"):
+                    cini_.nsay.set(process_float(line, cini_.nsay.get()));
+                    break;
+                case str_hash("CursorDodge"):
+                    cini_.ncdr.set(process_float(line, cini_.ncdr.get()));
+                    break;
+                case str_hash("Render"):
+                    render = conf_t::none;
+                    while (!is_empty(line))
+                        render |= process_map(line, rndrflg, conf_t::none);
+                    break;
+                case str_hash("Flags"):
+                    general = conf_t::none;
+                    while (!is_empty(line))
+                        general |= process_map(line, genflg, conf_t::none);
+                    break;
+            }
+        }
+        free(file);
+
+        ccur_ = cini_;
+        ccur_.lang = "";
+
+        cini_.flgs = general | render;
+        if (!cini_.nrun.get())
+            runs = 0;
+        else if (runs >= cini_.nrun.get()) {
+            cini_.flgs |= conf_t::update;
+            runs = 0;
+        }
+    }
+
+    /// primary initialization complete, now creating GUI
+    ///  0. [ FIRST AND FOREMOST! ] do not forget to edit the appropriate
+    ///     *CT_ constants after swapping or adding controls
+    ///  1. main window`s "dimensions" are just spaces to leave between
+    ///     window edges and actual controls
+    const auto here = intptr_t(this);
+    mctl_ = {
+        {nullptr, here, TXT_CAPT, FSW_SIZE | FCT_WNDW,  1,  1,  1,  1, FC2EM},
+        {nullptr, here, TXT_FLTR,            FCT_CBOX,  0,  0, 19,  2, FC2EM},
+        {nullptr, here, TXT_EXAC, FCP_VERT | FCT_CBOX,  0,  0, 19,  2, FC2EM},
+        {nullptr, here, TXT_OGRP, FCP_VERT | FCT_LIST,  0,  0, 19, 16, FC2EM},
+        {nullptr, here, TXT_SGRP, FCP_VERT | FCT_TEXT,  0,  1, 19,  2, FC2EM},
+        {nullptr, intptr_t(&ccur_.spec),
+                        TXT_SPEC, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2EM},
+        {nullptr, here, TXT_BADD, FCP_BOTH | FCT_BUTN,  1, -3,  9,  3, FC2EM},
+        {nullptr, here, TXT_SRND, FCP_VERT | FCT_CBOX
+                                           | FSX_LEFT,  0,  1, 19,  2, FC2EM},
+        {nullptr, intptr_t(&ccur_.rgpu),
+                        TXT_RGPU, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2EM},
+        {nullptr, here, TXT_BDUP, FCP_BOTH | FCT_CBOX,  1, -3,  9,  3, FC2EM},
+        {nullptr, here, TXT_SELE, FCP_VERT | FCT_PBAR,  0,  1, 19,  3, FC2EM},
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_BUTN,  0,  1,  9,  6, FC2EM},
+        {nullptr, here, TXT_GOGO, FCP_BOTH | FCT_BUTN
+                                           | FSB_DFLT,  1, -6,  9,  6, FC2EM},
+        {nullptr, here, TXT_HEAD, FCP_HORZ | FCT_SBOX,  0,  0, 41, 43, FC2EM},
+    };
+    octl_ = {
+        {nullptr, here, TXT_OPTS,            FCT_WNDW,  1,  1,  1,  1, FC2EO},
+
+        {nullptr, here, TXT_UONR,            FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {nullptr, here, TXT_ETOP, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {nullptr, here, TXT_EEFF, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {nullptr, here, TXT_EINT, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {nullptr, here, TXT_ESAY, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {nullptr, here, TXT_ECLR, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+        {nullptr, here, TXT_ERCH, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
+
+        {nullptr, intptr_t(&ccur_.nrun),
+                        TXT_RUNS,            FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {nullptr, here, TXT_RUNS, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
+        {nullptr, intptr_t(&ccur_.nsca),
+                        TXT_SCAL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {nullptr, here, TXT_SCAL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
+        {nullptr, intptr_t(&ccur_.ndil),
+                        TXT_TDIL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {nullptr, here, TXT_TDIL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
+        {nullptr, intptr_t(&ccur_.nsay),
+                        TXT_RSAY, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {nullptr, here, TXT_RSAY, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
+        {nullptr, intptr_t(&ccur_.ncdr),
+                        TXT_PCDR, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
+        {nullptr, here, TXT_PCDR, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
+
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
+                                           | FST_SUNK,  0,  1, 49, -2, FC2EO},
+
+        {nullptr, here, TXT_LGUI, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2EO},
+        {nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2EO},
+        {nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+        {nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
+                                           | FST_CNTR,  0,  0, 49,  2, FC2EO},
+
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
+                                           | FST_SUNK,  0,  1, 49, -2, FC2EO},
+
+        {nullptr, here, TXT_BDIR, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2EO},
+        {nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2EO},
+        {nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+        {nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
+                                           | FST_CNTR,  0,  0, 49,  2, FC2EO},
+
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
+                                           | FST_SUNK,  0,  1, 49, -2, FC2EO},
+
+        {nullptr, here, TXT_RELO, FCP_VERT | FCT_BUTN, 29,  0, 10,  3, FC2EO},
+        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
+    };
+    MakeWindow(mctl_);
+    MakeWindow(octl_);
+    RUN_FC2E(OCT_LREL, MSG_BCLK, 0); /// relocalize!
+    //UpdateOptionControls(&engc, 1);
+    RUN_FE2C(MCT_CAPT, MSG__SHW, 1);
+
+    const auto min_preview_width = get_min_preview_size().x;
+    const auto avg_font_width = get_avg_font_size().x;
+    /// showing the scroll window
+    //MCT_CHAR.fc2e = FC2EM; // why do we need this? that was the init value!
+    RUN_FE2C(MCT_CHAR, MSG__SHW, 1);
+
+    std::vector<library_t::input_t> ins;
+    auto find = rFindMake(cini_.base.c_str());
+    while (auto file = rFindFile(find)) {
+        ins.emplace_back(library_t::input_t(cini_.base, file));
+        free(file);
+    }
+    build_library_structure(cini_.base, ins);
+
+    /// initialize the rendering engine
+    cEngineCallback(0, ECB_INIT, (intptr_t)&engd_);
+
+    rInternalMainLoop(&mctl_[0], FRM_WAIT, UpdPreview, intptr_t(this));
+
+}
 
 void engine_t::build_library_structure(const std::string &base,
         const std::vector<library_t::input_t> &ins) {
@@ -1533,36 +2089,12 @@ void engine_t::build_library_structure(const std::string &base,
 void eProcessMenuItem(MENU *item) {
 }
 
-// TODO: what is 'base'?
 void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                     long  xpos, long  ypos, ulong xdim, ulong ydim) {
-    engine_t engc;
-    if (fcnf) {
-        auto config = concat_path({fcnf, DEF_CORE});
-        if (auto file = rLoadFile(config.c_str(), nullptr)) {
-            std::string base;
-            for (token_t text({}, file); !is_empty(text);
-                    text = next_token(text.second, 0, DEF_CRLF, 0)) {
-                if (!text.first.empty() && (text.first.back() == DEF_LFCR))
-                    text.first.remove_suffix(sizeof(DEF_LFCR));
-                auto line = next_token(text.first);
-                switch (str_hash(line.first)) {
-                    default: break;
-                    case str_hash("Content"):
-                        line = next_token(line.second, 0);
-                        base = concat_path(
-                                {std::string(line.first), "Content", "Ponies"});
-                        break;
-                }
-            }
-            free(file);
-            std::vector<library_t::input_t> ins;
-            auto find = rFindMake(base.c_str());
-            while (!!(file = rFindFile(find))) {
-                ins.emplace_back(library_t::input_t(base, file));
-                free(file);
-            }
-            engc.build_library_structure(base, ins);
-        }
-    }
+    T4IV area{{int32_t(xpos), int32_t(ypos),
+               int32_t(xdim - xpos), int32_t(ydim - ypos)}};
+    engine_t engc(fcnf, base, T2IV{{int32_t(xico), int32_t(yico)}}, area);
+
+
+
 }

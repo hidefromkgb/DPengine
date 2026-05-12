@@ -1,6 +1,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define LIB_OPEN __attribute__((visibility("default")))
 
 #ifdef _WIN32
@@ -228,3 +232,7 @@ LIB_OPEN void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
                                  uint32_t xdim, uint32_t ydim,
                                  uint32_t flgs, uint32_t msec,
                                  intptr_t user, UFRM ufrm, UFLG uflg);
+
+#ifdef __cplusplus
+} /// extern "C"
+#endif
