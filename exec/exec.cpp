@@ -25,8 +25,8 @@
 
 
 /// FE2C / FC2E helper macros
-#define RUN_FE2C(trgt, cmsg, data) trgt.fe2c(&trgt, cmsg, data)
-#define RUN_FC2E(trgt, cmsg, data) trgt.fc2e(&trgt, cmsg, data)
+#define RUN_FE2C(trgt, cmsg, data) (trgt).fe2c(&(trgt), (cmsg), (data))
+#define RUN_FC2E(trgt, cmsg, data) (trgt).fc2e(&(trgt), (cmsg), (data))
 
 /** convert degrees to radians  **/
 #define DTR_CONV (M_PI / 180.0)
@@ -213,7 +213,7 @@ uint32_t RNG_Load(uint32_t *seed) {
     seed[0] = (iter = seed[0] + 1) % size;
     retn = (seed[iter] & 0x80000000) | (seed[seed[0] + 1] & 0x7FFFFFFF);
     retn = seed[iter] = seed[(iter + 396) % size + 1]
-                      ^ (retn >> 1) ^ ((retn & 1)? 0x9908B0DF : 0);
+                      ^ (retn >> 1) ^ ((retn & 1) ? 0x9908B0DF : 0);
     retn ^= (retn >> 11);
     retn ^= (retn <<  7) & 0x9D2C5680;
     retn ^= (retn << 15) & 0xEFC60000;
@@ -380,7 +380,7 @@ T process_map(token_t &line, const std::unordered_map<std::string, T> &map,
 
 bool process_bool(
         token_t &line, bool def, char s = DEF_TSEP, char q = DEF_QUOT) {
-    static std::unordered_map<std::string, bool>
+    static const std::unordered_map<std::string, bool>
         map = { {"false", false}, {"true", true}, };
     return process_map(line, map, def, s, q);
 }
@@ -751,7 +751,7 @@ public:
 
         input_t() = default;
         input_t(const std::string_view &str) {
-            static std::unordered_map<std::string, gravity_flags_t> gravity = {
+            static const std::unordered_map<std::string, gravity_flags_t> p = {
                 {"any",         any        }, {"any-not_center", not_center  },
                 {"top_left",    top_left   }, {"top_right",      top_right   },
                 {"top",         top        }, {"bottom",         bottom      },
@@ -766,10 +766,10 @@ public:
             left_image = process_string(line);
             duration = process_float(line, duration);
             repeat_delay = process_float(line, repeat_delay);
-            placement_right = process_map(line, gravity, placement_right);
-            centering_right = process_map(line, gravity, centering_right);
-            placement_left = process_map(line, gravity, placement_left);
-            centering_left = process_map(line, gravity, centering_left);
+            placement_right = process_map(line, p, placement_right);
+            centering_right = process_map(line, p, centering_right);
+            placement_left = process_map(line, p, placement_left);
+            centering_left = process_map(line, p, centering_left);
             follow = process_bool(line, follow);
             prevent_loop = process_bool(line, prevent_loop);
         }
@@ -932,16 +932,17 @@ public:
 
         input_t() = default;
         input_t(const std::string_view &str) {
-            static std::unordered_map<std::string, bool>
-                followflg = { {"false", false}, {"true",   true},
-                              {"fixed", false}, {"mirror", true}, };
-            static std::unordered_map<std::string, movement_flags_t> moveflg = {
+            static const std::unordered_map<std::string, movement_flags_t> m = {
                 {"horizontal_vertical", move_hv  }, {"mouseover", move_mouse},
                 {"diagonal_horizontal", move_dh  }, {"dragged",   move_drag },
                 {"diagonal_vertical",   move_dv  }, {"sleep",     move_sleep},
                 {"horizontal_only",     move_horz}, {"none",      move_none },
                 {"vertical_only",       move_vert}, {"all",       move_all  },
                 {"diagonal_only",       move_diag},
+            };
+            static const std::unordered_map<std::string, bool> f = {
+                {"false", false}, {"true",   true},
+                {"fixed", false}, {"mirror", true},
             };
             token_t line({}, str);
             name = ascii_to_lower(process_string(line));
@@ -951,7 +952,7 @@ public:
             speed = process_float(line, speed);
             right_image = process_string(line);
             left_image = process_string(line);
-            movement = process_map(line, moveflg, movement);
+            movement = process_map(line, m, movement);
             linked_bhv = ascii_to_lower(process_string(line));
             bgn_speech = ascii_to_lower(process_string(line));
             end_speech = ascii_to_lower(process_string(line));
@@ -966,7 +967,7 @@ public:
             left_img_center = process_quoted_int_pair(line, left_img_center);
             prevent_loop = process_bool(line, prevent_loop);
             group = process_float(line, group);
-            mirror_target_xy = process_map(line, followflg, mirror_target_xy);
+            mirror_target_xy = process_map(line, f, mirror_target_xy);
         }
         bool validate() const {
             bool okay = !name.empty();
@@ -1085,7 +1086,7 @@ public:
         input_t(const std::string_view &str) {
             // TODO: is 'any' really equivalent to 'one'? check if there are
             //       relevant interactions where 'any' means '>1'
-            static std::unordered_map<std::string, bool> activations = {
+            static const std::unordered_map<std::string, bool> activations = {
                 {"true", true}, {"false",  false}, {"any", false},
                 {"all",  true}, {"random", false}, {"one", false},
             };
@@ -1154,7 +1155,7 @@ public:
 
 class library_t::input_t {
 public:
-    static constexpr char* config_name = (char*)"pony.ini";
+    static constexpr char* config_name = (char*)DEF_CONF;
 
     std::string name;
     std::vector<std::string> categories;
@@ -1228,6 +1229,7 @@ library_t::library_t(const std::string &path, const input_t &in,
 : library_path_(path)
 , readable_name_(in.name) {
     auto hashable_name = ascii_to_lower(in.name);
+    auto &bhv_id_desc = *find_in_map(bhv_id_map, hashable_name);
 
     // processing the interactions
     for (auto &i : in.interactions) {
@@ -1235,11 +1237,16 @@ library_t::library_t(const std::string &path, const input_t &in,
         if (!it->is_empty())
             interactions_.emplace_back(std::move(it));
     }
-    // distributing effects configs by group
+    // distributing effects configs by behaviour name
     std::unordered_map<std::string, eff_vec_t> effects;
-    for (auto &e : in.effects)
-        effects[e.bhv].emplace_back(e);
-
+    for (auto &e : in.effects) {
+        if (find_in_map(bhv_id_desc.m, e.bhv)) {
+            effects[e.bhv].emplace_back(e);
+        } else {
+            printf("[%s] WARNING, unused effect '%s'\n",
+                   in.name.c_str(), e.name.c_str());
+        }
+    }
     std::unordered_map<std::string, int> spk_bhv_map;
     std::unordered_map<int, std::vector<int>> spk_rnd_map;
     std::unordered_map<std::string, behaviour_t*> bhv_map;
@@ -1262,7 +1269,6 @@ library_t::library_t(const std::string &path, const input_t &in,
     auto i0 = find_in_map(spk_rnd_map, 0); // random speeches from group 0
 
     // creating the behaviours
-    auto &bhv_id_desc = *find_in_map(bhv_id_map, hashable_name);
     for (size_t i = 0; i < in.behaviours.size(); i++) {
         std::vector<int16_t> b_spk, e_spk;
         auto &b = in.behaviours[i];
@@ -1291,6 +1297,9 @@ library_t::library_t(const std::string &path, const input_t &in,
         auto im = find_in_map(bhv_id_desc.m, b.follow_mov_bhv);
         bhv_id_internal_t follow_grp_iid = {};
         follow_grp_iid.group = (is && im) ? -int16_t(i) : iid.group;
+        if (!is != !im)
+            printf("[%s] WARNING, inconsistent follow behaviours in '%s'\n",
+                   in.name.c_str(), b.name.c_str());
 
         auto ie = find_in_map(effects, b.name);
         behaviours_.emplace_back(std::make_unique<behaviour_t>(b, iid._,
@@ -1389,6 +1398,7 @@ const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
 /// client configuration
 class conf_t {
 public:
+    using lang_map_t = std::unordered_map<int32_t, std::string>;
     enum flags_t : uint32_t {
         none        = 0,
         draw        = 1 <<  0,
@@ -1405,7 +1415,14 @@ public:
         speech      = 1 << 11,
         cspeech     = 1 << 12,
         hover       = 1 << 13,
+        filters     = 1 << 14,
+        exact       = 1 << 15,
+        randomsel   = 1 << 16,
+        copies      = 1 << 17,
     };
+    static constexpr flags_t render = conf_t::show | conf_t::draw | conf_t::gpu;
+    static constexpr flags_t general = conf_t::hover | conf_t::interaction
+            | conf_t::effects | conf_t::speech | conf_t::cspeech;
     class spin_t {
     private:
         int16_t curr_, min_, max_;
@@ -1413,15 +1430,17 @@ public:
         spin_t() : curr_{}, min_{}, max_{} {};
         spin_t(int16_t curr, int16_t min, int16_t max)
             : curr_{std::clamp(curr, min, max)}, min_{min}, max_{max} {}
+        int16_t min() const { return min_; }
+        int16_t max() const { return max_; }
         int16_t set(int16_t dist) {
             return curr_ = (dist <= max_) ? (dist >= min_) ? dist : min_ : max_;
         }
         int16_t get() const { return curr_; }
         int16_t move(int16_t dist) { return set(get() + dist); }
     };
-    std::string lang;  // name of the language file
-    std::string base;  // path to the animation base
-    flags_t flgs = {};
+    std::string base;    // path to the animation base
+    std::string lang;    // name of the language file
+    lang_map_t lang_map; // localization taken from a language file
     spin_t nrun = spin_t(  5,    0,  1000); // runs between updates
     spin_t nsca = spin_t(100,   25,   300); // base scaling factor
     spin_t ndil = spin_t(100,   10,  1000); // time dilation factor
@@ -1429,155 +1448,293 @@ public:
     spin_t ncdr = spin_t(  0,    0,  1000); // cursor dodge radius
     spin_t spec = spin_t(  0, -100,   100); // group selection
     spin_t rgpu = spin_t(  0,    0, 30000); // random selection
+    flags_t flgs = {};
+
+    static lang_map_t get_lang_map(const std::string_view &file) {
+        lang_map_t retn;
+        int32_t idx = -1; // first iteration spent on filling token_t
+        for (token_t text({}, file); !is_empty(text);
+                text = next_token(text.second, 0, DEF_CRLF, 0), idx++)
+            if (!text.first.empty()) {
+                if (text.first.back() == DEF_LFCR)
+                    text.first.remove_suffix(sizeof(DEF_LFCR));
+                retn[idx] = text.first;
+            }
+        return retn;
+    }
 };
 
-/// engine data (client side)
-class engine_t : public no_copy_t {
-private:
-    std::vector<MENU> mspr_; /// per-sprite context menu
-    std::vector<MENU> mctx_; /// engine`s main context menu
-    std::vector<CTRL> mctl_; /// GUI controls array (main window)
-    std::vector<CTRL> octl_; /// GUI controls array (options window)
-    std::string cfnm_; /// main configuration file path
-    uint64_t tcur_; /// current, dilation-adjusted timestamp
-    uint64_t tpre_; /// previous raw timestamp
-    float tacc_;  /// partial timestamp accumulator
-    T3IV ppos_;   /// mouse pointer position (z = flags)
-    T2IV tray_;   /// tray icon dimensions
-    T4IV area_;   /// drawing area position and dimensions
-    conf_t cdef_; /// default configuration
-    conf_t ccur_; /// current configuration
-    conf_t cini_; /// initial configuration read at the start
-    ENGD *engd_;
+class window_t {
+public:
+    CTRL &get_root() { return controls_[0]; }
+    ~window_t() { for (auto &c : controls_) rFreeControl(&c); }
 
-    std::unordered_map<library_t::lib_id_t, std::unique_ptr<library_t>> libs_;
-    std::vector<std::vector<library_t::lib_id_t>> categories_;
+protected:
+    std::vector<CTRL> controls_;
 
-    T2IV get_min_preview_size() {
-        auto retn = RUN_FE2C(MCT_SPEC, MSG__GSZ, 0);
-        return {{uint16_t(retn), uint16_t(retn >> 16)}};
+    window_t(std::vector<CTRL> controls) {
+        controls_ = std::move(controls);
+        assert(!controls_.empty()
+                && ((controls_[0].flgs & FCT_TTTT) == FCT_WNDW));
+        // creating the main window
+        rMakeControl(&controls_[0], nullptr, nullptr);
+
+        long xmax = 0, ymax = 0, xoff = 0, yoff = 0;
+        for (size_t indx = 1; indx < controls_.size(); indx++) {
+            controls_[indx].prev = &controls_[0];
+            rMakeControl(&controls_[indx], &xoff, &yoff);
+            xmax = (xmax > xoff) ? xmax : xoff;
+            ymax = (ymax > yoff) ? ymax : yoff;
+        }
+        /// resizing and showing the window
+        RUN_FE2C(controls_[0], MSG_WSZC,
+                (uint16_t)xmax | ((uint32_t)ymax << 16));
     }
 
-    T2IV get_avg_font_size() {
-        AINF atmp{0, 0, 0, 0, (uint32_t*)"    " /* 4 spaces */};
-        auto retn = RUN_FE2C(MCT_CAPT, MSG_WTGD, (intptr_t)&atmp);
-        return {{int32_t(0.25f * uint16_t(retn)), uint16_t(retn >> 16)}};
+    static CTRL *get_parent(CTRL &child) { return child.prev; }
+
+    static CTRL &get_root(CTRL &child) {
+        auto root = &child;
+        for (auto curr = get_parent(*root);
+                curr && ((root->flgs & FCT_TTTT) != FCT_WNDW);
+                curr = get_parent(*root))
+            root = curr;
+        return *root;
+    }
+
+    void set_control_text(const std::string &str, size_t ctl) {
+        const auto type = controls_[ctl].flgs & FCT_TTTT;
+        if ((type == FCT_WNDW) || (type == FCT_LIST) || (type == FCT_PBAR)
+        ||  (type == FCT_BUTN) || (type == FCT_CBOX)
+        || ((type == FCT_TEXT) && !(controls_[ctl].flgs & FST_SUNK)))
+            RUN_FE2C(controls_[ctl], MSG__TXT, intptr_t(str.c_str()));
+    }
+};
+
+class conf_window_t : public window_t {
+protected:
+    const conf_t &def_conf_;
+    const conf_t &ini_conf_;
+    conf_t &conf_;
+
+    static bool try_update_checkbox(CTRL &c, int &flag) {
+        if ((c.flgs & FCT_TTTT) != FCT_CBOX) return false;
+        auto &flags = ((conf_window_t*)window_t::get_root(c).data)->conf_.flgs;
+        switch (flag) {
+            default:
+                flag = !!(flags & conf_t::flags_t(c.data));
+                RUN_FE2C(c, MSG_BCLK, flag);
+                return true;
+            case 0:
+                flags &= ~conf_t::flags_t(c.data);
+                return true;
+            case 1:
+                flags |= conf_t::flags_t(c.data);
+                return true;
+        }
+    }
+
+    static bool try_update_spinner(CTRL &c, int16_t val = 0, bool init = true) {
+        if ((c.flgs & FCT_TTTT) != FCT_SPIN) return false;
+        auto spin = (conf_t::spin_t*)c.data;
+        if (init) {
+            val = spin->get();
+            RUN_FE2C(c, MSG_NDIM,
+                    ((uint32_t)spin->max() << 16) | (uint16_t)spin->min());
+            RUN_FE2C(c, MSG_NSET, val);
+        } else {
+            val = spin->set(val);
+        }
+        return true;
+    }
+
+    void set_control_text_stock(int32_t idx, size_t ctl) {
+        assert(ctl < controls_.size());
+        if (auto in = find_in_map(conf_.lang_map, idx)) {
+            set_control_text(*in, ctl);
+        } else if (auto id = find_in_map(def_conf_.lang_map, idx)) {
+            set_control_text(*id, ctl);
+        }
+    }
+
+    void relocalize() {
+        for (size_t i = 0; i < controls_.size(); i++)
+            set_control_text_stock(controls_[i].uuid, i);
+        if (auto prev = get_parent(get_root())) // propagate to parent windows
+            RUN_FC2E(*prev, MSG__TXT, 0);
+    }
+
+    conf_window_t(std::vector<CTRL> controls, conf_t &conf,
+            const conf_t &ini_conf, const conf_t &def_conf)
+    : window_t(std::move(controls))
+    , def_conf_(def_conf)
+    , ini_conf_(ini_conf)
+    , conf_(conf) {}
+};
+
+class main_window_t : public conf_window_t {
+private:
+    static std::vector<CTRL> get_template(intptr_t here, const conf_t &conf);
+    static intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data);
+    static void try_update_checkbox(CTRL &c, int flag = -1);
+
+    void relocalize() {
+        #define mctl_ controls_
+        conf_window_t::relocalize();
+        for (auto &c : controls_) {
+            try_update_checkbox(c);
+            try_update_spinner(c);
+        }
+        bool all_at_once = RUN_FE2C(MCT_EXAC, MSG_BGST, 0) & FCS_MARK;
+        set_control_text_stock(
+                (all_at_once) ? TXT_AGRP : TXT_OGRP, &MCT_OGRP - &get_root());
+        #undef mctl_
     }
 
 public:
-    engine_t(const std::string_view fcnf, const std::string_view base,
-            const T2IV tray, const T4IV area);
+    main_window_t(conf_t &conf, const conf_t &ini_conf, const conf_t &def_conf)
+    : conf_window_t(
+            get_template(intptr_t(this), conf), conf, ini_conf, def_conf) {}
 
-    void build_library_structure(const std::string &path,
-            const std::vector<library_t::input_t> &ins);
+    void toggle_visibility(bool show) {
+        #define mctl_ controls_
+        RUN_FE2C(MCT_CHAR, MSG__SHW, show);
+        RUN_FE2C(MCT_CAPT, MSG__SHW, show);
+        #undef mctl_
+    }
+
+    void add_category(const std::string &name) {
+        #define mctl_ controls_
+        RUN_FE2C(MCT_OGRP, MSG_LADD, (intptr_t)name.c_str());
+        #undef mctl_
+    }
+
+    void set_options_window(const CTRL &opt) {
+        #define mctl_ controls_
+        MCT_OPTS.data = intptr_t(&opt);
+        #undef mctl_
+    }
+
+    T2IV get_min_preview_size() {
+        #define mctl_ controls_
+        auto retn = RUN_FE2C(MCT_SPEC, MSG__GSZ, 0);
+        return {{uint16_t(retn), uint16_t(retn >> 16)}};
+        #undef mctl_
+    }
+
+    T2IV get_avg_font_size() {
+        #define mctl_ controls_
+        AINF atmp{0, 0, 0, 0, (uint32_t*)"    "}; // 4 spaces
+        auto retn = RUN_FE2C(MCT_CAPT, MSG_WTGD, (intptr_t)&atmp);
+        return {{int32_t(0.25f * uint16_t(retn)), uint16_t(retn >> 16)}};
+        #undef mctl_
+    }
 };
 
-intptr_t FC2EO(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
-/*
-    static uint32_t uCSF[] = {CSF_UONR, CSF_ETOP, CSF_EEFF,
-                              CSF_EINT, CSF_ECLR, CSF_ESAY, CSF_ERCH};
-    uint32_t indx = 0;
-    char *temp;
-    ENGC *engc;
-
-    switch (ctrl->uuid) {
-        case TXT_OPTS:
-            if (cmsg == MSG_WEND)
-                ctrl->fe2c(ctrl, MSG__SHW, 0);
-            break;
-
-        case TXT_ERCH: indx++;
-        case TXT_ESAY: indx++;
-        case TXT_ECLR: indx++;
-        case TXT_EINT: indx++;
-        case TXT_EEFF: indx++;
-        case TXT_ETOP: indx++;
-        case TXT_UONR:
-            if (cmsg != MSG_BCLK)
-                break;
-            engc = (ENGC*)ctrl->data;
-            engc->ccur.flgs = (!data)? engc->ccur.flgs & ~uCSF[indx]
-                                     : engc->ccur.flgs |  uCSF[indx];
-            if (ctrl->uuid == TXT_ESAY) {
-                RUN_FE2C(engc->OCT_ECLR, MSG__ENB, data);
-                RUN_FE2C(engc->OCT_NSAY, MSG__ENB, data);
-                RUN_FE2C(engc->OCT_TSAY, MSG__ENB, data);
-            }
-            else if (ctrl->uuid == TXT_ERCH) {
-                RUN_FE2C(engc->OCT_NCDR, MSG__ENB, data);
-                RUN_FE2C(engc->OCT_TCDR, MSG__ENB, data);
-            }
-            break;
-
-        case TXT_RUNS:
-        case TXT_SCAL:
-        case TXT_TDIL:
-        case TXT_RSAY:
-        case TXT_PCDR:
-            if (cmsg == MSG_NSET)
-                ((int16_t*)ctrl->data)[1] =
-                    ClampToBounds(data, ((int16_t*)ctrl->data)[0],
-                                        ((int16_t*)ctrl->data)[2]);
-            break;
-
-        case TXT_CHOO:
-        case TXT_RELO:
-        case TXT_RESE:
-            if (cmsg != MSG_BCLK)
-                break;
-            engc = (ENGC*)ctrl->data;
-            if ((ctrl == &engc->OCT_FREL) || (ctrl == &engc->OCT_FRES)) {
-                CTRL *lctl, *bctl;
-
-                if (ctrl->uuid == TXT_RELO) {
-                    lctl = &engc->OCT_LREL;
-                    bctl = &engc->OCT_BREL;
-                    engc->ccur = engc->cini;
-                    engc->ccur.base = engc->ccur.lang = 0;
-                }
-                else {
-                    lctl = &engc->OCT_LRES;
-                    bctl = &engc->OCT_BRES;
-                    engc->ccur = engc->cdef;
-                    engc->ccur.base = engc->ccur.lang = 0;
-                }
-                lctl->fc2e(lctl, MSG_BCLK, 0);
-                bctl->fc2e(bctl, MSG_BCLK, 0);
-                UpdateOptionControls(engc, 0);
-                break;
-            }
-            if ((ctrl == &engc->OCT_LCHO)
-            ||  (ctrl == &engc->OCT_LREL) || (ctrl == &engc->OCT_LRES)) {
-                if ((temp = (ctrl->uuid == TXT_RELO)? engc->cini.lang : 0))
-                    temp = strdup(temp);
-                if ((ctrl->uuid != TXT_CHOO)
-                ||  (temp = Reslash(rChooseFile(ctrl, "lang",
-                                               (engc->ccur.lang)?
-                                                engc->ccur.lang : ""))))
-                    Relocalize(engc, temp);
-            }
-            else {
-                if ((temp = (ctrl->uuid == TXT_RELO)? engc->cini.base : 0))
-                    temp = strdup(temp);
-                if ((ctrl->uuid != TXT_CHOO)
-                ||  (temp = Reslash(rChooseDir(ctrl, engc->ccur.base)))) {
-                    free(engc->ccur.base);
-                    engc->ccur.base = (temp)? strdup(temp) : 0;
-                    RUN_FE2C(engc->OCT_BDIR, MSG__TXT,
-                            (intptr_t)((temp && strcmp(temp, engc->cdef.base))?
-                                        temp : engc->tran[TXT_DFLT]));
-                }
-            }
-            free(temp);
-            break;
+void main_window_t::try_update_checkbox(CTRL &c, int flag) {
+    #define mctl_ controls_
+    if (conf_window_t::try_update_checkbox(c, flag)) {
+        if (c.uuid == TXT_FLTR) {
+            auto w = (main_window_t*)window_t::get_root(c).data;
+            RUN_FE2C(w->MCT_EXAC, MSG__ENB, flag);
+            RUN_FE2C(w->MCT_OGRP, MSG__ENB, flag);
+        } else if (c.uuid == TXT_SRND) {
+            auto w = (main_window_t*)window_t::get_root(c).data;
+            RUN_FE2C(w->MCT_RGPU, MSG__ENB, flag);
+            RUN_FE2C(w->MCT_BDUP, MSG__ENB, flag);
+        } else if (c.uuid == TXT_EXAC) {
+            auto w = (main_window_t*)window_t::get_root(c).data;
+            w->set_control_text_stock((flag) ? TXT_AGRP : TXT_OGRP,
+                    &w->MCT_OGRP - &w->get_root());
+        }
     }
-//*/
-    return 0;
+    #undef mctl_
 }
 
-intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
-    INCBIN("../exec/icon.gif", MainIcon);
+std::vector<CTRL> main_window_t::get_template(
+        intptr_t here, const conf_t &conf) {
+    return {
+        {nullptr, here, TXT_CAPT, FSW_SIZE | FCT_WNDW,  1,  1,  1,  1, FC2E},
+        {nullptr, intptr_t(conf_t::filters),
+                        TXT_FLTR,            FCT_CBOX,  0,  0, 19,  2, FC2E},
+        {nullptr, intptr_t(conf_t::exact),
+                        TXT_EXAC, FCP_VERT | FCT_CBOX,  0,  0, 19,  2, FC2E},
+        {nullptr, here, TXT_OGRP, FCP_VERT | FCT_LIST,  0,  0, 19, 16, FC2E},
+        {nullptr, here, TXT_SGRP, FCP_VERT | FCT_TEXT,  0,  1, 19,  2, FC2E},
+        {nullptr, intptr_t(&conf.spec),
+                        TXT_SPEC, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2E},
+        {nullptr, here, TXT_BADD, FCP_BOTH | FCT_BUTN,  1, -3,  9,  3, FC2E},
+        {nullptr, intptr_t(conf_t::randomsel),
+             TXT_SRND, FSX_LEFT | FCP_VERT | FCT_CBOX,  0,  1, 19,  2, FC2E},
+        {nullptr, intptr_t(&conf.rgpu),
+                        TXT_RGPU, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2E},
+        {nullptr, intptr_t(conf_t::copies),
+                        TXT_BDUP, FCP_BOTH | FCT_CBOX,  1, -3,  9,  3, FC2E},
+        {nullptr, here, TXT_SELE, FCP_VERT | FCT_PBAR,  0,  1, 19,  3, FC2E},
+        {nullptr,    0, TXT_OPTS, FCP_VERT | FCT_BUTN,  0,  1,  9,  6, FC2E},
+        {nullptr, here, TXT_GOGO, FCP_BOTH | FCT_BUTN
+                                           | FSB_DFLT,  1, -6,  9,  6, FC2E},
+        {nullptr, here, TXT_HEAD, FCP_HORZ | FCT_SBOX,  0,  0, 41, 43, FC2E},
+    };
+}
 
+intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    #define mctl_ controls_
+    //INCBIN("../exec/icon.gif", MainIcon);
+
+    switch (ctrl->flgs & FCT_TTTT) {
+        case FCT_WNDW:
+            if ((cmsg == MSG__TXT) && !data) {
+                ((main_window_t*)ctrl->data)->relocalize();
+            } else if (cmsg == MSG_WSZC) {
+                auto w = (main_window_t*)ctrl->data;
+                if (size_t(&w->MCT_CHAR - &w->get_root())
+                        < w->controls_.size())
+                    RUN_FE2C(w->MCT_CHAR, cmsg, data);
+            } else if (cmsg == MSG_WEND) {
+/*
+                auto w = (main_window_t*)ctrl->data;
+                char *fptr, *file, *temp;
+                /// trying to write the animation base to its new location
+                if (!w->conf_.base.empty()) {
+                    fptr = strdup(engc->ccur.base);
+                    file = Concatenate(0, engc->cini.base, DEF_DSEP, DEF_FLDR);
+                    temp = Concatenate(0, engc->tran[TXT_BSAV],
+                                          "\n\n", file, "\n==>\n",
+                                          fptr, "\n\n", engc->tran[TXT_BDEL]);
+                    if (strcmp(engc->cini.base, engc->ccur.base)) {
+                        if (!rMessage(temp, engc->tran[TXT_BMOV],
+                                            engc->tran[TXT_BYES],
+                                            engc->tran[TXT_BNAY])) {
+                            free(fptr);
+                            fptr = 0;
+                        }
+                        if (!rMoveDir(file, fptr)) {
+                            free(temp);
+                            temp = Concatenate(0, engc->tran[TXT_BERR],
+                                                  "\n\n", file, "\n==>\n",
+                                                  (fptr) ? fptr : "[X]");
+                            rMessage(temp, engc->tran[TXT_BMOV],
+                                           engc->tran[TXT_BYES], 0);
+                        }
+                    }
+                    free(temp);
+                    free(fptr);
+                    free(file);
+                }
+//*/
+                return 1;
+            }
+            return 0;
+
+        case FCT_CBOX:
+            if (cmsg == MSG_BCLK) try_update_checkbox(*ctrl, !!data);
+            return 0;
+
+        case FCT_SPIN:
+            if (cmsg == MSG_NSET) try_update_spinner(*ctrl, data, false);
+            return 0;
+    }
     switch (ctrl->uuid) {
         case TXT_HEAD: {
 /*
@@ -1598,15 +1755,15 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             auto engc = (engine_t*)ctrl->data;
             if (cmsg == MSG_LGST) {
                 cmsg = RUN_FE2C(engc->MCT_EXAC, MSG_BGST, 0);
-                cmsg = (cmsg & FCS_MARK)? 2 : 1;
-                return (engc->ctgs._[data].flgs & cmsg)? 1 : 0;
+                cmsg = (cmsg & FCS_MARK) ? 2 : 1;
+                return (engc->ctgs._[data].flgs & cmsg) ? 1 : 0;
             } else if (cmsg == MSG_LSST) {
                 intptr_t prev;
                 cmsg = RUN_FE2C(engc->MCT_EXAC, MSG_BGST, 0);
-                cmsg = (cmsg & FCS_MARK)? 2 : 1;
-                prev = (engc->ctgs._[data >> 1].flgs & cmsg)? 1 : 0;
+                cmsg = (cmsg & FCS_MARK) ? 2 : 1;
+                prev = (engc->ctgs._[data >> 1].flgs & cmsg) ? 1 : 0;
                 engc->ctgs._[data >> 1].flgs &= ~cmsg;
-                engc->ctgs._[data >> 1].flgs |= (data & 1)? cmsg : 0;
+                engc->ctgs._[data >> 1].flgs |= (data & 1) ? cmsg : 0;
                 CategorizePreviews(engc);
                 return prev;
             }
@@ -1622,52 +1779,12 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 for (cmsg = 0; cmsg < engc->libs.size; cmsg++)
                     if (engc->libs._[cmsg].wctx.icnt >= 0) {
                         spin = engc->libs._[cmsg].wctx.icnt;
-                        spin = (spin + data > 0)? spin + data : 0;
+                        spin = (spin + data > 0) ? spin + data : 0;
                         if (engc->libs._[cmsg].spin.fe2c)
                             RUN_FE2C(engc->libs._[cmsg].spin, MSG_NSET, spin);
                         RUN_FC2E(engc->libs._[cmsg].spin, MSG_NSET, spin);
                     }
             }
-//*/
-            break;
-
-        case TXT_CAPT:
-/*
-            if (cmsg == MSG_WEND) {
-                ENGC *engc = (ENGC*)ctrl->data;
-                char *fptr, *file, *temp;
-
-                /// trying to write the animation base to its new location
-                if (engc->cini.base && engc->ccur.base) {
-                    fptr = strdup(engc->ccur.base);
-                    file = Concatenate(0, engc->cini.base, DEF_DSEP, DEF_FLDR);
-                    temp = Concatenate(0, engc->tran[TXT_BSAV],
-                                          "\n\n", file, "\n==>\n",
-                                          fptr, "\n\n", engc->tran[TXT_BDEL]);
-                    if (strcmp(engc->cini.base, engc->ccur.base)) {
-                        if (!rMessage(temp, engc->tran[TXT_BMOV],
-                                            engc->tran[TXT_BYES],
-                                            engc->tran[TXT_BNAY])) {
-                            free(fptr);
-                            fptr = 0;
-                        }
-                        if (!rMoveDir(file, fptr)) {
-                            free(temp);
-                            temp = Concatenate(0, engc->tran[TXT_BERR],
-                                                  "\n\n", file, "\n==>\n",
-                                                  (fptr)? fptr : "[X]");
-                            rMessage(temp, engc->tran[TXT_BMOV],
-                                           engc->tran[TXT_BYES], 0);
-                        }
-                    }
-                    free(temp);
-                    free(fptr);
-                    free(file);
-                }
-                return 1;
-            }
-            if ((cmsg == MSG_WSZC) && (((ENGC*)ctrl->data)->mctl))
-                RUN_FE2C(((ENGC*)ctrl->data)->MCT_CHAR, cmsg, data);
 //*/
             break;
 
@@ -1688,29 +1805,14 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
                 CategorizePreviews(engc);
                 RUN_FE2C(engc->MCT_OGRP, MSG__TXT,
-                        (intptr_t)engc->tran[(data)? TXT_AGRP : TXT_OGRP]);
+                        (intptr_t)engc->tran[(data) ? TXT_AGRP : TXT_OGRP]);
             }
 //*/
-            break;
-
-        case TXT_SRND:
-/*
-            if (cmsg == MSG_BCLK) {
-                RUN_FE2C(((ENGC*)ctrl->data)->MCT_RGPU, MSG__ENB, data);
-                RUN_FE2C(((ENGC*)ctrl->data)->MCT_BDUP, MSG__ENB, data);
-            }
-//*/
-            break;
-
-        case TXT_BDUP:
-            /// nothing goes here
             break;
 
         case TXT_OPTS:
-/*
             if (cmsg == MSG_BCLK)
-                RUN_FE2C(((ENGC*)ctrl->data)->OCT_OPTS, MSG__SHW, 1);
-//*/
+                if (auto opt = (CTRL*)ctrl->data) RUN_FE2C(*opt, MSG__SHW, 1);
             break;
 
         case TXT_GOGO: {
@@ -1793,7 +1895,7 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             free(igif.time);
             RUN_FE2C(engc->MCT_CAPT, MSG__SHW, 0);
             engc->pcur = engc->povr = 0;
-            engc->data = (engc->pmax)? calloc(engc->pmax,
+            engc->data = (engc->pmax) ? calloc(engc->pmax,
                                               sizeof(*engc->data)) : 0;
             cEngineRunMainLoop(engc->engd, engc->dpos.x, engc->dpos.y,
                                engc->dims.x + engc->dpos.x,
@@ -1817,240 +1919,366 @@ intptr_t FC2EM(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         }
     }
     return 0;
+    #undef mctl_
 }
 
-void FreeWindow(std::vector<CTRL> &window) {
-    long indx = 0;
-    while (window[indx].xdim | window[indx].ydim)
-        rFreeControl(&window[indx++]);
-    window = {};
-}
+class options_window_t : public conf_window_t {
+private:
+    static std::vector<CTRL> get_template(
+            CTRL *prev, intptr_t here, const conf_t &conf);
 
-void MakeWindow(std::vector<CTRL> &window) {
-    assert(!window.empty() && ((window[0].flgs & FCT_TTTT) == FCT_WNDW));
-    rMakeControl(&window[0], nullptr, nullptr); // creating the main window
+    static intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data);
 
-    long xmax = 0, ymax = 0, xoff = 0, yoff = 0;
-    for (size_t indx = 1; indx < window.size(); indx++) {
-        window[indx].prev = &window[0];
-        rMakeControl(&window[indx], &xoff, &yoff);
-        xmax = (xmax > xoff)? xmax : xoff;
-        ymax = (ymax > yoff)? ymax : yoff;
+    static void try_update_checkbox(CTRL &c, int flag = -1);
+
+    void maybe_set_control_text(const std::string &path, size_t ctl) {
+        if (!path.empty()) {
+            set_control_text(path, ctl);
+        } else {
+            set_control_text_stock(TXT_DFLT, ctl);
+        }
     }
-    /// resizing and showing the window
-    RUN_FE2C(window[0], MSG_WSZC, (uint16_t)xmax | ((uint32_t)ymax << 16));
+
+    void relocalize() {
+        #define octl_ controls_
+        conf_window_t::relocalize();
+        for (auto &c : controls_) {
+            try_update_checkbox(c);
+            try_update_spinner(c);
+        }
+        maybe_set_control_text(conf_.lang, &OCT_LGUI - &get_root());
+        maybe_set_control_text(conf_.base, &OCT_BDIR - &get_root());
+        #undef octl_
+    }
+
+public:
+    options_window_t(CTRL *prev, conf_t &conf, const conf_t &ini_conf,
+            const conf_t &def_conf)
+    : conf_window_t(get_template(prev, intptr_t(this), conf), conf, ini_conf,
+            def_conf) {
+        relocalize(); // also triggers relocalization of the main window
+    }
+};
+
+void options_window_t::try_update_checkbox(CTRL &c, int flag) {
+    #define octl_ controls_
+    if (conf_window_t::try_update_checkbox(c, flag)) {
+        if (c.uuid == TXT_ESAY) {
+            auto w = (options_window_t*)window_t::get_root(c).data;
+            RUN_FE2C(w->OCT_ECLR, MSG__ENB, flag);
+            RUN_FE2C(w->OCT_NSAY, MSG__ENB, flag);
+            RUN_FE2C(w->OCT_TSAY, MSG__ENB, flag);
+        } else if (c.uuid == TXT_ERCH) {
+            auto w = (options_window_t*)window_t::get_root(c).data;
+            RUN_FE2C(w->OCT_NCDR, MSG__ENB, flag);
+            RUN_FE2C(w->OCT_TCDR, MSG__ENB, flag);
+        }
+    }
+    #undef octl_
 }
+
+std::vector<CTRL> options_window_t::get_template(
+        CTRL *prev, intptr_t here, const conf_t &conf) {
+    return {
+        {   prev, here, TXT_OPTS,            FCT_WNDW,  1,  1,  1,  1, FC2E},
+
+        {nullptr, intptr_t(conf_t::update),
+                        TXT_UONR,            FCT_CBOX,  0,  0, 18,  2, FC2E},
+        {nullptr, intptr_t(conf_t::topmost),
+                        TXT_ETOP, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
+        {nullptr, intptr_t(conf_t::effects),
+                        TXT_EEFF, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
+        {nullptr, intptr_t(conf_t::interaction),
+                        TXT_EINT, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
+        {nullptr, intptr_t(conf_t::speech),
+                        TXT_ESAY, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
+        {nullptr, intptr_t(conf_t::cspeech),
+                        TXT_ECLR, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
+        {nullptr, intptr_t(conf_t::hover),
+                        TXT_ERCH, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
+
+        {nullptr, intptr_t(&conf.nrun),
+                        TXT_RUNS,            FCT_SPIN, 19,  0,  8,  3, FC2E},
+        {nullptr, here, TXT_RUNS, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+        {nullptr, intptr_t(&conf.nsca),
+                        TXT_SCAL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
+        {nullptr, here, TXT_SCAL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+        {nullptr, intptr_t(&conf.ndil),
+                        TXT_TDIL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
+        {nullptr, here, TXT_TDIL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+        {nullptr, intptr_t(&conf.nsay),
+                        TXT_RSAY, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
+        {nullptr, here, TXT_RSAY, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+        {nullptr, intptr_t(&conf.ncdr),
+                        TXT_PCDR, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
+        {nullptr, here, TXT_PCDR, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
+                                           | FST_SUNK,  0,  1, 49, -2, FC2E},
+
+        {nullptr, here, TXT_LGUI, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2E},
+        {nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
+                                           | FST_CNTR,  0,  0, 49,  2, FC2E},
+
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
+                                           | FST_SUNK,  0,  1, 49, -2, FC2E},
+
+        {nullptr, here, TXT_BDIR, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2E},
+        {nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
+                                           | FST_CNTR,  0,  0, 49,  2, FC2E},
+
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
+                                           | FST_SUNK,  0,  1, 49, -2, FC2E},
+
+        {nullptr, here, TXT_RELO, FCP_VERT | FCT_BUTN, 29,  0, 10,  3, FC2E},
+        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+    };
+}
+
+intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    #define octl_ controls_
+    switch (ctrl->flgs & FCT_TTTT) {
+        case FCT_WNDW:
+            if (cmsg == MSG_WEND) RUN_FE2C(*ctrl, MSG__SHW, 0);
+            break;
+
+        case FCT_CBOX:
+            if (cmsg == MSG_BCLK) try_update_checkbox(*ctrl, !!data);
+            break;
+
+        case FCT_SPIN:
+            if (cmsg == MSG_NSET) try_update_spinner(*ctrl, data, false);
+            break;
+
+        case FCT_BUTN: {
+            if (cmsg != MSG_BCLK) break;
+            auto w = (options_window_t*)ctrl->data;
+            if (ctrl == &w->OCT_BCHO) {
+                auto path = (!w->conf_.base.empty()) ? w->conf_.base : "";
+                auto base = rChooseDir(ctrl, path.c_str());
+                if (!base) break;
+                w->conf_.base = base;
+                free(base);
+                // TODO: add some checks to verify that the new dir is ok?
+            } else if (ctrl == &w->OCT_LCHO) {
+                auto path = (!w->conf_.lang.empty()) ? w->conf_.lang : "";
+                auto lang = rChooseFile(ctrl, "lang", path.c_str());
+                if (!lang) break;
+                w->conf_.lang = lang;
+                free(lang);
+                long size = 0;
+                if (auto file = rLoadFile(w->conf_.lang.c_str(), &size)) {
+                    std::string_view str(file, size);
+                    w->conf_.lang_map = conf_t::get_lang_map(str);
+                    free(file);
+                } else {
+                    w->conf_.lang_map.clear();
+                }
+            } else if (ctrl == &w->OCT_BREL) {
+                w->conf_.base = w->ini_conf_.base;
+            } else if (ctrl == &w->OCT_BRES) {
+                w->conf_.base = w->def_conf_.base;
+            } else if (ctrl == &w->OCT_LREL) {
+                w->conf_.lang = w->ini_conf_.lang;
+                w->conf_.lang_map = w->ini_conf_.lang_map;
+            } else if (ctrl == &w->OCT_LRES) {
+                w->conf_.lang = w->def_conf_.lang;
+                w->conf_.lang_map = w->def_conf_.lang_map;
+            } else if (ctrl == &w->OCT_FREL) {
+                w->conf_ = w->ini_conf_;
+            } else if (ctrl == &w->OCT_FRES) {
+                w->conf_ = w->def_conf_;
+            } else {
+                assert(false); // no buttons except those above
+            }
+            w->relocalize();
+            break;
+        }
+    }
+    return 0;
+    #undef octl_
+}
+
+/// engine data (client side)
+class engine_t : public no_copy_t {
+private:
+    std::string cfnm_; /// main configuration file path
+    conf_t cdef_; /// default configuration
+    conf_t cini_; /// initial configuration read at the start
+    conf_t ccur_; /// current configuration
+    main_window_t mctl_; /// main window
+    options_window_t octl_; /// options window
+    T2IV tray_;   /// tray icon dimensions
+    T4IV area_;   /// drawing area position and dimensions
+    T3IV ppos_;   /// mouse pointer position (z = flags)
+    uint64_t tcur_; /// current, dilation-adjusted timestamp
+    uint64_t tpre_; /// previous raw timestamp
+    float tacc_;  /// partial timestamp accumulator
+    std::vector<MENU> mspr_; /// per-sprite context menu
+    std::vector<MENU> mctx_; /// main context menu
+    ENGD *engd_;
+
+    std::unordered_map<library_t::lib_id_t, std::unique_ptr<library_t>> libs_;
+    std::vector<std::vector<library_t::lib_id_t>> categories_;
+
+    static conf_t get_def_conf(const std::string_view base) {
+        INCBIN("../exec/loc/en.lang", DefLang);
+        static const std::string_view def_lang(DefLang, DefLang_end - DefLang);
+
+        conf_t retn;
+        retn.base = base;
+        retn.flgs = conf_t::general | conf_t::render;
+        retn.lang_map = conf_t::get_lang_map(def_lang);
+        return retn;
+    }
+
+    static conf_t get_ini_conf(const conf_t &def, const std::string &cfnm) {
+        #define CASE(what) {#what, conf_t::what}
+        static const std::unordered_map<std::string, conf_t::flags_t> rndr = {
+            CASE(gpu), CASE(opaque), CASE(draw), CASE(show),
+            CASE(wpbo), CASE(wbgra), CASE(wregion),
+        };
+        static const std::unordered_map<std::string, conf_t::flags_t> gen = {
+            CASE(speech), CASE(cspeech), CASE(topmost), CASE(hover),
+            CASE(update), CASE(filters), CASE(effects), CASE(exact),
+            CASE(copies), CASE(randomsel), CASE(interaction),
+        };
+        #undef CASE
+
+        auto render = conf_t::render;
+        auto general = conf_t::general;
+        int16_t runs = 0;
+        conf_t retn;
+        retn.base = def.base;
+        if (auto file = (!cfnm.empty())
+                ? rLoadFile(cfnm.c_str(), nullptr)
+                : nullptr) {
+            for (token_t text({}, file); !is_empty(text);
+                    text = next_token(text.second, 0, DEF_CRLF, 0)) {
+                if (!text.first.empty() && (text.first.back() == DEF_LFCR))
+                    text.first.remove_suffix(sizeof(DEF_LFCR));
+                auto line = next_token(text.first);
+                switch (str_hash(line.first)) {
+                    default: break;
+                    case str_hash("Language"): {
+                        long size = 0;
+                        std::string name(line.second);
+                        if (auto file = rLoadFile(name.c_str(), &size)) {
+                            retn.lang = std::move(name);
+                            retn.lang_map = conf_t::get_lang_map(
+                                    std::string_view(file, size));
+                            free(file);
+                        }
+                        break;
+                    }
+                    case str_hash("Content"):
+                        line = next_token(line.second, 0);
+                        if (line.first.empty()) break;
+                        retn.base = line.first;
+                        break;
+                    case str_hash("RunsTillUpdate"):
+                        retn.nrun.set(process_float(line, retn.nrun.get()));
+                        runs = process_float(line, runs);
+                        break;
+                    case str_hash("BaseScale"):
+                        retn.nsca.set(process_float(line, retn.nsca.get()));
+                        break;
+                    case str_hash("TimeDilation"):
+                        retn.ndil.set(process_float(line, retn.ndil.get()));
+                        break;
+                    case str_hash("RandomSpeech"):
+                        retn.nsay.set(process_float(line, retn.nsay.get()));
+                        break;
+                    case str_hash("CursorDodge"):
+                        retn.ncdr.set(process_float(line, retn.ncdr.get()));
+                        break;
+                    case str_hash("Render"):
+                        render = conf_t::none;
+                        while (!is_empty(line))
+                            render |= process_map(line, rndr, conf_t::none);
+                        break;
+                    case str_hash("Flags"):
+                        general = conf_t::none;
+                        while (!is_empty(line))
+                            general |= process_map(line, gen, conf_t::none);
+                        break;
+                }
+            }
+            free(file);
+
+            retn.flgs = conf_t::general | conf_t::render;
+            if (retn.nrun.get() && (retn.nrun.get() <= runs))
+                retn.flgs |= conf_t::update;
+        }
+        return retn;
+    }
+
+    static conf_t get_cur_conf(const conf_t &ini) { return ini; }
+
+    void build_library_structure(const std::string &base);
+
+public:
+    engine_t(const std::string_view fcnf, const std::string_view base,
+            const T2IV tray, const T4IV area);
+
+    void main_loop();
+};
 
 void UpdPreview(intptr_t data, uint64_t time) {
-    auto engc = (engine_t*)data;
+    //auto engc = (engine_t*)data;
 }
 
 engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
-        const T2IV tray, const T4IV area) {
-    #define CASE(what) {#what, conf_t::what}
-    static std::unordered_map<std::string, conf_t::flags_t> rndrflg = {
-        CASE(gpu), CASE(opaque), CASE(draw), CASE(show),
-        CASE(wpbo), CASE(wbgra), CASE(wregion),
-    };
-    static std::unordered_map<std::string, conf_t::flags_t> genflg = {
-        CASE(topmost), CASE(speech), CASE(cspeech), CASE(hover),
-        CASE(effects), CASE(update), CASE(interaction),
-    };
-    #undef CASE
+        const T2IV tray, const T4IV area)
+: cfnm_((!fcnf.empty()) ? concat_path({std::string(fcnf), DEF_CORE}) : "")
+, cdef_(get_def_conf(base))
+, cini_(get_ini_conf(cdef_, cfnm_))
+, ccur_(get_cur_conf(cini_))
+, mctl_(ccur_, cini_, cdef_)
+, octl_(&mctl_.get_root(), ccur_, cini_, cdef_)
+, tray_(tray)
+, area_(area)
+, ppos_{}
+, tcur_{}
+, tpre_{}
+, tacc_{} {
+    mctl_.set_options_window(octl_.get_root());
+    build_library_structure(cini_.base);
+    mctl_.toggle_visibility(true);
+}
 
-    int16_t runs = 0;
-    conf_t::flags_t render = conf_t::show | conf_t::draw | conf_t::gpu;
-    conf_t::flags_t general = conf_t::hover | conf_t::interaction
-            | conf_t::effects | conf_t::speech | conf_t::cspeech;
-
-    tray_ = tray;
-    area_ = area;
-    cdef_.base = cini_.base = base;
-    cdef_.flgs = cini_.flgs = general | render;
-
-    cfnm_ = (!fcnf.empty())
-            ? concat_path({std::string(fcnf), DEF_CORE})
-            : "";
-    if (auto file = (!cfnm_.empty())
-            ? rLoadFile(cfnm_.c_str(), nullptr)
-            : nullptr) {
-        for (token_t text({}, file); !is_empty(text);
-                text = next_token(text.second, 0, DEF_CRLF, 0)) {
-            if (!text.first.empty() && (text.first.back() == DEF_LFCR))
-                text.first.remove_suffix(sizeof(DEF_LFCR));
-            auto line = next_token(text.first);
-            switch (str_hash(line.first)) {
-                default: break;
-                case str_hash("Language"):
-                    break;
-                case str_hash("Content"):
-                    line = next_token(line.second, 0);
-                    if (line.first.empty()) {
-                        cini_.base = cdef_.base;
-                        break;
-                    }
-                    cini_.base = concat_path(
-                            {std::string(line.first), "Content", "Ponies"});
-                    break;
-                case str_hash("RunsTillUpdate"):
-                    cini_.nrun.set(process_float(line, cini_.nrun.get()));
-                    runs = process_float(line, runs);
-                    break;
-                case str_hash("BaseScale"):
-                    cini_.nsca.set(process_float(line, cini_.nsca.get()));
-                    break;
-                case str_hash("TimeDilation"):
-                    cini_.ndil.set(process_float(line, cini_.ndil.get()));
-                    break;
-                case str_hash("RandomSpeech"):
-                    cini_.nsay.set(process_float(line, cini_.nsay.get()));
-                    break;
-                case str_hash("CursorDodge"):
-                    cini_.ncdr.set(process_float(line, cini_.ncdr.get()));
-                    break;
-                case str_hash("Render"):
-                    render = conf_t::none;
-                    while (!is_empty(line))
-                        render |= process_map(line, rndrflg, conf_t::none);
-                    break;
-                case str_hash("Flags"):
-                    general = conf_t::none;
-                    while (!is_empty(line))
-                        general |= process_map(line, genflg, conf_t::none);
-                    break;
-            }
-        }
-        free(file);
-
-        ccur_ = cini_;
-        ccur_.lang = "";
-
-        cini_.flgs = general | render;
-        if (!cini_.nrun.get())
-            runs = 0;
-        else if (runs >= cini_.nrun.get()) {
-            cini_.flgs |= conf_t::update;
-            runs = 0;
-        }
-    }
-
-    /// primary initialization complete, now creating GUI
-    ///  0. [ FIRST AND FOREMOST! ] do not forget to edit the appropriate
-    ///     *CT_ constants after swapping or adding controls
-    ///  1. main window`s "dimensions" are just spaces to leave between
-    ///     window edges and actual controls
-    const auto here = intptr_t(this);
-    mctl_ = {
-        {nullptr, here, TXT_CAPT, FSW_SIZE | FCT_WNDW,  1,  1,  1,  1, FC2EM},
-        {nullptr, here, TXT_FLTR,            FCT_CBOX,  0,  0, 19,  2, FC2EM},
-        {nullptr, here, TXT_EXAC, FCP_VERT | FCT_CBOX,  0,  0, 19,  2, FC2EM},
-        {nullptr, here, TXT_OGRP, FCP_VERT | FCT_LIST,  0,  0, 19, 16, FC2EM},
-        {nullptr, here, TXT_SGRP, FCP_VERT | FCT_TEXT,  0,  1, 19,  2, FC2EM},
-        {nullptr, intptr_t(&ccur_.spec),
-                        TXT_SPEC, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2EM},
-        {nullptr, here, TXT_BADD, FCP_BOTH | FCT_BUTN,  1, -3,  9,  3, FC2EM},
-        {nullptr, here, TXT_SRND, FCP_VERT | FCT_CBOX
-                                           | FSX_LEFT,  0,  1, 19,  2, FC2EM},
-        {nullptr, intptr_t(&ccur_.rgpu),
-                        TXT_RGPU, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2EM},
-        {nullptr, here, TXT_BDUP, FCP_BOTH | FCT_CBOX,  1, -3,  9,  3, FC2EM},
-        {nullptr, here, TXT_SELE, FCP_VERT | FCT_PBAR,  0,  1, 19,  3, FC2EM},
-        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_BUTN,  0,  1,  9,  6, FC2EM},
-        {nullptr, here, TXT_GOGO, FCP_BOTH | FCT_BUTN
-                                           | FSB_DFLT,  1, -6,  9,  6, FC2EM},
-        {nullptr, here, TXT_HEAD, FCP_HORZ | FCT_SBOX,  0,  0, 41, 43, FC2EM},
-    };
-    octl_ = {
-        {nullptr, here, TXT_OPTS,            FCT_WNDW,  1,  1,  1,  1, FC2EO},
-
-        {nullptr, here, TXT_UONR,            FCT_CBOX,  0,  0, 18,  2, FC2EO},
-        {nullptr, here, TXT_ETOP, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
-        {nullptr, here, TXT_EEFF, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
-        {nullptr, here, TXT_EINT, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
-        {nullptr, here, TXT_ESAY, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
-        {nullptr, here, TXT_ECLR, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
-        {nullptr, here, TXT_ERCH, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2EO},
-
-        {nullptr, intptr_t(&ccur_.nrun),
-                        TXT_RUNS,            FCT_SPIN, 19,  0,  8,  3, FC2EO},
-        {nullptr, here, TXT_RUNS, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
-        {nullptr, intptr_t(&ccur_.nsca),
-                        TXT_SCAL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
-        {nullptr, here, TXT_SCAL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
-        {nullptr, intptr_t(&ccur_.ndil),
-                        TXT_TDIL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
-        {nullptr, here, TXT_TDIL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
-        {nullptr, intptr_t(&ccur_.nsay),
-                        TXT_RSAY, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
-        {nullptr, here, TXT_RSAY, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
-        {nullptr, intptr_t(&ccur_.ncdr),
-                        TXT_PCDR, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2EO},
-        {nullptr, here, TXT_PCDR, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2EO},
-
-        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
-                                           | FST_SUNK,  0,  1, 49, -2, FC2EO},
-
-        {nullptr, here, TXT_LGUI, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2EO},
-        {nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2EO},
-        {nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
-        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
-        {nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
-                                           | FST_CNTR,  0,  0, 49,  2, FC2EO},
-
-        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
-                                           | FST_SUNK,  0,  1, 49, -2, FC2EO},
-
-        {nullptr, here, TXT_BDIR, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2EO},
-        {nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2EO},
-        {nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
-        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
-        {nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
-                                           | FST_CNTR,  0,  0, 49,  2, FC2EO},
-
-        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
-                                           | FST_SUNK,  0,  1, 49, -2, FC2EO},
-
-        {nullptr, here, TXT_RELO, FCP_VERT | FCT_BUTN, 29,  0, 10,  3, FC2EO},
-        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2EO},
-    };
-    MakeWindow(mctl_);
-    MakeWindow(octl_);
-    RUN_FC2E(OCT_LREL, MSG_BCLK, 0); /// relocalize!
-    //UpdateOptionControls(&engc, 1);
-    RUN_FE2C(MCT_CAPT, MSG__SHW, 1);
-
-    const auto min_preview_width = get_min_preview_size().x;
-    const auto avg_font_width = get_avg_font_size().x;
-    /// showing the scroll window
-    //MCT_CHAR.fc2e = FC2EM; // why do we need this? that was the init value!
-    RUN_FE2C(MCT_CHAR, MSG__SHW, 1);
-
-    std::vector<library_t::input_t> ins;
-    auto find = rFindMake(cini_.base.c_str());
-    while (auto file = rFindFile(find)) {
-        ins.emplace_back(library_t::input_t(cini_.base, file));
-        free(file);
-    }
-    build_library_structure(cini_.base, ins);
-
+void engine_t::main_loop() {
     /// initialize the rendering engine
     cEngineCallback(0, ECB_INIT, (intptr_t)&engd_);
 
-    rInternalMainLoop(&mctl_[0], FRM_WAIT, UpdPreview, intptr_t(this));
-
+    rInternalMainLoop(&mctl_.get_root(), FRM_WAIT, UpdPreview, intptr_t(this));
 }
 
-void engine_t::build_library_structure(const std::string &base,
-        const std::vector<library_t::input_t> &ins) {
+void engine_t::build_library_structure(const std::string &base) {
     std::unordered_map<std::string, std::unordered_set<library_t::lib_id_t>>
         categories;
     library_t::bhv_id_map_t bhv_id_map;
+
+    std::vector<library_t::input_t> ins;
+    auto path = concat_path({base, DEF_FLDR, "Ponies"});
+    auto find = rFindMake(path.c_str());
+    while (auto file = rFindFile(find)) {
+        ins.emplace_back(library_t::input_t(path, file));
+        free(file);
+    }
 
     // construct the behaviour ID descriptors and draft categories for everyone
     for (size_t i = 0; i < ins.size(); i++) {
         auto ib = bhv_id_map.emplace(ascii_to_lower(ins[i].name),
                     library_t::build_bhv_id_desc(ins[i]));
         assert(ib.second); // make sure the library has a unique name
+        ((void)ib);
         for (auto &c : ins[i].categories)
             categories[c].emplace(str_hash(ins[i].name));
     }
@@ -2063,7 +2291,7 @@ void engine_t::build_library_structure(const std::string &base,
                     printf("[%s] WARNING, invalid follow target name in '%s'\n",
                             i.name.c_str(), b.name.c_str());
 
-    // load the libraries
+    // initialize the libraries
     for (size_t i = 0; i < ins.size(); i++) {
         printf("%s\n", ins[i].name.c_str());
         auto path = concat_path({base, ins[i].name});
@@ -2082,7 +2310,7 @@ void engine_t::build_library_structure(const std::string &base,
             return (*lib_a)->name() < (*lib_b)->name();
         };
         std::sort(categories_.back().begin(), categories_.back().end(), names);
-        // TODO: associate names/indices with the list control
+        mctl_.add_category(c.first);
     }
 }
 
@@ -2095,6 +2323,5 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                int32_t(xdim - xpos), int32_t(ydim - ypos)}};
     engine_t engc(fcnf, base, T2IV{{int32_t(xico), int32_t(yico)}}, area);
 
-
-
+    engc.main_loop();
 }

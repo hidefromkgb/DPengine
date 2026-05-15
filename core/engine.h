@@ -22,6 +22,7 @@ extern "C" {
     __asm__(                       \
         ".section .data;"          \
         ".global _" #pvar ";"      \
+        ".global _" #pvar "_end;"  \
         "_" #pvar ":"              \
         ".incbin \"" file "\";"    \
         "_" #pvar "_end:"          \
@@ -29,12 +30,14 @@ extern "C" {
         ".align 4;"                \
         ".section .text;"          \
     );                             \
-    extern char pvar[]
+    extern char pvar[];            \
+    extern char pvar ## _end[]
 #elif __APPLE__
     #define INCBIN(file, pvar)     \
     __asm__(                       \
         ".section __DATA,__data\n" \
         ".globl _" #pvar "\n"      \
+        ".globl _" #pvar "_end\n"  \
         "_" #pvar ":\n"            \
         ".incbin \"" file "\"\n"   \
         "_" #pvar "_end:\n"        \
@@ -42,12 +45,14 @@ extern "C" {
         ".align 4\n"               \
         ".section __TEXT,__text\n" \
     );                             \
-    extern char pvar[]
+    extern char pvar[];            \
+    extern char pvar ## _end[]
 #else
     #define INCBIN(file, pvar)     \
     __asm__(                       \
         ".pushsection .data;"      \
         ".global " #pvar ";"       \
+        ".global " #pvar "_end;"   \
         #pvar ":"                  \
         ".incbin \"" file "\";"    \
         #pvar "_end:"              \
@@ -55,7 +60,8 @@ extern "C" {
         ".align 4;"                \
         ".popsection;"             \
     );                             \
-    extern char pvar[]
+    extern char pvar[];            \
+    extern char pvar ## _end[]
 #endif
 
 

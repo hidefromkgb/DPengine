@@ -272,7 +272,7 @@ long rMoveDir(char *dsrc, char *ddst) {
 
 
 
-char *ChooseFileDir(CTRL *root, char *file, char *fext) {
+char *ChooseFileDir(CTRL *root, const char *file, const char *fext) {
     GtkFileFilter *fltr;
     GtkWidget *wdlg;
     char *temp;
@@ -298,19 +298,19 @@ char *ChooseFileDir(CTRL *root, char *file, char *fext) {
     if (gtk_dialog_run(GTK_DIALOG(wdlg)) != GTK_RESPONSE_ACCEPT)
         temp = 0;
     else {
-        fext = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(wdlg));
-        temp = strdup(fext);
-        g_free(fext);
+        char *retn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(wdlg));
+        temp = strdup(retn);
+        g_free(retn);
     }
     gtk_widget_destroy(wdlg);
     return temp;
 }
 
-char *rChooseDir(CTRL *root, char *base) {
+char *rChooseDir(CTRL *root, const char *base) {
     return ChooseFileDir(root, base, 0);
 }
 
-char *rChooseFile(CTRL *root, char *fext, char *file) {
+char *rChooseFile(CTRL *root, const char *fext, const char *file) {
     return ChooseFileDir(root, file, fext);
 }
 
@@ -443,7 +443,8 @@ gboolean TmrFunc(gpointer data) {
 
 
 
-void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
+void rInternalMainLoop(
+        const CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
     intptr_t user[2] = {(intptr_t)upre, data};
     guint tmrp;
 
@@ -789,6 +790,13 @@ intptr_t FE2CX(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
         case MSG__TXT:
             gtk_label_set_text(GTK_LABEL(ctrl->priv[7]), (char*)data);
+            if ((ctrl->flgs & FCT_TTTT) == FCT_BUTN) {
+                GdkRectangle rect = {};
+                rect.width = (uint16_t)ctrl->priv[1];
+                rect.height = (uint16_t)(ctrl->priv[1] >> 16);
+                ctrl->priv[1] = 0;
+                ButtonSize(GTK_WIDGET(ctrl->priv[7]), &rect, ctrl);
+            }
             break;
 
         case MSG_BGST:
@@ -1103,7 +1111,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
         fmet = pango_context_get_metrics(pctx, gwnd->style->font_desc, 0);
         xfon = pango_font_metrics_get_approximate_char_width(fmet);
         yfon = pango_font_metrics_get_ascent(fmet);
-        ctrl->priv[2] =  (uint16_t)round(1.500 * xfon / PANGO_SCALE)
+        ctrl->priv[2] =  (uint16_t)round(1.625 * xfon / PANGO_SCALE)
                       | ((uint32_t)round(0.675 * yfon / PANGO_SCALE) << 16);
 
         g_signal_connect(G_OBJECT(gwnd), "configure-event",
