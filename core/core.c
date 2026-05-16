@@ -826,8 +826,11 @@ void cEngineLoadAnimAsync(ENGD *engd, AINF *ainf, uint8_t *name,
     SEM_TYPE curr;
     uint64_t hash;
 
-    if (!engd || !ainf || !name)
+    if (!engd || !ainf || !name) {
+        if (udis)
+            udis(data);
         return;
+    }
     estr = TreeFind(engd->hstr, hash = HashLine64((char*)name));
     while (estr) {
         if (!strcmp(estr->path, (char*)name))
@@ -858,6 +861,8 @@ void cEngineLoadAnimAsync(ENGD *engd, AINF *ainf, uint8_t *name,
         dest->next = estr->dest;
         estr->dest = dest;
         dest->ainf = ainf;
+        if (udis)
+            udis(data);
         printf(TXL_DUPL" %s\n", estr->path);
     }
 }
