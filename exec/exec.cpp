@@ -3,19 +3,16 @@
 #include <charconv>
 #include <functional>
 #include <initializer_list>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <type_traits>
-#include <unordered_set>
 #include <vector>
 
 #include "exec.h"
 #include "zip/zip_load.h"
 
 
-
-// TODO: check which *::input_t fields are still left unprocessed, and fix!
 
 // TODO: implement a test system? e.g. instead of the screen the characters
 //       would print their actions to STDOUT, and if the same PRNG, config,
@@ -24,9 +21,20 @@
 
 
 
+// TODO: preview text scrolling
+// TODO: categorization
+// TODO: content downloading
+// TODO: config saving
+// TODO: speech bubbles
+// TODO: the go button
+
+
+
 // FE2C / FC2E helper macros
 #define RUN_FE2C(trgt, cmsg, data) (trgt).fe2c(&(trgt), (cmsg), (data))
 #define RUN_FC2E(trgt, cmsg, data) (trgt).fc2e(&(trgt), (cmsg), (data))
+
+#define assert_and_discard(a, d) assert(a), ((void)(d))
 
 /* convert degrees to radians  */
 #define DTR_CONV (M_PI / 180.0)
@@ -122,27 +130,52 @@ enum {
 /*  Cancel                       */ TXT_BNAY,
 };
 
-// 32-bit flag enum generation machinery
-#define GEN_FLAGS(...) GEN_FLAGSh( 0,,,,,,,,,,,,,,,,,,,,,,,,,__VA_ARGS__) \
-                       GEN_FLAGSh( 8,,,,,,,,,,,,,,,,,        __VA_ARGS__) \
-                       GEN_FLAGSh(16,,,,,,,,,                __VA_ARGS__) \
-                       GEN_FLAGSh(24,                        __VA_ARGS__)
-//                                  ^1      ^8      ^16     ^24
-#define GEN_FLAGSh(h, ...) \
-GEN_FLAGSl(h + 0,,,,,,,,__VA_ARGS__) GEN_FLAGSl(h + 1,,,,,,,__VA_ARGS__) \
-GEN_FLAGSl(h + 2,,,,,,  __VA_ARGS__) GEN_FLAGSl(h + 3,,,,,  __VA_ARGS__) \
-GEN_FLAGSl(h + 4,,,,    __VA_ARGS__) GEN_FLAGSl(h + 5,,,    __VA_ARGS__) \
-GEN_FLAGSl(h + 6,,      __VA_ARGS__) GEN_FLAGSl(h + 7,      __VA_ARGS__)
-#define GEN_FLAGSl(...) GEN_FLAGSyn(__VA_ARGS__, \
-y,y,y,y, y,y,y,y, y,y,y,y, y,y,y,y, y,y,y,y, y,y,y,y, y,y,y,y, y,y,y,y, \
-n,n,n,n, n,n,n,n, n,n,n,n, n,n,n,n, n,n,n,n, n,n,n,n, n,n,n,n, n,n,n,n, )
-#define GEN_FLAGSyn(v0,v1,v2,v3,v4,v5,v6,v7, v8,v9,vA,vB,vC,vD,vE,vF, \
-                    w0,w1,w2,w3,w4,w5,w6,w7, w8,w9,wA,wB,wC,wD,wE,wF, \
-                    a0,a1,a2,a3,a4,a5,a6,a7, a8,a9,aA,aB,aC,aD,aE,aF, \
-                    b0,b1,b2,b3,b4,b5,b6,b7, b8,b9,bA,bB,bC,bD,bE,bF, \
-                    yn, ...) GEN_FLAGS##yn(a0, v0)
-#define GEN_FLAGSy(a, v) a = 1 << (v),
-#define GEN_FLAGSn(a, v)
+/*
+// GEN_FLAGS(): 64-bit flag enum generation machinery
+#define GEN_FLAGS(...) \
+GEN_FLAGS4(00 ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,##__VA_ARGS__) \
+GEN_FLAGS4(16                 ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,##__VA_ARGS__) \
+GEN_FLAGS4(32                                 ,,,,,,,,,,,,,,,,,##__VA_ARGS__) \
+GEN_FLAGS4(48                                                 ,##__VA_ARGS__)
+#define GEN_FLAGS4(h, ...) \
+GEN_FLAGS3(h+ 0,,,,,,,,,,,,,__VA_ARGS__) GEN_FLAGS3(h+ 4,,,,,,,,,__VA_ARGS__) \
+GEN_FLAGS3(h+ 8        ,,,,,__VA_ARGS__) GEN_FLAGS3(h+12        ,__VA_ARGS__)
+#define GEN_FLAGS3(h, ...) \
+GEN_FLAGS2(h+ 0         ,,,,__VA_ARGS__) GEN_FLAGS2(h+ 1      ,,,__VA_ARGS__) \
+GEN_FLAGS2(h+ 2           ,,__VA_ARGS__) GEN_FLAGS2(h+ 3        ,__VA_ARGS__)
+#define GEN_FLAGS2(...) GEN_FLAGS10(__VA_ARGS__, \
+1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, \
+1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, \
+0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, \
+0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, )
+#define GEN_FLAGS10(    ___,s1,s2,s3,s4,s5,s6,s7, t0,t1,t2,t3,t4,t5,t6,t7, \
+u0,u1,u2,u3,u4,u5,u6,u7, v0,v1,v2,v3,v4,v5,v6,v7, w0,w1,w2,w3,w4,w5,w6,w7, \
+x0,x1,x2,x3,x4,x5,x6,x7, y0,y1,y2,y3,y4,y5,y6,y7, z0,z1,z2,z3,z4,z5,z6,z7, \
+__,a1,a2,a3,a4,a5,a6,a7, b0,b1,b2,b3,b4,b5,b6,b7, c0,c1,c2,c3,c4,c5,c6,c7, \
+d0,d1,d2,d3,d4,d5,d6,d7, e0,e1,e2,e3,e4,e5,e6,e7, f0,f1,f2,f3,f4,f5,f6,f7, \
+g0,g1,g2,g3,g4,g5,g6,g7, h0,h1,h2,h3,h4,h5,h6,h7, _, ...) GEN_FLAGS##_(__, ___)
+#define GEN_FLAGS1(arg, val) arg = 1uLL << (val),
+#define GEN_FLAGS0(arg, val)
+/*/
+// GEN_FLAGS(): 32-bit flag enum generation machinery
+#define GEN_FLAGS(...)           GEN_FLAGS4(00,,,,,,,,,,,,,,,,,##__VA_ARGS__) \
+                                 GEN_FLAGS4(16                ,##__VA_ARGS__)
+#define GEN_FLAGS4(h, ...) \
+GEN_FLAGS3(h+ 0,,,,,,,,,,,,,__VA_ARGS__) GEN_FLAGS3(h+ 4,,,,,,,,,__VA_ARGS__) \
+GEN_FLAGS3(h+ 8        ,,,,,__VA_ARGS__) GEN_FLAGS3(h+12        ,__VA_ARGS__)
+#define GEN_FLAGS3(h, ...) \
+GEN_FLAGS2(h+ 0         ,,,,__VA_ARGS__) GEN_FLAGS2(h+ 1      ,,,__VA_ARGS__) \
+GEN_FLAGS2(h+ 2           ,,__VA_ARGS__) GEN_FLAGS2(h+ 3        ,__VA_ARGS__)
+#define GEN_FLAGS2(...) GEN_FLAGS10(__VA_ARGS__, \
+1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, \
+0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, )
+#define GEN_FLAGS10(    ___,s1,s2,s3,s4,s5,s6,s7, t0,t1,t2,t3,t4,t5,t6,t7, \
+u0,u1,u2,u3,u4,u5,u6,u7, v0,v1,v2,v3,v4,v5,v6,v7, __,a1,a2,a3,a4,a5,a6,a7, \
+b0,b1,b2,b3,b4,b5,b6,b7, c0,c1,c2,c3,c4,c5,c6,c7, d0,d1,d2,d3,d4,d5,d6,d7, \
+_, ...) GEN_FLAGS##_(__, ___)
+#define GEN_FLAGS1(arg, val) arg = 1u << (val),
+#define GEN_FLAGS0(arg, val)
+//*/
 
 // flag enum support
 template<class T> constexpr typename std::enable_if<std::is_enum_v<T>, T>::type
@@ -401,11 +434,13 @@ std::string process_string(
     return std::string(line.first);
 }
 
+class unit_t;
 class library_t;
 class speech_t;
 class effect_t;
 class behaviour_t;
 class interaction_t;
+class engine_t;
 
 template <typename T>
 using ref_vec_t = std::vector<std::reference_wrapper<const T>>;
@@ -520,10 +555,7 @@ private:
     std::vector<std::unique_ptr<speech_t>> speeches_;
     // TODO: remap groups sequenitially and make this a vector?
     std::unordered_map<int, group_t> groups_;
-    sprite_bank_t::sprite_t preview_;
-    CTRL imagebox_; // image box control to preview the sprite
-    CTRL charname_; // character name just below the image box
-    CTRL spinner_;  // spin control to set ICNT
+    size_t preview_id_;
 
     inline static bhv_id_t init_bhv_id(movement_flags_t move, int16_t group);
 
@@ -538,7 +570,7 @@ public:
     library_t(std::string path, const input_t &in,
             const bhv_id_map_t &bhv_id_map);
 
-    bool upload_preview(ENGD *engd);
+    const unit_t &get_preview(ENGD *engd = nullptr);
 
     const std::string &name() const { return readable_name_; }
 };
@@ -589,11 +621,9 @@ protected:
     unit_t(): sides_{} {}
     ~unit_t() {
         const auto discard_r = maybe_discard(false);
-        assert(discard_r);
-        ((void)discard_r);
+        assert_and_discard(discard_r, discard_r);
         const auto discard_l = maybe_discard(true);
-        assert(discard_l);
-        ((void)discard_l);
+        assert_and_discard(discard_l, discard_l);
     }
 
     void set_center(bool left, const T2IV &center) {
@@ -636,45 +666,35 @@ protected:
 //*/
         return true;
     }
-    T2IV dims(bool left) {
-        T2IV retn{{(decltype(retn.x))sides_[left].image_.xdim,
-                   (decltype(retn.y))sides_[left].image_.ydim}};
-        return retn;
-    }
-    uint32_t next_frame(bool left, uint32_t curr) {
-        return (curr + 1 >= sides_[left].image_.fcnt)
-                ? (sides_[left].flags_ & repeat) ? 0 : curr
-                : (curr + 1);
-    }
 
 public:
-    bool is_owner_discardable(bool left) {
+    bool is_owner_discardable(bool left) const {
         const auto flags = sides_[left].flags_;
         return (flags & prepare) && !(flags & upload);
     }
-    bool is_owner_discardable() {
+    bool is_owner_discardable() const {
         return is_owner_discardable(false) && is_owner_discardable(true);
     }
 
-    bool is_being_uploaded(bool left) {
+    bool is_being_uploaded(bool left) const {
         const auto flags = sides_[left].flags_;
         return !(flags & prepare) && (flags & upload);
     }
-    bool is_being_uploaded() {
+    bool is_being_uploaded() const {
         return is_being_uploaded(false) && is_being_uploaded(true);
     }
 
-    bool is_empty(bool left) {
+    bool is_empty(bool left) const {
         const auto flags = sides_[left].flags_;
         return !(flags & prepare) && !(flags & upload);
     }
-    bool is_empty() { return is_empty(false) && is_empty(true); }
+    bool is_empty() const { return is_empty(false) && is_empty(true); }
 
-    bool is_ready(bool left) {
+    bool is_ready(bool left) const {
         const auto flags = sides_[left].flags_;
         return (flags & prepare) && (flags & upload);
     }
-    bool is_ready() { return is_ready(false) && is_ready(true); }
+    bool is_ready() const { return is_ready(false) && is_ready(true); }
 
     bool schedule_upload(bool left, ENGD *engd) {
         if (!is_owner_discardable(left)) return is_ready(left);
@@ -697,6 +717,28 @@ public:
                     anim, ELA_AINF, finalize);
         }
         return true;
+    }
+    T2IV dims(bool left) const {
+        T2IV retn{{(decltype(retn.x))sides_[left].image_.xdim,
+                   (decltype(retn.y))sides_[left].image_.ydim}};
+        return retn;
+    }
+    intptr_t advance(
+            bool left, int64_t time, int64_t &old, uint32_t &frame) const {
+        if (time <= old) return 0;
+        auto &side = sides_[left];
+        bool wrap = frame >= (side.image_.fcnt - 1);
+        if (!wrap || (side.flags_ & repeat)) {
+            if (time > (old += side.image_.time[frame]))
+                old = time; // > 1 frame skipped, resetting
+            frame = (!wrap) ? frame + 1 : 0;
+            return side.image_.uuid;
+        } else {
+            old = std::numeric_limits<int64_t>::max(); // never expires
+            wrap = frame >= side.image_.fcnt;
+            frame = side.image_.fcnt - 1;
+            return (wrap) ? side.image_.uuid : 0;
+        }
     }
 };
 
@@ -1212,6 +1254,8 @@ library_t::library_t(std::string path, const input_t &in,
         const bhv_id_map_t &bhv_id_map)
 : library_path_(std::move(path))
 , readable_name_(in.name) {
+    preview_id_ = 0;
+
     auto hashable_name = ascii_to_lower(in.name);
     auto &bhv_id_desc = *find_in_map(bhv_id_map, hashable_name);
 
@@ -1361,9 +1405,10 @@ library_t::bhv_id_t library_t::init_bhv_id(movement_flags_t move, int16_t grp) {
     return iid._;
 }
 
-bool library_t::upload_preview(ENGD *engd) {
-    assert(!behaviours_.empty());
-    return behaviours_[0]->schedule_upload(false, engd);
+const unit_t &library_t::get_preview(ENGD *engd) {
+    auto &preview = *behaviours_[preview_id_];
+    if (engd) preview.schedule_upload(false, engd);
+    return preview;
 }
 
 const behaviour_t *library_t::get(bhv_id_t id) const {
@@ -1403,10 +1448,12 @@ public:
         spin_t() : curr_{}, min_{}, max_{} {};
         spin_t(int16_t curr, int16_t min, int16_t max)
             : curr_{std::clamp(curr, min, max)}, min_{min}, max_{max} {}
+        void set_min(int16_t m) { min_ = m; move(0); }
+        void set_max(int16_t m) { max_ = m; move(0); }
         int16_t min() const { return min_; }
         int16_t max() const { return max_; }
         int16_t set(int16_t dist) {
-            return curr_ = (dist <= max_) ? (dist >= min_) ? dist : min_ : max_;
+            return curr_ = std::clamp(curr_, min_, max_);
         }
         int16_t get() const { return curr_; }
         int16_t move(int16_t dist) { return set(get() + dist); }
@@ -1438,12 +1485,19 @@ public:
 };
 
 class window_t {
+private:
+    bool visible_;
+    std::vector<CTRL> controls_;
+
 public:
     intptr_t get_id() { return intptr_t(&get(0)); }
     ~window_t() { for (auto &c : controls_) rFreeControl(&c); }
 
-private:
-    std::vector<CTRL> controls_;
+    void toggle_visibility(bool visible) {
+        visible_ = visible;
+        RUN_FE2C(get_root(), MSG__SHW, visible);
+    }
+    bool is_visible() const { return visible_; }
 
 protected:
     size_t size() const { return controls_.size(); }
@@ -1454,7 +1508,7 @@ protected:
     CTRL &get_root() { return get(0); }
     static int32_t get_type(const CTRL &ctrl) { return ctrl.flgs & FCT_TTTT; }
 
-    window_t(std::vector<CTRL> controls) {
+    window_t(std::vector<CTRL> controls) : visible_(false) {
         controls_ = std::move(controls);
         assert(!controls_.empty() && (get_type(controls_[0]) == FCT_WNDW));
         // creating the main window
@@ -1562,9 +1616,24 @@ private:
     enum elements_t { MCT_CAPT = 0,
         MCT_FLTR, MCT_EXAC, MCT_OGRP, MCT_SGRP, MCT_SPEC, MCT_BADD, MCT_SRND,
         MCT_RGPU, MCT_BDUP, MCT_SELE, MCT_OPTS, MCT_GOGO, MCT_CHAR, };
+
+    class preview_t;
+    conf_t::spin_t preview_stats_; // min = 0, curr = selected, max = total
+    std::vector<std::unique_ptr<preview_t>> previews_;
+
     std::vector<CTRL> get_template(intptr_t here, const conf_t &conf);
     static intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data);
+    static intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data);
     static void try_update_checkbox(CTRL &c, int flag = -1);
+    void try_update_spinner_preview(CTRL &c, int16_t v, bool init);
+    void display_previews(int32_t y_scroll);
+    size_t rearrange_previews(T2IV preview_area);
+
+    T2IV get_scrollbox_metrics() { // u = total height, v = window height
+        auto &scrollbox = get(MCT_CHAR);
+        return {{(decltype(T2IV::x))(RUN_FE2C(scrollbox, MSG_SGTH, 0)),
+                 (decltype(T2IV::y))(RUN_FE2C(scrollbox, MSG__GSZ, 0) >> 16)}};
+    }
 
     void relocalize() {
         conf_window_t::relocalize();
@@ -1581,11 +1650,6 @@ public:
     : conf_window_t(
             get_template(intptr_t(this), conf), conf, ini_conf, def_conf) {}
 
-    void toggle_visibility(bool show) {
-        RUN_FE2C(get(MCT_CHAR), MSG__SHW, show);
-        RUN_FE2C(get(MCT_CAPT), MSG__SHW, show);
-    }
-
     void add_category(const std::string &name) {
         RUN_FE2C(get(MCT_OGRP), MSG_LADD, (intptr_t)name.c_str());
     }
@@ -1594,15 +1658,17 @@ public:
         get(MCT_OPTS).data = opt_id;
     }
 
-    T2IV get_min_preview_size() {
-        auto retn = RUN_FE2C(get(MCT_SPEC), MSG__GSZ, 0);
-        return {{uint16_t(retn), uint16_t(retn >> 16)}};
+    T4IV get_min_preview_size() {
+        auto sgrp = RUN_FE2C(get(MCT_SGRP), MSG__GSZ, 0);
+        auto spec = RUN_FE2C(get(MCT_SPEC), MSG__GSZ, 0);
+        return {{uint16_t(spec), uint16_t(spec >> 16),
+                uint16_t(sgrp >> 16), uint16_t(spec >> 16)}};
     }
 
     T2IV get_avg_font_size() {
         AINF atmp{0, 0, 0, 0, (uint32_t*)"    "}; // 4 spaces
-        auto retn = RUN_FE2C(get(MCT_CAPT), MSG_WTGD, (intptr_t)&atmp);
-        return {{int32_t(0.25f * uint16_t(retn)), uint16_t(retn >> 16)}};
+        auto f = RUN_FE2C(get(MCT_CAPT), MSG_WTGD, (intptr_t)&atmp);
+        return {{(decltype(T2IV::x))(0.25f * uint16_t(f)), uint16_t(f >> 16)}};
     }
 
     void set_progress(int32_t text, uint32_t frac, uint32_t full) {
@@ -1613,8 +1679,15 @@ public:
         RUN_FE2C(get(MCT_SELE), MSG_PPOS, (full) ? frac : 0);
     }
 
-    void main_loop(uint32_t fram, UPRE upre, intptr_t data) {
-        rInternalMainLoop(&get_root(), fram, upre, data);
+    static void update_previews(intptr_t data, uint64_t time);
+
+    void init_preview(ENGD *engd, const unit_t &preview, int64_t categories,
+            const std::string &name, library_t::lib_id_t lib_id);
+
+    void finalize_previews();
+
+    void main_loop(uint32_t fram) {
+        rInternalMainLoop(&get_root(), fram, update_previews, intptr_t(this));
     }
 };
 
@@ -1738,18 +1811,12 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case FCT_SBOX:
-/*
             if (cmsg == MSG_SGIP) {
-                auto w = (main_window_t*)ctrl->data;
-                DisplayPreviews(w, data, ctrl->fe2c(ctrl, MSG_SGTH, 0),
-                               (uint32_t)ctrl->fe2c(ctrl, MSG__GSZ, 0) >> 16);
+                ((main_window_t*)ctrl->data)->display_previews(data);
             } else if (cmsg == MSG_SSID) {
-                auto w = (engine_t*)ctrl->data;
-                auto retn = RearrangePreviews(
-                            w, 8, (uint16_t)data, (uint16_t)(data >> 16));
-                if (retn >= 0) return retn;
+                return ((main_window_t*)ctrl->data)->rearrange_previews(
+                        {{(uint16_t)data, (uint16_t)(data >> 16)}});
             }
-//*/
             break;
 
         case FCT_BUTN:
@@ -1876,6 +1943,22 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     return 0;
 }
 
+intptr_t main_window_t::FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    switch (get_type(*ctrl)) {
+        case FCT_IBOX:
+            if (cmsg == MSG_IFRM)
+                cEngineCallback((ENGD*)ctrl->data, ECB_DRAW, data);
+            break;
+
+        case FCT_SPIN:
+            if (cmsg == MSG_NSET)
+                ((main_window_t*)get_root(*ctrl).data)->
+                        try_update_spinner_preview(*ctrl, data, false);
+            break;
+    }
+    return 0;
+}
+
 class options_window_t : public conf_window_t {
 private:
     enum elements_t { OCT_OPTS = 0,
@@ -1919,7 +2002,6 @@ public:
 };
 
 void options_window_t::try_update_checkbox(CTRL &c, int flag) {
-    #define octl_ controls_
     if (conf_window_t::try_update_checkbox(c, flag)) {
         if (c.uuid == TXT_ESAY) {
             auto w = (options_window_t*)get_root(c).data;
@@ -1932,7 +2014,6 @@ void options_window_t::try_update_checkbox(CTRL &c, int flag) {
             RUN_FE2C(w->get(OCT_TCDR), MSG__ENB, flag);
         }
     }
-    #undef octl_
 }
 
 std::vector<CTRL> options_window_t::get_template(
@@ -2001,7 +2082,6 @@ std::vector<CTRL> options_window_t::get_template(
 }
 
 intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
-    #define octl_ controls_
     switch (get_type(*ctrl)) {
         case FCT_WNDW:
             if (cmsg == MSG_WEND) RUN_FE2C(*ctrl, MSG__SHW, 0);
@@ -2061,7 +2141,6 @@ intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
         }
     }
     return 0;
-    #undef octl_
 }
 
 // engine data (client side)
@@ -2084,7 +2163,6 @@ private:
     ENGD *engd_;
 
     std::unordered_map<library_t::lib_id_t, std::unique_ptr<library_t>> libs_;
-    std::vector<std::vector<library_t::lib_id_t>> categories_;
 
     static conf_t get_def_conf(const std::string_view base) {
         INCBIN("../exec/loc/en.lang", DefLang);
@@ -2186,6 +2264,11 @@ public:
     engine_t(const std::string_view fcnf, const std::string_view base,
             const T2IV tray, const T4IV area);
 
+    const library_t &get_library(library_t::lib_id_t lib_id) const {
+        auto il = find_in_map(libs_, lib_id);
+        assert(il);
+        return *il->get();
+    }
     void main_loop();
 };
 
@@ -2203,138 +2286,214 @@ engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
 , tcur_{}
 , tpre_{}
 , tacc_{} {
-    mctl_.set_options_window(octl_.get_id());
-    build_library_structure(cini_.base);
-    mctl_.toggle_visibility(true);
+    mctl_.set_options_window(octl_.get_id()); // link options window to main
+    cEngineCallback(0, ECB_INIT, (intptr_t)&engd_); // create rendering engine
+    build_library_structure(cini_.base); // read configuration, load everything
 }
 
-void UpdPreview(intptr_t data, uint64_t time) {
-    //auto engc = (engine_t*)data;
+class main_window_t::preview_t : public no_copy_t {
+private:
+    // !eligible && !visible = doesn't match selection, not visible
+    // !eligible &&  visible = doesn't match selection, visible: need to hide
+    //  eligible && !visible = matches selection, not visible: need to show
+    //  eligible &&  visible = matches selection, visible
+    enum flags_t : uint32_t { GEN_FLAGS(finalized, eligible, visible) };
+    std::string name_;
+    library_t::lib_id_t lib_id_;
+    conf_t::spin_t count_;
+    flags_t flags_;
+    T2IV lower_left_;
+    T4IV size_;
+    const unit_t &unit_;
+    int64_t categories_;
+    uint32_t last_frame_;
+    int64_t last_time_;
+    CTRL imagebox_; // image box control to preview the sprite
+    CTRL charname_; // character name just below the image box
+    CTRL spinner_;  // spin control to set ICNT
+
+public:
+    ~preview_t() {
+        if (imagebox_.fe2c) rFreeControl(&imagebox_);
+        if (charname_.fe2c) rFreeControl(&charname_);
+        if (spinner_.fe2c) rFreeControl(&spinner_);
+    }
+    preview_t(CTRL *p, int32_t idx, T4IV size, FCTL fc2e, int64_t categories,
+            ENGD *engd, const unit_t &unit, const std::string &name,
+            library_t::lib_id_t lib_id)
+    : name_(std::to_string(idx + 1) + ". " + name)
+    , lib_id_(lib_id)
+    , count_(0, 0, 30000)
+    , flags_{}
+    , lower_left_{}
+    , size_(size)
+    , unit_(unit)
+    , categories_(categories)
+    , last_frame_(0)
+    , last_time_(0) {
+        auto engd_ = intptr_t(engd);
+        imagebox_ = {p, engd_, idx, FCT_IBOX, 0, 0, size.x, size.y, fc2e};
+        charname_ = {p, engd_, idx, FCT_TEXT | FST_CNTR, 0, 0, size.x, 0, fc2e};
+        spinner_ = {p, intptr_t(&count_), idx, FCT_SPIN, 0, 0, size.x, 0, fc2e};
+    }
+    void finalize() {
+        if ((flags_ & finalized) || !unit_.is_ready(false)) return;
+
+        auto dims = unit_.dims(false);
+        size_.x = std::max(size_.x, dims.x);
+        size_.y = std::max(size_.y, dims.y);
+
+        imagebox_.xdim = -size_.x;
+        imagebox_.ydim = -size_.y;
+
+        charname_.xdim = -size_.x;
+        charname_.ydim = -size_.z;
+
+        spinner_.xdim = -size_.x;
+        spinner_.ydim = -size_.w;
+
+        flags_ |= finalized;
+    }
+    bool is_eligible() const { return flags_ & eligible; }
+    void render(int64_t time) {
+        if (!imagebox_.fe2c) return;
+        if (auto uuid = unit_.advance(false, time, last_time_, last_frame_)) {
+            if (!(flags_ & visible)) return;
+            RUN_FE2C(imagebox_, MSG_IFRM, (last_frame_ & 0x3FF) | (uuid << 10));
+        }
+    }
+    bool categorize(int64_t c, bool all_at_once) {
+        bool match = (all_at_once) ? (categories_ & c) == c : (categories_ & c);
+        flags_ = (match) ? (flags_ | eligible) : (flags_ & ~eligible);
+        return match;
+    }
+    void toggle_visibility(bool visible) {
+        if (imagebox_.fe2c) RUN_FE2C(imagebox_, MSG__SHW, visible);
+        if (charname_.fe2c) RUN_FE2C(charname_, MSG__SHW, visible);
+        if (spinner_.fe2c) RUN_FE2C(spinner_, MSG__SHW, visible);
+    }
+    void set_pos(T2IV lower_left) {
+        lower_left_ = lower_left;
+        flags_ &= ~visible;
+        toggle_visibility(false);
+    }
+    void actualize(int32_t y_visible, int32_t y_scroll) {
+        auto within_scroll = [&]() {
+            auto ymax = lower_left_.y - y_scroll;
+            return (ymax >= 0) && (ymax - get_size().y < y_visible);
+        };
+        if (!(flags_ & finalized)) return;
+        const bool e = is_eligible();
+        if (e != !(flags_ & visible)) return;
+        if (e && !within_scroll()) return;
+        flags_ ^= visible;
+        const bool v = (flags_ & visible);
+        if (v) {
+            if (!imagebox_.fe2c) rMakeControl(&imagebox_, nullptr, nullptr);
+            if (!charname_.fe2c) {
+                rMakeControl(&charname_, nullptr, nullptr);
+                RUN_FE2C(charname_, MSG__TXT, intptr_t(name_.c_str()));
+            }
+            if (!spinner_.fe2c) {
+                rMakeControl(&spinner_, nullptr, nullptr);
+                try_update_spinner(spinner_);
+            }
+            long pos[2] = {-lower_left_.x, size_.w - lower_left_.y};
+            RUN_FE2C(spinner_, MSG__POS, (intptr_t)pos);
+            pos[1] += size_.z;
+            RUN_FE2C(charname_, MSG__POS, (intptr_t)pos);
+            pos[1] += size_.y;
+            RUN_FE2C(imagebox_, MSG__POS, (intptr_t)pos);
+        }
+        toggle_visibility(v);
+    }
+    T2IV get_size() const { return {{size_.x, size_.y + size_.z + size_.w}}; }
+    int16_t count() const { return is_eligible() * count_.get(); }
+    library_t::lib_id_t lib_id() const { return lib_id_; }
+
+    const std::string &get_name() const { return name_; }
+};
+
+void main_window_t::init_preview(ENGD *engd, const unit_t &preview,
+        int64_t categories, const std::string &name, library_t::lib_id_t id) {
+    previews_.emplace_back(std::make_unique<preview_t>(&get(MCT_CHAR),
+                previews_.size(), get_min_preview_size(), FC2EI, categories,
+                engd, preview, name, id));
+}
+
+void main_window_t::finalize_previews() {
+    for (auto &p : previews_)
+        p->finalize();
+    RUN_FE2C(get(MCT_CHAR), MSG_WSZC, 0);
+}
+
+void main_window_t::try_update_spinner_preview(CTRL &c, int16_t v, bool init) {
+    auto spin = (conf_t::spin_t*)c.data;
+    auto old_empty = !spin->get();
+    try_update_spinner(c, v, init);
+    auto new_empty = !spin->get();
+    preview_stats_.move(old_empty - new_empty);
+    set_progress(TXT_SELE, preview_stats_.get(), preview_stats_.max());
+}
+
+void main_window_t::display_previews(int32_t y_scroll) {
+    auto metrics = get_scrollbox_metrics();
+    for (auto &p : previews_)
+        p->actualize(metrics.v, y_scroll);
+}
+
+size_t main_window_t::rearrange_previews(T2IV preview_area) {
+    // TODO: move this elsewhere
+    for (auto &p : previews_)
+        p->categorize(0, true);
+
+    constexpr int32_t xysp = 8;
+    std::vector<T2IV> rows(1, {{}}); // x = last index + 1, y = max row height
+    for (auto xmax = xysp; rows.back().x < (decltype(T2IV::x))previews_.size();
+            rows.back().x++) {
+        if (!previews_[rows.back().x]->is_eligible()) continue;
+        auto size = previews_[rows.back().x]->get_size();
+        if (rows.back().y && (xmax + size.x + xysp > preview_area.x)) {
+            xmax = xysp + size.x + xysp;
+            rows.emplace_back(T2IV{{rows.back().x, size.y}});
+        } else {
+            xmax += size.x + xysp;
+            rows.back().y = std::max(rows.back().y, size.y);
+        }
+    }
+    T2IV here = {{xysp, -xysp}};
+    for (auto row = 0; row < (decltype(row))rows.size(); row++) {
+        here = {{xysp, here.y + rows[row].y + xysp}};
+        for (auto p = (row) ? rows[row - 1].x : 0; p < rows[row].x; p++) {
+            if (!previews_[p]->is_eligible()) continue;
+            previews_[p]->set_pos(here);
+            here.x += previews_[p]->get_size().x + xysp;
+        }
+    }
+    return std::max(here.y, preview_area.y);
+}
+
+void main_window_t::update_previews(intptr_t data, uint64_t time) {
+    auto w = (main_window_t*)data;
+    if (!w->is_visible()) return; // window hidden when the engine is active
+    for (auto &p : w->previews_)
+        p->render(time);
 }
 
 void engine_t::main_loop() {
-    // initialize the rendering engine
-    cEngineCallback(0, ECB_INIT, (intptr_t)&engd_);
-
-    // uploading preview images
-    uint32_t lib_idx = 0;
-    for (auto &l : libs_) {
-        auto ok = l.second->upload_preview(engd_);
-        assert(ok);
-        ((void)ok);
-        mctl_.set_progress(TXT_LOAD, ++lib_idx, libs_.size());
-    }
     cEngineCallback(engd_, ECB_LOAD, 0);
     cEngineCallback(engd_, ECB_LOAD, ~0);
 
-    /// constructing previews
-/*
-    for (ulib = &engc.libs._[0], indx = 0; indx < engc.libs.size;
-         ulib = &engc.libs._[++indx]) {
-        auto anim = UnitFromLib(&ulib->barr, 0);
-        xpos = anim->xdim;
-        xpos = (xico > xpos)? xico : xpos;
-        ulib->pict = (CTRL){&engc.MCT_CHAR, (intptr_t)engc.engd, indx, FCT_IBOX,
-                             0, 0, -xpos, (anim->ydim) ? -(long)anim->ydim : -1,
-                             FC2EI};
-        ulib->spin = (CTRL){&engc.MCT_CHAR, (intptr_t)ulib, indx,
-                             FCT_SPIN, 0, 0, -xpos, 3, FC2EI};
-        ulib->capt = (CTRL){&engc.MCT_CHAR, (intptr_t)ulib, indx,
-                             FCT_TEXT | FST_CNTR, 0, 0, -xpos, 2, FC2EI};
-        /// calculating library name offsets
-        ulib->scrl = calloc(1, ulib->wctx.nnam = strlen(ulib->name) + 16);
-        sprintf(ulib->scrl, "%d. %s", (int)indx + 1, ulib->name);
-        atmp.xdim = atmp.ydim = 0;
-        atmp.time = (uint32_t*)ulib->scrl;
-        ypos = (uint16_t)RUN_FE2C(engc.MCT_CAPT, MSG_WTGD, (intptr_t)&atmp);
-        ulib->wctx.noff = 0;
-        if (xpos < ypos) {
-            /// name width greater than the name field width, need to scroll
-            ulib->wctx.nnam = strlen(ulib->scrl);
-            ulib->wctx.noff = ceil((float)(ypos - xpos) / (float)yico) + 2;
-            for ((file = malloc(ulib->wctx.noff + 1))[ypos = ulib->wctx.noff] = 0;
-                  ypos; file[--ypos] = ' ');
-            fptr = Concatenate(0, file, ulib->scrl, file);
-            free(ulib->scrl);
-            free(file);
-            ulib->scrl = fptr;
-        }
-        if (!indx)
-            CreatePreview(ulib); /// need that preview for others to work
+    // computing preview sizes, since image sizes are now known
+    mctl_.finalize_previews();
 
-        ulib->fgsc = 0xFF000000;
-        ulib->bgsc = 0xFFFFFFFF;
-        /// calculating speech colors if there are speeches in
-        /// the library and the "colored speech" flag is set
-        if (ulib->nsay && (engc.ccur.flgs & CSF_ECLR)) {
-            atmp.fcnt = 0;
-            atmp.xdim = anim->xdim;
-            atmp.ydim = anim->ydim;
-            atmp.uuid = anim->uuid;
-            atmp.time =
-                calloc(xpos = atmp.xdim * atmp.ydim, sizeof(*atmp.time));
-            cEngineCallback(engc.engd, ECB_DRAW, (intptr_t)&atmp);
-            qsort(atmp.time, xpos, sizeof(*atmp.time), bgracmp);
-            for (tclr = clrs[0] = clrs[1] = clrs[2] = 0; xpos >= 0; xpos--)
-                if (xpos && ((tclr & 0xFFFFFFFFUL) == atmp.time[xpos - 1]))
-                    tclr += 0x100000000UL;
-                else {
-                    if ((tclr & 0xFF000000)
-                    && ((tclr >> 32) >= (clrs[2] >> 32))) {
-                        if ((tclr >> 32) < (clrs[1] >> 32))
-                            clrs[2] = tclr;
-                        else if ((tclr >> 32) < (clrs[0] >> 32)) {
-                            clrs[2] = clrs[1];
-                            clrs[1] = tclr;
-                        }
-                        else {
-                            clrs[2] = clrs[1];
-                            clrs[1] = clrs[0];
-                            clrs[0] = tclr;
-                        }
-                    }
-                    tclr = (xpos)? atmp.time[xpos - 1] | 0x100000000UL : 0;
-                }
-            free(atmp.time);
-            #define LUMA(c) (299 * (uint8_t)(c >> 16) + \
-                             587 * (uint8_t)(c >> 8) + 114 * (uint8_t)c)
-            clrs[0] = ((uint64_t)LUMA(clrs[0]) << 32) + (uint32_t)clrs[0];
-            clrs[1] = ((uint64_t)LUMA(clrs[1]) << 32) + (uint32_t)clrs[1];
-            clrs[2] = ((uint64_t)LUMA(clrs[2]) << 32) + (uint32_t)clrs[2];
-            #undef LUMA
-            qsort(clrs, 3, sizeof(*clrs), li64cmp);
-            RGB2HSL(clrs[0], _hsl[0]);
-            RGB2HSL(clrs[2], _hsl[1]);
-            if (_hsl[1][2] - _hsl[0][2] < 2 * ldif) {
-                mean = 0.5 * (_hsl[1][2] + _hsl[0][2]);
-                if (mean + ldif > 1)
-                    _hsl[0][2] = mean - 2 * ldif;
-                else if (mean - ldif < 0)
-                    _hsl[1][2] = mean + 2 * ldif;
-                else {
-                    _hsl[0][2] = mean - ldif;
-                    _hsl[1][2] = mean + ldif;
-                }
-            }
-            ulib->fgsc = HSL2RGB(_hsl[0]);
-            ulib->bgsc = HSL2RGB(_hsl[1]);
-        }
-    }
-    RUN_FC2E(engc.MCT_FLTR, MSG_BCLK, 0);
-    CategorizePreviews(&engc);
-    engc.seed = RNG_Make(elem = time(0));
-
-    printf("[((RNG))] seed = 0x%08X\n[[[INI]]] %s\n", elem, engc.cfnm);
-
-
-//*/
-
-    mctl_.main_loop(FRM_WAIT, UpdPreview, intptr_t(this));
+    mctl_.main_loop(FRM_WAIT);
 }
 
 void engine_t::build_library_structure(const std::string &base) {
-    std::unordered_map<std::string, std::unordered_set<library_t::lib_id_t>>
-        categories;
+    int64_t last_category = 1;
+    std::vector<std::pair<library_t::lib_id_t, int64_t>> categories;
+    std::unordered_map<std::string, int64_t> ctg_map;
     library_t::bhv_id_map_t bhv_id_map;
 
     std::vector<library_t::input_t> ins;
@@ -2345,43 +2504,56 @@ void engine_t::build_library_structure(const std::string &base) {
         free(file);
     }
 
-    // construct the behaviour ID descriptors and draft categories for everyone
-    for (size_t i = 0; i < ins.size(); i++) {
-        auto ib = bhv_id_map.emplace(ascii_to_lower(ins[i].name),
-                    library_t::build_bhv_id_desc(ins[i]));
-        assert(ib.second); // make sure the library has a unique name
-        ((void)ib);
-        for (auto &c : ins[i].categories)
-            categories[c].emplace(str_hash(ins[i].name));
+    for (auto &i : ins) {
+        // construct the behaviour ID descriptors and extract categories
+        auto ib = bhv_id_map.emplace(
+                    ascii_to_lower(i.name), library_t::build_bhv_id_desc(i));
+        assert_and_discard(ib.second, ib); // make sure the library is unique
+        int64_t all_categories = 0;
+        for (auto &c : i.categories) {
+            if (auto ic = find_in_map(ctg_map, c)) {
+                all_categories |= *ic;
+            } else if (last_category) {
+                all_categories |= last_category;
+                ctg_map[c] = last_category;
+                last_category <<= 1;
+                mctl_.add_category(c);
+            } else { // no more category space! (shouldn't happen with DP base)
+                assert(last_category != 0);
+            }
+        }
+        categories.emplace_back(str_hash(i.name), all_categories);
     }
-
-    // process follow targets (nothing to do beside report missing ones)
-    for (auto &i : ins)
+    for (auto &i : ins) {
+        // initialize the libraries
+        printf("%s\n", i.name.c_str());
+        libs_.emplace(str_hash(i.name), std::make_unique<library_t>(
+                    concat_path({path, i.name}), i, bhv_id_map));
+        // process follow targets (nothing to do beside report missing ones)
         for (auto &b : i.behaviours)
             if (!b.follow_target.empty())
                 if (!find_in_map(bhv_id_map, b.follow_target))
                     printf("[%s] WARNING, invalid follow target name in '%s'\n",
                             i.name.c_str(), b.name.c_str());
-
-    // initialize the libraries
-    for (size_t i = 0; i < ins.size(); i++) {
-        printf("%s\n", ins[i].name.c_str());
-        libs_.emplace(str_hash(ins[i].name), std::make_unique<library_t>(
-                    concat_path({path, ins[i].name}), ins[i], bhv_id_map));
     }
 
-    // process categories
-    categories_.reserve(categories.size());
-    for (auto &c : categories) {
-        categories_.emplace_back();
-        for (auto l : c.second) categories_.back().emplace_back(l);
-        auto names = [&](library_t::lib_id_t &a, library_t::lib_id_t &b) {
-            auto lib_a = find_in_map(libs_, a);
-            auto lib_b = find_in_map(libs_, b);
-            return (*lib_a)->name() < (*lib_b)->name();
-        };
-        std::sort(categories_.back().begin(), categories_.back().end(), names);
-        mctl_.add_category(c.first);
+    // order the libraries by name and partially initialize the previews
+    using ctg_val_t = decltype(categories)::value_type;
+    auto names = [&](ctg_val_t &a, ctg_val_t &b) {
+        auto lib_a = find_in_map(libs_, a.first);
+        auto lib_b = find_in_map(libs_, b.first);
+        return (*lib_a)->name() < (*lib_b)->name();
+    };
+    std::sort(categories.begin(), categories.end(), names);
+
+    // show the main window, initialize the previews
+    mctl_.toggle_visibility(true);
+    for (size_t lib_idx = 0; lib_idx < categories.size(); lib_idx++) {
+        auto &c = categories[lib_idx];
+        auto &il = *find_in_map(libs_, c.first);
+        mctl_.init_preview(
+                engd_, il->get_preview(engd_), c.second, il->name(), c.first);
+        mctl_.set_progress(TXT_LOAD, lib_idx + 1, categories.size());
     }
 }
 
@@ -2390,9 +2562,10 @@ void eProcessMenuItem(MENU *item) {
 
 void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                     long  xpos, long  ypos, ulong xdim, ulong ydim) {
-    T4IV area{{int32_t(xpos), int32_t(ypos),
-               int32_t(xdim - xpos), int32_t(ydim - ypos)}};
-    engine_t engc(fcnf, base, T2IV{{int32_t(xico), int32_t(yico)}}, area);
+    T2IV ico{{(decltype(ico.x))xico, (decltype(ico.y))yico}};
+    T4IV scr{{(decltype(scr.x))(xpos), (decltype(scr.y))(ypos),
+              (decltype(scr.z))(xdim - xpos), (decltype(scr.w))(ydim - ypos)}};
+    engine_t engc(fcnf, base, ico, scr);
 
     engc.main_loop();
 }
