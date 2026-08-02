@@ -419,6 +419,11 @@ long TryUpdatePixTree(ENGD *engd, TREE *estr) {
             /// not found, the animation is new
             TreeAdd(&engd->hpix, estr->epix);
             estr->epix->ainf.uuid = (++engd->uniq << 2) | estr->turn;
+            switch (estr->epix->scal) {
+                case 0: stat = '.'; break; // 1x scaling
+                case 1: stat = ':'; break; // 2x scaling
+                default: stat = '|'; break; // 4x+ scaling
+            }
         }
         else {
             /// found, replacing
