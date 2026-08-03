@@ -21,8 +21,6 @@
 
 
 
-// TODO: preview text scrolling
-// TODO: categorization
 // TODO: content downloading
 // TODO: config saving
 // TODO: speech bubbles
@@ -444,8 +442,6 @@ class engine_t;
 
 template <typename T>
 using ref_vec_t = std::vector<std::reference_wrapper<const T>>;
-
-using bhv_map_t = std::unordered_map<std::string, behaviour_t*>;
 
 enum movement_flags_t {
     GEN_FLAGS(move_none, move_drag, move_sleep, move_mouse,
@@ -1453,10 +1449,51 @@ public:
         int16_t min() const { return min_; }
         int16_t max() const { return max_; }
         int16_t set(int16_t dist) {
-            return curr_ = std::clamp(curr_, min_, max_);
+            return curr_ = std::clamp(dist, min_, max_);
         }
         int16_t get() const { return curr_; }
         int16_t move(int16_t dist) { return set(get() + dist); }
+    };
+    class categories_t {
+    private:
+        using type_t = uint64_t;
+        std::vector<type_t> data_;
+
+        static inline std::pair<size_t, size_t> convert_ctg_id(size_t ctg_id) {
+            constexpr auto digits = std::numeric_limits<type_t>::digits;
+            return {ctg_id / digits, ctg_id % digits};
+        }
+
+    public:
+        void add(size_t ctg_id) {
+            const auto idx = convert_ctg_id(ctg_id);
+            for (size_t i = data_.size(); i <= idx.first; i++)
+                data_.emplace_back(0);
+            data_[idx.first] |= (type_t(1) << idx.second);
+        }
+        void remove(size_t ctg_id) {
+            const auto idx = convert_ctg_id(ctg_id);
+            if (idx.first < data_.size())
+                data_[idx.first] &= ~(type_t(1) << idx.second);
+        }
+        bool match(const categories_t &rhs, bool all_at_once) const {
+            bool retn = all_at_once;
+            if (all_at_once) {
+                size_t size = std::max(data_.size(), rhs.data_.size());
+                for (size_t i = 0; retn && (i < size); i++) {
+                    auto a = (i < data_.size()) ? data_[i] : type_t(0);
+                    auto b = (i < rhs.data_.size()) ? rhs.data_[i] : type_t(0);
+                    retn &= (a & b) == b;
+                }
+            } else {
+                size_t size = std::min(data_.size(), rhs.data_.size());
+                for (size_t i = 0; !retn && (i < size); i++)
+                    retn |= data_[i] & rhs.data_[i];
+            }
+            return retn;
+        }
+        categories_t() = default;
+        categories_t(size_t ctg_id) { add(ctg_id); }
     };
     std::string base;    // path to the animation base
     std::string lang;    // name of the language file
@@ -1469,6 +1506,8 @@ public:
     spin_t spec = spin_t(  0, -100,   100); // group selection
     spin_t rgpu = spin_t(  0,    0, 30000); // random selection
     flags_t flgs = {};
+    categories_t ctg_nonex = {};
+    categories_t ctg_exact = {};
 
     static lang_map_t get_lang_map(const std::string_view &file) {
         lang_map_t retn;
@@ -1557,6 +1596,7 @@ protected:
         auto &flags = ((conf_window_t*)get_root(c).data)->conf_.flgs;
         switch (flag) {
             default:
+                if (!c.fe2c) return false;
                 flag = !!(flags & conf_t::flags_t(c.data));
                 RUN_FE2C(c, MSG_BCLK, flag);
                 return true;
@@ -1572,15 +1612,27 @@ protected:
     static bool try_update_spinner(CTRL &c, int16_t val = 0, bool init = true) {
         if (get_type(c) != FCT_SPIN) return false;
         auto spin = (conf_t::spin_t*)c.data;
-        if (init) {
+        if (!init) {
+            val = spin->set(val);
+        } else if (c.fe2c) {
+            bool set_dims = (val == 0);
             val = spin->get();
-            RUN_FE2C(c, MSG_NDIM,
-                    ((uint32_t)spin->max() << 16) | (uint16_t)spin->min());
+            if (set_dims)
+                RUN_FE2C(c, MSG_NDIM,
+                        ((uint32_t)spin->max() << 16) | (uint16_t)spin->min());
             RUN_FE2C(c, MSG_NSET, val);
         } else {
-            val = spin->set(val);
+            return false;
         }
         return true;
+    }
+
+    static int16_t update_spinner(CTRL &c, int16_t val) {
+        if (get_type(c) != FCT_SPIN) return 0;
+        auto spin = (conf_t::spin_t*)c.data;
+        auto old_empty = !spin->get();
+        spin->set(val);
+        return old_empty - !spin->get();
     }
 
     const std::string *get_text_stock(int32_t idx) const {
@@ -1625,7 +1677,6 @@ private:
     static intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data);
     static intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data);
     static void try_update_checkbox(CTRL &c, int flag = -1);
-    void try_update_spinner_preview(CTRL &c, int16_t v, bool init);
     void display_previews(int32_t y_scroll);
     size_t rearrange_previews(T2IV preview_area);
 
@@ -1665,10 +1716,10 @@ public:
                 uint16_t(sgrp >> 16), uint16_t(spec >> 16)}};
     }
 
-    T2IV get_avg_font_size() {
-        AINF atmp{0, 0, 0, 0, (uint32_t*)"    "}; // 4 spaces
-        auto f = RUN_FE2C(get(MCT_CAPT), MSG_WTGD, (intptr_t)&atmp);
-        return {{(decltype(T2IV::x))(0.25f * uint16_t(f)), uint16_t(f >> 16)}};
+    static T2IV get_string_dims(CTRL &window, const std::string_view &str) {
+        AINF atmp{0, 0, 0, 0, (uint32_t*)str.data()};
+        auto f = RUN_FE2C(window, MSG_WTGD, (intptr_t)&atmp);
+        return {{uint16_t(f), uint16_t(f >> 16)}};
     }
 
     void set_progress(int32_t text, uint32_t frac, uint32_t full) {
@@ -1681,9 +1732,11 @@ public:
 
     static void update_previews(intptr_t data, uint64_t time);
 
-    void init_preview(ENGD *engd, const unit_t &preview, int64_t categories,
-            const std::string &name, library_t::lib_id_t lib_id);
+    void init_preview(ENGD *engd, const unit_t &preview,
+            conf_t::categories_t categories, const std::string &name,
+            library_t::lib_id_t lib_id);
 
+    void categorize_previews();
     void finalize_previews();
 
     void main_loop(uint32_t fram) {
@@ -1701,11 +1754,11 @@ void main_window_t::try_update_checkbox(CTRL &c, int flag) {
             auto w = (main_window_t*)get_root(c).data;
             RUN_FE2C(w->get(MCT_EXAC), MSG__ENB, flag);
             RUN_FE2C(w->get(MCT_OGRP), MSG__ENB, flag);
-//            CategorizePreviews((ENGC*)ctrl->data);
+            w->categorize_previews();
         } else if (c.uuid == TXT_EXAC) {
             auto w = (main_window_t*)get_root(c).data;
             w->set_control_text_stock((flag) ? TXT_AGRP : TXT_OGRP, MCT_OGRP);
-//            CategorizePreviews((ENGC*)ctrl->data);
+            w->categorize_previews();
         }
     }
 }
@@ -1737,212 +1790,6 @@ std::vector<CTRL> main_window_t::get_template(
     };
 }
 
-intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
-    //INCBIN("../exec/icon.gif", MainIcon);
-
-    switch (get_type(*ctrl)) {
-        case FCT_WNDW:
-            if ((cmsg == MSG__TXT) && !data) {
-                ((main_window_t*)ctrl->data)->relocalize();
-            } else if (cmsg == MSG_WSZC) {
-                auto w = (main_window_t*)ctrl->data;
-                if (size_t(MCT_CHAR) < w->size())
-                    RUN_FE2C(w->get(MCT_CHAR), cmsg, data);
-            } else if (cmsg == MSG_WEND) {
-/*
-                auto w = (main_window_t*)ctrl->data;
-                char *fptr, *file, *temp;
-                // trying to write the animation base to its new location
-                if (!w->conf_.base.empty()) {
-                    fptr = strdup(engc->ccur.base);
-                    file = Concatenate(0, engc->cini.base, DEF_DSEP, DEF_FLDR);
-                    temp = Concatenate(0, engc->tran[TXT_BSAV],
-                                          "\n\n", file, "\n==>\n",
-                                          fptr, "\n\n", engc->tran[TXT_BDEL]);
-                    if (strcmp(engc->cini.base, engc->ccur.base)) {
-                        if (!rMessage(temp, engc->tran[TXT_BMOV],
-                                            engc->tran[TXT_BYES],
-                                            engc->tran[TXT_BNAY])) {
-                            free(fptr);
-                            fptr = 0;
-                        }
-                        if (!rMoveDir(file, fptr)) {
-                            free(temp);
-                            temp = Concatenate(0, engc->tran[TXT_BERR],
-                                                  "\n\n", file, "\n==>\n",
-                                                  (fptr) ? fptr : "[X]");
-                            rMessage(temp, engc->tran[TXT_BMOV],
-                                           engc->tran[TXT_BYES], 0);
-                        }
-                    }
-                    free(temp);
-                    free(fptr);
-                    free(file);
-                }
-//*/
-                return 1;
-            }
-            break;
-
-        case FCT_CBOX:
-            if (cmsg == MSG_BCLK) try_update_checkbox(*ctrl, !!data);
-            break;
-
-        case FCT_SPIN:
-            if (cmsg == MSG_NSET) try_update_spinner(*ctrl, data, false);
-            break;
-
-        case FCT_LIST:
-            if ((cmsg == MSG_LGST) || (cmsg == MSG_LSST)) {
-                auto w = (main_window_t*)ctrl->data;
-                cmsg = (w->conf_.flgs & conf_t::exact) ? 2 : 1;
-/*
-                if (cmsg == MSG_LGST) {
-                    return !!(w->ctgs._[data].flgs & cmsg);
-                } else {
-                    bool retn = !!(w->ctgs._[data >> 1].flgs & cmsg);
-                    w->ctgs._[data >> 1].flgs &= ~cmsg;
-                    w->ctgs._[data >> 1].flgs |= (data & 1) ? cmsg : 0;
-                    CategorizePreviews(w);
-                    return retn;
-                }
-*/
-            }
-            break;
-
-        case FCT_SBOX:
-            if (cmsg == MSG_SGIP) {
-                ((main_window_t*)ctrl->data)->display_previews(data);
-            } else if (cmsg == MSG_SSID) {
-                return ((main_window_t*)ctrl->data)->rearrange_previews(
-                        {{(uint16_t)data, (uint16_t)(data >> 16)}});
-            }
-            break;
-
-        case FCT_BUTN:
-            if (cmsg != MSG_BCLK) break;
-            if (ctrl->uuid == TXT_OPTS) {
-                if (auto opts = (CTRL*)ctrl->data) RUN_FE2C(*opts, MSG__SHW, 1);
-            } else if (ctrl->uuid == TXT_BADD) {
-/*
-                auto w = (main_window_t*)ctrl->data;
-                long spin;
-                data = RUN_FE2C(w->MCT_SPEC, MSG_NGET, 0);
-                for (cmsg = 0; cmsg < w->libs.size; cmsg++)
-                    if (w->libs._[cmsg].wctx.icnt >= 0) {
-                        spin = w->libs._[cmsg].wctx.icnt;
-                        spin = (spin + data > 0) ? spin + data : 0;
-                        if (w->libs._[cmsg].spin.fe2c)
-                            RUN_FE2C(w->libs._[cmsg].spin, MSG_NSET, spin);
-                        RUN_FC2E(w->libs._[cmsg].spin, MSG_NSET, spin);
-                    }
-//*/
-            } else if (ctrl->uuid == TXT_GOGO) {
-/*
-                LINF *libs;
-                auto engc = (main_window_t*)ctrl->data;
-                AINF igif = {};
-                intptr_t icon;
-                long ilen, *irnd, *iput;
-
-                irnd = calloc(engc->libs.size, sizeof(*irnd));
-                iput = calloc(engc->libs.size, sizeof(*iput));
-
-                // checking if random choice is enabled
-                if (engc->conf_.flgs & conf_t::randomsel) {
-                    // indexing random-capable libraries
-                    for (ilen = icon = 0; icon < engc->libs.size; icon++)
-                        if (engc->libs._[icon].wctx.icnt == 0)
-                            iput[ilen++] = icon;
-                    // iterating over the requested random sprites count
-                    for (icon = RUN_FE2C(engc->MCT_RGPU, MSG_NGET, 0);
-                        (icon > 0) && ilen; icon--) {
-                        irnd[iput[data = RNG_Load(engc->seed) % ilen]]++;
-                        auto copies = engc->conf_.flgs & conf_t::copies;
-                        if (!copies && (data < --ilen))
-                            iput[data] = iput[ilen];
-                    }
-                    // finally, adding the computed random values to ICNTs
-                    for (icon = 0; icon < engc->libs.size; icon++)
-                        engc->libs._[icon].wctx.icnt += irnd[icon];
-                }
-                // is there anything selected? let's find out
-                for (icon = 0; icon < engc->libs.size; icon++)
-                    if (engc->libs._[icon].wctx.icnt > 0)
-                        break;
-                if (icon >= engc->libs.size) {
-                    // [TODO:] do we need to show messages here?
-//                    rMessage("Nothing selected!", 0, 0);
-                    free(irnd);
-                    free(iput);
-                    break;
-                }
-                // counting the number of selected libraries
-                for (cmsg = icon = 0; icon < engc->libs.size; icon++)
-                    if (engc->libs._[icon].wctx.icnt > 0)
-                        cmsg++;
-                SetProgress(engc, TXT_LOAD, 0, cmsg);
-
-                cEngineCallback(engc->engd, ECB_LOAD, ~0);
-                for (data = icon = 0; icon < engc->libs.size; icon++)
-                    if (engc->libs._[icon].wctx.icnt > 0) {
-                        LoadLib(&engc->libs._[icon], engc->engd);
-                        SetProgress(engc, TXT_LOAD, ++data, cmsg);
-                        RUN_FE2C(engc->MCT_SELE, MSG_PPOS, data);
-                    }
-                cEngineLoadAnimAsync(engc->engd, &igif, (uint8_t*)"/Icon/",
-                                     MainIcon, ELA_LOAD, 0);
-                cEngineCallback(engc->engd, ECB_LOAD, 0);
-
-                // [TODO:] adapt for CTR_V_FLTR
-                for (libs = engc->libs._, icon = 0; icon < engc->libs.size;
-                        icon++)
-                    if (AppendSpriteArr(&engc->libs._[icon], engc)) {
-                        // revert random ICNT
-                        engc->libs._[icon].wctx.icnt -= irnd[icon];
-                        if (++libs <= &engc->libs._[icon])
-                            CTR_ASSIGN(libs[-1], engc->libs._[icon]);
-                    }
-                free(irnd);
-                free(iput);
-                CTR_V_MGET(engc->libs, libs - engc->libs._, 1);
-                igif.fcnt = 0;
-                igif.xdim = engc->idim.x;
-                igif.ydim = engc->idim.y;
-                igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
-                cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
-                icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
-                                     igif.time, igif.xdim, igif.ydim);
-                free(igif.time);
-                RUN_FE2C(engc->MCT_CAPT, MSG__SHW, 0);
-                engc->pcur = engc->povr = 0;
-                engc->data = (engc->pmax) ? calloc(engc->pmax,
-                                                  sizeof(*engc->data)) : 0;
-                cEngineRunMainLoop(engc->engd, engc->dpos.x, engc->dpos.y,
-                                   engc->dims.x + engc->dpos.x,
-                                   engc->dims.y + engc->dpos.y, engc->ftmp,
-                                   FRM_WAIT, (intptr_t)engc, eUpdFrame,
-                                   eUpdFlags);
-                cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
-                free(engc->data);
-
-                rFreeTrayIcon(icon);
-                for (icon = 0; icon < engc->pcnt; icon++)
-                    free(engc->parr[icon]);
-                free(engc->parr);
-                engc->parr = 0;
-                engc->pmax = engc->pcnt = 0;
-
-                // finally showing the window
-                RecountSelectedLibs(engc);
-                RUN_FE2C(engc->MCT_CAPT, MSG__SHW, ~0);
-//*/
-            }
-            break;
-    }
-    return 0;
-}
-
 intptr_t main_window_t::FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (get_type(*ctrl)) {
         case FCT_IBOX:
@@ -1951,9 +1798,12 @@ intptr_t main_window_t::FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             break;
 
         case FCT_SPIN:
-            if (cmsg == MSG_NSET)
-                ((main_window_t*)get_root(*ctrl).data)->
-                        try_update_spinner_preview(*ctrl, data, false);
+            if (cmsg == MSG_NSET) {
+                auto w = (main_window_t*)get_root(*ctrl).data;
+                w->preview_stats_.move(update_spinner(*ctrl, data));
+                w->set_progress(TXT_SELE, w->preview_stats_.get(),
+                        w->preview_stats_.max());
+            }
             break;
     }
     return 0;
@@ -2298,19 +2148,44 @@ private:
     //  eligible && !visible = matches selection, not visible: need to show
     //  eligible &&  visible = matches selection, visible
     enum flags_t : uint32_t { GEN_FLAGS(finalized, eligible, visible) };
-    std::string name_;
+    std::string name_; // padded name
+    int32_t name_len_;
+    int32_t name_iter_;
+    int64_t name_time_;
     library_t::lib_id_t lib_id_;
     conf_t::spin_t count_;
     flags_t flags_;
     T2IV lower_left_;
     T4IV size_;
+    conf_t::categories_t categories_;
     const unit_t &unit_;
-    int64_t categories_;
-    uint32_t last_frame_;
-    int64_t last_time_;
+    uint32_t frame_iter_;
+    int64_t frame_time_;
     CTRL imagebox_; // image box control to preview the sprite
     CTRL charname_; // character name just below the image box
     CTRL spinner_;  // spin control to set ICNT
+
+    bool within_scroll(int32_t y_visible, int32_t y_scroll) const {
+        auto ymax = lower_left_.y - y_scroll;
+        return (ymax >= 0) && (ymax - get_size().y < y_visible);
+    }
+    std::string_view name_scroll_advance(int64_t time) {
+        #define ABS(v) (((v) < 0) ? -(v) : (v))
+        constexpr int FRM_TEXT = FRM_WAIT * 1.5f;
+        if (!name_len_ || (time <= name_time_ + FRM_TEXT)) return {};
+        name_time_ = time + FRM_TEXT;
+        const auto true_len = name_.size() - name_len_ * 2;
+        name_[true_len + name_len_ + ABS(name_iter_)] = ' ';
+        if (++name_iter_ >= name_len_) name_iter_ = -name_iter_;
+        name_[true_len + name_len_ + ABS(name_iter_)] = 0;
+        return {name_.data() + ABS(name_iter_), true_len + name_len_};
+        #undef ABS
+    }
+    void toggle_visibility(bool visible) {
+        if (imagebox_.fe2c) RUN_FE2C(imagebox_, MSG__SHW, visible);
+        if (charname_.fe2c) RUN_FE2C(charname_, MSG__SHW, visible);
+        if (spinner_.fe2c) RUN_FE2C(spinner_, MSG__SHW, visible);
+    }
 
 public:
     ~preview_t() {
@@ -2318,31 +2193,53 @@ public:
         if (charname_.fe2c) rFreeControl(&charname_);
         if (spinner_.fe2c) rFreeControl(&spinner_);
     }
-    preview_t(CTRL *p, int32_t idx, T4IV size, FCTL fc2e, int64_t categories,
-            ENGD *engd, const unit_t &unit, const std::string &name,
-            library_t::lib_id_t lib_id)
+    preview_t(CTRL *p, int32_t idx, T4IV size, FCTL fc2e,
+            conf_t::categories_t categories, ENGD *engd, const unit_t &unit,
+            const std::string &name, library_t::lib_id_t lib_id)
     : name_(std::to_string(idx + 1) + ". " + name)
+    , name_len_(0)
+    , name_iter_(0)
+    , name_time_(0)
     , lib_id_(lib_id)
     , count_(0, 0, 30000)
     , flags_{}
     , lower_left_{}
     , size_(size)
+    , categories_(std::move(categories))
     , unit_(unit)
-    , categories_(categories)
-    , last_frame_(0)
-    , last_time_(0) {
+    , frame_iter_(0)
+    , frame_time_(0) {
         auto engd_ = intptr_t(engd);
         imagebox_ = {p, engd_, idx, FCT_IBOX, 0, 0, size.x, size.y, fc2e};
         charname_ = {p, engd_, idx, FCT_TEXT | FST_CNTR, 0, 0, size.x, 0, fc2e};
         spinner_ = {p, intptr_t(&count_), idx, FCT_SPIN, 0, 0, size.x, 0, fc2e};
     }
-    void finalize() {
+    bool is_eligible() const { return flags_ & eligible; }
+    void set_pos(T2IV lower_left) {
+        lower_left_ = lower_left;
+        flags_ &= ~visible;
+        toggle_visibility(false);
+    }
+    void finalize(float inv_space_width) {
         if ((flags_ & finalized) || !unit_.is_ready(false)) return;
 
         auto dims = unit_.dims(false);
         size_.x = std::max(size_.x, dims.x);
         size_.y = std::max(size_.y, dims.y);
 
+        constexpr int leeway = 6;
+        auto name_size = get_string_dims(get_root(charname_), name_.data());
+        if (name_size.x + leeway > size_.x) { // consider scrolling
+            auto maybe_name_len
+                      = std::ceil(inv_space_width * (name_size.x - size_.x));
+            if (maybe_name_len < 8) { // too tight, widen the box instead
+                size_.x = name_size.x + leeway;
+            } else {
+                name_len_ = maybe_name_len + 1;
+                std::string padding(name_len_, ' ');
+                name_ = padding + name_ + padding;
+            }
+        }
         imagebox_.xdim = -size_.x;
         imagebox_.ydim = -size_.y;
 
@@ -2354,38 +2251,26 @@ public:
 
         flags_ |= finalized;
     }
-    bool is_eligible() const { return flags_ & eligible; }
     void render(int64_t time) {
-        if (!imagebox_.fe2c) return;
-        if (auto uuid = unit_.advance(false, time, last_time_, last_frame_)) {
+        if (!imagebox_.fe2c || !charname_.fe2c) return;
+        if (auto uuid = unit_.advance(false, time, frame_time_, frame_iter_)) {
             if (!(flags_ & visible)) return;
-            RUN_FE2C(imagebox_, MSG_IFRM, (last_frame_ & 0x3FF) | (uuid << 10));
+            RUN_FE2C(imagebox_, MSG_IFRM, (frame_iter_ & 0x3FF) | (uuid << 10));
         }
+        auto str = name_scroll_advance(time);
+        if (!str.empty() && (flags_ & visible))
+            RUN_FE2C(charname_, MSG__TXT, (intptr_t)str.data());
     }
-    bool categorize(int64_t c, bool all_at_once) {
-        bool match = (all_at_once) ? (categories_ & c) == c : (categories_ & c);
+    bool categorize(const conf_t::categories_t &c, bool all_at_once) {
+        const bool match = categories_.match(c, all_at_once);
         flags_ = (match) ? (flags_ | eligible) : (flags_ & ~eligible);
         return match;
     }
-    void toggle_visibility(bool visible) {
-        if (imagebox_.fe2c) RUN_FE2C(imagebox_, MSG__SHW, visible);
-        if (charname_.fe2c) RUN_FE2C(charname_, MSG__SHW, visible);
-        if (spinner_.fe2c) RUN_FE2C(spinner_, MSG__SHW, visible);
-    }
-    void set_pos(T2IV lower_left) {
-        lower_left_ = lower_left;
-        flags_ &= ~visible;
-        toggle_visibility(false);
-    }
     void actualize(int32_t y_visible, int32_t y_scroll) {
-        auto within_scroll = [&]() {
-            auto ymax = lower_left_.y - y_scroll;
-            return (ymax >= 0) && (ymax - get_size().y < y_visible);
-        };
         if (!(flags_ & finalized)) return;
         const bool e = is_eligible();
+        if (e && !within_scroll(y_visible, y_scroll)) return;
         if (e != !(flags_ & visible)) return;
-        if (e && !within_scroll()) return;
         flags_ ^= visible;
         const bool v = (flags_ & visible);
         if (v) {
@@ -2409,31 +2294,252 @@ public:
     }
     T2IV get_size() const { return {{size_.x, size_.y + size_.z + size_.w}}; }
     int16_t count() const { return is_eligible() * count_.get(); }
-    library_t::lib_id_t lib_id() const { return lib_id_; }
-
-    const std::string &get_name() const { return name_; }
+    int16_t update_spinner_relative(int16_t value) {
+        if (!is_eligible()) return 0;
+        auto v = conf_window_t::update_spinner(spinner_, count_.get() + value);
+        conf_window_t::try_update_spinner(spinner_, 1, true);
+        return v;
+    }
 };
 
-void main_window_t::init_preview(ENGD *engd, const unit_t &preview,
-        int64_t categories, const std::string &name, library_t::lib_id_t id) {
-    previews_.emplace_back(std::make_unique<preview_t>(&get(MCT_CHAR),
-                previews_.size(), get_min_preview_size(), FC2EI, categories,
-                engd, preview, name, id));
+intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
+    //INCBIN("../exec/icon.gif", MainIcon);
+
+    switch (get_type(*ctrl)) {
+        case FCT_WNDW:
+            if ((cmsg == MSG__TXT) && !data) {
+                ((main_window_t*)ctrl->data)->relocalize();
+            } else if (cmsg == MSG_WSZC) {
+                auto w = (main_window_t*)ctrl->data;
+                if (size_t(MCT_CHAR) < w->size())
+                    RUN_FE2C(w->get(MCT_CHAR), cmsg, data);
+            } else if (cmsg == MSG_WEND) {
+/*
+                auto w = (main_window_t*)ctrl->data;
+                char *fptr, *file, *temp;
+                // trying to write the animation base to its new location
+                if (!w->conf_.base.empty()) {
+                    fptr = strdup(engc->ccur.base);
+                    file = Concatenate(0, engc->cini.base, DEF_DSEP, DEF_FLDR);
+                    temp = Concatenate(0, engc->tran[TXT_BSAV],
+                                          "\n\n", file, "\n==>\n",
+                                          fptr, "\n\n", engc->tran[TXT_BDEL]);
+                    if (strcmp(engc->cini.base, engc->ccur.base)) {
+                        if (!rMessage(temp, engc->tran[TXT_BMOV],
+                                            engc->tran[TXT_BYES],
+                                            engc->tran[TXT_BNAY])) {
+                            free(fptr);
+                            fptr = 0;
+                        }
+                        if (!rMoveDir(file, fptr)) {
+                            free(temp);
+                            temp = Concatenate(0, engc->tran[TXT_BERR],
+                                                  "\n\n", file, "\n==>\n",
+                                                  (fptr) ? fptr : "[X]");
+                            rMessage(temp, engc->tran[TXT_BMOV],
+                                           engc->tran[TXT_BYES], 0);
+                        }
+                    }
+                    free(temp);
+                    free(fptr);
+                    free(file);
+                }
+//*/
+                return 1;
+            }
+            break;
+
+        case FCT_CBOX:
+            if (cmsg == MSG_BCLK) try_update_checkbox(*ctrl, !!data);
+            break;
+
+        case FCT_SPIN:
+            if (cmsg == MSG_NSET) try_update_spinner(*ctrl, data, false);
+            break;
+
+        case FCT_LIST:
+            if ((cmsg == MSG_LGST) || (cmsg == MSG_LSST)) {
+                auto w = (main_window_t*)ctrl->data;
+                auto &categories = (w->conf_.flgs & conf_t::exact)
+                        ? w->conf_.ctg_exact
+                        : w->conf_.ctg_nonex;
+                if (cmsg == MSG_LGST) {
+                    return categories.match(conf_t::categories_t(data), false);
+                } else {
+                    bool retn = categories.match(
+                            conf_t::categories_t(data >> 1), false);
+                    if (data & 1) {
+                        categories.add(data >> 1);
+                    } else {
+                        categories.remove(data >> 1);
+                    }
+                    w->categorize_previews();
+                    return retn;
+                }
+            }
+            break;
+
+        case FCT_SBOX:
+            if (cmsg == MSG_SGIP) {
+                ((main_window_t*)ctrl->data)->display_previews(data);
+            } else if (cmsg == MSG_SSID) {
+                return ((main_window_t*)ctrl->data)->rearrange_previews(
+                        {{(uint16_t)data, (uint16_t)(data >> 16)}});
+            }
+            break;
+
+        case FCT_BUTN:
+            if (cmsg != MSG_BCLK) break;
+            if (ctrl->uuid == TXT_OPTS) {
+                if (auto opts = (CTRL*)ctrl->data) RUN_FE2C(*opts, MSG__SHW, 1);
+            } else if (ctrl->uuid == TXT_BADD) {
+                auto w = (main_window_t*)ctrl->data;
+                auto spec = w->conf_.spec.get();
+                for (auto &p : w->previews_)
+                    if (int total = p->update_spinner_relative(spec)) {
+                        w->preview_stats_.move(total);
+                        w->set_progress(TXT_SELE, w->preview_stats_.get(),
+                                w->preview_stats_.max());
+                    }
+            } else if (ctrl->uuid == TXT_GOGO) {
+/*
+                LINF *libs;
+                auto engc = (main_window_t*)ctrl->data;
+                AINF igif = {};
+                intptr_t icon;
+                long ilen, *irnd, *iput;
+
+                irnd = calloc(engc->libs.size, sizeof(*irnd));
+                iput = calloc(engc->libs.size, sizeof(*iput));
+
+                // checking if random choice is enabled
+                if (engc->conf_.flgs & conf_t::randomsel) {
+                    // indexing random-capable libraries
+                    for (ilen = icon = 0; icon < engc->libs.size; icon++)
+                        if (engc->libs._[icon].wctx.icnt == 0)
+                            iput[ilen++] = icon;
+                    // iterating over the requested random sprites count
+                    for (icon = RUN_FE2C(engc->MCT_RGPU, MSG_NGET, 0);
+                        (icon > 0) && ilen; icon--) {
+                        irnd[iput[data = RNG_Load(engc->seed) % ilen]]++;
+                        auto copies = engc->conf_.flgs & conf_t::copies;
+                        if (!copies && (data < --ilen))
+                            iput[data] = iput[ilen];
+                    }
+                    // finally, adding the computed random values to ICNTs
+                    for (icon = 0; icon < engc->libs.size; icon++)
+                        engc->libs._[icon].wctx.icnt += irnd[icon];
+                }
+                // is there anything selected? let's find out
+                for (icon = 0; icon < engc->libs.size; icon++)
+                    if (engc->libs._[icon].wctx.icnt > 0)
+                        break;
+                if (icon >= engc->libs.size) {
+                    // [TODO:] do we need to show messages here?
+//                    rMessage("Nothing selected!", 0, 0);
+                    free(irnd);
+                    free(iput);
+                    break;
+                }
+                // counting the number of selected libraries
+                for (cmsg = icon = 0; icon < engc->libs.size; icon++)
+                    if (engc->libs._[icon].wctx.icnt > 0)
+                        cmsg++;
+                SetProgress(engc, TXT_LOAD, 0, cmsg);
+
+                cEngineCallback(engc->engd, ECB_LOAD, ~0);
+                for (data = icon = 0; icon < engc->libs.size; icon++)
+                    if (engc->libs._[icon].wctx.icnt > 0) {
+                        LoadLib(&engc->libs._[icon], engc->engd);
+                        SetProgress(engc, TXT_LOAD, ++data, cmsg);
+                        RUN_FE2C(engc->MCT_SELE, MSG_PPOS, data);
+                    }
+                cEngineLoadAnimAsync(engc->engd, &igif, (uint8_t*)"/Icon/",
+                                     MainIcon, ELA_LOAD, 0);
+                cEngineCallback(engc->engd, ECB_LOAD, 0);
+
+                // [TODO:] adapt for CTR_V_FLTR
+                for (libs = engc->libs._, icon = 0; icon < engc->libs.size;
+                        icon++)
+                    if (AppendSpriteArr(&engc->libs._[icon], engc)) {
+                        // revert random ICNT
+                        engc->libs._[icon].wctx.icnt -= irnd[icon];
+                        if (++libs <= &engc->libs._[icon])
+                            CTR_ASSIGN(libs[-1], engc->libs._[icon]);
+                    }
+                free(irnd);
+                free(iput);
+                CTR_V_MGET(engc->libs, libs - engc->libs._, 1);
+                igif.fcnt = 0;
+                igif.xdim = engc->idim.x;
+                igif.ydim = engc->idim.y;
+                igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
+                cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
+                icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
+                                     igif.time, igif.xdim, igif.ydim);
+                free(igif.time);
+                RUN_FE2C(engc->MCT_CAPT, MSG__SHW, 0);
+                engc->pcur = engc->povr = 0;
+                engc->data = (engc->pmax) ? calloc(engc->pmax,
+                                                  sizeof(*engc->data)) : 0;
+                cEngineRunMainLoop(engc->engd, engc->dpos.x, engc->dpos.y,
+                                   engc->dims.x + engc->dpos.x,
+                                   engc->dims.y + engc->dpos.y, engc->ftmp,
+                                   FRM_WAIT, (intptr_t)engc, eUpdFrame,
+                                   eUpdFlags);
+                cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
+                free(engc->data);
+
+                rFreeTrayIcon(icon);
+                for (icon = 0; icon < engc->pcnt; icon++)
+                    free(engc->parr[icon]);
+                free(engc->parr);
+                engc->parr = 0;
+                engc->pmax = engc->pcnt = 0;
+
+                // finally showing the window
+                RecountSelectedLibs(engc);
+                RUN_FE2C(engc->MCT_CAPT, MSG__SHW, ~0);
+//*/
+            }
+            break;
+    }
+    return 0;
 }
 
-void main_window_t::finalize_previews() {
+void main_window_t::init_preview(ENGD *engd, const unit_t &preview,
+        conf_t::categories_t categories, const std::string &name,
+        library_t::lib_id_t id) {
+    previews_.emplace_back(std::make_unique<preview_t>(&get(MCT_CHAR),
+                previews_.size(), get_min_preview_size(), FC2EI,
+                std::move(categories), engd, preview, name, id));
+}
+
+void main_window_t::categorize_previews() {
+    int16_t count = 0, total = 0;
+    const bool filters = conf_.flgs & conf_t::filters;
+    const bool exact = !filters || (conf_.flgs & conf_t::exact);
+    const auto &ctg = (filters) ? (exact) ? conf_.ctg_exact : conf_.ctg_nonex
+                                : conf_t::categories_t{};
     for (auto &p : previews_)
-        p->finalize();
+        if (p->categorize(ctg, exact)) {
+            count += !!p->count();
+            total++;
+        }
+    preview_stats_.set_max(total);
+    preview_stats_.set(count);
+    set_progress(TXT_SELE, preview_stats_.get(), preview_stats_.max());
     RUN_FE2C(get(MCT_CHAR), MSG_WSZC, 0);
 }
 
-void main_window_t::try_update_spinner_preview(CTRL &c, int16_t v, bool init) {
-    auto spin = (conf_t::spin_t*)c.data;
-    auto old_empty = !spin->get();
-    try_update_spinner(c, v, init);
-    auto new_empty = !spin->get();
-    preview_stats_.move(old_empty - new_empty);
-    set_progress(TXT_SELE, preview_stats_.get(), preview_stats_.max());
+void main_window_t::finalize_previews() {
+    static const std::string_view spaces("    ");
+    float inv_space_width = float(spaces.size())
+                          / get_string_dims(get_root(), spaces.data()).x;
+
+    for (auto &p : previews_)
+        p->finalize(inv_space_width);
+    categorize_previews();
 }
 
 void main_window_t::display_previews(int32_t y_scroll) {
@@ -2443,10 +2549,6 @@ void main_window_t::display_previews(int32_t y_scroll) {
 }
 
 size_t main_window_t::rearrange_previews(T2IV preview_area) {
-    // TODO: move this elsewhere
-    for (auto &p : previews_)
-        p->categorize(0, true);
-
     constexpr int32_t xysp = 8;
     std::vector<T2IV> rows(1, {{}}); // x = last index + 1, y = max row height
     for (auto xmax = xysp; rows.back().x < (decltype(T2IV::x))previews_.size();
@@ -2463,7 +2565,7 @@ size_t main_window_t::rearrange_previews(T2IV preview_area) {
     }
     T2IV here = {{xysp, -xysp}};
     for (auto row = 0; row < (decltype(row))rows.size(); row++) {
-        here = {{xysp, here.y + rows[row].y + xysp}};
+        here = {{xysp, here.y + xysp + rows[row].y}};
         for (auto p = (row) ? rows[row - 1].x : 0; p < rows[row].x; p++) {
             if (!previews_[p]->is_eligible()) continue;
             previews_[p]->set_pos(here);
@@ -2491,9 +2593,9 @@ void engine_t::main_loop() {
 }
 
 void engine_t::build_library_structure(const std::string &base) {
-    int64_t last_category = 1;
-    std::vector<std::pair<library_t::lib_id_t, int64_t>> categories;
-    std::unordered_map<std::string, int64_t> ctg_map;
+    size_t last_category = 0;
+    std::vector<std::pair<library_t::lib_id_t, conf_t::categories_t>> ctg;
+    std::unordered_map<std::string, size_t> ctg_map;
     library_t::bhv_id_map_t bhv_id_map;
 
     std::vector<library_t::input_t> ins;
@@ -2509,20 +2611,18 @@ void engine_t::build_library_structure(const std::string &base) {
         auto ib = bhv_id_map.emplace(
                     ascii_to_lower(i.name), library_t::build_bhv_id_desc(i));
         assert_and_discard(ib.second, ib); // make sure the library is unique
-        int64_t all_categories = 0;
+        conf_t::categories_t all_categories;
         for (auto &c : i.categories) {
             if (auto ic = find_in_map(ctg_map, c)) {
-                all_categories |= *ic;
-            } else if (last_category) {
-                all_categories |= last_category;
+                all_categories.add(*ic);
+            } else {
+                all_categories.add(last_category);
                 ctg_map[c] = last_category;
-                last_category <<= 1;
+                last_category++;
                 mctl_.add_category(c);
-            } else { // no more category space! (shouldn't happen with DP base)
-                assert(last_category != 0);
             }
         }
-        categories.emplace_back(str_hash(i.name), all_categories);
+        ctg.emplace_back(str_hash(i.name), std::move(all_categories));
     }
     for (auto &i : ins) {
         // initialize the libraries
@@ -2537,23 +2637,23 @@ void engine_t::build_library_structure(const std::string &base) {
                             i.name.c_str(), b.name.c_str());
     }
 
-    // order the libraries by name and partially initialize the previews
-    using ctg_val_t = decltype(categories)::value_type;
+    // order the libraries by name
+    using ctg_val_t = decltype(ctg)::value_type;
     auto names = [&](ctg_val_t &a, ctg_val_t &b) {
         auto lib_a = find_in_map(libs_, a.first);
         auto lib_b = find_in_map(libs_, b.first);
         return (*lib_a)->name() < (*lib_b)->name();
     };
-    std::sort(categories.begin(), categories.end(), names);
+    std::sort(ctg.begin(), ctg.end(), names);
 
     // show the main window, initialize the previews
     mctl_.toggle_visibility(true);
-    for (size_t lib_idx = 0; lib_idx < categories.size(); lib_idx++) {
-        auto &c = categories[lib_idx];
+    for (size_t lib_idx = 0; lib_idx < ctg.size(); lib_idx++) {
+        auto &c = ctg[lib_idx];
         auto &il = *find_in_map(libs_, c.first);
-        mctl_.init_preview(
-                engd_, il->get_preview(engd_), c.second, il->name(), c.first);
-        mctl_.set_progress(TXT_LOAD, lib_idx + 1, categories.size());
+        mctl_.init_preview(engd_, il->get_preview(engd_), std::move(c.second),
+                il->name(), c.first);
+        mctl_.set_progress(TXT_LOAD, lib_idx + 1, ctg.size());
     }
 }
 
