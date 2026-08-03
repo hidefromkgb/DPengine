@@ -552,6 +552,8 @@ private:
     // TODO: remap groups sequenitially and make this a vector?
     std::unordered_map<int, group_t> groups_;
     size_t preview_id_;
+    uint32_t speech_fg_;
+    uint32_t speech_bg_;
 
     inline static bhv_id_t init_bhv_id(movement_flags_t move, int16_t group);
 
@@ -567,6 +569,8 @@ public:
             const bhv_id_map_t &bhv_id_map);
 
     const unit_t &get_preview(ENGD *engd = nullptr);
+    void extract_speech_colors(ENGD *engd, intptr_t parallel);
+    static void extract_speech_colors_worker(intptr_t data, uint64_t unused);
 
     const std::string &name() const { return readable_name_; }
 };
@@ -1251,6 +1255,8 @@ library_t::library_t(std::string path, const input_t &in,
 : library_path_(std::move(path))
 , readable_name_(in.name) {
     preview_id_ = 0;
+    speech_fg_ = 0xFF000000;
+    speech_bg_ = 0xFFFFFFFF;
 
     auto hashable_name = ascii_to_lower(in.name);
     auto &bhv_id_desc = *find_in_map(bhv_id_map, hashable_name);
@@ -1399,6 +1405,177 @@ library_t::bhv_id_t library_t::init_bhv_id(movement_flags_t move, int16_t grp) {
     }
     iid.group = grp;
     return iid._;
+}
+
+void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
+    struct hsl_t {float h, s, l;};
+    auto hsl_to_rgb = [](const hsl_t &hsl) {
+        const float coef = (hsl.l > 0.5f) ? (hsl.s + hsl.l - hsl.s * hsl.l)
+                                          : (        hsl.l + hsl.s * hsl.l);
+        uint8_t r = 255 * hsl.l, g = 255 * hsl.l, b = 255 * hsl.l;
+        if (coef > 0.f) {
+            const float mean = 2.f * hsl.l - coef;
+            const float frac = 6.f * hsl.h - (int)(6.f * hsl.h);
+            const float mid1 = mean + frac * (coef - mean);
+            const float mid2 = coef - frac * (coef - mean);
+            switch ((int)(6.f * hsl.h) % 6) {
+                case 0: r = 255 * coef; g = 255 * mid1; b = 255 * mean; break;
+                case 1: r = 255 * mid2; g = 255 * coef; b = 255 * mean; break;
+                case 2: r = 255 * mean; g = 255 * coef; b = 255 * mid1; break;
+                case 3: r = 255 * mean; g = 255 * mid2; b = 255 * coef; break;
+                case 4: r = 255 * mid1; g = 255 * mean; b = 255 * coef; break;
+                case 5: r = 255 * coef; g = 255 * mean; b = 255 * mid2; break;
+            }
+        }
+        return b | ((uint32_t)g << 8) | ((uint32_t)r << 16) | 0xFF000000;
+    };
+    auto rgb_to_hsl = [](uint32_t bgra) {
+        const float r = (1.f / 255.f) * (uint8_t)(bgra >> 16);
+        const float g = (1.f / 255.f) * (uint8_t)(bgra >> 8);
+        const float b = (1.f / 255.f) * (uint8_t)(bgra);
+        const float min = std::min(std::min(r, g), b);
+        const float max = std::max(std::max(r, g), b);
+        hsl_t hsl = {};
+        if ((hsl.l = (max + min) * 0.5f) <= 0.f) return hsl;
+        const float inv_diff = 1.f / (max - min);
+        if ((hsl.s = max - min) > 0.f) {
+            hsl.s /= (hsl.l > 0.5f) ? (2.f - max - min) : (max + min);
+        } else {
+            return hsl;
+        }
+        if (r == max) {
+            hsl.h = (g == min) ? (5.f + (max - b) * inv_diff)
+                               : (1.f - (max - g) * inv_diff);
+        } else if (g == max) {
+            hsl.h = (b == min) ? (1.f + (max - r) * inv_diff)
+                               : (3.f - (max - b) * inv_diff);
+        } else { // (b == _max) {
+            hsl.h = (r == min) ? (3.f + (max - g) * inv_diff)
+                               : (5.f - (max - r) * inv_diff);
+        }
+        hsl.h *= 1.f / 6.f;
+        return hsl;
+    };
+    auto get_luminance = [](uint32_t bgra) {
+        const float r = (1.f / 255.f) * (uint8_t)(bgra >> 16);
+        const float g = (1.f / 255.f) * (uint8_t)(bgra >> 8);
+        const float b = (1.f / 255.f) * (uint8_t)(bgra);
+        return (2126 * 255) * std::powf((r + 0.055f) * (1.f / 1.055f), 2.4f)
+             + (7152 * 255) * std::powf((g + 0.055f) * (1.f / 1.055f), 2.4f)
+             + ( 722 * 255) * std::powf((b + 0.055f) * (1.f / 1.055f), 2.4f);
+    };
+    auto get_contrast = [&](const hsl_t &dk, const hsl_t &bt) {
+        return (500 * 255 + get_luminance(hsl_to_rgb(bt)))
+             / (500 * 255 + get_luminance(hsl_to_rgb(dk)));
+    };
+    auto color_text = [](uint32_t fg, uint32_t bg, const std::string &text) {
+        std::string retn = "\033[48;2;" + std::to_string(uint8_t(bg >> 16))
+                + ";" + std::to_string(uint8_t(bg >> 8))
+                + ";" + std::to_string(uint8_t(bg));
+        if (fg != bg)
+            retn += ";38;2;" + std::to_string(uint8_t(fg >> 16))
+                    + ";" + std::to_string(uint8_t(fg >> 8))
+                    + ";" + std::to_string(uint8_t(fg));
+        return retn + "m" + text + "\033[0m";
+    };
+
+    // reading the inputs, freeing temporary data
+    auto lib = (library_t *)(((intptr_t *)data)[0]);
+    auto engd = (ENGD *)(((intptr_t *)data)[1]);
+    data = (intptr_t)realloc((void *)data, 0);
+
+    // allocating the color buffer and drawing frame #0 of the preview to it
+    auto &preview = lib->get_preview();
+    auto dims = preview.dims(false);
+    size_t preview_size = sizeof(uint32_t) * dims.x * dims.y;
+    uint32_t frame = 0;
+    int64_t time = 0;
+    AINF ainf = {preview.advance(false, 1, time, frame), (uint32_t)dims.x,
+        (uint32_t)dims.y, 0, (uint32_t *)realloc(nullptr, preview_size)};
+    for (size_t i = dims.x * dims.y; i; ainf.time[--i] = 0) {}
+    cEngineCallback(engd, ECB_DRAW, (intptr_t)&ainf);
+
+    // building the color histogram
+    std::unordered_map<uint32_t, uint32_t> histogram;
+    for (size_t i = dims.x * dims.y; i; histogram[ainf.time[--i]]++) {}
+    ainf.time = (uint32_t *)realloc(ainf.time, 0);
+
+    // extracting the most prominent colors from the histogram; end = size - 1
+    constexpr size_t end = 2;
+    size_t bgn = 0;
+    struct {uint32_t clr, idx;} top_clrs[end + 1] = {};
+    for (auto &h : histogram)
+        if ((h.first & 0xFF000000) && (h.second >= top_clrs[end].idx)) {
+            size_t i = end;
+            for (; i && (h.second >= top_clrs[i - 1].idx); i--) {}
+            for (size_t j = end; j > i; j--)
+                top_clrs[j] = top_clrs[j - 1];
+            top_clrs[i] = {h.first, h.second};
+        }
+
+    // saving the color order for debugging
+    std::string colors;
+    for (size_t i = bgn; i <= end; i++)
+        colors += color_text(top_clrs[i].clr, top_clrs[i].clr, "   ");
+
+    // sorting the colors by luminance
+    // more sorting networks: bertdobbelaere.github.io/sorting_networks.html
+    for (size_t i = bgn; i <= end; i++)
+        top_clrs[i].idx = get_luminance(top_clrs[i].clr);
+    #define SORT(v, i, j) if (v[i].idx > v[j].idx) std::swap(v[i], v[j])
+    static_assert(end == 2);
+    SORT(top_clrs, 0, 1);
+    SORT(top_clrs, 0, 2);
+    SORT(top_clrs, 1, 2);
+    #undef SORT
+
+    // emphasizing the contrast artificially in case it's insufficient
+    for (; (bgn < end) && !(top_clrs[bgn].clr & 0xFF000000); bgn++) {}
+    auto dk = rgb_to_hsl(top_clrs[bgn].clr); // dark
+    auto bt = rgb_to_hsl(top_clrs[end].clr); // bright
+    float contrast = -get_contrast(dk, bt);
+    constexpr float readable_contrast = 5.f; // W3C WCAG recommends >4.5
+    constexpr auto bin_iter = 16; // number of binary search iterations
+    if (-contrast < readable_contrast) {
+        constexpr float min_l = 0.f, max_l = 1.f;
+        const float dk_l = dk.l, bt_l = bt.l, delta_l = bt_l - dk_l;
+        const float mid_part = ((max_l - bt_l) < (dk_l - min_l))
+                ?       1.f / (1.f + (max_l - bt_l) / (dk_l - min_l))
+                : 1.f - 1.f / (1.f + (dk_l - min_l) / (max_l - bt_l));
+        for (float min = min_l, max = max_l;
+                max - min > (max_l - min_l) / (1 << bin_iter); ) {
+            const float mid = 0.5f * (min + max) - delta_l;
+            dk.l = std::clamp(dk_l - mid * mid_part, min_l, max_l);
+            bt.l = std::clamp(bt_l - mid * mid_part + mid, min_l, max_l);
+            contrast = get_contrast(dk, bt);
+            ((contrast < readable_contrast) ? min : max) = mid + delta_l;
+        }
+    }
+
+    // saving the results
+    lib->speech_fg_ = hsl_to_rgb(dk);
+    lib->speech_bg_ = hsl_to_rgb(bt);
+
+    // printing the debug output
+    std::string text(40, '#');
+    text.replace(0, lib->readable_name_.size() + 1, lib->readable_name_ + " ");
+    char temp[32];
+    sprintf(temp, "%06X %06X - ", lib->speech_fg_ & 0xFFFFFF,
+            lib->speech_bg_ & 0xFFFFFF);
+    text = color_text(lib->speech_fg_, lib->speech_bg_, temp + text + " ");
+    sprintf(temp, "%5.2f ", std::fabs(contrast));
+    text = color_text((contrast < 0.f) ? lib->speech_fg_ : lib->speech_bg_,
+                (contrast < 0.f) ? lib->speech_bg_ : lib->speech_fg_, temp)
+         + text + colors;
+    printf("%s\n", text.c_str());
+}
+
+void library_t::extract_speech_colors(ENGD *engd, intptr_t parallel) {
+    if (speeches_.empty()) return;
+    intptr_t *data = (intptr_t *)realloc(nullptr, sizeof(intptr_t) * 2);
+    data[0] = intptr_t(this);
+    data[1] = intptr_t(engd);
+    rLoadParallel(parallel, intptr_t(data));
 }
 
 const unit_t &library_t::get_preview(ENGD *engd) {
@@ -2002,12 +2179,12 @@ private:
     conf_t ccur_; // current configuration
     main_window_t mctl_; // main window
     options_window_t octl_; // options window
-    T2IV tray_;   // tray icon dimensions
-    T4IV area_;   // drawing area position and dimensions
-    T3IV ppos_;   // mouse pointer position (z = flags)
+    T2IV tray_; // tray icon dimensions
+    T4IV area_; // drawing area position and dimensions
+    T3IV ppos_; // mouse pointer position (z = flags)
     uint64_t tcur_; // current, dilation-adjusted timestamp
     uint64_t tpre_; // previous raw timestamp
-    float tacc_;  // partial timestamp accumulator
+    float tacc_; // partial timestamp accumulator
     std::vector<MENU> mspr_; // per-sprite context menu
     std::vector<MENU> mctx_; // main context menu
     ENGD *engd_;
@@ -2583,12 +2760,20 @@ void main_window_t::update_previews(intptr_t data, uint64_t time) {
 }
 
 void engine_t::main_loop() {
+    // waiting for the previews to finish loading
     cEngineCallback(engd_, ECB_LOAD, 0);
     cEngineCallback(engd_, ECB_LOAD, ~0);
 
     // computing preview sizes, since image sizes are now known
     mctl_.finalize_previews();
 
+    // computing the colors for colored speech, in parallel
+    auto parallel = rMakeParallel(library_t::extract_speech_colors_worker, 1);
+    for (auto &l : libs_)
+        l.second->extract_speech_colors(engd_, parallel);
+    rFreeParallel(parallel);
+
+    // starting the GUI loop
     mctl_.main_loop(FRM_WAIT);
 }
 
