@@ -591,7 +591,7 @@ private:
     } sides_[2];
 
     void *allocate(bool left, size_t size) {
-        uint8_t *data = (uint8_t*)malloc(size + sizeof(intptr_t));
+        auto data = (uint8_t*)realloc(nullptr, size + sizeof(intptr_t));
         *((intptr_t*)data) = (intptr_t)(&sides_[left].flags_);
         sides_[left].image_.time = (uint32_t*)(data + sizeof(intptr_t));
         return (void*)sides_[left].image_.time;
@@ -600,7 +600,7 @@ private:
         if (!data) return;
         data = ((uint8_t*)data) - sizeof(intptr_t);
         *((flags_t*)(*(intptr_t*)data)) |= prepare | upload;
-        free(data);
+        data = realloc(data, 0);
     }
     void set_flag(bool left, bool value, flags_t flag) {
         auto &side = sides_[left];
@@ -1227,7 +1227,7 @@ public:
                         break;
                 }
             }
-            free(file);
+            file = (typeof(file))realloc(file, 0);
         }
     }
 };
@@ -1482,7 +1482,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     // reading the inputs, freeing temporary data
     auto lib = (library_t *)(((intptr_t *)data)[0]);
     auto engd = (ENGD *)(((intptr_t *)data)[1]);
-    data = (intptr_t)realloc((void *)data, 0);
+    data = (typeof(data))realloc((void *)data, 0);
 
     // allocating the color buffer and drawing frame #0 of the preview to it
     auto &preview = lib->get_preview();
@@ -1491,14 +1491,14 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     uint32_t frame = 0;
     int64_t time = 0;
     AINF ainf = {preview.advance(false, 1, time, frame), (uint32_t)dims.x,
-        (uint32_t)dims.y, 0, (uint32_t *)realloc(nullptr, preview_size)};
+        (uint32_t)dims.y, 0, (typeof(ainf.time))realloc(nullptr, preview_size)};
     for (size_t i = dims.x * dims.y; i; ainf.time[--i] = 0) {}
     cEngineCallback(engd, ECB_DRAW, (intptr_t)&ainf);
 
     // building the color histogram
     std::unordered_map<uint32_t, uint32_t> histogram;
     for (size_t i = dims.x * dims.y; i; histogram[ainf.time[--i]]++) {}
-    ainf.time = (uint32_t *)realloc(ainf.time, 0);
+    ainf.time = (typeof(ainf.time))realloc(ainf.time, 0);
 
     // extracting the most prominent colors from the histogram; end = size - 1
     constexpr size_t end = 2;
@@ -1572,7 +1572,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
 
 void library_t::extract_speech_colors(ENGD *engd, intptr_t parallel) {
     if (speeches_.empty()) return;
-    intptr_t *data = (intptr_t *)realloc(nullptr, sizeof(intptr_t) * 2);
+    auto data = (intptr_t *)realloc(nullptr, sizeof(intptr_t) * 2);
     data[0] = intptr_t(this);
     data[1] = intptr_t(engd);
     rLoadParallel(parallel, intptr_t(data));
@@ -2130,19 +2130,19 @@ intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 auto base = rChooseDir(ctrl, path.c_str());
                 if (!base) break;
                 w->conf_.base = base;
-                free(base);
+                base = (typeof(base))realloc(base, 0);
                 // TODO: add some checks to verify that the new dir is ok?
             } else if (ctrl == &w->get(OCT_LCHO)) {
                 auto path = (!w->conf_.lang.empty()) ? w->conf_.lang : "";
                 auto lang = rChooseFile(ctrl, "lang", path.c_str());
                 if (!lang) break;
                 w->conf_.lang = lang;
-                free(lang);
+                lang = (typeof(lang))realloc(lang, 0);
                 long size = 0;
                 if (auto file = rLoadFile(w->conf_.lang.c_str(), &size)) {
                     std::string_view str(file, size);
                     w->conf_.lang_map = conf_t::get_lang_map(str);
-                    free(file);
+                    file = (typeof(file))realloc(file, 0);
                 } else {
                     w->conf_.lang_map.clear();
                 }
@@ -2237,7 +2237,7 @@ private:
                             retn.lang = std::move(name);
                             retn.lang_map = conf_t::get_lang_map(
                                     std::string_view(file, size));
-                            free(file);
+                            file = (typeof(file))realloc(file, 0);
                         }
                         break;
                     }
@@ -2274,7 +2274,7 @@ private:
                         break;
                 }
             }
-            free(file);
+            file = (typeof(file))realloc(file, 0);
 
             retn.flgs = conf_t::general | conf_t::render;
             if (retn.nrun.get() && (retn.nrun.get() <= runs))
@@ -2505,11 +2505,11 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                         if (!rMessage(temp, engc->tran[TXT_BMOV],
                                             engc->tran[TXT_BYES],
                                             engc->tran[TXT_BNAY])) {
-                            free(fptr);
+                            free_(fptr);
                             fptr = 0;
                         }
                         if (!rMoveDir(file, fptr)) {
-                            free(temp);
+                            free_(temp);
                             temp = Concatenate(0, engc->tran[TXT_BERR],
                                                   "\n\n", file, "\n==>\n",
                                                   (fptr) ? fptr : "[X]");
@@ -2517,9 +2517,9 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                                            engc->tran[TXT_BYES], 0);
                         }
                     }
-                    free(temp);
-                    free(fptr);
-                    free(file);
+                    free_(temp);
+                    free_(fptr);
+                    free_(file);
                 }
 //*/
                 return 1;
@@ -2614,8 +2614,8 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 if (icon >= engc->libs.size) {
                     // [TODO:] do we need to show messages here?
 //                    rMessage("Nothing selected!", 0, 0);
-                    free(irnd);
-                    free(iput);
+                    free_(irnd);
+                    free_(iput);
                     break;
                 }
                 // counting the number of selected libraries
@@ -2644,8 +2644,8 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                         if (++libs <= &engc->libs._[icon])
                             CTR_ASSIGN(libs[-1], engc->libs._[icon]);
                     }
-                free(irnd);
-                free(iput);
+                free_(irnd);
+                free_(iput);
                 CTR_V_MGET(engc->libs, libs - engc->libs._, 1);
                 igif.fcnt = 0;
                 igif.xdim = engc->idim.x;
@@ -2654,7 +2654,7 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
                 icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
                                      igif.time, igif.xdim, igif.ydim);
-                free(igif.time);
+                free_(igif.time);
                 RUN_FE2C(engc->MCT_CAPT, MSG__SHW, 0);
                 engc->pcur = engc->povr = 0;
                 engc->data = (engc->pmax) ? calloc(engc->pmax,
@@ -2665,12 +2665,12 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                                    FRM_WAIT, (intptr_t)engc, eUpdFrame,
                                    eUpdFlags);
                 cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
-                free(engc->data);
+                free_(engc->data);
 
                 rFreeTrayIcon(icon);
                 for (icon = 0; icon < engc->pcnt; icon++)
-                    free(engc->parr[icon]);
-                free(engc->parr);
+                    free_(engc->parr[icon]);
+                free_(engc->parr);
                 engc->parr = 0;
                 engc->pmax = engc->pcnt = 0;
 
@@ -2788,7 +2788,7 @@ void engine_t::build_library_structure(const std::string &base) {
     auto find = rFindMake(path.c_str());
     while (auto file = rFindFile(find)) {
         ins.emplace_back(library_t::input_t(path, file));
-        free(file);
+        file = (typeof(file))realloc(file, 0);
     }
 
     for (auto &i : ins) {
