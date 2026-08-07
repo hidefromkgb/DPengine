@@ -2,14 +2,15 @@
 
 An alternative experimental engine for
 [Desktop Ponies](https://github.com/RoosterDragon/Desktop-Ponies)
-written in C and GLSL and focused on performance. Don\`t trust GitHub if it
-shows ObjC in the list of used languages, it\`s pure C.
+written in C/C++ and GLSL and focused on performance. Don't trust GitHub if it
+shows ObjC in the list of used languages, it's pure C/C++.
 
 **[WARNING:]** This repo contains submodules (core/gif/load/, core/ogl/load/,
-exec/ctr/, exec/zip/, macos/load/), so don\`t forget to specify `--recursive`
+exec/ctr/, exec/zip/, macos/load/), so don't forget to specify `--recursive`
 when doing a `git clone`! As for GitHub ZIP downloader, unfortunately it still
-[doesn\`t support](https://stackoverflow.com/q/12936014) submodules as of now,
-so downloading a ZIP instead of cloning yields an incomplete copy.
+[doesn't support](https://github.com/dear-github/dear-github/issues/214)
+submodules as of now, so downloading a ZIP instead of cloning yields an
+incomplete copy.
 
 Win32 GUI (as seen on Windows 98 SE):
 
@@ -31,14 +32,6 @@ any location on the local hard drive, after which DPE should be configured to
 use it: click the 'More Options...' button on the main window and choose the
 'Animation base directory' so that it points to the *parent* directory of the
 animation base. After that, close DPE and execute it again. Enjoy!
-
-The source code is meant to be built via either Code::Blocks IDE or makefiles
-included in the project.
-
-*N.B.:* to be able to build on Windows using Code::Blocks 10.05, go to
-Settings → Compiler and Debugger → Toolchain Executables, and change
-'Make program' to 'mingw32-make.exe'. It`s how it was meant to be.
-More recent versions ship with correct settings.
 
 *N.B.:* to build and run DPE on Linux, install the following packages:
 
@@ -68,10 +61,15 @@ The task at hand is to implement the remaining DP features missing from DPE:
 
 Some functionality is not present in DP but would also be nice to have:
 
-1. Implement the "alias method" for behaviours
 1. Parallelize sprite processing in frontend
 1. Move rendering options from tray menu to tab 3
 1. Add OS-specific options to tab 3
+1. More games like Snake or Arkanoid or Space Invaders?
+
+An effort is now underway to rewrite `exec` in C++ in a
+[separate branch](https://github.com/hidefromkgb/DPengine/tree/full_cpp);
+after it's ready the intention is to implement the missing features in C++,
+since it looks easier that way, and then port everything back to C.
 
 ## License
 
