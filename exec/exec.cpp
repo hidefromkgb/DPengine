@@ -1033,13 +1033,16 @@ public:
     // the BGN group, if start speech is absent)
     static int16_t select_speech(uint32_t *seed, uint32_t chance,
             const behaviour_t &prev, const behaviour_t &curr) {
+        constexpr uint64_t max_chance = 100;
+        constexpr uint64_t mul_chance // [0;max_chance]->[0;~0+5], type matters
+                = (double(uint32_t(~0 - 1)) + max_chance) / max_chance;
         auto bgn = random_selection<true>(curr.bgn_speech_idx_, seed);
         auto end = random_selection<true>(prev.end_speech_idx_, seed);
         // priority in DP: 1. start speech; 2. end speech; 3. random speech;
         end = (bgn >= 0) ? (end >= 0) ? bgn : end : bgn;
         // TODO: fix the case when (end > 0) gets replaced with (bgn = 0);
         //       at the time this is hypothetical, but can become relevant
-        return ((end < 0) || (RNG_Load(seed) < chance)) ? end : 0;
+        return ((end < 0) || (RNG_Load(seed) < mul_chance * chance)) ? end : 0;
     }
 
 #ifdef DEV_MODE
@@ -1748,20 +1751,19 @@ protected:
 
     window_t(std::vector<CTRL> controls) : visible_(false) {
         controls_ = std::move(controls);
-        assert(!controls_.empty() && (get_type(controls_[0]) == FCT_WNDW));
+        assert(!controls_.empty() && (get_type(get_root()) == FCT_WNDW));
         // creating the main window
-        rMakeControl(&controls_[0], nullptr, nullptr);
+        rMakeControl(&get_root(), nullptr, nullptr);
 
         long xmax = 0, ymax = 0, xoff = 0, yoff = 0;
         for (size_t indx = 1; indx < controls_.size(); indx++) {
-            controls_[indx].prev = &controls_[0];
-            rMakeControl(&controls_[indx], &xoff, &yoff);
+            get(indx).prev = &get_root();
+            rMakeControl(&get(indx), &xoff, &yoff);
             xmax = (xmax > xoff) ? xmax : xoff;
             ymax = (ymax > yoff) ? ymax : yoff;
         }
         // resizing and showing the window
-        RUN_FE2C(controls_[0], MSG_WSZC,
-                (uint16_t)xmax | ((uint32_t)ymax << 16));
+        RUN_FE2C(get_root(), MSG_WSZC, (uint16_t)xmax | ((uint32_t)ymax << 16));
     }
 
     static CTRL *get_parent(CTRL &child) { return child.prev; }
@@ -1776,11 +1778,11 @@ protected:
 
     void set_control_text(const std::string &str, size_t ctl) {
         assert(ctl < size());
-        const auto type = get_type(controls_[ctl]);
+        const auto type = get_type(get(ctl));
         if ((type == FCT_WNDW) || (type == FCT_LIST) || (type == FCT_PBAR)
         ||  (type == FCT_BUTN) || (type == FCT_CBOX)
-        || ((type == FCT_TEXT) && !(controls_[ctl].flgs & FST_SUNK)))
-            RUN_FE2C(controls_[ctl], MSG__TXT, intptr_t(str.c_str()));
+        || ((type == FCT_TEXT) && !(get(ctl).flgs & FST_SUNK)))
+            RUN_FE2C(get(ctl), MSG__TXT, intptr_t(str.c_str()));
     }
 };
 
@@ -2201,6 +2203,7 @@ private:
     conf_t cdef_; // default configuration
     conf_t cini_; // initial configuration read at the start
     uint32_t runs_; // current run count between updates
+    float tacc_; // partial timestamp accumulator
     conf_t ccur_; // current configuration
     main_window_t mctl_; // main window
     options_window_t octl_; // options window
@@ -2209,7 +2212,6 @@ private:
     T3IV ppos_; // mouse pointer position (z = flags)
     uint64_t tcur_; // current, dilation-adjusted timestamp
     uint64_t tpre_; // previous raw timestamp
-    float tacc_; // partial timestamp accumulator
     std::vector<MENU> mspr_; // per-sprite context menu
     std::vector<MENU> mctx_; // main context menu
     ENGD *engd_;
@@ -2386,6 +2388,7 @@ engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
 , cdef_(get_def_conf(base))
 , cini_(load_ini_conf(cdef_, cfnm_))
 , runs_(fixup_min(cini_.nrun, cdef_.nrun)) // do not move past ccur_()
+, tacc_{}
 , ccur_(cini_)
 , mctl_(ccur_, cini_, cdef_)
 , octl_(mctl_.get_id(), ccur_, cini_, cdef_)
@@ -2393,8 +2396,7 @@ engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
 , area_(area)
 , ppos_{}
 , tcur_{}
-, tpre_{}
-, tacc_{} {
+, tpre_{} {
     mctl_.set_options_window(octl_.get_id()); // link options window to main
     cEngineCallback(0, ECB_INIT, (intptr_t)&engd_); // create rendering engine
     build_library_structure(cini_.base); // read configuration, load everything
