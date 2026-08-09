@@ -224,7 +224,7 @@ char *rLoadFile(const char *name, long *size) {
 
 
 
-long rSaveFile(char *name, char *data, long size) {
+long rSaveFile(const char *name, const char *data, long size) {
     long file;
 
     if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {

@@ -22,7 +22,6 @@
 
 
 // TODO: content downloading
-// TODO: config saving
 // TODO: speech bubbles
 // TODO: the go button
 
@@ -51,6 +50,29 @@
 #define DEF_TSEP ','
 // default dir slash (string)
 #define DEF_DSEP "/"
+
+// config file content dir location; intentionally separate from DEF_FLDR
+#define CFG_FLDR "Content"
+// config file language file location
+#define CFG_LGUI "Language"
+//
+#define CFG_RUNS "RunsTillUpdate"
+//
+#define CFG_SCAL "BaseScale"
+//
+#define CFG_TDIL "TimeDilation"
+//
+#define CFG_RSAY "RandomSpeech"
+//
+#define CFG_PCDR "CursorDodge"
+//
+#define CFG_SPEC "GroupSelection"
+//
+#define CFG_RGPU "RandomSelection"
+//
+#define CFG_RNDR "Render"
+//
+#define CFG_FLGS "Flags"
 
 enum {
 /*  framerate limiter in msec    */ FRM_WAIT = 40,
@@ -443,7 +465,7 @@ class engine_t;
 template <typename T>
 using ref_vec_t = std::vector<std::reference_wrapper<const T>>;
 
-enum movement_flags_t {
+enum movement_flags_t : uint32_t {
     GEN_FLAGS(move_none, move_drag, move_sleep, move_mouse,
               move_horz, move_vert, move_diag)
     move_hv = move_horz | move_vert, move_dh = move_diag | move_horz,
@@ -1605,15 +1627,14 @@ const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
 // client configuration
 class conf_t {
 public:
-    using lang_map_t = std::unordered_map<int32_t, std::string>;
     enum flags_t : uint32_t {
-        GEN_FLAGS(draw, show, gpu, opaque, wbgra, wpbo, wregion, update,
-                  topmost, effects, interaction, speech, cspeech, hover,
-                  filters, exact, randomsel, copies)
+        GEN_FLAGS(draw, show, gpu, opaque, wbgra, wpbo, wregion,
+                  update, topmost, effects, interaction, speech,
+                  cspeech, hover, filters, exact, randomsel, copies)
+        render_mask = draw | show | gpu | opaque | wbgra | wpbo | wregion,
+        general_mask = update | topmost | effects | interaction | speech
+                     | cspeech | hover | filters | exact | randomsel | copies,
     };
-    static constexpr flags_t render = conf_t::show | conf_t::draw | conf_t::gpu;
-    static constexpr flags_t general = conf_t::hover | conf_t::interaction
-            | conf_t::effects | conf_t::speech | conf_t::cspeech;
     class spin_t {
     private:
         int16_t curr_, min_, max_;
@@ -1672,16 +1693,17 @@ public:
         categories_t() = default;
         categories_t(size_t ctg_id) { add(ctg_id); }
     };
-    std::string base;    // path to the animation base
-    std::string lang;    // name of the language file
+    using lang_map_t = std::unordered_map<int32_t, std::string>;
+    std::string base; // path to the animation base
+    std::string lang; // name of the language file
     lang_map_t lang_map; // localization taken from the language file
-    spin_t nrun = spin_t(  5,    0,  1000); // runs between updates
-    spin_t nsca = spin_t(100,   25,   300); // base scaling factor
-    spin_t ndil = spin_t(100,   10,  1000); // time dilation factor
-    spin_t nsay = spin_t( 50,    0,   100); // random speech chance
-    spin_t ncdr = spin_t(  0,    0,  1000); // cursor dodge radius
-    spin_t spec = spin_t(  0, -100,   100); // group selection
-    spin_t rgpu = spin_t(  0,    0, 30000); // random selection
+    spin_t nrun; // runs between updates
+    spin_t nsca; // base scaling factor
+    spin_t ndil; // time dilation factor
+    spin_t nsay; // random speech chance
+    spin_t ncdr; // cursor dodge radius
+    spin_t spec; // group selection
+    spin_t rgpu; // random selection
     flags_t flgs = {};
     categories_t ctg_nonex = {};
     categories_t ctg_exact = {};
@@ -2173,9 +2195,12 @@ intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 // engine data (client side)
 class engine_t : public no_copy_t {
 private:
+    static const std::unordered_map<std::string, conf_t::flags_t> all_flags;
+
     std::string cfnm_; // main configuration file path
     conf_t cdef_; // default configuration
     conf_t cini_; // initial configuration read at the start
+    uint32_t runs_; // current run count between updates
     conf_t ccur_; // current configuration
     main_window_t mctl_; // main window
     options_window_t octl_; // options window
@@ -2197,32 +2222,59 @@ private:
 
         conf_t retn;
         retn.base = base;
-        retn.flgs = conf_t::general | conf_t::render;
+        retn.flgs = conf_t::show | conf_t::draw | conf_t::gpu | conf_t::hover
+                  | conf_t::interaction | conf_t::effects | conf_t::speech
+                  | conf_t::cspeech;
         retn.lang_map = conf_t::get_lang_map(def_lang);
+        retn.nrun = conf_t::spin_t(  5,    0,  1000);
+        retn.nsca = conf_t::spin_t(100,   25,   300);
+        retn.ndil = conf_t::spin_t(100,   10,  1000);
+        retn.nsay = conf_t::spin_t( 50,    0,   100);
+        retn.ncdr = conf_t::spin_t(  0,    0,  1000);
+        retn.spec = conf_t::spin_t(  0, -100,   100);
+        retn.rgpu = conf_t::spin_t(  0,    0, 30000);
         return retn;
     }
 
-    static conf_t get_ini_conf(const conf_t &def, const std::string &cfnm) {
-        #define CASE(what) {#what, conf_t::what}
-        static const std::unordered_map<std::string, conf_t::flags_t> rndr = {
-            CASE(gpu), CASE(opaque), CASE(draw), CASE(show),
-            CASE(wpbo), CASE(wbgra), CASE(wregion),
-        };
-        static const std::unordered_map<std::string, conf_t::flags_t> gen = {
-            CASE(speech), CASE(cspeech), CASE(topmost), CASE(hover),
-            CASE(update), CASE(filters), CASE(effects), CASE(exact),
-            CASE(copies), CASE(randomsel), CASE(interaction),
-        };
-        #undef CASE
+    void save_ini_conf() const {
+        auto header = [](const char *h) { return DEF_CRLF + std::string(h); };
+        auto svalue = [](const std::string &v) { return DEF_TSEP + v; };
+        auto ivalue = [&](int v) { return svalue(std::to_string(v)); };
+        std::string retn;
+        retn = header(CFG_FLDR)
+             + svalue((ccur_.base != cdef_.base) ? ccur_.base : "");
+        retn += header(CFG_LGUI) + svalue(ccur_.lang);
+        retn += header(CFG_RUNS) + ivalue(ccur_.nrun.get()) + ivalue(runs_);
+        retn += header(CFG_SCAL) + ivalue(ccur_.nsca.get());
+        retn += header(CFG_TDIL) + ivalue(ccur_.ndil.get());
+        retn += header(CFG_RSAY) + ivalue(ccur_.nsay.get());
+        retn += header(CFG_PCDR) + ivalue(ccur_.ncdr.get());
+        retn += header(CFG_SPEC) + ivalue(ccur_.spec.get());
+        retn += header(CFG_RGPU) + ivalue(ccur_.rgpu.get());
+        auto render_flags = header(CFG_RNDR), general_flags = header(CFG_FLGS);
+        for (auto &f : all_flags) {
+            assert(f.second & (conf_t::render_mask | conf_t::general_mask));
+            auto &target = (f.second & conf_t::render_mask) ? render_flags
+                                                            : general_flags;
+            if ((ccur_.flgs & f.second)) target += svalue(f.first);
+        }
+        retn = retn.substr(1) + render_flags + general_flags;
+        rSaveFile(cfnm_.c_str(), retn.c_str(), retn.size());
+    }
 
-        auto render = conf_t::render;
-        auto general = conf_t::general;
-        int16_t runs = 0;
+    static conf_t load_ini_conf(const conf_t &def, const std::string &cfnm) {
+        auto process_spin = [](token_t &line, const conf_t::spin_t &def) {
+            return conf_t::spin_t(
+                    process_float(line, def.get()), def.min(), def.max());
+        };
+        auto render = def.flgs & conf_t::render_mask;
+        auto general = def.flgs & conf_t::general_mask;
         conf_t retn;
         retn.base = def.base;
         if (auto file = (!cfnm.empty())
                 ? rLoadFile(cfnm.c_str(), nullptr)
                 : nullptr) {
+            printf("Reading config from '%s'...\n", cfnm.c_str());
             for (token_t text({}, file); !is_empty(text);
                     text = next_token(text.second, 0, DEF_CRLF, 0)) {
                 if (!text.first.empty() && (text.first.back() == DEF_LFCR))
@@ -2230,7 +2282,7 @@ private:
                 auto line = next_token(text.first);
                 switch (str_hash(line.first)) {
                     default: break;
-                    case str_hash("Language"): {
+                    case str_hash(CFG_LGUI): {
                         long size = 0;
                         std::string name(line.second);
                         if (auto file = rLoadFile(name.c_str(), &size)) {
@@ -2241,49 +2293,68 @@ private:
                         }
                         break;
                     }
-                    case str_hash("Content"):
+                    case str_hash(CFG_FLDR):
                         line = next_token(line.second, 0);
                         if (line.first.empty()) break;
                         retn.base = line.first;
                         break;
-                    case str_hash("RunsTillUpdate"):
-                        retn.nrun.set(process_float(line, retn.nrun.get()));
-                        runs = process_float(line, runs);
+                    case str_hash(CFG_RUNS): {
+                        // a little hack: set min to equal the run count
+                        // (see fixup_min() in constructor for more info)
+                        int16_t max = process_float(line, def.nrun.get());
+                        int16_t runs = process_float(line, def.nrun.min()) + 1;
+                        max = std::clamp(max, def.nrun.min(), def.nrun.max());
+                        runs = std::clamp(runs, def.nrun.min(), max);
+                        if ((max > def.nrun.min()) && (max == runs)) {
+                            retn.flgs |= conf_t::update;
+                            runs = def.nrun.min();
+                        }
+                        retn.nrun = conf_t::spin_t(max, runs, def.nrun.max());
                         break;
-                    case str_hash("BaseScale"):
-                        retn.nsca.set(process_float(line, retn.nsca.get()));
+                    }
+                    case str_hash(CFG_SCAL):
+                        retn.nsca = process_spin(line, def.nsca);
                         break;
-                    case str_hash("TimeDilation"):
-                        retn.ndil.set(process_float(line, retn.ndil.get()));
+                    case str_hash(CFG_TDIL):
+                        retn.ndil = process_spin(line, def.ndil);
                         break;
-                    case str_hash("RandomSpeech"):
-                        retn.nsay.set(process_float(line, retn.nsay.get()));
+                    case str_hash(CFG_RSAY):
+                        retn.nsay = process_spin(line, def.nsay);
                         break;
-                    case str_hash("CursorDodge"):
-                        retn.ncdr.set(process_float(line, retn.ncdr.get()));
+                    case str_hash(CFG_PCDR):
+                        retn.ncdr = process_spin(line, def.ncdr);
                         break;
-                    case str_hash("Render"):
+                    case str_hash(CFG_SPEC):
+                        retn.spec = process_spin(line, def.spec);
+                        break;
+                    case str_hash(CFG_RGPU):
+                        retn.rgpu = process_spin(line, def.rgpu);
+                        break;
+                    case str_hash(CFG_RNDR):
                         render = {};
                         while (!is_empty(line))
-                            render |= process_map(line, rndr, {});
+                            render |= process_map(line, all_flags, {})
+                                & conf_t::render_mask;
                         break;
-                    case str_hash("Flags"):
+                    case str_hash(CFG_FLGS):
                         general = {};
                         while (!is_empty(line))
-                            general |= process_map(line, gen, {});
+                            general |= process_map(line, all_flags, {})
+                                & conf_t::general_mask;
                         break;
                 }
             }
             file = (typeof(file))realloc(file, 0);
-
-            retn.flgs = conf_t::general | conf_t::render;
-            if (retn.nrun.get() && (retn.nrun.get() <= runs))
-                retn.flgs |= conf_t::update;
+            retn.flgs = render | general;
         }
         return retn;
     }
 
-    static conf_t get_cur_conf(const conf_t &ini) { return ini; }
+    static int16_t fixup_min(conf_t::spin_t &spin, const conf_t::spin_t &def) {
+        auto retn = spin.min();
+        spin.set_min(def.min());
+        return retn;
+    }
 
     void build_library_structure(const std::string &base);
 
@@ -2299,12 +2370,23 @@ public:
     void main_loop();
 };
 
+const std::unordered_map<std::string, conf_t::flags_t> engine_t::all_flags = {
+#define CASE(what) {#what, conf_t::what}
+    CASE(gpu), CASE(opaque), CASE(draw), CASE(show),
+    CASE(wpbo), CASE(wbgra), CASE(wregion),
+    CASE(speech), CASE(cspeech), CASE(topmost), CASE(hover),
+    CASE(update), CASE(filters), CASE(effects), CASE(exact),
+    CASE(copies), CASE(randomsel), CASE(interaction),
+#undef CASE
+};
+
 engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
         const T2IV tray, const T4IV area)
 : cfnm_((!fcnf.empty()) ? concat_path({std::string(fcnf), DEF_CORE}) : "")
 , cdef_(get_def_conf(base))
-, cini_(get_ini_conf(cdef_, cfnm_))
-, ccur_(get_cur_conf(cini_))
+, cini_(load_ini_conf(cdef_, cfnm_))
+, runs_(fixup_min(cini_.nrun, cdef_.nrun)) // do not move past ccur_()
+, ccur_(cini_)
 , mctl_(ccur_, cini_, cdef_)
 , octl_(mctl_.get_id(), ccur_, cini_, cdef_)
 , tray_(tray)
@@ -2775,6 +2857,8 @@ void engine_t::main_loop() {
 
     // starting the GUI loop
     mctl_.main_loop(FRM_WAIT);
+
+    save_ini_conf();
 }
 
 void engine_t::build_library_structure(const std::string &base) {
@@ -2802,8 +2886,7 @@ void engine_t::build_library_structure(const std::string &base) {
                 all_categories.add(*ic);
             } else {
                 all_categories.add(last_category);
-                ctg_map[c] = last_category;
-                last_category++;
+                ctg_map[c] = last_category++;
                 mctl_.add_category(c);
             }
         }

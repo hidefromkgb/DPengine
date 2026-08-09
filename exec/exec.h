@@ -146,7 +146,7 @@ intptr_t rMakeTrayIcon(MENU *mctx, char *text,
 long  rLoadHTTPS(intptr_t user, char *page, char **dest,
                  void (*load)(long, intptr_t), intptr_t lprm);
 long  rMessage(char *text, char *head, char *byes, char *bnay);
-long  rSaveFile(char *name, char *data, long size);
+long  rSaveFile(const char *name, const char *data, long size);
 long  rMoveDir(char *dsrc, char *ddst);
 long  rMakeDir(char *name, long dupl);
 void  rInternalMainLoop(
