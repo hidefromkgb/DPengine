@@ -9,6 +9,14 @@ macos.app
 # DP stuff
 Content*
 
+# Vim-specific
+*.sw?
+*~
+
+# CMake-specific
+Debug
+Release
+
 # Code::Blocks service files
 *.cscope_file_list
 *.layout

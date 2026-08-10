@@ -99,6 +99,10 @@ private:
                         bhv[i].end(), rhs.bhv[i].begin(), rhs.bhv[i].end());
         }
     };
+    struct extract_speech_colors_job_t {
+        library_t *lib;
+        ENGD *engd;
+    };
 
     std::string library_path_;
     std::string readable_name_;
@@ -116,6 +120,18 @@ private:
     const speech_t *select_speech(uint32_t *seed, uint32_t chance,
             bhv_id_t prev, bhv_id_t curr) const;
 
+    static void extract_speech_colors_worker(intptr_t data, uint64_t unused);
+
+    // struct and methods that compartmentalize the constructor:
+    struct build_ctx_t;
+    void init_interactions(const build_ctx_t &ctx);
+    void map_effects(build_ctx_t &ctx);
+    void map_speeches(build_ctx_t &ctx);
+    void create_behaviours(build_ctx_t &ctx);
+    void init_probabilities(const build_ctx_t &ctx);
+    void init_follow_groups(const build_ctx_t &ctx);
+    void dump_stats() const;
+
 public:
     inline const behaviour_t *get(bhv_id_t id) const;
 
@@ -125,8 +141,8 @@ public:
             const bhv_id_map_t &bhv_id_map);
 
     const unit_t &get_preview(ENGD *engd = nullptr);
-    void extract_speech_colors(ENGD *engd, intptr_t parallel);
-    static void extract_speech_colors_worker(intptr_t data, uint64_t unused);
+    static void extract_speech_colors(
+            ENGD *engd, const std::vector<library_t*> &libs);
 
     const std::string &name() const { return readable_name_; }
 };
