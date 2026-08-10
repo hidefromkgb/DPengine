@@ -1,3 +1,6 @@
+#ifndef EXEC_H
+#define EXEC_H
+
 #include <time.h>
 #include <math.h>
 #include <stdio.h>
@@ -168,3 +171,5 @@ MENU *rOSSpecificMenu(void *engc);
 #ifdef __cplusplus
 } /// extern "C"
 #endif
+
+#endif // EXEC_H
