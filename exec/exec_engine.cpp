@@ -42,7 +42,8 @@ const std::unordered_map<std::string, conf_t::flags_t> engine_t::all_flags = {
 
 engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
         const T2IV tray, const T4IV area)
-: cfnm_((!fcnf.empty()) ? concat_path({std::string(fcnf), DEF_CORE}) : "")
+: cfnm_((!fcnf.empty()) ? concat_path({std::string(fcnf), DEF_CORE})
+                        : std::string())
 , cdef_(get_def_conf(base))
 , cini_(load_ini_conf(cdef_, cfnm_))
 , runs_(fixup_min(cini_.nrun, cdef_.nrun)) // do not move past ccur_()
@@ -61,15 +62,12 @@ engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
 }
 
 conf_t engine_t::get_def_conf(const std::string_view base) {
-    INCBIN("../exec/loc/en.lang", DefLang);
-    static const std::string_view def_lang(DefLang, DefLang_end - DefLang);
-
     conf_t retn;
     retn.base = base;
     retn.flgs = conf_t::show | conf_t::draw | conf_t::gpu | conf_t::hover
               | conf_t::interaction | conf_t::effects | conf_t::speech
               | conf_t::cspeech;
-    retn.lang_map = conf_t::get_lang_map(def_lang);
+    retn.lang_map = conf_t::get_lang_map({});
     retn.nrun = conf_t::spin_t(  5,    0,  1000);
     retn.nsca = conf_t::spin_t(100,   25,   300);
     retn.ndil = conf_t::spin_t(100,   10,  1000);
@@ -92,7 +90,7 @@ void engine_t::save_ini_conf() const {
     auto ivalue = [&](int v) { return svalue(std::to_string(v)); };
     std::string retn;
     retn = header(CFG_FLDR)
-         + svalue((ccur_.base != cdef_.base) ? ccur_.base : "");
+         + svalue((ccur_.base != cdef_.base) ? ccur_.base : std::string());
     retn += header(CFG_LGUI) + svalue(ccur_.lang);
     retn += header(CFG_RUNS) + ivalue(ccur_.nrun.get()) + ivalue(runs_);
     retn += header(CFG_SCAL) + ivalue(ccur_.nsca.get());
@@ -125,24 +123,15 @@ conf_t engine_t::load_ini_conf(const conf_t &def, const std::string &cfnm) {
             ? rLoadFile(cfnm.c_str(), nullptr)
             : nullptr) {
         printf("Reading config from '%s'...\n", cfnm.c_str());
-        for (token_t text({}, file); !is_empty(text);
-                text = next_token(text.second, 0, DEF_CRLF, 0)) {
-            if (!text.first.empty() && (text.first.back() == DEF_LFCR))
-                text.first.remove_suffix(sizeof(DEF_LFCR));
+        for (token_t text({}, file); next_line(text); ) {
             auto line = next_token(text.first);
             switch (str_hash(line.first)) {
                 default: break;
-                case str_hash(CFG_LGUI): {
-                    long size = 0;
-                    std::string name(line.second);
-                    if (auto file = rLoadFile(name.c_str(), &size)) {
-                        retn.lang = std::move(name);
-                        retn.lang_map = conf_t::get_lang_map(
-                                std::string_view(file, size));
-                        file = (typeof(file))realloc(file, 0);
-                    }
+                case str_hash(CFG_LGUI):
+                    retn.lang = line.second;
+                    retn.lang_map = conf_t::get_lang_map(retn.lang);
+                    if (retn.lang_map.empty()) retn.lang = {};
                     break;
-                }
                 case str_hash(CFG_FLDR):
                     line = next_token(line.second, 0);
                     if (line.first.empty()) break;

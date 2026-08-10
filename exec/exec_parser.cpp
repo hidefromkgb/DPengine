@@ -84,6 +84,13 @@ token_t next_token(const std::string_view &str, char c, char s, char q) {
     return {token, iter};
 }
 
+bool next_line(token_t &t) {
+    t = next_token(t.second, 0, DEF_CRLF, 0);
+    if (!t.first.empty() && (t.first.back() == DEF_LFCR))
+        t.first.remove_suffix(sizeof(DEF_LFCR));
+    return !is_empty(t);
+}
+
 bool process_bool(token_t &line, bool def, char s, char q) {
     static const std::unordered_map<std::string, bool>
         map = { {"false", false}, {"true", true}, };
