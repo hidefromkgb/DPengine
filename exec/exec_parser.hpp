@@ -47,6 +47,8 @@ size_t constexpr str_hash(const std::string_view &str, bool ascii2low = true) {
 
 std::string concat_path(const std::initializer_list<const std::string> &list);
 
+bool next_line(token_t &t);
+
 token_t next_token(const std::string_view &str,
         char c = DEF_CMNT, char s = DEF_TSEP, char q = DEF_QUOT);
 

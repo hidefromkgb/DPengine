@@ -27,10 +27,7 @@ library_t::input_t::input_t(const std::string &base, const std::string &dir) {
     auto config = concat_path({base, dir, DEF_CONF});
     if (auto file = rLoadFile(config.c_str(), nullptr)) {
         name = dir;
-        for (token_t text({}, file); !is_empty(text);
-                text = next_token(text.second, 0, DEF_CRLF, 0)) {
-            if (!text.first.empty() && (text.first.back() == DEF_LFCR))
-                text.first.remove_suffix(sizeof(DEF_LFCR));
+        for (token_t text({}, file); next_line(text); ) {
             auto line = next_token(text.first);
             switch (str_hash(line.first)) {
                 //case str_hash("Name"):

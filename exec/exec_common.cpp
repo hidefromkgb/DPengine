@@ -15,16 +15,18 @@
 
 
 
-conf_t::lang_map_t conf_t::get_lang_map(const std::string_view &file) {
+conf_t::lang_map_t conf_t::get_lang_map(const std::string &file_name) {
+    INCBIN("../exec/loc/en.lang", DefLang);
+    long size = (file_name.empty()) ? DefLang_end - DefLang : 0;
+    auto file = (file_name.empty()) ? DefLang
+                                    : rLoadFile(file_name.c_str(), &size);
     lang_map_t retn;
-    int32_t idx = -1; // first iteration spent on filling token_t
-    for (token_t text({}, file); !is_empty(text);
-            text = next_token(text.second, 0, DEF_CRLF, 0), idx++)
-        if (!text.first.empty()) {
-            if (text.first.back() == DEF_LFCR)
-                text.first.remove_suffix(sizeof(DEF_LFCR));
-            retn[idx] = text.first;
-        }
+    if (file) {
+        token_t text({}, std::string_view(file, size));
+        for (int32_t idx = 0; next_line(text); idx++)
+            if (!text.first.empty()) retn[idx] = text.first;
+        if (!file_name.empty()) file = (typeof(file))realloc(file, 0);
+    }
     return retn;
 }
 

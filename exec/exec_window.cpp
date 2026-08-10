@@ -292,26 +292,21 @@ intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             if (cmsg != MSG_BCLK) break;
             auto w = (options_window_t*)ctrl->data;
             if (ctrl == &w->get(OCT_BCHO)) {
-                auto path = (!w->conf_.base.empty()) ? w->conf_.base : "";
+                auto path = (!w->conf_.base.empty()) ? w->conf_.base
+                                                     : std::string();
                 auto base = rChooseDir(ctrl, path.c_str());
                 if (!base) break;
                 w->conf_.base = base;
                 base = (typeof(base))realloc(base, 0);
                 // TODO: add some checks to verify that the new dir is ok?
             } else if (ctrl == &w->get(OCT_LCHO)) {
-                auto path = (!w->conf_.lang.empty()) ? w->conf_.lang : "";
+                auto path = (!w->conf_.lang.empty()) ? w->conf_.lang
+                                                     : std::string();
                 auto lang = rChooseFile(ctrl, "lang", path.c_str());
                 if (!lang) break;
                 w->conf_.lang = lang;
                 lang = (typeof(lang))realloc(lang, 0);
-                long size = 0;
-                if (auto file = rLoadFile(w->conf_.lang.c_str(), &size)) {
-                    std::string_view str(file, size);
-                    w->conf_.lang_map = conf_t::get_lang_map(str);
-                    file = (typeof(file))realloc(file, 0);
-                } else {
-                    w->conf_.lang_map.clear();
-                }
+                w->conf_.lang_map = conf_t::get_lang_map(w->conf_.lang);
             } else if (ctrl == &w->get(OCT_BREL)) {
                 w->conf_.base = w->ini_conf_.base;
             } else if (ctrl == &w->get(OCT_BRES)) {

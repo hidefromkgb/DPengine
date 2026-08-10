@@ -185,7 +185,7 @@ public:
     categories_t ctg_nonex = {};
     categories_t ctg_exact = {};
 
-    static lang_map_t get_lang_map(const std::string_view &file);
+    static lang_map_t get_lang_map(const std::string &file_name);
 };
 
 #endif // EXEC_COMMON_HPP
