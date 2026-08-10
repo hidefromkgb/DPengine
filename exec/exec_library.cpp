@@ -63,148 +63,6 @@ library_t::input_t::input_t(const std::string &base, const std::string &dir) {
     }
 }
 
-library_t::library_t(std::string path, const input_t &in,
-        const bhv_id_map_t &bhv_id_map)
-: library_path_(std::move(path))
-, readable_name_(in.name) {
-    preview_id_ = 0;
-    speech_fg_ = 0xFF000000;
-    speech_bg_ = 0xFFFFFFFF;
-
-    auto hashable_name = ascii_to_lower(in.name);
-    auto &bhv_id_desc = *find_in_map(bhv_id_map, hashable_name);
-
-    // processing the interactions
-    for (auto &i : in.interactions) {
-        auto it = std::make_unique<interaction_t>(i, hashable_name, bhv_id_map);
-        if (!it->is_empty())
-            interactions_.emplace_back(std::move(it));
-    }
-    // distributing effects configs by behaviour name
-    std::unordered_map<std::string, eff_vec_t> effects;
-    for (auto &e : in.effects) {
-        if (find_in_map(bhv_id_desc.m, e.bhv)) {
-            effects[e.bhv].emplace_back(e);
-        } else {
-            printf("[%s] WARNING, unused effect '%s'\n",
-                   in.name.c_str(), e.name.c_str());
-        }
-    }
-    std::unordered_map<std::string, int> spk_bhv_map;
-    std::unordered_map<int, std::vector<int>> spk_rnd_map;
-    std::unordered_map<std::string, behaviour_t*> bhv_map;
-    eff_vec_t e_null;
-
-    // distributing behaviour-linked (< 0) and random (> 0) speeches
-    for (auto &s : in.speeches) {
-        auto dejavu = find_in_map(spk_bhv_map, s.name);
-        if (dejavu)
-            printf("[%s] WARNING, speech name collision: '%s'%s\n",
-                    in.name.c_str(), s.name.c_str(),
-                    (s.skip) ? ", non-selectable (dropped)" : ", selectable");
-        if (!dejavu || !s.skip) {
-            speeches_.emplace_back(std::make_unique<speech_t>(s));
-            spk_bhv_map.emplace(s.name, -int(speeches_.size()));
-            if (!s.skip)
-                spk_rnd_map[s.group].emplace_back(int(speeches_.size()));
-        }
-    }
-    auto i0 = find_in_map(spk_rnd_map, 0); // random speeches from group 0
-
-    // creating the behaviours
-    for (size_t i = 0; i < in.behaviours.size(); i++) {
-        std::vector<int16_t> b_spk, e_spk;
-        auto &b = in.behaviours[i];
-        auto ig = find_in_map(spk_rnd_map, b.group);
-        if (auto ib = find_in_map(spk_bhv_map, b.bgn_speech)) {
-            b_spk.emplace_back(*ib); // found behaviour-specific start speech
-        } else if (ig || i0) {
-            // no start speech found, substituting it with random speeches;
-            // no speech can belong to >1 group, don't look for duplicates
-            if (ig) b_spk.insert(b_spk.end(), ig->begin(), ig->end());
-            if (i0 && (b.group != 0))
-                b_spk.insert(b_spk.end(), i0->begin(), i0->end());
-        }
-        if (auto ie = find_in_map(spk_bhv_map, b.end_speech))
-            e_spk.emplace_back(*ie); // found behaviour-specific end speech
-
-        bhv_id_internal_t iid{bhv_id_desc.v[i]};
-        bhv_id_internal_t linked_iid = {};
-        if (auto il = find_in_map(bhv_id_desc.m, b.linked_bhv)) {
-            linked_iid._ = *il;
-        } else if (!b.linked_bhv.empty()) {
-            printf("[%s] WARNING, invalid linked behaviour name in '%s'\n",
-                    in.name.c_str(), b.name.c_str());
-        }
-        auto is = find_in_map(bhv_id_desc.m, b.follow_stop_bhv);
-        auto im = find_in_map(bhv_id_desc.m, b.follow_mov_bhv);
-        bhv_id_internal_t follow_grp_iid = {};
-        follow_grp_iid.group = (is && im) ? -int16_t(i) : iid.group;
-        if (!is != !im)
-            printf("[%s] WARNING, inconsistent follow behaviours in '%s'\n",
-                   in.name.c_str(), b.name.c_str());
-
-        auto ie = find_in_map(effects, b.name);
-        behaviours_.emplace_back(std::make_unique<behaviour_t>(b, iid._,
-                    linked_iid._, follow_grp_iid._, str_hash(b.follow_target),
-                    library_path_, b_spk, e_spk, (ie) ? *ie : e_null));
-        groups_[iid.group].bhv[iid.type].emplace_back(*behaviours_.back());
-        bhv_map.emplace(b.name, behaviours_.back().get());
-        assert(iid.index == groups_[iid.group].bhv[iid.type].size());
-    }
-
-    std::unordered_map<int, std::vector<uint32_t>> prob_map;
-    for (size_t i = 0; i < in.behaviours.size(); i++) {
-        auto &b = in.behaviours[i];
-        if ((!b.skip) && (b.chance > 0.f)) {
-            prob_map[b.group].emplace_back(
-                    10000.f * std::clamp(b.chance, 0.f, 1.f));
-            groups_[b.group].bhv[nonzero_prob].emplace_back(*behaviours_[i]);
-        }
-    }
-    // adding behaviours from group 0 (GroupAny) to all other groups
-    if (auto ig = find_in_map(groups_, 0))
-        for (auto &p : prob_map)
-            if (p.first != 0) {
-                p.second.insert(
-                        p.second.end(), prob_map[0].begin(), prob_map[0].end());
-                groups_[p.first].append(*ig);
-            }
-    // initializing probabilities
-    for (auto &p : prob_map) {
-        assert(groups_[p.first].bhv[nonzero_prob].size() == p.second.size());
-        groups_[p.first].nonzero_weights = weighted_rng_t(p.second);
-    }
-    // creating special groups where follow images are to be taken from
-    for (size_t i = 0; i < in.behaviours.size(); i++)
-        if (!in.behaviours[i].follow_target.empty()
-                && !in.behaviours[i].auto_follow_img) {
-            group_t grp;
-            if (auto is = find_in_map(
-                        bhv_map, in.behaviours[i].follow_stop_bhv))
-                grp.bhv[stationary].emplace_back(**is);
-            if (auto im = find_in_map(
-                        bhv_map, in.behaviours[i].follow_mov_bhv))
-                grp.bhv[moving].emplace_back(**im);
-
-            if (!grp.bhv[moving].empty() && !grp.bhv[stationary].empty()) {
-                groups_[-int16_t(i)] = std::move(grp);
-            } else {
-                printf("[%s] WARNING, invalid custom follow behaviours in "
-                       "'%s', reverting to defaults\n",
-                        in.name.c_str(), in.behaviours[i].name.c_str());
-            }
-        }
-
-    printf("Total behaviours: %lu\n", behaviours_.size());
-    for (auto &g : groups_) {
-        printf("[%d] %lu + %lu + %lu + %lu + %lu + %lu\n", g.first,
-            g.second.bhv[nonzero_prob].size(), g.second.bhv[stationary].size(),
-            g.second.bhv[moving].size(), g.second.bhv[mouseover].size(),
-            g.second.bhv[dragged].size(), g.second.bhv[sleeping].size());
-    }
-}
-
 bhv_id_t library_t::init_bhv_id(movement_flags_t move, int16_t grp) {
     bhv_id_internal_t iid;
     iid.index = 1;
@@ -221,80 +79,79 @@ bhv_id_t library_t::init_bhv_id(movement_flags_t move, int16_t grp) {
 }
 
 void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
-    struct hsl_t {float h, s, l;};
-    auto hsl_to_rgb = [](const hsl_t &hsl) {
-        const float coef = (hsl.l > 0.5f) ? (hsl.s + hsl.l - hsl.s * hsl.l)
-                                          : (        hsl.l + hsl.s * hsl.l);
-        uint8_t r = 255 * hsl.l, g = 255 * hsl.l, b = 255 * hsl.l;
-        if (coef > 0.f) {
-            const float mean = 2.f * hsl.l - coef;
-            const float frac = 6.f * hsl.h - (int)(6.f * hsl.h);
+    struct hsl_t {
+        float h, s, l;
+
+        hsl_t(uint32_t bgra) : h(0), s(0), l(0) {
+            const float r = to_fp32(bgra >> 16);
+            const float g = to_fp32(bgra >> 8);
+            const float b = to_fp32(bgra);
+            const float min = std::min(std::min(r, g), b);
+            const float max = std::max(std::max(r, g), b);
+            if ((l = (max + min) * 0.5f) <= 0.f) return;
+            if ((s = max - min) <= 0.f) return;
+            const float inv_diff = 1.f / (max - min);
+            s /= (l > 0.5f) ? (2.f - max - min) : (max + min);
+            if (r == max) {
+                h = (g == min) ? (5.f + (max - b) * inv_diff)
+                               : (1.f - (max - g) * inv_diff);
+            } else if (g == max) {
+                h = (b == min) ? (1.f + (max - r) * inv_diff)
+                               : (3.f - (max - b) * inv_diff);
+            } else { // (b == _max) {
+                h = (r == min) ? (3.f + (max - g) * inv_diff)
+                               : (5.f - (max - r) * inv_diff);
+            }
+            h *= 1.f / 6.f;
+        }
+        uint32_t bgra() const {
+            const float coef = (l > 0.5f) ? (s + l - s * l)
+                                          : (    l + s * l);
+            if (coef <= 0.f)
+                return ((uint8_t)(255 * l) * 0x010101) | 0xFF000000;
+            const float mean = 2.f * l - coef;
+            const float frac = 6.f * h - (int)(6.f * h);
             const float mid1 = mean + frac * (coef - mean);
             const float mid2 = coef - frac * (coef - mean);
-            switch ((int)(6.f * hsl.h) % 6) {
-                case 0: r = 255 * coef; g = 255 * mid1; b = 255 * mean; break;
-                case 1: r = 255 * mid2; g = 255 * coef; b = 255 * mean; break;
-                case 2: r = 255 * mean; g = 255 * coef; b = 255 * mid1; break;
-                case 3: r = 255 * mean; g = 255 * mid2; b = 255 * coef; break;
-                case 4: r = 255 * mid1; g = 255 * mean; b = 255 * coef; break;
-                case 5: r = 255 * coef; g = 255 * mean; b = 255 * mid2; break;
+            uint8_t r, g, b;
+            switch ((int)(6.f * h)) {
+                default: r = 255 * coef; g = 255 * mid1; b = 255 * mean; break;
+                case 1:  r = 255 * mid2; g = 255 * coef; b = 255 * mean; break;
+                case 2:  r = 255 * mean; g = 255 * coef; b = 255 * mid1; break;
+                case 3:  r = 255 * mean; g = 255 * mid2; b = 255 * coef; break;
+                case 4:  r = 255 * mid1; g = 255 * mean; b = 255 * coef; break;
+                case 5:  r = 255 * coef; g = 255 * mean; b = 255 * mid2; break;
             }
+            return b | ((uint32_t)g << 8) | ((uint32_t)r << 16) | 0xFF000000;
         }
-        return b | ((uint32_t)g << 8) | ((uint32_t)r << 16) | 0xFF000000;
-    };
-    auto rgb_to_hsl = [](uint32_t bgra) {
-        const float r = (1.f / 255.f) * (uint8_t)(bgra >> 16);
-        const float g = (1.f / 255.f) * (uint8_t)(bgra >> 8);
-        const float b = (1.f / 255.f) * (uint8_t)(bgra);
-        const float min = std::min(std::min(r, g), b);
-        const float max = std::max(std::max(r, g), b);
-        hsl_t hsl = {};
-        if ((hsl.l = (max + min) * 0.5f) <= 0.f) return hsl;
-        const float inv_diff = 1.f / (max - min);
-        if ((hsl.s = max - min) > 0.f) {
-            hsl.s /= (hsl.l > 0.5f) ? (2.f - max - min) : (max + min);
-        } else {
-            return hsl;
+        static float to_fp32(uint8_t int8) { return (1.f / 255.f) * int8; }
+        static float to_linear_srgb(uint8_t int8) {
+            return std::pow((to_fp32(int8) + 0.055f) * (1.f / 1.055f), 2.4f);
         }
-        if (r == max) {
-            hsl.h = (g == min) ? (5.f + (max - b) * inv_diff)
-                               : (1.f - (max - g) * inv_diff);
-        } else if (g == max) {
-            hsl.h = (b == min) ? (1.f + (max - r) * inv_diff)
-                               : (3.f - (max - b) * inv_diff);
-        } else { // (b == _max) {
-            hsl.h = (r == min) ? (3.f + (max - g) * inv_diff)
-                               : (5.f - (max - r) * inv_diff);
+        static float get_luminance(uint32_t bgra) {
+            return (2126 * 255) * to_linear_srgb(bgra >> 16) // R
+                 + (7152 * 255) * to_linear_srgb(bgra >> 8)  // G
+                 + ( 722 * 255) * to_linear_srgb(bgra);      // B
         }
-        hsl.h *= 1.f / 6.f;
-        return hsl;
+        static float get_contrast(const hsl_t &dk, const hsl_t &bt) {
+            return (500 * 255 + get_luminance(bt.bgra()))
+                 / (500 * 255 + get_luminance(dk.bgra()));
+        }
+        static std::string ttycolor( // TODO: does WIN32 have something alike?
+                uint32_t fg, uint32_t bg, const std::string &text) {
+            std::string retn = "\033[48;2;" + std::to_string(uint8_t(bg >> 16))
+                    + ";" + std::to_string(uint8_t(bg >> 8))
+                    + ";" + std::to_string(uint8_t(bg));
+            if (fg != bg)
+                retn += ";38;2;" + std::to_string(uint8_t(fg >> 16))
+                        + ";" + std::to_string(uint8_t(fg >> 8))
+                        + ";" + std::to_string(uint8_t(fg));
+            return retn + "m" + text + "\033[0m";
+        }
     };
-    auto get_luminance = [](uint32_t bgra) {
-        const float r = (1.f / 255.f) * (uint8_t)(bgra >> 16);
-        const float g = (1.f / 255.f) * (uint8_t)(bgra >> 8);
-        const float b = (1.f / 255.f) * (uint8_t)(bgra);
-        return (2126 * 255) * std::powf((r + 0.055f) * (1.f / 1.055f), 2.4f)
-             + (7152 * 255) * std::powf((g + 0.055f) * (1.f / 1.055f), 2.4f)
-             + ( 722 * 255) * std::powf((b + 0.055f) * (1.f / 1.055f), 2.4f);
-    };
-    auto get_contrast = [&](const hsl_t &dk, const hsl_t &bt) {
-        return (500 * 255 + get_luminance(hsl_to_rgb(bt)))
-             / (500 * 255 + get_luminance(hsl_to_rgb(dk)));
-    };
-    auto color_text = [](uint32_t fg, uint32_t bg, const std::string &text) {
-        std::string retn = "\033[48;2;" + std::to_string(uint8_t(bg >> 16))
-                + ";" + std::to_string(uint8_t(bg >> 8))
-                + ";" + std::to_string(uint8_t(bg));
-        if (fg != bg)
-            retn += ";38;2;" + std::to_string(uint8_t(fg >> 16))
-                    + ";" + std::to_string(uint8_t(fg >> 8))
-                    + ";" + std::to_string(uint8_t(fg));
-        return retn + "m" + text + "\033[0m";
-    };
-
     // reading the inputs, freeing temporary data
-    auto lib = (library_t *)(((intptr_t *)data)[0]);
-    auto engd = (ENGD *)(((intptr_t *)data)[1]);
+    auto lib = ((extract_speech_colors_job_t *)data)->lib;
+    auto engd = ((extract_speech_colors_job_t *)data)->engd;
     data = (typeof(data))realloc((void *)data, 0);
 
     // allocating the color buffer and drawing frame #0 of the preview to it
@@ -329,12 +186,12 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     // saving the color order for debugging
     std::string colors;
     for (size_t i = bgn; i <= end; i++)
-        colors += color_text(top_clrs[i].clr, top_clrs[i].clr, "   ");
+        colors += hsl_t::ttycolor(top_clrs[i].clr, top_clrs[i].clr, "   ");
 
     // sorting the colors by luminance
     // more sorting networks: bertdobbelaere.github.io/sorting_networks.html
     for (size_t i = bgn; i <= end; i++)
-        top_clrs[i].idx = get_luminance(top_clrs[i].clr);
+        top_clrs[i].idx = hsl_t::get_luminance(top_clrs[i].clr);
     #define SORT(v, i, j) if (v[i].idx > v[j].idx) std::swap(v[i], v[j])
     static_assert(end == 2);
     SORT(top_clrs, 0, 1);
@@ -344,9 +201,9 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
 
     // emphasizing the contrast artificially in case it's insufficient
     for (; (bgn < end) && !(top_clrs[bgn].clr & 0xFF000000); bgn++) {}
-    auto dk = rgb_to_hsl(top_clrs[bgn].clr); // dark
-    auto bt = rgb_to_hsl(top_clrs[end].clr); // bright
-    float contrast = -get_contrast(dk, bt);
+    hsl_t dk(top_clrs[bgn].clr); // dark
+    hsl_t bt(top_clrs[end].clr); // bright
+    float contrast = -hsl_t::get_contrast(dk, bt);
     constexpr float readable_contrast = 5.f; // W3C WCAG recommends >4.5
     constexpr auto bin_iter = 16; // number of binary search iterations
     if (-contrast < readable_contrast) {
@@ -360,14 +217,14 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
             const float mid = 0.5f * (min + max) - delta_l;
             dk.l = std::clamp(dk_l - mid * mid_part, min_l, max_l);
             bt.l = std::clamp(bt_l - mid * mid_part + mid, min_l, max_l);
-            contrast = get_contrast(dk, bt);
+            contrast = hsl_t::get_contrast(dk, bt);
             ((contrast < readable_contrast) ? min : max) = mid + delta_l;
         }
     }
 
     // saving the results
-    lib->speech_fg_ = hsl_to_rgb(dk);
-    lib->speech_bg_ = hsl_to_rgb(bt);
+    lib->speech_fg_ = dk.bgra();
+    lib->speech_bg_ = bt.bgra();
 
     // printing the debug output
     std::string text(40, '#');
@@ -375,20 +232,26 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     char temp[32];
     sprintf(temp, "%06X %06X - ", lib->speech_fg_ & 0xFFFFFF,
             lib->speech_bg_ & 0xFFFFFF);
-    text = color_text(lib->speech_fg_, lib->speech_bg_, temp + text + " ");
+    text = hsl_t::ttycolor(lib->speech_fg_, lib->speech_bg_, temp + text + " ");
     sprintf(temp, "%5.2f ", std::fabs(contrast));
-    text = color_text((contrast < 0.f) ? lib->speech_fg_ : lib->speech_bg_,
+    text = hsl_t::ttycolor((contrast < 0.f) ? lib->speech_fg_ : lib->speech_bg_,
                 (contrast < 0.f) ? lib->speech_bg_ : lib->speech_fg_, temp)
          + text + colors;
     printf("%s\n", text.c_str());
 }
 
-void library_t::extract_speech_colors(ENGD *engd, intptr_t parallel) {
-    if (speeches_.empty()) return;
-    auto data = (intptr_t *)realloc(nullptr, sizeof(intptr_t) * 2);
-    data[0] = intptr_t(this);
-    data[1] = intptr_t(engd);
-    rLoadParallel(parallel, intptr_t(data));
+void library_t::extract_speech_colors(
+        ENGD *engd, const std::vector<library_t*> &libs) {
+    auto parallel = rMakeParallel(extract_speech_colors_worker, 1);
+    for (auto &l : libs) {
+        if (l->speeches_.empty()) continue;
+        auto data = (extract_speech_colors_job_t *)realloc(
+                nullptr, sizeof(extract_speech_colors_job_t));
+        data->lib = l;
+        data->engd = engd;
+        rLoadParallel(parallel, intptr_t(data));
+    }
+    rFreeParallel(parallel);
 }
 
 const unit_t &library_t::get_preview(ENGD *engd) {
@@ -468,4 +331,189 @@ interaction_t::interaction_t(const input_t &in, const std::string &lib_name,
         printf("[%s] WARNING, no interaction behaviours in '%s', "
                "interaction dropped\n",
                 lib_name.c_str(), in.name.c_str());
+}
+
+
+
+struct library_t::build_ctx_t {
+    const input_t &in;
+    const bhv_id_map_t &bhv_id_map;
+    const std::string hashable_name;
+
+    // filled by map_effects:
+    std::unordered_map<std::string, eff_vec_t> eff_by_bhv_name;
+    // filled by map_speeches:
+    std::unordered_map<std::string, int> spk_by_name;
+    std::unordered_map<int, std::vector<int>> spk_by_group;
+    // filled by create_behaviours:
+    std::unordered_map<std::string, behaviour_t*> bhv_by_name;
+
+    const bhv_id_desc_t &bhv_id_desc() const {
+        auto bhv_id_desc = find_in_map(bhv_id_map, hashable_name);
+        assert(bhv_id_desc);
+        return *bhv_id_desc;
+    }
+
+    build_ctx_t(const input_t &i, const bhv_id_map_t &m)
+    : in(i)
+    , bhv_id_map(m)
+    , hashable_name(ascii_to_lower(i.name)) {}
+};
+
+void library_t::init_interactions(const build_ctx_t &ctx) {
+    for (auto &i : ctx.in.interactions) {
+        auto it = std::make_unique<interaction_t>(
+                i, ctx.hashable_name, ctx.bhv_id_map);
+        if (!it->is_empty())
+            interactions_.emplace_back(std::move(it));
+    }
+}
+
+void library_t::map_effects(build_ctx_t &ctx) {
+    const auto &bhv_id_desc = ctx.bhv_id_desc();
+    for (auto &e : ctx.in.effects) {
+        if (find_in_map(bhv_id_desc.m, e.bhv)) {
+            ctx.eff_by_bhv_name[e.bhv].emplace_back(e);
+        } else {
+            printf("[%s] WARNING, unused effect '%s'\n",
+                   ctx.in.name.c_str(), e.name.c_str());
+        }
+    }
+}
+
+void library_t::map_speeches(build_ctx_t &ctx) {
+    for (auto &s : ctx.in.speeches) {
+        auto dejavu = find_in_map(ctx.spk_by_name, s.name);
+        if (dejavu)
+            printf("[%s] WARNING, speech name collision: '%s'%s\n",
+                    ctx.in.name.c_str(), s.name.c_str(),
+                    (s.skip) ? ", non-selectable (dropped)" : ", selectable");
+        if (!dejavu || !s.skip) {
+            speeches_.emplace_back(std::make_unique<speech_t>(s));
+            ctx.spk_by_name.emplace(s.name, -int(speeches_.size()));
+            if (!s.skip)
+                ctx.spk_by_group[s.group].emplace_back(int(speeches_.size()));
+        }
+    }
+}
+
+void library_t::create_behaviours(build_ctx_t &ctx) {
+    eff_vec_t e_null;
+    auto i0 = find_in_map(ctx.spk_by_group, 0); // random speeches from group 0
+    const auto &bhv_id_desc = ctx.bhv_id_desc();
+    for (size_t i = 0; i < ctx.in.behaviours.size(); i++) {
+        std::vector<int16_t> b_spk, e_spk;
+        auto &b = ctx.in.behaviours[i];
+        auto ig = find_in_map(ctx.spk_by_group, b.group);
+        if (auto ib = find_in_map(ctx.spk_by_name, b.bgn_speech)) {
+            b_spk.emplace_back(*ib); // found behaviour-specific start speech
+        } else if (ig || i0) {
+            // no start speech found, substituting it with random speeches;
+            // no speech can belong to >1 group, don't look for duplicates
+            if (ig) b_spk.insert(b_spk.end(), ig->begin(), ig->end());
+            if (i0 && (b.group != 0))
+                b_spk.insert(b_spk.end(), i0->begin(), i0->end());
+        }
+        if (auto ie = find_in_map(ctx.spk_by_name, b.end_speech))
+            e_spk.emplace_back(*ie); // found behaviour-specific end speech
+
+        bhv_id_internal_t iid{bhv_id_desc.v[i]};
+        bhv_id_internal_t linked_iid = {};
+        if (auto il = find_in_map(bhv_id_desc.m, b.linked_bhv)) {
+            linked_iid._ = *il;
+        } else if (!b.linked_bhv.empty()) {
+            printf("[%s] WARNING, invalid linked behaviour name in '%s'\n",
+                    ctx.in.name.c_str(), b.name.c_str());
+        }
+        auto is = find_in_map(bhv_id_desc.m, b.follow_stop_bhv);
+        auto im = find_in_map(bhv_id_desc.m, b.follow_mov_bhv);
+        bhv_id_internal_t follow_grp_iid = {};
+        follow_grp_iid.group = (is && im) ? -int16_t(i) : iid.group;
+        if (!is != !im)
+            printf("[%s] WARNING, inconsistent follow behaviours in '%s'\n",
+                   ctx.in.name.c_str(), b.name.c_str());
+
+        auto ie = find_in_map(ctx.eff_by_bhv_name, b.name);
+        behaviours_.emplace_back(std::make_unique<behaviour_t>(b, iid._,
+                    linked_iid._, follow_grp_iid._, str_hash(b.follow_target),
+                    library_path_, b_spk, e_spk, (ie) ? *ie : e_null));
+        groups_[iid.group].bhv[iid.type].emplace_back(*behaviours_.back());
+        ctx.bhv_by_name.emplace(b.name, behaviours_.back().get());
+        assert(iid.index == groups_[iid.group].bhv[iid.type].size());
+    }
+}
+
+void library_t::init_probabilities(const build_ctx_t &ctx) {
+    // extracting raw probabilities
+    std::unordered_map<int, std::vector<uint32_t>> prob_map;
+    for (size_t i = 0; i < ctx.in.behaviours.size(); i++) {
+        auto &b = ctx.in.behaviours[i];
+        if ((!b.skip) && (b.chance > 0.f)) {
+            prob_map[b.group].emplace_back(
+                    10000.f * std::clamp(b.chance, 0.f, 1.f));
+            groups_[b.group].bhv[nonzero_prob].emplace_back(*behaviours_[i]);
+        }
+    }
+    // adding behaviours from group 0 (GroupAny) to all other groups
+    auto ip = find_in_map(prob_map, 0);
+    if (auto ig = find_in_map(groups_, 0))
+        for (auto &p : prob_map)
+            if (p.first != 0) {
+                if (ip) p.second.insert(p.second.end(), ip->begin(), ip->end());
+                groups_[p.first].append(*ig);
+            }
+    // initializing probabilities for the alias method
+    for (auto &p : prob_map) {
+        assert(groups_[p.first].bhv[nonzero_prob].size() == p.second.size());
+        groups_[p.first].nonzero_weights = weighted_rng_t(p.second);
+    }
+}
+
+void library_t::init_follow_groups(const build_ctx_t &ctx) {
+    for (size_t i = 0; i < ctx.in.behaviours.size(); i++)
+        if (!ctx.in.behaviours[i].follow_target.empty()
+                && !ctx.in.behaviours[i].auto_follow_img) {
+            group_t grp;
+            if (auto is = find_in_map(
+                        ctx.bhv_by_name, ctx.in.behaviours[i].follow_stop_bhv))
+                grp.bhv[stationary].emplace_back(**is);
+            if (auto im = find_in_map(
+                        ctx.bhv_by_name, ctx.in.behaviours[i].follow_mov_bhv))
+                grp.bhv[moving].emplace_back(**im);
+
+            if (!grp.bhv[moving].empty() && !grp.bhv[stationary].empty()) {
+                groups_[-int16_t(i)] = std::move(grp);
+            } else {
+                printf("[%s] WARNING, invalid custom follow behaviours in "
+                       "'%s', reverting to defaults\n",
+                        ctx.in.name.c_str(), ctx.in.behaviours[i].name.c_str());
+            }
+        }
+}
+
+void library_t::dump_stats() const {
+    printf("Total behaviours: %lu\n", behaviours_.size());
+    for (auto &g : groups_) {
+        printf("[%d] %lu + %lu + %lu + %lu + %lu + %lu\n", g.first,
+            g.second.bhv[nonzero_prob].size(), g.second.bhv[stationary].size(),
+            g.second.bhv[moving].size(), g.second.bhv[mouseover].size(),
+            g.second.bhv[dragged].size(), g.second.bhv[sleeping].size());
+    }
+}
+
+library_t::library_t(std::string path, const input_t &in,
+        const bhv_id_map_t &bhv_id_map)
+: library_path_(std::move(path))
+, readable_name_(in.name)
+, preview_id_(0)
+, speech_fg_(0xFF000000)
+, speech_bg_(0xFFFFFFFF) {
+    build_ctx_t ctx(in, bhv_id_map);
+    init_interactions(ctx);
+    map_effects(ctx);
+    map_speeches(ctx);
+    create_behaviours(ctx);
+    init_probabilities(ctx);
+    init_follow_groups(ctx);
+    dump_stats();
 }

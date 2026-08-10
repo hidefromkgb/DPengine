@@ -10,7 +10,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include <engine.h>
+
+#include "engine.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -208,11 +208,13 @@ void engine_t::main_loop() {
     // computing preview sizes, since image sizes are now known
     mctl_.finalize_previews();
 
-    // computing the colors for colored speech, in parallel
-    auto parallel = rMakeParallel(library_t::extract_speech_colors_worker, 1);
-    for (auto &l : libs_)
-        l.second->extract_speech_colors(engd_, parallel);
-    rFreeParallel(parallel);
+    do { // computing the colors for colored speech, in parallel
+        std::vector<library_t*> distilled_libs;
+        distilled_libs.reserve(libs_.size());
+        for (auto &l : libs_)
+            distilled_libs.emplace_back(l.second.get());
+        library_t::extract_speech_colors(engd_, distilled_libs);
+    } while (false);
 
     // starting the GUI loop
     mctl_.main_loop(FRM_WAIT);
