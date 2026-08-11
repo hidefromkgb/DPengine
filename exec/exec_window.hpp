@@ -130,8 +130,9 @@ class main_window_t : public conf_window_t {
 private:
     enum elements_t { MCT_CAPT = 0,
         MCT_FLTR, MCT_EXAC, MCT_OGRP, MCT_SGRP, MCT_SPEC, MCT_BADD, MCT_SRND,
-        MCT_RGPU, MCT_BDUP, MCT_SELE, MCT_OPTS, MCT_GOGO, MCT_CHAR, };
-
+        MCT_RGPU, MCT_BDUP, MCT_SELE, MCT_OPTS, MCT_GOGO, MCT_CHAR,
+        MCT__MAX = MCT_CHAR
+    };
     class preview_t : public no_copy_t {
     private:
         // !eligible && !visible: doesn't match selection, not visible
@@ -335,7 +336,9 @@ private:
         OCT_NRUN, OCT_TRUN, OCT_NSCA, OCT_TSCA, OCT_NDIL, OCT_TDIL, OCT_NSAY,
         OCT_TSAY, OCT_NCDR, OCT_TCDR, OCT_LSEP, OCT_LHDR, OCT_LCHO, OCT_LREL,
         OCT_LRES, OCT_LGUI, OCT_BSEP, OCT_BHDR, OCT_BCHO, OCT_BREL, OCT_BRES,
-        OCT_BDIR, OCT_FSEP, OCT_FREL, OCT_FRES, };
+        OCT_BDIR, OCT_FSEP, OCT_FREL, OCT_FRES,
+        OCT__MAX = OCT_FRES
+    };
     std::vector<CTRL> get_template(
             intptr_t prev, intptr_t here, const conf_t &conf);
 
