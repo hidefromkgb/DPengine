@@ -269,7 +269,7 @@ void engine_t::build_library_structure(const std::string &base) {
     for (size_t ctg_idx = 0; ctg_idx < ctg.size(); ctg_idx++) {
         auto &c = ctg[ctg_idx];
         auto &il = *find_in_map(libs_, c.first);
-        mctl_.init_preview(engd_, il->get_preview(engd_), std::move(c.second),
+        mctl_.init_preview(engd_, il->load_preview(engd_), std::move(c.second),
                 il->name(), c.first);
         mctl_.set_progress_load(ctg_idx + 1, ctg.size());
     }

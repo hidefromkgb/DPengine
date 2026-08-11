@@ -99,10 +99,6 @@ private:
                         bhv[i].end(), rhs.bhv[i].begin(), rhs.bhv[i].end());
         }
     };
-    struct extract_speech_colors_job_t {
-        library_t *lib;
-        ENGD *engd;
-    };
 
     std::string library_path_;
     std::string readable_name_;
@@ -121,6 +117,7 @@ private:
             bhv_id_t prev, bhv_id_t curr) const;
 
     static void extract_speech_colors_worker(intptr_t data, uint64_t unused);
+    unit_t &get_preview_internal() { return *behaviours_[preview_id_]; }
 
     // struct and methods that compartmentalize the constructor:
     struct build_ctx_t;
@@ -140,7 +137,14 @@ public:
     library_t(std::string path, const input_t &in,
             const bhv_id_map_t &bhv_id_map);
 
-    const unit_t &get_preview(ENGD *engd = nullptr);
+    // both *_preview() methods intentionally non-const:
+    // their unit_t's should only be accessible during init
+    const unit_t &get_preview() { return get_preview_internal(); }
+    const unit_t &load_preview(ENGD *engd) {
+        auto &preview = get_preview_internal();
+        preview.schedule_upload(false, engd);
+        return preview;
+    }
     static void extract_speech_colors(
             ENGD *engd, const std::vector<library_t*> &libs);
 

@@ -75,6 +75,86 @@ bhv_id_t library_t::init_bhv_id(movement_flags_t move, int16_t grp) {
     return iid._;
 }
 
+const behaviour_t *library_t::get(bhv_id_t id) const {
+    bhv_id_internal_t iid = {id};
+    if (!iid.index) return nullptr;
+    auto ig = find_in_map(groups_, iid.group);
+    return (ig && (iid.index <= ig->bhv[iid.type].size()))
+            ? &ig->bhv[iid.type][iid.index - 1].get()
+            : nullptr;
+}
+
+const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
+        bhv_id_t prev, bhv_id_t curr) const {
+    auto b_prev = get(prev), b_curr = get(curr);
+    if (!b_prev || !b_curr) return nullptr;
+    auto index = behaviour_t::select_speech(seed, chance, *b_prev, *b_curr);
+    assert(std::abs(index) <= speeches_.size());
+    return (index) ? speeches_[std::abs(index) - 1].get() : nullptr;
+}
+
+interaction_t::input_t::input_t(const std::string_view &str) {
+    // TODO: is 'any' really equivalent to 'one'? check if there are
+    //       relevant interactions where 'any' means '>1'
+    static const std::unordered_map<std::string, bool> activations = {
+        {"true", true}, {"false",  false}, {"any", false},
+        {"all",  true}, {"random", false}, {"one", false},
+    };
+    token_t line({}, str);
+    name = process_string(line);
+    chance = process_float(line, chance);
+    proximity = process_float(line, proximity);
+    auto tgt_s = process_array(line);
+    for (auto &t : tgt_s) targets.emplace_back(ascii_to_lower(t));
+    target_activation_all
+            = process_map(line, activations, target_activation_all);
+    auto bhv_s = process_array(line);
+    for (auto &b : bhv_s) bhv.emplace_back(ascii_to_lower(b));
+    reactivation_delay = process_float(line, reactivation_delay);
+}
+
+interaction_t::interaction_t(const input_t &in, const std::string &lib_name,
+        const bhv_id_map_t &bhv_id_map)
+: all_(in.target_activation_all)
+, proximity_(in.proximity)
+, chance_(double(uint32_t(~0)) * std::clamp(in.chance, 0.f, 1.f))
+, duration_{{std::numeric_limits<decltype(duration_.x)>::max(),
+            (decltype(duration_.y))(1000.f * in.reactivation_delay)}} {
+#ifdef DEV_MODE
+    debug_ = in;
+#endif // DEV_MODE
+    auto append_bhv = [&](const std::string &lib_id, bool target) {
+        auto &retn = (target) ? targets_[str_hash(lib_id)] : initiator_;
+        if (auto bhv_id_desc = find_in_map(bhv_id_map, lib_id))
+            for (auto &b : in.bhv)
+                if (auto bhv_id = find_in_map(bhv_id_desc->m, b))
+                    retn.emplace_back(*bhv_id);
+        if (retn.empty()) {
+            printf("[%s] WARNING, no interaction behaviours with '%s' in "
+                   "'%s', target dropped\n",
+                    lib_name.c_str(), lib_id.c_str(), in.name.c_str());
+            return false;
+        }
+        return true;
+    };
+    if (append_bhv(lib_name, false)) {
+        for (auto &t : in.targets) append_bhv(t, true);
+        for (auto it = targets_.begin(); it != targets_.end(); )
+            it = (it->second.empty()) ? targets_.erase(it) : std::next(it);
+    }
+    if (is_empty())
+        printf("[%s] WARNING, no interaction behaviours in '%s', "
+               "interaction dropped\n",
+                lib_name.c_str(), in.name.c_str());
+}
+
+
+
+struct extract_speech_colors_worker_data_t {
+    library_t *lib;
+    ENGD *engd;
+};
+
 void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     struct hsl_t {
         float h, s, l;
@@ -147,8 +227,8 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
         }
     };
     // reading the inputs, freeing temporary data
-    auto lib = ((extract_speech_colors_job_t *)data)->lib;
-    auto engd = ((extract_speech_colors_job_t *)data)->engd;
+    auto lib = ((extract_speech_colors_worker_data_t *)data)->lib;
+    auto engd = ((extract_speech_colors_worker_data_t *)data)->engd;
     data = (typeof(data))realloc((void *)data, 0);
 
     // allocating the color buffer and drawing frame #0 of the preview to it
@@ -225,7 +305,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
 
     // printing the debug output
     std::string text(40, '#');
-    text.replace(0, lib->readable_name_.size() + 1, lib->readable_name_ + " ");
+    text.replace(0, lib->name().size() + 1, lib->name() + " ");
     char temp[32];
     sprintf(temp, "%06X %06X - ", lib->speech_fg_ & 0xFFFFFF,
             lib->speech_bg_ & 0xFFFFFF);
@@ -242,95 +322,14 @@ void library_t::extract_speech_colors(
     auto parallel = rMakeParallel(extract_speech_colors_worker, 1);
     for (auto &l : libs) {
         if (l->speeches_.empty()) continue;
-        auto data = (extract_speech_colors_job_t *)realloc(
-                nullptr, sizeof(extract_speech_colors_job_t));
+        auto data = (extract_speech_colors_worker_data_t *)realloc(
+                nullptr, sizeof(extract_speech_colors_worker_data_t));
         data->lib = l;
         data->engd = engd;
         rLoadParallel(parallel, intptr_t(data));
     }
     rFreeParallel(parallel);
 }
-
-const unit_t &library_t::get_preview(ENGD *engd) {
-    auto &preview = *behaviours_[preview_id_];
-    if (engd) preview.schedule_upload(false, engd);
-    return preview;
-}
-
-const behaviour_t *library_t::get(bhv_id_t id) const {
-    bhv_id_internal_t iid = {id};
-    if (!iid.index) return nullptr;
-    auto ig = find_in_map(groups_, iid.group);
-    return (ig && (iid.index <= ig->bhv[iid.type].size()))
-            ? &ig->bhv[iid.type][iid.index - 1].get()
-            : nullptr;
-}
-
-const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
-        bhv_id_t prev, bhv_id_t curr) const {
-    auto b_prev = get(prev), b_curr = get(curr);
-    if (!b_prev || !b_curr) return nullptr;
-    auto index = behaviour_t::select_speech(seed, chance, *b_prev, *b_curr);
-    assert(std::abs(index) <= speeches_.size());
-    return (index) ? speeches_[std::abs(index) - 1].get() : nullptr;
-}
-
-interaction_t::input_t::input_t(const std::string_view &str) {
-    // TODO: is 'any' really equivalent to 'one'? check if there are
-    //       relevant interactions where 'any' means '>1'
-    static const std::unordered_map<std::string, bool> activations = {
-        {"true", true}, {"false",  false}, {"any", false},
-        {"all",  true}, {"random", false}, {"one", false},
-    };
-    token_t line({}, str);
-    name = process_string(line);
-    chance = process_float(line, chance);
-    proximity = process_float(line, proximity);
-    auto tgt_s = process_array(line);
-    for (auto &t : tgt_s) targets.emplace_back(ascii_to_lower(t));
-    target_activation_all
-            = process_map(line, activations, target_activation_all);
-    auto bhv_s = process_array(line);
-    for (auto &b : bhv_s) bhv.emplace_back(ascii_to_lower(b));
-    reactivation_delay = process_float(line, reactivation_delay);
-}
-
-interaction_t::interaction_t(const input_t &in, const std::string &lib_name,
-        const bhv_id_map_t &bhv_id_map)
-: all_(in.target_activation_all)
-, proximity_(in.proximity)
-, chance_(double(uint32_t(~0)) * std::clamp(in.chance, 0.f, 1.f))
-, duration_{{std::numeric_limits<decltype(duration_.x)>::max(),
-            (decltype(duration_.y))(1000.f * in.reactivation_delay)}} {
-#ifdef DEV_MODE
-    debug_ = in;
-#endif // DEV_MODE
-    auto append_bhv = [&](const std::string &lib_id, bool target) {
-        auto &retn = (target) ? targets_[str_hash(lib_id)] : initiator_;
-        if (auto bhv_id_desc = find_in_map(bhv_id_map, lib_id))
-            for (auto &b : in.bhv)
-                if (auto bhv_id = find_in_map(bhv_id_desc->m, b))
-                    retn.emplace_back(*bhv_id);
-        if (retn.empty()) {
-            printf("[%s] WARNING, no interaction behaviours with '%s' in "
-                   "'%s', target dropped\n",
-                    lib_name.c_str(), lib_id.c_str(), in.name.c_str());
-            return false;
-        }
-        return true;
-    };
-    if (append_bhv(lib_name, false)) {
-        for (auto &t : in.targets) append_bhv(t, true);
-        for (auto it = targets_.begin(); it != targets_.end(); )
-            it = (it->second.empty()) ? targets_.erase(it) : std::next(it);
-    }
-    if (is_empty())
-        printf("[%s] WARNING, no interaction behaviours in '%s', "
-               "interaction dropped\n",
-                lib_name.c_str(), in.name.c_str());
-}
-
-
 
 struct library_t::build_ctx_t {
     const input_t &in;
@@ -442,25 +441,25 @@ void library_t::create_behaviours(build_ctx_t &ctx) {
 
 void library_t::init_probabilities(const build_ctx_t &ctx) {
     // extracting raw probabilities
-    std::unordered_map<int, std::vector<uint32_t>> prob_map;
+    std::unordered_map<int, std::vector<uint32_t>> prob_by_group;
     for (size_t i = 0; i < ctx.in.behaviours.size(); i++) {
         auto &b = ctx.in.behaviours[i];
         if ((!b.skip) && (b.chance > 0.f)) {
-            prob_map[b.group].emplace_back(
+            prob_by_group[b.group].emplace_back(
                     10000.f * std::clamp(b.chance, 0.f, 1.f));
             groups_[b.group].bhv[nonzero_prob].emplace_back(*behaviours_[i]);
         }
     }
     // adding behaviours from group 0 (GroupAny) to all other groups
-    auto ip = find_in_map(prob_map, 0);
+    auto ip = find_in_map(prob_by_group, 0);
     if (auto ig = find_in_map(groups_, 0))
-        for (auto &p : prob_map)
+        for (auto &p : prob_by_group)
             if (p.first != 0) {
                 if (ip) p.second.insert(p.second.end(), ip->begin(), ip->end());
                 groups_[p.first].append(*ig);
             }
     // initializing probabilities for the alias method
-    for (auto &p : prob_map) {
+    for (auto &p : prob_by_group) {
         assert(groups_[p.first].bhv[nonzero_prob].size() == p.second.size());
         groups_[p.first].nonzero_weights = weighted_rng_t(p.second);
     }
