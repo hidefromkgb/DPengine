@@ -394,6 +394,7 @@ intptr_t rMakeParallel(UPRE func, long size) {
 
 void rLoadParallel(intptr_t user, intptr_t data) {
     DTHR *dthr = (DTHR*)user;
+    HANDLE thrd;
     DWORD retn;
     intptr_t *pass;
 
@@ -401,7 +402,19 @@ void rLoadParallel(intptr_t user, intptr_t data) {
     pass[0] = user;
     pass[1] = data;
     WaitForSingleObject(dthr->isem, INFINITE);
-    CreateThread(0, 0, ParallelFunc, pass, 0, &retn);
+    /// unlike a joinable pthread, a thread here does free its stack the very
+    /// moment it is done, but its kernel object lives on until the thread is
+    /// gone AND every handle to it is closed; closing the handle leaves the
+    /// running thread alone, as it holds a reference of its own, and merely
+    /// drops ours, so that the object can go the moment the thread returns
+    if ((thrd = CreateThread(0, 0, ParallelFunc, pass, 0, &retn)) != 0) {
+        CloseHandle(thrd);
+    } else {
+        /// no thread means nobody to free the data and give the slot back,
+        /// and a slot that never returns hangs rFreeParallel() forever
+        free(pass);
+        ReleaseSemaphore(dthr->isem, 1, 0);
+    }
 }
 
 
