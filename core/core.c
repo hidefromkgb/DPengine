@@ -964,13 +964,22 @@ void cEngineCallback(ENGD *engd, uint32_t ecba, intptr_t data) {
             retn += ((ydim - ycoe * anim->ydim) >> 1) * xdim
                  +  ((xdim - xcoe * anim->xdim) >> 1);
             bptr = anim->bptr + anim->xdim * anim->ydim * ainf->fcnt;
-            for (y = anim->ydim * ycoe - 1; y >= 0; y--)
-                for (x = anim->xdim * xcoe - 1; x >= 0; x--) {
-                    /// division, OMFG! [TODO:] get rid of this
-                    pixl = anim->bpal[bptr[anim->xdim * (y / ycoe)
-                                                      + (x / xcoe)]];
-                    if (pixl.chnl[3] != 0x00)
-                        retn[xdim * y + x] = pixl;
+            /// walking the source instead of the target: every source pixel
+            /// covers the very same XCOE by YCOE block of the target, so the
+            /// palette lookup and the alpha test are done once per block and
+            /// the two divisions that used to map the target back onto the
+            /// source are not needed at all
+            for (y = anim->ydim - 1; y >= 0; y--)
+                for (x = anim->xdim - 1; x >= 0; x--) {
+                    long i, j;
+                    pixl = anim->bpal[bptr[anim->xdim * y + x]];
+                    if (pixl.chnl[3] == 0x00)
+                        continue;
+                    for (i = ycoe - 1; i >= 0; i--) {
+                        BGRA *line = retn + xdim * (y * ycoe + i) + x * xcoe;
+                        for (j = xcoe - 1; j >= 0; j--)
+                            line[j] = pixl;
+                    }
                 }
             break;
         }
