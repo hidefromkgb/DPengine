@@ -434,7 +434,19 @@ void rLoadParallel(intptr_t user, intptr_t data) {
     pass[0] = user;
     pass[1] = data;
     sem_wait(dthr->isem);
-    pthread_create(&pthr, 0, ParallelFunc, pass);
+    /// nobody ever joins these, and a joinable thread holds on to both its
+    /// descriptor and its stack until joined, so they have to be detached
+    /// for the system to reclaim the two as soon as the thread is done;
+    /// pthread_create() yields 0 on success, so this detaches every thread
+    /// that got created, and skips only the ones that never came to be
+    if (pthread_create(&pthr, 0, ParallelFunc, pass) == 0) {
+        pthread_detach(pthr);
+    } else {
+        /// no thread means nobody to free the data and give the slot back,
+        /// and a slot that never returns hangs rFreeParallel() forever
+        free(pass);
+        sem_post(dthr->isem);
+    }
 }
 
 
