@@ -203,7 +203,22 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
         }
         static float to_fp32(uint8_t int8) { return (1.f / 255.f) * int8; }
         static float to_linear_srgb(uint8_t int8) {
-            return std::pow((to_fp32(int8) + 0.055f) * (1.f / 1.055f), 2.4f);
+            // the argument is an 8-bit channel, so the whole function is 256
+            // values that can just as well be tabulated once; pow() is a lot
+            // more expensive than a lookup. N.B.: a local static is filled in
+            // a thread-safe manner since C++11, but the C port will have to
+            // build the table before the workers are spawned instead
+            static const struct lut_t {
+                float lin[256];
+
+                lut_t() {
+                    for (uint32_t i = 0; i < 256; i++)
+                        lin[i] = std::pow((to_fp32(i) + 0.055f)
+                                        * (1.f / 1.055f), 2.4f);
+                }
+            } lut;
+
+            return lut.lin[int8];
         }
         static float get_luminance(uint32_t bgra) {
             return (2126 * 255) * to_linear_srgb(bgra >> 16) // R
@@ -242,23 +257,71 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     for (size_t i = dims.x * dims.y; i; ainf.time[--i] = 0) {}
     cEngineCallback(engd, ECB_DRAW, (intptr_t)&ainf);
 
-    // building the color histogram
-    std::unordered_map<uint32_t, uint32_t> histogram;
-    for (size_t i = dims.x * dims.y; i; histogram[ainf.time[--i]]++) {}
+    // building the color histogram. The preview is drawn from a palette, so
+    // the number of distinct colors is tiny next to the number of pixels and
+    // a flat open-addressed table beats a node-based map by a wide margin.
+    // CLR == 0 marks a free cell and never clashes with a stored key, as the
+    // fully transparent pixels are skipped here: they could never win the
+    // selection below anyway, it used to test the very same alpha
+    struct cell_t {uint32_t clr, cnt;};
+    uint32_t bits = 9, mask = (1u << bits) - 1, used = 0;
+    cell_t *cells = (cell_t *)realloc(nullptr, sizeof(*cells) * (mask + 1));
+    for (uint32_t i = mask + 1; i; cells[--i] = {}) {}
+    for (size_t i = dims.x * dims.y; i;) {
+        const uint32_t clr = ainf.time[--i];
+        uint32_t j;
+
+        if (!(clr & 0xFF000000))
+            continue;
+        for (j = (clr * 2654435761u) >> (32 - bits);
+                cells[j].clr && (cells[j].clr != clr); j = (j + 1) & mask) {}
+        if (cells[j].clr) {
+            cells[j].cnt++;
+            continue;
+        }
+        cells[j] = {clr, 1};
+        if (2 * ++used <= mask + 1)
+            continue;
+        // the table went half full, so double it and reinsert everything to
+        // keep the probe chains short. A palette of 256 colors never gets
+        // anywhere near here, this is the way out should the preview ever
+        // start coming from a source with a truer color depth
+        do {
+            cell_t *prev = cells;
+            uint32_t size = mask + 1;
+
+            mask = (1u << ++bits) - 1;
+            cells = (cell_t *)realloc(nullptr, sizeof(*cells) * (mask + 1));
+            for (uint32_t k = mask + 1; k; cells[--k] = {}) {}
+            for (uint32_t k = size; k;) {
+                const cell_t cell = prev[--k];
+                uint32_t m;
+
+                if (!cell.clr)
+                    continue;
+                for (m = (cell.clr * 2654435761u) >> (32 - bits);
+                        cells[m].clr; m = (m + 1) & mask) {}
+                cells[m] = cell;
+            }
+            prev = (cell_t *)realloc(prev, 0);
+        } while (false);
+    }
     ainf.time = (typeof(ainf.time))realloc(ainf.time, 0);
 
     // extracting the most prominent colors from the histogram; end = size - 1
     constexpr size_t end = 2;
     size_t bgn = 0;
     struct {uint32_t clr, idx;} top_clrs[end + 1] = {};
-    for (auto &h : histogram)
-        if ((h.first & 0xFF000000) && (h.second >= top_clrs[end].idx)) {
-            size_t i = end;
-            for (; i && (h.second >= top_clrs[i - 1].idx); i--) {}
-            for (size_t j = end; j > i; j--)
-                top_clrs[j] = top_clrs[j - 1];
-            top_clrs[i] = {h.first, h.second};
+    for (uint32_t i = mask + 1; i;)
+        if (const cell_t cell = cells[--i];
+                cell.clr && (cell.cnt >= top_clrs[end].idx)) {
+            size_t j = end;
+            for (; j && (cell.cnt >= top_clrs[j - 1].idx); j--) {}
+            for (size_t k = end; k > j; k--)
+                top_clrs[k] = top_clrs[k - 1];
+            top_clrs[j] = {cell.clr, cell.cnt};
         }
+    cells = (cell_t *)realloc(cells, 0);
 
     // saving the color order for debugging
     std::string colors;
