@@ -88,10 +88,20 @@ char *lLoadFile(char *name, long *size) {
 
 
 
-void lMakeThread(void *thrd) {
+long lMakeThread(void *thrd) {
+    HANDLE hthr;
     DWORD retn;
 
-    CreateThread(0, 0, (LPTHREAD_START_ROUTINE)cThrdFunc, thrd, 0, &retn);
+    /// a worker frees its stack the moment it is done, but its kernel object
+    /// lives on until every handle to it is closed, and StopThreads() lets it
+    /// exit on each switch between the loading and the drawing modes; closing
+    /// the handle leaves the running worker alone, as it holds a reference of
+    /// its own, and merely drops ours, so the object goes once the worker does
+    if (!(hthr = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)cThrdFunc,
+                              thrd, 0, &retn)))
+        return 0;
+    CloseHandle(hthr);
+    return !0;
 }
 
 
@@ -101,11 +111,11 @@ long lPickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask) {
     long iter;
 
     for (iter = 0; iter < (long)dobj[-1]; iter++)
-        if (mask & (1 << iter))
+        if (mask & SEM_UUID(iter))
             ResetEvent(dobj[iter]);
 
     for (iter = 0; iter < (long)pobj[-1]; iter++)
-        if (mask & (1 << iter))
+        if (mask & SEM_UUID(iter))
             SetEvent(pobj[iter]);
 
     return TRUE;
@@ -121,10 +131,10 @@ SEM_TYPE lWaitSemaphore(SEMD *wait, SEM_TYPE mask) {
     if (mask) {
         indx = 0;
         iter = objs;
-        retn = mask &= (1 << (long)list[-1]) - 1;
+        retn = mask &= SEM_BITS((long)list[-1]);
         while (retn) {
             *iter++ = list[temp = cFindBit(retn)];
-            retn &= ~(1 << temp);
+            retn &= ~SEM_UUID(temp);
             indx++;
         }
         WaitForMultipleObjects(indx, objs, TRUE, INFINITE);
@@ -132,7 +142,7 @@ SEM_TYPE lWaitSemaphore(SEMD *wait, SEM_TYPE mask) {
     }
     else {
         retn = WaitForMultipleObjects((long)list[-1], list, FALSE, INFINITE);
-        retn = (retn < MAXIMUM_WAIT_OBJECTS)? 1 << retn : 0;
+        retn = (retn < MAXIMUM_WAIT_OBJECTS)? SEM_UUID(retn) : 0;
     }
     return retn;
 }

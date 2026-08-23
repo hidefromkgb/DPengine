@@ -77,6 +77,10 @@ struct ENGD {
              fram,    /// FPS counter
              msec,    /// frame delay
              ncpu,    /// number of CPU cores the engine is allowed to occupy
+             live,    /// number of workers the system did give out, <= NCPU;
+                      /// they always are the first LIVE ones, so the mask of
+                      /// the bits that have a worker behind them is just
+                      /// SEM_BITS(LIVE), and 0 means there is no pool at all
              uniq;    /// number of unique animations
     uint64_t tfrm,    /// timestamp for the previous frame
              tfps;    /// timestamp for the previous FPS count
@@ -717,16 +721,15 @@ void PTHR(THRD *data) {
 
 
 void StopThreads(ENGD *engd) {
-    ulong iter, loop;
+    ulong iter;
 
-    for (loop = iter = 0; iter < engd->ncpu; iter++)
-        loop |= engd->thrd[iter].loop;
-    if (loop) {
-        lWaitSemaphore(engd->osem, SEM_FULL);
+    if (engd->live) {
+        lWaitSemaphore(engd->osem, SEM_BITS(engd->live));
         for (iter = 0; iter < engd->ncpu; iter++)
             engd->thrd[iter].loop = 0;
-        lPickSemaphore(engd->osem, engd->isem, SEM_FULL);
-        lWaitSemaphore(engd->osem, SEM_FULL);
+        lPickSemaphore(engd->osem, engd->isem, SEM_BITS(engd->live));
+        lWaitSemaphore(engd->osem, SEM_BITS(engd->live));
+        engd->live = 0;
     }
 }
 
@@ -735,24 +738,53 @@ void StopThreads(ENGD *engd) {
 long SwitchThreads(ENGD *engd, long draw) {
     long iter, temp;
 
-    if (draw) {
-        for (iter = 0; iter < engd->ncpu; iter++)
-            if (engd->thrd[iter].loop)
-                return -1;
+    if (draw && engd->live)
+        return -1;
 
-        temp = (engd->dims.ydim / engd->ncpu) + 1;
-        for (iter = 0; iter < engd->ncpu; iter++) {
-            engd->thrd[iter] = (THRD){1, 1 << iter, engd, 0, PTHR,
-                                    {{temp * iter, temp * (iter + 1)}}};
-            lMakeThread(&engd->thrd[iter]);
+    /// no worker is running at this point, so every bit belongs in OSEM; this
+    /// undoes the parking done at the end of a previous, shorter round, which
+    /// would otherwise leave a bit standing in ISEM and let the worker that
+    /// takes it up this time run once before it is ever given anything to do
+    lPickSemaphore(engd->isem, engd->osem, SEM_BITS(engd->ncpu));
+
+    /// the system may refuse to give out one more thread, and the pool has to
+    /// stay free of holes: the drawing slices below divide the area among the
+    /// workers that do exist, and the win32 semaphore is a plain array of as
+    /// many events as there are workers, indexed by the very same bit number.
+    /// So the first refusal ends the spawning, and LIVE, always <= NCPU, is
+    /// what the rest of the engine goes by. A short pool merely gets less done
+    /// at a time; a bit with no worker behind it, on the other hand, would be
+    /// handed work that nobody ever picks up, and would never return to OSEM
+    for (iter = 0; iter < engd->ncpu; iter++)
+        engd->thrd[iter] = (THRD){0};
+    for (iter = 0; iter < engd->ncpu; iter++) {
+        engd->thrd[iter] = (THRD){1, SEM_UUID(iter), engd, 0, draw? PTHR : LTHR};
+        if (!lMakeThread(&engd->thrd[iter])) {
+            engd->thrd[iter] = (THRD){0};
+            break;
         }
-        engd->thrd[engd->ncpu - 1].ymax = engd->dims.ydim;
     }
-    else
-        for (iter = 0; iter < engd->ncpu; iter++) {
-            engd->thrd[iter] = (THRD){1, 1 << iter, engd, 0, LTHR};
-            lMakeThread(&engd->thrd[iter]);
+    if (!(engd->live = iter))
+        return -1;
+
+    /// the bits left without a worker are parked in ISEM, so that OSEM only
+    /// ever shows the ones that can actually take work. ISEM is the side the
+    /// workers wait on, and each of them only ever tests its own bit, so the
+    /// strays sitting there are inert
+    lPickSemaphore(engd->osem, engd->isem,
+                   SEM_BITS(engd->ncpu) & ~SEM_BITS(engd->live));
+
+    /// the slices are only known once the count is, hence the separate pass;
+    /// it is safe to fill them in behind a worker's back, as it is still stuck
+    /// on ISEM, and the mutex there orders these writes before the first read
+    if (draw) {
+        temp = (engd->dims.ydim / engd->live) + 1;
+        for (iter = 0; iter < engd->live; iter++) {
+            engd->thrd[iter].ymin = temp * iter;
+            engd->thrd[iter].ymax = temp * (iter + 1);
         }
+        engd->thrd[engd->live - 1].ymax = engd->dims.ydim;
+    }
     return 0;
 }
 
@@ -802,9 +834,15 @@ void cOutputFrame(ENGD *engd, long frbo) {
             BindRBO(engd->surf, 0);
     }
     else {
+        /// SwitchThreads() reuses a pool that is already up, in which case it
+        /// reports -1, so LIVE, and not the return value, is what tells apart
+        /// having workers from having none; with none the frame is left as it
+        /// is, which beats waiting on a semaphore nobody will ever post to
         SwitchThreads(engd, 1);
-        lPickSemaphore(engd->osem, engd->isem, SEM_FULL);
-        lWaitSemaphore(engd->osem, SEM_FULL);
+        if (engd->live) {
+            lPickSemaphore(engd->osem, engd->isem, SEM_BITS(engd->live));
+            lWaitSemaphore(engd->osem, SEM_BITS(engd->live));
+        }
     }
     engd->fram++;
 }
@@ -831,7 +869,10 @@ void cEngineLoadAnimAsync(ENGD *engd, AINF *ainf, uint8_t *name,
     SEM_TYPE curr;
     uint64_t hash;
 
-    if (!engd || !ainf || !name) {
+    /// with no pool at all there is nobody to hand the loading over to, and
+    /// the wait on OSEM below would never end, so the request is turned down
+    /// the same way a malformed one is
+    if (!engd || !ainf || !name || !engd->live) {
         if (udis)
             udis(data);
         return;
@@ -858,7 +899,7 @@ void cEngineLoadAnimAsync(ENGD *engd, AINF *ainf, uint8_t *name,
         engd->thrd[curr].udis = udis;
         engd->thrd[curr].data = data;
         engd->thrd[curr].flgs = flgs;
-        lPickSemaphore(engd->osem, engd->isem, 1 << curr);
+        lPickSemaphore(engd->osem, engd->isem, SEM_UUID(curr));
         TryUpdatePixTree(engd, retn);
     }
     else if (estr->epix) {
