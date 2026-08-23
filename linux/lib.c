@@ -13,6 +13,13 @@ struct SEMD {
     SEM_TYPE list, full;
 };
 
+/// lPickSemaphore() moves LIST by the atomic builtins and outside CMTX, so a
+/// plain read of it here races the write however indivisible the latter is,
+/// and, having no barrier of its own, is also free to be reordered with the
+/// reads of the THRD that the bit stands for. FULL needs none of this, being
+/// set before the first thread exists and read-only ever since
+#define SEM_LIST(semd) __atomic_load_n(&(semd)->list, __ATOMIC_SEQ_CST)
+
 
 
 GdkGLDrawable *gtk_widget_gl_begin(GtkWidget *gwnd) {
@@ -251,17 +258,22 @@ char *lLoadFile(char *name, long *size) {
 long lCountCPUs() {
     long retn = sysconf(_SC_NPROCESSORS_ONLN);
 
-    retn = (retn < sizeof(SEM_TYPE) * CHAR_BIT)?
-            retn : sizeof(SEM_TYPE) * CHAR_BIT;
+    retn = (retn < SEM_NTHR)? retn : SEM_NTHR;
     return (retn > 1)? retn : 1;
 }
 
 
 
-void lMakeThread(void *thrd) {
+long lMakeThread(void *thrd) {
     pthread_t pthr;
 
-    pthread_create(&pthr, 0, cThrdFunc, thrd);
+    /// nobody ever joins the pool, and StopThreads() lets every worker exit on
+    /// each switch between the loading and the drawing modes, so a joinable one
+    /// would leave its descriptor and its stack behind at every single switch
+    if (pthread_create(&pthr, 0, cThrdFunc, thrd) != 0)
+        return 0;
+    pthread_detach(pthr);
+    return !0;
 }
 
 
@@ -282,7 +294,7 @@ void lMakeSemaphore(SEMD **retn, long nthr, SEM_TYPE mask) {
         *retn = malloc(sizeof(**retn));
         pthread_mutex_init(&(*retn)->cmtx, 0);
         pthread_cond_init(&(*retn)->cvar, 0);
-        (*retn)->full = (1 << nthr) - 1;
+        (*retn)->full = SEM_BITS(nthr);
         (*retn)->list = (*retn)->full & mask;
     }
 }
@@ -307,12 +319,12 @@ long lPickSemaphore(SEMD *drop, SEMD *pick, SEM_TYPE mask) {
 SEM_TYPE lWaitSemaphore(SEMD *wait, SEM_TYPE mask) {
     pthread_mutex_lock(&wait->cmtx);
     if (mask)
-        while ((wait->list ^ wait->full) & mask)
+        while ((SEM_LIST(wait) ^ wait->full) & mask)
             pthread_cond_wait(&wait->cvar, &wait->cmtx);
     else
-        while (!wait->list)
+        while (!SEM_LIST(wait))
             pthread_cond_wait(&wait->cvar, &wait->cmtx);
-    mask = wait->list;
+    mask = SEM_LIST(wait);
     pthread_mutex_unlock(&wait->cmtx);
     return mask;
 }
