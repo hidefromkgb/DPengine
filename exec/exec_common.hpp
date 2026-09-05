@@ -2,6 +2,7 @@
 #define EXEC_COMMON_HPP
 
 #include <algorithm>
+#include <array>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -13,6 +14,7 @@
 
 using lib_id_t = size_t;
 using bhv_id_t = uint32_t;
+using selection_t = std::vector<std::pair<lib_id_t, uint32_t>>;
 
 enum {
 /*  framerate limiter in msec    */ FRM_WAIT = 40,

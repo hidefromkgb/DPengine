@@ -5,19 +5,19 @@
 <key>CFBundlePackageType</key>
 <string>APPL</string>
 <key>CFBundleExecutable</key>
-<string>DPE</string>
+<string>@MAC_APP_EXE_NAME@</string>
 <key>CFBundleIdentifier</key>
-<string>hidefromkgb.DesktopPoniesEngine</string>
+<string>@MAC_APP_GUI_IDENTIFIER@</string>
 <key>CFBundleName</key>
-<string>Desktop Ponies Engine</string>
+<string>@MAC_APP_BUNDLE_NAME@</string>
 <key>CFBundleIconFile</key>
-<string>main</string>
+<string>@MAC_APP_ICON@</string>
 <key>CFBundleVersion</key>
-<string>[early alpha]</string>
+<string>@MAC_APP_BUNDLE_VERSION@</string>
 <key>LSApplicationCategoryType</key>
-<string>public.app-category.entertainment</string>
+<string>@MAC_APP_CATEGORY_TYPE@</string>
 <key>LSMinimumSystemVersion</key>
-<string>10.6.0</string>
+<string>@MAC_APP_MIN_OS_VERSION@</string>
 <key>LSUIElement</key>
 <string>1</string>
 <key>NSRequiresAquaSystemAppearance</key>

@@ -1,7 +1,9 @@
 #include <cassert>
 
 #include "exec_engine.hpp"
+#include "exec_library.hpp"
 #include "exec_parser.hpp"
+#include "exec_prng.hpp"
 
 
 
@@ -40,16 +42,34 @@ const std::unordered_map<std::string, conf_t::flags_t> engine_t::all_flags = {
 #undef CASE
 };
 
+static inline ENGD *init_engd() {
+    ENGD *engd = nullptr;
+    cEngineCallback(0, ECB_INIT, (intptr_t)&engd);
+    return engd;
+}
+
+static inline uint32_t *init_seed() {
+    uint32_t seed = time(nullptr);
+    printf("[((RNG))] seed = 0x%08X\n", seed);
+    return RNG_Make(seed);
+}
+
+engine_t::~engine_t() {
+    RNG_Free(&seed_);
+}
+
 engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
         const T2IV tray, const T4IV area)
-: cfnm_((!fcnf.empty()) ? concat_path({std::string(fcnf), DEF_CORE})
+: engd_(init_engd())
+, seed_(init_seed())
+, cfnm_((!fcnf.empty()) ? concat_path({std::string(fcnf), DEF_CORE})
                         : std::string())
 , cdef_(get_def_conf(base))
 , cini_(load_ini_conf(cdef_, cfnm_))
 , runs_(fixup_min(cini_.nrun, cdef_.nrun)) // do not move past ccur_()
 , tacc_{}
 , ccur_(cini_)
-, mctl_(ccur_, cini_, cdef_)
+, mctl_(engd_, *this, ccur_, cini_, cdef_)
 , octl_(mctl_.get_id(), ccur_, cini_, cdef_)
 , tray_(tray)
 , area_(area)
@@ -57,8 +77,18 @@ engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
 , tcur_{}
 , tpre_{} {
     mctl_.set_options_window(octl_.get_id()); // link options window to main
-    cEngineCallback(0, ECB_INIT, (intptr_t)&engd_); // create rendering engine
     build_library_structure(cini_.base); // read configuration, load everything
+}
+
+bool engine_t::load_selection(const selection_t &sel, bool show_progress) {
+    if (sel.empty()) return false;
+    cEngineCallback(engd_, ECB_LOAD, ~0); // interrupt to load more animations
+    for (size_t iter = 0; iter < sel.size(); iter++) {
+        (*find_in_map(libs_, sel[iter].first))->load(engd_);
+        if (show_progress) mctl_.set_progress_load(iter + 1, sel.size());
+    }
+    cEngineCallback(engd_, ECB_LOAD, 0); // wait for the loading to complete
+    return true;
 }
 
 conf_t engine_t::get_def_conf(const std::string_view base) {
@@ -189,6 +219,19 @@ conf_t engine_t::load_ini_conf(const conf_t &def, const std::string &cfnm) {
     return retn;
 }
 
+void engine_t::display_loop() {
+    if (!load_selection(mctl_.collect_selection(seed_), true)) {
+        // [TODO:] not convinced if this is needed; localize if it is
+        //rMessage("Nothing selected!", nullptr, "OK", nullptr);
+        return;
+    }
+    const auto icon = mctl_.prepare_tray_icon(tray_);
+
+    // [TODO:] invoke cEngineRunMainLoop()
+
+    mctl_.discard_tray_icon(icon);
+}
+
 void engine_t::main_loop() {
     // waiting for the previews to finish loading
     cEngineCallback(engd_, ECB_LOAD, 0);
@@ -266,10 +309,11 @@ void engine_t::build_library_structure(const std::string &base) {
 
     // show the main window, initialize the previews
     mctl_.toggle_visibility(true);
+    RUN_FC2E(*(CTRL*)mctl_.get_id(), MSG__TXT, 0); // relocalize
     for (size_t ctg_idx = 0; ctg_idx < ctg.size(); ctg_idx++) {
         auto &c = ctg[ctg_idx];
         auto &il = *find_in_map(libs_, c.first);
-        mctl_.init_preview(engd_, il->load_preview(engd_), std::move(c.second),
+        mctl_.init_preview(il->load_preview(engd_), std::move(c.second),
                 il->name(), c.first);
         mctl_.set_progress_load(ctg_idx + 1, ctg.size());
     }

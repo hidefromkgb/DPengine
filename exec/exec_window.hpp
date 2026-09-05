@@ -12,6 +12,8 @@
 #define RUN_FE2C(trgt, cmsg, data) (trgt).fe2c(&(trgt), (cmsg), (data))
 #define RUN_FC2E(trgt, cmsg, data) (trgt).fc2e(&(trgt), (cmsg), (data))
 
+class engine_t;
+
 class window_t {
 private:
     bool visible_;
@@ -209,6 +211,7 @@ private:
                 = {p, intptr_t(&count_), idx, FCT_SPIN, 0, 0, size.x, 0, fc2e};
         }
         bool is_eligible() const { return flags_ & eligible; }
+        lib_id_t lib_id() const { return lib_id_; }
         void set_pos(T2IV lower_left) {
             lower_left_ = lower_left;
             flags_ &= ~visible;
@@ -259,11 +262,28 @@ private:
             return v;
         }
     };
+    class menu_t : public no_copy_t {
+    private:
+        std::vector<MENU> items_;
 
+    public:
+        void reload(std::vector<MENU> template_menu) {
+            items_ = std::move(template_menu);
+            items_.emplace_back(MENU{});
+        }
+        MENU *get();
+    };
+
+    ENGD *engd_;
     conf_t::spin_t preview_stats_; // min = 0, curr = selected, max = total
     std::vector<std::unique_ptr<preview_t>> previews_;
+    menu_t global_menu_;
+    menu_t local_menu_;
 
-    std::vector<CTRL> get_template(intptr_t here, const conf_t &conf);
+    static void global_menu_handler(MENU *item);
+    std::vector<MENU> get_global_template();
+
+    std::vector<CTRL> get_template(engine_t &engcref, const conf_t &conf);
     static intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data);
     static intptr_t FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data);
     static void try_update_checkbox(CTRL &c, int flag = -1);
@@ -287,9 +307,10 @@ private:
     void relocalize();
 
 public:
-    main_window_t(conf_t &conf, const conf_t &ini_conf, const conf_t &def_conf)
-    : conf_window_t(
-            get_template(intptr_t(this), conf), conf, ini_conf, def_conf) {}
+    main_window_t(ENGD *engd, engine_t &engc, conf_t &conf,
+            const conf_t &ini_conf, const conf_t &def_conf)
+    : conf_window_t(get_template(engc, conf), conf, ini_conf, def_conf)
+    , engd_(engd) {}
 
     void add_category(const std::string &name) {
         RUN_FE2C(get(MCT_OGRP), MSG_LADD, (intptr_t)name.c_str());
@@ -315,14 +336,19 @@ public:
     void set_progress_load(uint32_t frac, uint32_t full);
     void set_progress_select(uint32_t frac, uint32_t full);
 
+    selection_t collect_selection(uint32_t *seed) const;
+
     static void update_previews(intptr_t data, uint64_t time);
 
-    void init_preview(ENGD *engd, const unit_t &preview,
+    void init_preview(const unit_t &preview,
             conf_t::categories_t categories, const std::string &name,
             lib_id_t lib_id);
 
     void categorize_previews();
     void finalize_previews();
+
+    intptr_t prepare_tray_icon(T2IV tray);
+    void discard_tray_icon(intptr_t icon);
 
     void main_loop(uint32_t fram) {
         rInternalMainLoop(&get_root(), fram, update_previews, intptr_t(this));
@@ -339,8 +365,7 @@ private:
         OCT_BDIR, OCT_FSEP, OCT_FREL, OCT_FRES,
         OCT__MAX = OCT_FRES
     };
-    std::vector<CTRL> get_template(
-            intptr_t prev, intptr_t here, const conf_t &conf);
+    std::vector<CTRL> get_template(CTRL *prevptr, const conf_t &conf);
 
     static intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data);
 
@@ -361,8 +386,7 @@ private:
 public:
     options_window_t(intptr_t prev, conf_t &conf, const conf_t &ini_conf,
             const conf_t &def_conf)
-    : conf_window_t(get_template(prev, intptr_t(this), conf), conf, ini_conf,
-            def_conf) {
+    : conf_window_t(get_template((CTRL*)prev, conf), conf, ini_conf, def_conf) {
         relocalize(); // also triggers relocalization of the main window
     }
 };

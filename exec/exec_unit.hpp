@@ -88,6 +88,11 @@ public:
     bool is_ready() const { return is_ready(false) && is_ready(true); }
 
     bool schedule_upload(bool left, ENGD *engd);
+    bool schedule_upload(ENGD *engd) {
+        const bool r = schedule_upload(false, engd);
+        const bool l = schedule_upload(true, engd);
+        return r && l;
+    }
 
     T2IV dims(bool left) const {
         T2IV retn{{(decltype(retn.x))sides_[left].image_.xdim,

@@ -1,5 +1,7 @@
 #include <cassert>
 
+#include "exec_engine.hpp"
+#include "exec_prng.hpp"
 #include "exec_window.hpp"
 
 
@@ -78,7 +80,9 @@ enum {
 };
 
 std::vector<CTRL> main_window_t::get_template(
-        intptr_t here, const conf_t &conf) {
+        engine_t &engcref, const conf_t &conf) {
+    auto engc = (intptr_t)&engcref;
+    auto here = (intptr_t)this;
     std::array tmpl = {
     CTRL{nullptr, here, TXT_CAPT, FSW_SIZE | FCT_WNDW,  1,  1,  1,  1, FC2E},
     CTRL{nullptr, intptr_t(conf_t::filters),
@@ -98,8 +102,8 @@ std::vector<CTRL> main_window_t::get_template(
                         TXT_BDUP, FCP_BOTH | FCT_CBOX,  1, -3,  9,  3, FC2E},
     CTRL{nullptr, here, TXT_SELE, FCP_VERT | FCT_PBAR,  0,  1, 19,  3, FC2E},
     CTRL{nullptr,    0, TXT_OPTS, FCP_VERT | FCT_BUTN,  0,  1,  9,  6, FC2E},
-    CTRL{nullptr, here, TXT_GOGO, FCP_BOTH | FCT_BUTN
-                                           | FSB_DFLT,  1, -6,  9,  6, FC2E},
+    CTRL{nullptr, engc, TXT_GOGO, FCP_BOTH | FCT_BUTN
+    /* ^--- engine_t reference above!!! */ | FSB_DFLT,  1, -6,  9,  6, FC2E},
     CTRL{nullptr, here, TXT_HEAD, FCP_HORZ | FCT_SBOX,  0,  0, 41, 43, FC2E},
     };
     static_assert(tmpl.size() - 1 == MCT__MAX);
@@ -107,8 +111,8 @@ std::vector<CTRL> main_window_t::get_template(
 }
 
 std::vector<CTRL> options_window_t::get_template(
-        intptr_t prev, intptr_t here, const conf_t &conf) {
-    auto prevptr = (CTRL*)prev;
+        CTRL *prevptr, const conf_t &conf) {
+    auto here = (intptr_t)this;
     std::array tmpl = {
     CTRL{prevptr, here, TXT_OPTS,            FCT_WNDW,  1,  1,  1,  1, FC2E},
 
@@ -189,7 +193,10 @@ window_t::window_t(std::vector<CTRL> controls) : visible_(false) {
         ymax = (ymax > yoff) ? ymax : yoff;
     }
     // resizing and showing the window
+    FCTL fc2e = nullptr;
+    std::swap(fc2e, get_root().fc2e); // no size request forwarding for now
     RUN_FE2C(get_root(), MSG_WSZC, (uint16_t)xmax | ((uint32_t)ymax << 16));
+    std::swap(fc2e, get_root().fc2e);
 }
 
 CTRL &window_t::get(int32_t ctl) {
@@ -214,6 +221,7 @@ void main_window_t::relocalize() {
     }
     auto text = (conf_.flgs & conf_t::exact) ? TXT_AGRP : TXT_OGRP;
     set_control_text_stock(text, MCT_OGRP);
+    global_menu_.reload(get_global_template());
 }
 
 void main_window_t::try_update_checkbox(CTRL &c, int flag) {
@@ -333,9 +341,28 @@ intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     return 0;
 }
 
-intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
-    //INCBIN("../exec/icon.gif", MainIcon);
+selection_t main_window_t::collect_selection(uint32_t *seed) const {
+    std::vector<uint32_t> rand_count(previews_.size(), 0);
+    if (conf_.flgs & conf_t::randomsel)
+        if (auto rand = conf_.rgpu.get()) {
+            std::vector<size_t> pool;
+            for (size_t iter = 0; iter < previews_.size(); iter++)
+                if (previews_[iter]->is_eligible()) pool.emplace_back(iter);
+            for (auto left = pool.size(); left && (rand > 0); rand--) {
+                auto indx = RNG_Load(seed) % left;
+                rand_count[pool[indx]]++;
+                if (!(conf_.flgs & conf_t::copies))
+                    if (indx < --left) pool[indx] = pool[left];
+            }
+        }
+    selection_t retn;
+    for (size_t iter = 0; iter < previews_.size(); iter++)
+        if (auto count = previews_[iter]->count() + rand_count[iter])
+            retn.emplace_back(previews_[iter]->lib_id(), count);
+    return retn;
+}
 
+intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
     switch (get_type(*ctrl)) {
         case FCT_WNDW:
             if ((cmsg == MSG__TXT) && !data) {
@@ -433,116 +460,18 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                                 w->preview_stats_.max());
                     }
             } else if (ctrl->uuid == TXT_GOGO) {
-/*
-                LINF *libs;
-                auto engc = (main_window_t*)ctrl->data;
-                AINF igif = {};
-                intptr_t icon;
-                long ilen, *irnd, *iput;
-
-                irnd = calloc(engc->libs.size, sizeof(*irnd));
-                iput = calloc(engc->libs.size, sizeof(*iput));
-
-                // checking if random choice is enabled
-                if (engc->conf_.flgs & conf_t::randomsel) {
-                    // indexing random-capable libraries
-                    for (ilen = icon = 0; icon < engc->libs.size; icon++)
-                        if (engc->libs._[icon].wctx.icnt == 0)
-                            iput[ilen++] = icon;
-                    // iterating over the requested random sprites count
-                    for (icon = RUN_FE2C(engc->MCT_RGPU, MSG_NGET, 0);
-                        (icon > 0) && ilen; icon--) {
-                        irnd[iput[data = RNG_Load(engc->seed) % ilen]]++;
-                        auto copies = engc->conf_.flgs & conf_t::copies;
-                        if (!copies && (data < --ilen))
-                            iput[data] = iput[ilen];
-                    }
-                    // finally, adding the computed random values to ICNTs
-                    for (icon = 0; icon < engc->libs.size; icon++)
-                        engc->libs._[icon].wctx.icnt += irnd[icon];
-                }
-                // is there anything selected? let's find out
-                for (icon = 0; icon < engc->libs.size; icon++)
-                    if (engc->libs._[icon].wctx.icnt > 0)
-                        break;
-                if (icon >= engc->libs.size) {
-                    // [TODO:] do we need to show messages here?
-//                    rMessage("Nothing selected!", 0, 0);
-                    free_(irnd);
-                    free_(iput);
-                    break;
-                }
-                // counting the number of selected libraries
-                for (cmsg = icon = 0; icon < engc->libs.size; icon++)
-                    if (engc->libs._[icon].wctx.icnt > 0)
-                        cmsg++;
-                SetProgress(engc, TXT_LOAD, 0, cmsg);
-
-                cEngineCallback(engc->engd, ECB_LOAD, ~0);
-                for (data = icon = 0; icon < engc->libs.size; icon++)
-                    if (engc->libs._[icon].wctx.icnt > 0) {
-                        LoadLib(&engc->libs._[icon], engc->engd);
-                        SetProgress(engc, TXT_LOAD, ++data, cmsg);
-                        RUN_FE2C(engc->MCT_SELE, MSG_PPOS, data);
-                    }
-                cEngineLoadAnimAsync(engc->engd, &igif, (uint8_t*)"/Icon/",
-                                     MainIcon, ELA_LOAD, 0);
-                cEngineCallback(engc->engd, ECB_LOAD, 0);
-
-                // [TODO:] adapt for CTR_V_FLTR
-                for (libs = engc->libs._, icon = 0; icon < engc->libs.size;
-                        icon++)
-                    if (AppendSpriteArr(&engc->libs._[icon], engc)) {
-                        // revert random ICNT
-                        engc->libs._[icon].wctx.icnt -= irnd[icon];
-                        if (++libs <= &engc->libs._[icon])
-                            CTR_ASSIGN(libs[-1], engc->libs._[icon]);
-                    }
-                free_(irnd);
-                free_(iput);
-                CTR_V_MGET(engc->libs, libs - engc->libs._, 1);
-                igif.fcnt = 0;
-                igif.xdim = engc->idim.x;
-                igif.ydim = engc->idim.y;
-                igif.time = calloc(sizeof(*igif.time), igif.xdim * igif.ydim);
-                cEngineCallback(engc->engd, ECB_DRAW, (intptr_t)&igif);
-                icon = rMakeTrayIcon(engc->mctx, engc->tran[TXT_HEAD],
-                                     igif.time, igif.xdim, igif.ydim);
-                free_(igif.time);
-                RUN_FE2C(engc->MCT_CAPT, MSG__SHW, 0);
-                engc->pcur = engc->povr = 0;
-                engc->data = (engc->pmax) ? calloc(engc->pmax,
-                                                  sizeof(*engc->data)) : 0;
-                cEngineRunMainLoop(engc->engd, engc->dpos.x, engc->dpos.y,
-                                   engc->dims.x + engc->dpos.x,
-                                   engc->dims.y + engc->dpos.y, engc->ftmp,
-                                   FRM_WAIT, (intptr_t)engc, eUpdFrame,
-                                   eUpdFlags);
-                cEngineCallback(engc->engd, ECB_GFLG, (intptr_t)&engc->ftmp);
-                free_(engc->data);
-
-                rFreeTrayIcon(icon);
-                for (icon = 0; icon < engc->pcnt; icon++)
-                    free_(engc->parr[icon]);
-                free_(engc->parr);
-                engc->parr = 0;
-                engc->pmax = engc->pcnt = 0;
-
-                // finally showing the window
-                RecountSelectedLibs(engc);
-                RUN_FE2C(engc->MCT_CAPT, MSG__SHW, ~0);
-//*/
+                ((engine_t*)ctrl->data)->display_loop();
             }
             break;
     }
     return 0;
 }
 
-void main_window_t::init_preview(ENGD *engd, const unit_t &preview,
+void main_window_t::init_preview(const unit_t &preview,
         conf_t::categories_t categories, const std::string &name, lib_id_t id) {
     previews_.emplace_back(std::make_unique<preview_t>(&get(MCT_CHAR),
                 previews_.size(), get_min_preview_size(), FC2EI,
-                std::move(categories), engd, preview, name, id));
+                std::move(categories), engd_, preview, name, id));
 }
 
 void main_window_t::categorize_previews() {
@@ -661,4 +590,111 @@ void main_window_t::set_progress_load(uint32_t frac, uint32_t full) {
 
 void main_window_t::set_progress_select(uint32_t frac, uint32_t full) {
     set_progress(TXT_SELE, frac, full);
+}
+
+intptr_t main_window_t::prepare_tray_icon(T2IV tray) {
+    INCBIN("../exec/icon.gif", MainIcon); (void)(MainIcon_end);
+
+    AINF icon = {};
+    cEngineCallback(engd_, ECB_LOAD, ~0);
+    cEngineLoadAnimAsync(
+            engd_, &icon, (uint8_t*)"/Icon/", MainIcon, ELA_LOAD, 0);
+    cEngineCallback(engd_, ECB_LOAD, 0);
+    icon.fcnt = 0;
+    icon.xdim = tray.x;
+    icon.ydim = tray.y;
+    icon.time = (decltype(icon.time))realloc(
+            nullptr, sizeof(*icon.time) * icon.xdim * icon.ydim);
+    cEngineCallback(engd_, ECB_DRAW, (intptr_t)&icon);
+    auto retn = rMakeTrayIcon(global_menu_.get(),
+            get_text_stock(TXT_HEAD)->data(), icon.time, icon.xdim, icon.ydim);
+    icon.time = (decltype(icon.time))realloc(icon.time, 0);
+    toggle_visibility(false);
+    return retn;
+}
+
+void main_window_t::discard_tray_icon(intptr_t icon) {
+    rFreeTrayIcon(icon);
+    toggle_visibility(true);
+}
+
+void eProcessMenuItem(MENU *item) {
+    MENU *indx;
+
+    if (item->flgs & MFL_CCHK) {
+        if (item->flgs & MFL_RCHK & ~MFL_CCHK) {
+            if (item->flgs & MFL_VCHK)
+                return;
+            item->flgs |= MFL_VCHK;
+            indx = item;
+            while ((--indx)->flgs & MFL_RCHK & ~MFL_CCHK)
+                indx->flgs &= ~MFL_VCHK;
+            indx = item;
+            while ((++indx)->flgs & MFL_RCHK & ~MFL_CCHK)
+                indx->flgs &= ~MFL_VCHK;
+        }
+        else
+            item->flgs ^= MFL_VCHK;
+    }
+    if (!item->chld && item->func)
+        item->func(item);
+}
+
+void main_window_t::global_menu_handler(MENU *item) {
+    uint32_t indx, flgs = 0;
+    ENGD *engd;
+
+    switch (item->uuid) {
+        case TXT_RGPU:
+            engd = (ENGD*)item->data;
+            cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
+            if (item->flgs & MFL_VCHK)
+                flgs |= COM_RGPU;
+            else
+                flgs &= ~COM_RGPU;
+            cEngineCallback(engd, ECB_SFLG, flgs);
+            break;
+
+        case TXT_SHOW:
+        case TXT_DRAW:
+        case TXT_OPAQ:
+            engd = (ENGD*)item->data;
+            indx = (item->uuid != TXT_OPAQ)? (item->uuid != TXT_DRAW)?
+                    COM_SHOW : COM_DRAW : COM_OPAQ;
+            cEngineCallback(engd, ECB_GFLG, (intptr_t)&flgs);
+            if (item->flgs & MFL_VCHK)
+                flgs |= indx;
+            else
+                flgs &= ~indx;
+            cEngineCallback(engd, ECB_SFLG, flgs);
+            break;
+
+        case TXT_EXIT:
+            cEngineCallback((ENGD*)item->data, ECB_QUIT, ~0);
+            break;
+    }
+}
+
+std::vector<MENU> main_window_t::get_global_template() {
+    return std::vector<MENU>{
+        {.text = get_text_stock(TXT_HEAD)->data(), .flgs = MFL_GRAY},
+        {.text = ""},
+        {.text = get_text_stock(TXT_SPEC)->data()},
+        {.text = get_text_stock(TXT_RGPU)->data(), .data = (intptr_t)engd_,
+         .flgs = MFL_CCHK, .uuid = TXT_RGPU, .func = global_menu_handler},
+        {.text = get_text_stock(TXT_OPAQ)->data(), .data = (intptr_t)engd_,
+         .flgs = MFL_CCHK, .uuid = TXT_OPAQ, .func = global_menu_handler},
+        {.text = get_text_stock(TXT_DRAW)->data(), .data = (intptr_t)engd_,
+         .flgs = MFL_CCHK, .uuid = TXT_DRAW, .func = global_menu_handler},
+        {.text = get_text_stock(TXT_SHOW)->data(), .data = (intptr_t)engd_,
+         .flgs = MFL_CCHK, .uuid = TXT_SHOW, .func = global_menu_handler},
+        {.text = ""},
+        {.text = get_text_stock(TXT_EXIT)->data(), .data = (intptr_t)engd_,
+                           .uuid = TXT_EXIT, .func = global_menu_handler}
+    };
+}
+
+MENU *main_window_t::menu_t::get() {
+    assert(!items_.empty());
+    return items_.data();
 }

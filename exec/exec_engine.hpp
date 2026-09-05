@@ -2,16 +2,19 @@
 #define EXEC_ENGINE_HPP
 
 #include "exec_common.hpp"
-#include "exec_library.hpp"
 #include "exec_window.hpp"
 
 
+
+class library_t;
 
 // engine data (client side)
 class engine_t : public no_copy_t {
 private:
     static const std::unordered_map<std::string, conf_t::flags_t> all_flags;
 
+    ENGD *engd_; // rendering engine data
+    uint32_t *seed_; // random number generator seed
     std::string cfnm_; // main configuration file path
     conf_t cdef_; // default configuration
     conf_t cini_; // initial configuration read at the start
@@ -25,9 +28,6 @@ private:
     T3IV ppos_; // mouse pointer position (z = flags)
     uint64_t tcur_; // current, dilation-adjusted timestamp
     uint64_t tpre_; // previous raw timestamp
-    std::vector<MENU> mspr_; // per-sprite context menu
-    std::vector<MENU> mctx_; // main context menu
-    ENGD *engd_;
 
     std::unordered_map<lib_id_t, std::unique_ptr<library_t>> libs_;
 
@@ -45,11 +45,16 @@ private:
 
     void build_library_structure(const std::string &base);
 
+    bool load_selection(const selection_t &sel, bool show_progress);
+
 public:
+    ~engine_t();
     engine_t(const std::string_view fcnf, const std::string_view base,
             const T2IV tray, const T4IV area);
 
     const library_t &get_library(lib_id_t lib_id) const;
+
+    void display_loop();
     void main_loop();
 };
 

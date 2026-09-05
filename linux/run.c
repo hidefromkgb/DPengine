@@ -113,12 +113,13 @@ char *rConvertUTF8(char *utf8) {
 
 
 
-long rMessage(char *text, char *head, char *byes, char *bnay) {
+long rMessage(const char *text, const char *head, const char *byes,
+        const char *bnay) {
     GtkWidget *hdlg;
     long retn;
 
     hdlg = gtk_message_dialog_new(0, GTK_DIALOG_MODAL, GTK_MESSAGE_OTHER,
-                                     GTK_BUTTONS_NONE, text);
+                                     GTK_BUTTONS_NONE, "%s", text);
     gtk_dialog_add_buttons(GTK_DIALOG(hdlg), byes,
                           (char*)GTK_RESPONSE_OK, (char*)0);
     if (bnay)
@@ -134,7 +135,7 @@ long rMessage(char *text, char *head, char *byes, char *bnay) {
 
 
 
-intptr_t rMakeTrayIcon(MENU *mctx, char *text,
+intptr_t rMakeTrayIcon(MENU *mctx, const char *text,
                       uint32_t *data, long xdim, long ydim) {
     GtkStatusIcon *icon = 0;
     GdkPixbuf *pbuf;
@@ -417,13 +418,17 @@ long rLoadHTTPS(intptr_t user, char *page, char **dest,
                 void (*load)(long, intptr_t), intptr_t lprm) {
     intptr_t data[4] = {0, 0, (intptr_t)load, lprm};
     char *hreq, **ctxt = (char**)user;
-    CURL *curl;
+    CURL *curl = 0;
 
     if (!page || !dest) {
-        *dest = 0;
+        if (dest) *dest = 0;
         return 0;
     }
     curl = curl_easy_init();
+    if (!curl) {
+        *dest = 0;
+        return 0;
+    }
     hreq = calloc(1, 1 + strlen(ctxt[1]) + strlen(page));
     curl_easy_setopt(curl, CURLOPT_URL, strcat(strcat(hreq, ctxt[1]), page));
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteHTTPS);

@@ -227,6 +227,11 @@ public:
     bhv_id_t linked_id() const { return linked_id_; }
     bhv_id_t follow_grp_id() const { return follow_grp_id_; }
 
+    void schedule_upload_full(ENGD *engd) {
+        schedule_upload(engd);
+        for (auto &e : effects_) e->schedule_upload(engd);
+    }
+
     behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
             bhv_id_t follow_grp_id, lib_id_t follow_tgt,
             const std::string &path, std::vector<int16_t> bgn_speech,

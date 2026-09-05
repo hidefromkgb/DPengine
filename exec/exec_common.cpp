@@ -30,9 +30,6 @@ conf_t::lang_map_t conf_t::get_lang_map(const std::string &file_name) {
     return retn;
 }
 
-void eProcessMenuItem(MENU *item) {
-}
-
 void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
                     long  xpos, long  ypos, ulong xdim, ulong ydim) {
     T2IV ico{{(decltype(ico.x))xico, (decltype(ico.y))yico}};

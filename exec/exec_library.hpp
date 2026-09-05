@@ -145,6 +145,8 @@ public:
         preview.schedule_upload(false, engd);
         return preview;
     }
+    void load(ENGD *engd);
+
     static void extract_speech_colors(
             ENGD *engd, const std::vector<library_t*> &libs);
 

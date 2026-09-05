@@ -91,6 +91,13 @@ bool next_line(token_t &t) {
     return !is_empty(t);
 }
 
+float to_float(const std::string_view &line, float def) {
+    char *end = nullptr;
+    errno = 0;
+    float retn = (!line.empty()) ? ::strtof(line.data(), &end) : def;
+    return (errno || (line.data() == end)) ? def : retn;
+}
+
 bool process_bool(token_t &line, bool def, char s, char q) {
     static const std::unordered_map<std::string, bool>
         map = { {"false", false}, {"true", true}, };
@@ -99,9 +106,7 @@ bool process_bool(token_t &line, bool def, char s, char q) {
 
 float process_float(token_t &line, float def, char s, char q) {
     line = next_token(line.second, 0, s, q);
-    std::from_chars(
-            line.first.data(), line.first.data() + line.first.size(), def);
-    return def;
+    return to_float(line.first, def);
 }
 
 std::vector<std::string_view> process_array(
@@ -123,10 +128,10 @@ std::vector<std::string_view> process_array(
 T2IV process_quoted_int_pair(token_t &line, T2IV def, char s, char q) {
     auto pair = process_array(line, s, 0, q, q);
     if (pair.size() > 0)
-        std::from_chars(pair[0].data(), pair[0].data() + pair[0].size(), def.x);
+        def.x = to_float(pair[0], def.x);
     if (pair.size() > 1)
-        std::from_chars(pair[1].data(), pair[1].data() + pair[1].size(), def.y);
-    return def;
+        def.y = to_float(pair[1], def.y);
+    return def; // 23 bits per value are more than enough here
 }
 
 std::string process_string(token_t &line, char s, char q) {

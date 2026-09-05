@@ -394,6 +394,11 @@ void library_t::extract_speech_colors(
     rFreeParallel(parallel);
 }
 
+void library_t::load(ENGD *engd) {
+    for (auto &b : behaviours_) b->schedule_upload_full(engd);
+    for (auto &s : speeches_) s->schedule_upload(engd);
+}
+
 struct library_t::build_ctx_t {
     const input_t &in;
     const bhv_id_map_t &bhv_id_map;

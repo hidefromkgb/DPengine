@@ -125,12 +125,12 @@ typedef struct _CTRL {
 /// menu item
 typedef struct _MENU {
     struct
-    _MENU   *chld;  /// submenu (or 0 if none)
-    char    *text;  /// item text
-    intptr_t data;  /// item data
-    uint32_t flgs,  /// item flags
-             uuid;  /// item ID
-    void   (*func)(struct _MENU*); /// item handler
+    _MENU      *chld;  /// submenu (or 0 if none)
+    const char *text;  /// item text
+    intptr_t    data;  /// item data
+    uint32_t    flgs,  /// item flags
+                uuid;  /// item ID
+    void      (*func)(struct _MENU*); /// item handler
 } MENU;
 
 
@@ -145,11 +145,12 @@ void  eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
 intptr_t rMakeParallel(UPRE func, long size);
 intptr_t rFindMake(const char *base);
 intptr_t rMakeHTTPS(char *user, char *serv);
-intptr_t rMakeTrayIcon(MENU *mctx, char *text,
+intptr_t rMakeTrayIcon(MENU *mctx, const char *text,
                        uint32_t *data, long xdim, long ydim);
 long  rLoadHTTPS(intptr_t user, char *page, char **dest,
                  void (*load)(long, intptr_t), intptr_t lprm);
-long  rMessage(char *text, char *head, char *byes, char *bnay);
+long  rMessage(
+        const char *text, const char *head, const char *byes, const char *bnay);
 long  rSaveFile(const char *name, const char *data, long size);
 long  rMoveDir(char *dsrc, char *ddst);
 long  rMakeDir(char *name, long dupl);
