@@ -266,6 +266,7 @@ void engine_t::build_library_structure(const std::string &base) {
 
     // show the main window, initialize the previews
     mctl_.toggle_visibility(true);
+    RUN_FC2E(*(CTRL*)mctl_.get_id(), MSG__TXT, 0); // relocalize
     for (size_t ctg_idx = 0; ctg_idx < ctg.size(); ctg_idx++) {
         auto &c = ctg[ctg_idx];
         auto &il = *find_in_map(libs_, c.first);

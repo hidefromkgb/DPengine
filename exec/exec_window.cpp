@@ -189,7 +189,10 @@ window_t::window_t(std::vector<CTRL> controls) : visible_(false) {
         ymax = (ymax > yoff) ? ymax : yoff;
     }
     // resizing and showing the window
+    FCTL fc2e = nullptr;
+    std::swap(fc2e, get_root().fc2e); // no size request forwarding for now
     RUN_FE2C(get_root(), MSG_WSZC, (uint16_t)xmax | ((uint32_t)ymax << 16));
+    std::swap(fc2e, get_root().fc2e);
 }
 
 CTRL &window_t::get(int32_t ctl) {

@@ -46,6 +46,12 @@ typedef struct {
 
 pthread_mutex_t *pmtx; /// the necessary evil: global mutex table for OpenSSL
 
+/// more necessary evil: global vars that hold cURL function addresses
+CURL* (*curl_easy_init_)(void) = 0;
+CURLcode (*curl_easy_setopt_)(CURL *curl, CURLoption option, ...) = 0;
+CURLcode (*curl_easy_perform_)(CURL *curl) = 0;
+void (*curl_easy_cleanup_)(CURL *curl) = 0;
+
 
 
 static SEL ActionSelector() {
@@ -234,7 +240,7 @@ void rFreeTrayIcon(intptr_t icon) {
 
 
 
-intptr_t rFindMake(char *base) {
+intptr_t rFindMake(const char *base) {
     FIND *find;
 
     find = calloc(1, sizeof(*find));
@@ -266,7 +272,7 @@ char *rFindFile(intptr_t data) {
 
 
 
-char *rLoadFile(char *name, long *size) {
+char *rLoadFile(const char *name, long *size) {
     char *retn = 0;
     long file, flen;
 
@@ -285,7 +291,7 @@ char *rLoadFile(char *name, long *size) {
 
 
 
-long rSaveFile(char *name, char *data, long size) {
+long rSaveFile(const char *name, const char *data, long size) {
     long file;
 
     if ((file = open(name, O_CREAT | O_WRONLY, 0644)) > 0) {
@@ -333,18 +339,19 @@ long rMoveDir(char *dsrc, char *ddst) {
 
 
 
-char *ChooseFileDir(CTRL *root, char *file, char *fext) {
+char *ChooseFileDir(CTRL *root, const char *file, const char *fext_) {
     NSOpenPanel *cfdp;
     NSString *path;
     NSArray *type;
     NSURL *idir;
+    char *fext = 0;
 
     file = strdup(file);
     setAllowsMultipleSelection_(cfdp = openPanel(_(NSOpenPanel)), false);
-    setCanChooseDirectories_(cfdp, !fext);
-    setCanChooseFiles_(cfdp, !!fext);
-    if (fext) {
-        path = MAC_MakeString(fext);
+    setCanChooseDirectories_(cfdp, !fext_);
+    setCanChooseFiles_(cfdp, !!fext_);
+    if (fext_) {
+        path = MAC_MakeString(fext_);
         type = (NSArray*)CFArrayCreate(kCFAllocatorDefault,
                                       (const void**)&path, 1,
                                       &kCFTypeArrayCallBacks);
@@ -384,11 +391,11 @@ char *ChooseFileDir(CTRL *root, char *file, char *fext) {
     return fext;
 }
 
-char *rChooseDir(CTRL *root, char *base) {
+char *rChooseDir(CTRL *root, const char *base) {
     return ChooseFileDir(root, base, 0);
 }
 
-char *rChooseFile(CTRL *root, char *fext, char *file) {
+char *rChooseFile(CTRL *root, const char *fext, const char *file) {
     return ChooseFileDir(root, file, fext);
 }
 
@@ -503,24 +510,31 @@ long rLoadHTTPS(intptr_t user, char *page, char **dest,
                 void (*load)(long, intptr_t), intptr_t lprm) {
     intptr_t data[4] = {0, 0, (intptr_t)load, lprm};
     char *hreq, **ctxt = (char**)user;
-    CURL *curl;
+    CURL *curl = 0;
 
     if (!page || !dest) {
+        if (dest) *dest = 0;
+        return 0;
+    }
+    if (curl_easy_init_) curl = curl_easy_init_();
+    if (!curl) {
         *dest = 0;
         return 0;
     }
-    curl = curl_easy_init();
     hreq = calloc(1, 1 + strlen(ctxt[1]) + strlen(page));
-    curl_easy_setopt(curl, CURLOPT_URL, strcat(strcat(hreq, ctxt[1]), page));
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteHTTPS);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, data);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, ctxt[0]);
-    if (curl_easy_perform(curl)) {
+    if (curl_easy_setopt_) {
+        curl_easy_setopt_(
+                curl, CURLOPT_URL, strcat(strcat(hreq, ctxt[1]), page));
+        curl_easy_setopt_(curl, CURLOPT_WRITEFUNCTION, WriteHTTPS);
+        curl_easy_setopt_(curl, CURLOPT_WRITEDATA, data);
+        curl_easy_setopt_(curl, CURLOPT_FOLLOWLOCATION, 1);
+        curl_easy_setopt_(curl, CURLOPT_USERAGENT, ctxt[0]);
+    }
+    if (curl_easy_perform_ && curl_easy_perform_(curl)) {
         data[1] = (intptr_t)realloc((char*)data[1], 0);
         data[1] = data[0] = 0;
     }
-    curl_easy_cleanup(curl);
+    if (curl_easy_cleanup_) curl_easy_cleanup_(curl);
     free(hreq);
     *dest = (char*)data[1];
     return data[0];
@@ -540,7 +554,7 @@ void TmrFunc(CFRunLoopTimerRef tmrp, void *user) {
 
 
 
-void rInternalMainLoop(CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
+void rInternalMainLoop(const CTRL *root, uint32_t fram, UPRE upre, intptr_t data) {
     intptr_t user[2] = {(intptr_t)upre, data};
     CFRunLoopTimerRef tmrp;
 
@@ -1417,8 +1431,8 @@ void MAC_Handler(OnSize) {
     NSRect rect;
 
     MAC_GetIvar(self, VAR_DATA, &ctrl);
-    if (!ctrl)
-        return;
+    if (!ctrl || !ctrl->fc2e)
+         return;
 
     rect = frame((NSView*)ctrl->priv[0]);
     rect = contentRectForFrameRect_((NSView*)ctrl->priv[0], rect);
@@ -1738,11 +1752,24 @@ int main(int argc, char *argv[]) {
                  _(isPartialStringValid_newEditingString_errorDescription_),
                  OnValidate)
     };
-    void (*CSIC)(pthread_t (*func)()) =
+    CURLcode (*curl_global_init_)(long flags) = 0;
+    void (*curl_global_cleanup_)(void) = 0;
+
+    // cURL needs to stay loaded, so dlclose(curl) is never called
+    void *curl = dlopen("libcurl.dylib", RTLD_NOW);
+    if (curl) {
+        curl_global_init_    = dlsym(curl, "curl_global_init");
+        curl_global_cleanup_ = dlsym(curl, "curl_global_cleanup");
+        curl_easy_init_      = dlsym(curl, "curl_easy_init");
+        curl_easy_setopt_    = dlsym(curl, "curl_easy_setopt");
+        curl_easy_perform_   = dlsym(curl, "curl_easy_perform");
+        curl_easy_cleanup_   = dlsym(curl, "curl_easy_cleanup");
+    }
+    void (*set_id_callback_)(pthread_t (*func)()) =
         dlsym(RTLD_DEFAULT, "CRYPTO_set_id_callback");
-    void (*CSLC)(void (*func)(int, int, const char*, int)) =
+    void (*set_locking_callback_)(void (*func)(int, int, const char*, int)) =
         dlsym(RTLD_DEFAULT, "CRYPTO_set_locking_callback");
-    int  (*CNLK)() = dlsym(RTLD_DEFAULT, "CRYPTO_num_locks");
+    int  (*num_locks_)() = dlsym(RTLD_DEFAULT, "CRYPTO_num_locks");
     char *conf, *home;
     NSString *path;
     NSArray *urls;
@@ -1753,14 +1780,16 @@ int main(int argc, char *argv[]) {
 //    setBool_forKey_(standardUserDefaults(_(NSUserDefaults)),
 //                    false, MAC_ConstString("NSShowNonLocalizedStrings"));
 
-    if (!MAC_10_07_PLUS) {
-        pmtx = calloc(cmtx = CNLK(), sizeof(*pmtx));
+    long has_crypto = set_id_callback_ && set_locking_callback_ && num_locks_;
+
+    if (!MAC_10_07_PLUS && has_crypto) {
+        pmtx = calloc(cmtx = num_locks_(), sizeof(*pmtx));
         for (iter = 0; iter < cmtx; iter++)
             pthread_mutex_init(&pmtx[iter], 0);
-        CSIC(pthread_self);
-        CSLC(lockfunc);
+        set_id_callback_(pthread_self);
+        set_locking_callback_(lockfunc);
     }
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    if (curl_global_init_) curl_global_init_(CURL_GLOBAL_DEFAULT);
     setActivationPolicy_(sharedApplication(_(NSApplication)),
                          NSApplicationActivationPolicyAccessory);
     home = MAC_LoadString(bundlePath(mainBundle(_(NSBundle))));
@@ -1790,10 +1819,10 @@ int main(int argc, char *argv[]) {
     for (argc = 0; argc < sizeof(scls) / sizeof(*scls); argc++)
         if (scls[argc])
             MAC_FreeClass(scls[argc]);
-    curl_global_cleanup();
-    if (!MAC_10_07_PLUS) {
-        CSLC(0);
-        CSIC(0);
+    if (curl_global_cleanup_) curl_global_cleanup_();
+    if (!MAC_10_07_PLUS && has_crypto) {
+        set_locking_callback_(0);
+        set_id_callback_(0);
         for (iter = 0; iter < cmtx; iter++)
             pthread_mutex_destroy(&pmtx[iter]);
         free(pmtx);

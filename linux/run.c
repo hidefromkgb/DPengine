@@ -417,13 +417,17 @@ long rLoadHTTPS(intptr_t user, char *page, char **dest,
                 void (*load)(long, intptr_t), intptr_t lprm) {
     intptr_t data[4] = {0, 0, (intptr_t)load, lprm};
     char *hreq, **ctxt = (char**)user;
-    CURL *curl;
+    CURL *curl = 0;
 
     if (!page || !dest) {
-        *dest = 0;
+        if (dest) *dest = 0;
         return 0;
     }
     curl = curl_easy_init();
+    if (!curl) {
+        *dest = 0;
+        return 0;
+    }
     hreq = calloc(1, 1 + strlen(ctxt[1]) + strlen(page));
     curl_easy_setopt(curl, CURLOPT_URL, strcat(strcat(hreq, ctxt[1]), page));
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteHTTPS);
