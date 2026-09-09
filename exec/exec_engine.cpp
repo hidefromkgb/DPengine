@@ -1,9 +1,11 @@
+#include <algorithm>
 #include <cassert>
 
 #include "exec_engine.hpp"
 #include "exec_library.hpp"
 #include "exec_parser.hpp"
 #include "exec_prng.hpp"
+#include "exec_sprite.hpp"
 
 
 
@@ -75,7 +77,8 @@ engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
 , area_(area)
 , ppos_{}
 , tcur_{}
-, tpre_{} {
+, tpre_{}
+, pmax_{} {
     mctl_.set_options_window(octl_.get_id()); // link options window to main
     build_library_structure(cini_.base); // read configuration, load everything
 }
@@ -88,6 +91,7 @@ bool engine_t::load_selection(const selection_t &sel, bool show_progress) {
         if (show_progress) mctl_.set_progress_load(iter + 1, sel.size());
     }
     cEngineCallback(engd_, ECB_LOAD, 0); // wait for the loading to complete
+    for (auto &s : sel) (*find_in_map(libs_, s.first))->resolve_centers();
     return true;
 }
 
@@ -149,9 +153,8 @@ conf_t engine_t::load_ini_conf(const conf_t &def, const std::string &cfnm) {
     auto general = def.flgs & conf_t::general_mask;
     conf_t retn;
     retn.base = def.base;
-    if (auto file = (!cfnm.empty())
-            ? rLoadFile(cfnm.c_str(), nullptr)
-            : nullptr) {
+    if (auto file = (!cfnm.empty()) ? rLoadFile(cfnm.c_str(), nullptr)
+                                    : nullptr) {
         printf("Reading config from '%s'...\n", cfnm.c_str());
         for (token_t text({}, file); next_line(text); ) {
             auto line = next_token(text.first);
@@ -219,17 +222,93 @@ conf_t engine_t::load_ini_conf(const conf_t &def, const std::string &cfnm) {
     return retn;
 }
 
+uint32_t engine_t::update_flags(ENGD *engd, intptr_t user, uint32_t flgs) {
+    // the engine reports what it actually managed to do, which is not always
+    // what it was asked for; the tray menu's checkmarks come from here
+    ((engine_t*)user)->mctl_.sync_menu_flags(flgs);
+    return flgs;
+}
+
+uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
+        uint64_t time, intptr_t user, uint32_t attr,
+        int32_t xptr, int32_t yptr, int32_t isel) {
+    auto engc = (engine_t*)user;
+    // [TODO:] mouse handling (dragging, mouseover and the per-sprite context
+    //         menu) belongs here, and is what XPTR, YPTR and ISEL are for
+
+    // timekeeping (with dilation and partial timestamp accumulator)
+    if (!engc->tpre_) engc->tpre_ = time;
+    engc->tacc_ += 0.01f * engc->ccur_.ndil.get() * (time - engc->tpre_);
+    engc->tpre_ = time;
+    engc->tcur_ += (uint64_t)engc->tacc_;
+    engc->tacc_ -= (uint64_t)engc->tacc_;
+
+    // animating the sprites
+    T2IV area{{engc->area_.xdim, engc->area_.ydim}};
+    for (auto &s : engc->sprites_)
+        s->update(engc->seed_, engc->tcur_, area);
+
+    // sorting the sprites by depth and building the display list
+    using sp_t = const std::unique_ptr<sprite_t>;
+    std::stable_sort(engc->sprites_.begin(), engc->sprites_.end(),
+            [](sp_t &a, sp_t &b) { return sprite_t::depth_sort(*a, *b); });
+    engc->display_.clear();
+    for (auto &s : engc->sprites_)
+        s->maybe_append(engc->display_);
+
+    engc->ppos_.z = attr; // remembering the button state for the next frame
+    *data = engc->display_.data();
+    // SIZE is the capacity of the sprite array rather than its length: the GPU
+    // renderer is built once, out of whatever the very first frame reports
+    // (see MakeRendererOGL() in core/ogl/oglstd.c), so it has to be the
+    // maximum for the whole run; reporting 0 is how the engine is told to stop
+    *size = (!engc->sprites_.empty()) ? engc->pmax_ : 0;
+    return engc->display_.size();
+}
+
 void engine_t::display_loop() {
-    if (!load_selection(mctl_.collect_selection(seed_), true)) {
+    static const std::pair<conf_t::flags_t, uint32_t> render_flags[] = {
+        {conf_t::gpu,    COM_RGPU}, {conf_t::wbgra,   WIN_IBGR},
+        {conf_t::draw,   COM_DRAW}, {conf_t::wpbo,    WIN_IPBO},
+        {conf_t::show,   COM_SHOW}, {conf_t::wregion, WIN_IRGN},
+        {conf_t::opaque, COM_OPAQ},
+    };
+
+    const auto sel = mctl_.collect_selection(seed_);
+    if (!load_selection(sel, true)) {
         // [TODO:] not convinced if this is needed; localize if it is
         //rMessage("Nothing selected!", nullptr, "OK", nullptr);
         return;
     }
+    T2IV area{{area_.xdim, area_.ydim}};
+    for (auto &s : sel)
+        for (uint32_t iter = 0; iter < s.second; iter++)
+            sprites_.emplace_back(std::make_unique<sprite_t>(
+                    get_library(s.first), seed_, tcur_, area));
+    // [TODO:] once effects and speeches can spawn sprites of their own, this
+    //         has to budget for them the way master's Q-formula did
+    pmax_ = sprites_.size();
+    display_.reserve(pmax_);
+
+    uint32_t engd_flags = 0;
+    for (auto &f : render_flags)
+        if (ccur_.flgs & f.first) engd_flags |= f.second;
+
+    tpre_ = 0;
     const auto icon = mctl_.prepare_tray_icon(tray_);
-
-    // [TODO:] invoke cEngineRunMainLoop()
-
+    cEngineRunMainLoop(engd_, area_.x, area_.y, area_.z + area_.x,
+            area_.w + area_.y, engd_flags, FRM_WAIT, (intptr_t)this,
+            update_frame, update_flags);
+    cEngineCallback(engd_, ECB_GFLG, (intptr_t)&engd_flags);
     mctl_.discard_tray_icon(icon);
+
+    ccur_.flgs &= ~conf_t::render_mask;
+    for (auto &f : render_flags)
+        if (engd_flags & f.second) ccur_.flgs |= f.first;
+
+    sprites_.clear();
+    display_.clear();
+    pmax_ = 0;
 }
 
 void engine_t::main_loop() {

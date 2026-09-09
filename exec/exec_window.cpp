@@ -605,6 +605,7 @@ intptr_t main_window_t::prepare_tray_icon(T2IV tray) {
     icon.ydim = tray.y;
     icon.time = (decltype(icon.time))realloc(
             nullptr, sizeof(*icon.time) * icon.xdim * icon.ydim);
+    for (size_t iter = icon.xdim * icon.ydim; iter; icon.time[--iter] = 0);
     cEngineCallback(engd_, ECB_DRAW, (intptr_t)&icon);
     auto retn = rMakeTrayIcon(global_menu_.get(),
             get_text_stock(TXT_HEAD)->data(), icon.time, icon.xdim, icon.ydim);
@@ -616,6 +617,31 @@ intptr_t main_window_t::prepare_tray_icon(T2IV tray) {
 void main_window_t::discard_tray_icon(intptr_t icon) {
     rFreeTrayIcon(icon);
     toggle_visibility(true);
+}
+
+void main_window_t::sync_menu_flags(uint32_t flgs) {
+    // the engine calls this at every start and restart of its main loop, and
+    // it is the only thing that ever puts a checkmark on the render toggles:
+    // their templates below carry MFL_CCHK but never MFL_VCHK so the initial
+    // state comes from whatever the engine reports back here
+    for (auto item = global_menu_.get(); item->text; item++) {
+        uint32_t flag = 0;
+        switch (item->uuid) {
+            default: continue;
+            case TXT_RGPU: flag = COM_RGPU; break;
+            case TXT_OPAQ: flag = COM_OPAQ; break;
+            case TXT_DRAW: flag = COM_DRAW; break;
+            case TXT_SHOW: flag = COM_SHOW; break;
+        }
+        // a flag the engine dropped while its item was checked means the
+        // engine could not do what was asked; the only such case is the GPU
+        if (!(flgs & flag) && (item->flgs & MFL_VCHK)
+        &&  (flag == (uint32_t)COM_RGPU))
+            rMessage(get_text_stock(TXT_CIGL)->data(), nullptr,
+                    get_text_stock(TXT_BYES)->data(), nullptr);
+        item->flgs = (flgs & flag) ? (item->flgs | MFL_VCHK)
+                                   : (item->flgs & ~MFL_VCHK);
+    }
 }
 
 void eProcessMenuItem(MENU *item) {

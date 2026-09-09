@@ -9,10 +9,13 @@
 
 
 enum movement_flags_t : uint32_t {
-    GEN_FLAGS(move_none, move_drag, move_sleep, move_mouse,
-              move_horz, move_vert, move_diag)
-    move_hv = move_horz | move_vert, move_dh = move_diag | move_horz,
-    move_dv = move_diag | move_vert, move_all= move_diag | move_horz | move_vert
+    GEN_FLAGS(move_none, move_horz, move_vert, move_diag,
+              move_drag, move_sleep, move_mouse)
+    move_hv = move_horz | move_vert,
+    move_dh = move_diag | move_horz,
+    move_dv = move_diag | move_vert,
+    move_all = move_diag | move_horz | move_vert,
+    move_ctl = move_drag | move_sleep | move_mouse,
 };
 
 class effect_t : public unit_t {
@@ -192,9 +195,6 @@ public:
         }
     };
 
-    static int16_t select_speech(uint32_t *seed, uint32_t chance,
-            const behaviour_t &prev, const behaviour_t &curr);
-
 #ifdef DEV_MODE
     input_t debug_;
 #endif // DEV_MODE
@@ -205,7 +205,7 @@ private:
     // follow_grp_id_ is only needed for its group info: have to
     // pick moving/stationary follow images from this very group
     const bhv_id_t follow_grp_id_;
-    const T2IV duration_; // u = min, v = max
+    const T2IV duration_; // u = min, v = possible extension above min
     const float movement_speed_;
     const movement_flags_t movement_;
     const std::vector<int16_t> bgn_speech_idx_; // speech indices from library
@@ -227,9 +227,19 @@ public:
     bhv_id_t linked_id() const { return linked_id_; }
     bhv_id_t follow_grp_id() const { return follow_grp_id_; }
 
+    T2FV choose_velocity(uint32_t *seed) const;
+    int32_t choose_duration(uint32_t *seed) const;
+
+    static int16_t select_speech(uint32_t *seed, uint32_t chance,
+            const behaviour_t &prev, const behaviour_t &curr);
+
     void schedule_upload_full(ENGD *engd) {
         schedule_upload(engd);
         for (auto &e : effects_) e->schedule_upload(engd);
+    }
+    void resolve_center_full() {
+        resolve_center();
+        for (auto &e : effects_) e->resolve_center();
     }
 
     behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,

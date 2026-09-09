@@ -350,6 +350,8 @@ public:
     intptr_t prepare_tray_icon(T2IV tray);
     void discard_tray_icon(intptr_t icon);
 
+    void sync_menu_flags(uint32_t flgs);
+
     void main_loop(uint32_t fram) {
         rInternalMainLoop(&get_root(), fram, update_previews, intptr_t(this));
     }

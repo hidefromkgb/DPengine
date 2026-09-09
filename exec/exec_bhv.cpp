@@ -98,6 +98,13 @@ behaviour_t::input_t::input_t(const std::string_view &str) {
     mirror_target_xy = process_map(line, f, mirror_target_xy);
 }
 
+static const T2IV process_duration(float min_d, float max_d) {
+    if (min_d > max_d) std::swap(min_d, max_d);
+    max_d -= min_d;
+    return T2IV{{(decltype(T2IV::x))(1000.f * min_d),
+                 (decltype(T2IV::y))(1000.f * max_d)}};
+}
+
 behaviour_t::behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
         bhv_id_t follow_grp_id, lib_id_t follow_tgt, const std::string &path,
         std::vector<int16_t> bgn_speech, std::vector<int16_t> end_speech,
@@ -105,10 +112,7 @@ behaviour_t::behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
 : id_(id)
 , linked_id_(linked_id)
 , follow_grp_id_(follow_grp_id)
-, duration_{{(decltype(duration_.x))(1000.f *
-                            std::min(in.min_duration, in.max_duration)),
-             (decltype(duration_.y))(1000.f *
-                            std::max(in.min_duration, in.max_duration))}}
+, duration_(process_duration(in.min_duration, in.max_duration))
 , movement_speed_(in.speed * FRM_WAIT / 30.f)
 , movement_(in.movement)
 , bgn_speech_idx_(std::move(bgn_speech))
@@ -149,4 +153,66 @@ int16_t behaviour_t::select_speech(uint32_t *seed, uint32_t chance,
     // TODO: fix the case when (end > 0) gets replaced with (bgn = 0);
     //       at the time this is hypothetical, but can become relevant
     return ((end < 0) || (RNG_Load(seed) < mul_chance * chance)) ? end : 0;
+}
+
+static constexpr std::array<T2FV, 32> get_cos_sin_lut() {
+    constexpr float DTR_CONV = M_PI / 180.f;
+    std::array<T2FV, 32> retn = {};
+    for (auto a = 14; a <= 45; a++)
+        retn[a - 14] = T2FV{{std::cos(DTR_CONV * a), std::sin(DTR_CONV * a)}};
+    return retn;
+}
+
+T2FV behaviour_t::choose_velocity(uint32_t *seed) const {
+    static const auto cos_sin_lut = get_cos_sin_lut();
+    auto move = movement_;
+    T2FV retn{{0.f, 0.f}};
+    if (move & move_all) {
+        const auto prng = RNG_Load(seed);
+        //          vvvv--- move_all selector; bit 5 also for move_{hv,dh,dv}
+        //    ...BA9876543210 (bits of prng)
+        // !Y ---^^^    ^^^^^--- cos_sin_lut index, [0; 32)
+        //  !X ---''--- flip the quadrant for full range
+        const auto hv = move & move_hv;
+        switch (move & move_all) {
+            case move_all:
+                switch (prng & 0x1E0) {
+                    case 0x000: case 0x020: case 0x040: case 0x060: case 0x080:
+                        move = move_horz; break;
+                    case 0x0A0: case 0x0C0: case 0x0E0: case 0x100: case 0x120:
+                        move = move_vert; break;
+                    default: move = move_diag; break; // 6 cases, not 5; is ok
+                }
+                break;
+            case move_hv: move = (prng & 0x020) ? move_horz : move_vert; break;
+            case move_dh: move = (prng & 0x020) ? move_diag : move_horz; break;
+            case move_dv: move = (prng & 0x020) ? move_diag : move_vert; break;
+            default: move &= move_all; break;
+        }
+        if (move != move_diag) {
+            retn = (move == move_vert) ? T2FV{{0.f, 1.f}} : T2FV{{1.f, 0.f}};
+        } else {
+            // how the angles were meant to be computed, see DP tech doc:
+            // - hv=move_none: pure diagonal movement, [15; 75]
+            // - hv=move_hv:   used to be move_all so pure diag here, [15; 75]
+            // - hv=move_horz: used to be move_dh, [15; 45]
+            // - hv=move_vert: used to be move_dv, [45; 75]
+            // how the angles are actually computed:
+            // - the LUT contains 32 values: [14; 45], (prng % m) -> (prng & m)
+            // - 14 degrees not that different from 15, no one will notice
+            // - if the full range is needed, 1 extra bit flips (x,y) -> (y,x)
+            // - that way, the full range is [14; 76] and 45 is 2x as probable
+            retn = cos_sin_lut[prng & 0x1F];
+            if (((prng & 0x200) && ((hv == move_none) || (hv == move_hv)))
+                    || (hv == move_vert))
+                std::swap(retn.x, retn.y);
+        }
+        retn.x *= (prng & 0x400) ? -movement_speed_ : movement_speed_;
+        retn.y *= (prng & 0x800) ? -movement_speed_ : movement_speed_;
+    }
+    return retn;
+}
+
+int32_t behaviour_t::choose_duration(uint32_t *seed) const {
+    return duration_.u + ((duration_.v) ? RNG_Load(seed) % duration_.v : 0);
 }

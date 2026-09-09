@@ -130,7 +130,10 @@ private:
     void dump_stats() const;
 
 public:
-    inline const behaviour_t *get(bhv_id_t id) const;
+    const behaviour_t *get(bhv_id_t id) const;
+
+    const behaviour_t *next_behaviour(
+            uint32_t *seed, const behaviour_t *curr) const;
 
     static bhv_id_desc_t build_bhv_id_desc(const input_t &in);
 
@@ -146,6 +149,8 @@ public:
         return preview;
     }
     void load(ENGD *engd);
+
+    void resolve_centers();
 
     static void extract_speech_colors(
             ENGD *engd, const std::vector<library_t*> &libs);

@@ -64,7 +64,7 @@ bhv_id_t library_t::init_bhv_id(movement_flags_t move, int16_t grp) {
     bhv_id_internal_t iid;
     iid.index = 1;
     switch (move) {
-        case move_none:  iid.type = stationary; break;
+        default:         iid.type = stationary; break;
         case move_mouse: iid.type = mouseover;  break;
         case move_drag:  iid.type = dragged;    break;
         case move_sleep: iid.type = sleeping;   break;
@@ -82,6 +82,31 @@ const behaviour_t *library_t::get(bhv_id_t id) const {
     return (ig && (iid.index <= ig->bhv[iid.type].size()))
             ? &ig->bhv[iid.type][iid.index - 1].get()
             : nullptr;
+}
+
+const behaviour_t *library_t::next_behaviour(
+        uint32_t *seed, const behaviour_t *curr) const {
+    auto check_has_nzp = [](const group_t *grp) {
+        return (grp && !grp->bhv[nonzero_prob].empty()) ? grp : nullptr;
+    };
+    if (curr && curr->linked_id()) return get(curr->linked_id());
+
+    bhv_id_internal_t iid = {(curr) ? curr->id() : bhv_id_t{}};
+    auto grp = check_has_nzp(find_in_map(groups_, iid.group));
+    if (!grp) {
+        int best = INT32_MAX;
+        for (auto &ig : groups_)
+            if (check_has_nzp(&ig.second) && (!grp || (ig.first < best))) {
+                grp = &ig.second;
+                best = ig.first;
+            }
+    }
+    if (!grp) {
+        assert(false);
+        return {};
+    }
+    return &weighted_random_selection<false>(
+            grp->bhv[nonzero_prob], grp->nonzero_weights, seed).get();
 }
 
 const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
@@ -397,6 +422,11 @@ void library_t::extract_speech_colors(
 void library_t::load(ENGD *engd) {
     for (auto &b : behaviours_) b->schedule_upload_full(engd);
     for (auto &s : speeches_) s->schedule_upload(engd);
+}
+
+void library_t::resolve_centers() {
+    for (auto &b : behaviours_) b->resolve_center_full();
+    for (auto &s : speeches_) s->resolve_center();
 }
 
 struct library_t::build_ctx_t {

@@ -16,7 +16,7 @@ private:
     // !prepare &&  upload = AINF is being uploaded
     //  prepare &&  upload = AINF is ready
     enum flags_t : uint32_t {
-        GEN_FLAGS(prepare, upload, from_path, fake_center, repeat)
+        GEN_FLAGS(prepare, upload, from_path, centered, repeat)
     };
     struct {
         flags_t flags_ = {};
@@ -47,7 +47,6 @@ protected:
     ~unit_t();
 
     void set_center(bool left, const T2IV &center) {
-        set_flag(left, (center.x != 0) || (center.y != 0), fake_center);
         sides_[left].center_ = center;
     }
     void set_loop(bool left, bool loop) { set_flag(left, loop, repeat); }
@@ -99,6 +98,25 @@ public:
                    (decltype(retn.y))sides_[left].image_.ydim}};
         return retn;
     }
+    void resolve_center(bool left) {
+        // per DP tech doc a center of (0, 0) means 'use natural image center',
+        // and anything else is a point on the image measured from its top left
+        // corner; either way it needs the AINF dimensions and those only exist
+        // once the loader is done, hence a separate pass to be run right after
+        // the ECB_LOAD barrier
+        auto &side = sides_[left];
+        if ((side.flags_ & centered) || !is_ready(left)) return;
+        set_flag(left, true, centered);
+        decltype(side.center_.x) xdim = side.image_.xdim;
+        decltype(side.center_.y) ydim = side.image_.ydim;
+        side.center_ = (side.center_.x || side.center_.y)
+                     ? T2IV{{side.center_.x, ydim - side.center_.y}}
+                     : T2IV{{xdim >> 1, ydim >> 1}};
+    }
+    void resolve_center() { resolve_center(false); resolve_center(true); }
+
+    T2IV center(bool left) const { return sides_[left].center_; }
+
     intptr_t advance(
             bool left, int64_t time, int64_t &old, uint32_t &frame) const {
         if (time <= old) return 0;
