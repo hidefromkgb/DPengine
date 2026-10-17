@@ -70,6 +70,7 @@ include_directories(core ${COMMON_INCLUDE_DIRS})
 link_directories(${COMMON_LIBRARY_DIRS})
 
 file(GLOB_RECURSE LIB_SRC CONFIGURE_DEPENDS core/*.c*)
+list(FILTER LIB_SRC EXCLUDE REGEX core/gif/load/tests)
 add_library(${LIB_NAME} ${LIB_SRC} ${OS_SRC}/lib.c)
 target_link_libraries(${LIB_NAME} PRIVATE ${LIB_LIBRARIES})
 
