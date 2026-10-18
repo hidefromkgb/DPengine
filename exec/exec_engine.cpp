@@ -91,7 +91,7 @@ bool engine_t::load_selection(const selection_t &sel, bool show_progress) {
         if (show_progress) mctl_.set_progress_load(iter + 1, sel.size());
     }
     cEngineCallback(engd_, ECB_LOAD, 0); // wait for the loading to complete
-    for (auto &s : sel) (*find_in_map(libs_, s.first))->resolve_centers();
+    for (auto &s : sel) (*find_in_map(libs_, s.first))->finalize();
     return true;
 }
 
@@ -315,6 +315,7 @@ void engine_t::main_loop() {
     // waiting for the previews to finish loading
     cEngineCallback(engd_, ECB_LOAD, 0);
     cEngineCallback(engd_, ECB_LOAD, ~0);
+    for (auto &l : libs_) l.second->finalize();
 
     // computing preview sizes, since image sizes are now known
     mctl_.finalize_previews();

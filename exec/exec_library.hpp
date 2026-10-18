@@ -150,7 +150,8 @@ public:
     }
     void load(ENGD *engd);
 
-    void resolve_centers();
+    // to be called after every ECB_LOAD with 0, see unit_t::finalize()
+    void finalize();
 
     static void extract_speech_colors(
             ENGD *engd, const std::vector<library_t*> &libs);

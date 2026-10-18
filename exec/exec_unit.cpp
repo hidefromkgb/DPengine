@@ -16,7 +16,7 @@ bool unit_t::maybe_discard(bool left) {
     if (is_being_uploaded(left)) return false;
     if (is_owner_discardable(left)) {
         assert(sides_[left].image_.time);
-        finalize(sides_[left].image_.time);
+        release(sides_[left].image_.time);
     }
     sides_[left].flags_ &= ~(prepare | upload);
     sides_[left].image_ = {};
@@ -35,7 +35,6 @@ bool unit_t::prepare_source(bool left, const std::string &name) {
 bool unit_t::prepare_source(bool left, const std::string &name, uint32_t xdim,
         uint32_t ydim, const std::function<void(uint32_t*)> &draw) {
     // the layout is as follows:
-    //  -ptr: &flags
     //     0: AINF
     // +AINF: buf
     //  +buf: time
@@ -72,10 +71,10 @@ bool unit_t::schedule_upload(bool left, ENGD *engd) {
         pos = (pos != std::string_view::npos) ? pos + 1 : 0;
         temp.remove_prefix(pos); // animation hash: last dir + gif name
         cEngineLoadAnimAsync(engd, &side.image_, (uint8_t*)temp.data(),
-                data, ELA_DISK, finalize);
+                data, ELA_DISK, release);
     } else if (auto anim = (AINF*)data) {
         cEngineLoadAnimAsync(engd, &side.image_, (uint8_t*)(anim->time + 1),
-                anim, ELA_AINF, finalize);
+                anim, ELA_AINF, release);
     }
     return true;
 }

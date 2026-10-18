@@ -96,6 +96,7 @@ public:
                                 (g[b].y * bhv.y - g[e].y * eff.y) / 2}});
             return retn;
         };
+        unit_t::finalize();
         gravity_[false] = process_side(gravity_flags_[false].centering,
                 gravity_flags_[false].placement, dims(false), bhv_right_size);
         gravity_[true] = process_side(gravity_flags_[true].centering,
@@ -237,9 +238,9 @@ public:
         schedule_upload(engd);
         for (auto &e : effects_) e->schedule_upload(engd);
     }
-    void resolve_center_full() {
-        resolve_center();
-        for (auto &e : effects_) e->resolve_center();
+    void finalize_full() {
+        finalize();
+        for (auto &e : effects_) e->finalize(dims(false), dims(true));
     }
 
     behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,

@@ -424,9 +424,9 @@ void library_t::load(ENGD *engd) {
     for (auto &s : speeches_) s->schedule_upload(engd);
 }
 
-void library_t::resolve_centers() {
-    for (auto &b : behaviours_) b->resolve_center_full();
-    for (auto &s : speeches_) s->resolve_center();
+void library_t::finalize() {
+    for (auto &b : behaviours_) b->finalize_full();
+    for (auto &s : speeches_) s->finalize(T2IV{}, T2IV{});
 }
 
 struct library_t::build_ctx_t {

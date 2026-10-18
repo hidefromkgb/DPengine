@@ -16,7 +16,7 @@ private:
     // !prepare &&  upload = AINF is being uploaded
     //  prepare &&  upload = AINF is ready
     enum flags_t : uint32_t {
-        GEN_FLAGS(prepare, upload, from_path, centered, repeat)
+        GEN_FLAGS(prepare, upload, from_path, repeat)
     };
     struct {
         flags_t flags_ = {};
@@ -25,16 +25,13 @@ private:
     } sides_[2];
 
     void *allocate(bool left, size_t size) {
-        auto data = (uint8_t*)realloc(nullptr, size + sizeof(intptr_t));
-        *((intptr_t*)data) = (intptr_t)(&sides_[left].flags_);
-        sides_[left].image_.time = (uint32_t*)(data + sizeof(intptr_t));
+        sides_[left].image_.time = (uint32_t*)realloc(nullptr, size);
         return (void*)sides_[left].image_.time;
     }
-    static void finalize(void *data) {
-        if (!data) return;
-        data = ((uint8_t*)data) - sizeof(intptr_t);
-        *((flags_t*)(*(intptr_t*)data)) |= prepare | upload;
-        data = realloc(data, 0);
+    // the engine calls this once it no longer needs the source buffer, which
+    // is NOT the same as the AINF being filled in
+    static void release(void *data) {
+        if (data) data = realloc(data, 0);
     }
     void set_flag(bool left, bool value, flags_t flag) {
         auto &side = sides_[left];
@@ -98,22 +95,33 @@ public:
                    (decltype(retn.y))sides_[left].image_.ydim}};
         return retn;
     }
-    void resolve_center(bool left) {
+    // the engine writes the AINF separately from releasing the source buffer,
+    // and only at the end of ECB_LOAD with 0, until that barrier the AINF has
+    // no frames, no times and no uuid, and if the engine has nothing to put
+    // there (the load failed, or the request got turned down) it stays that
+    // way for good. Hence this, to be called after the barrier and nowhere
+    // else: it is what turns a side from `being uploaded` into `ready`, and
+    // as discarding is refused until then, the engine never gets to write
+    // into a side that has moved on; everything that depends on the AINF is
+    // settled here too - a side only gets uploaded once, so this only ever
+    // acts once per side, and is a no-op for sides that were never uploaded
+    void finalize(bool left) {
+        auto &side = sides_[left];
+        if (!is_being_uploaded(left)) return;
+        set_flag(left, true, prepare);
+        // this saves processing time by reducing the number of IFs required in
+        // the frame advancement routine: no animation means nothing to loop
+        if (side.image_.fcnt < 2) set_loop(left, false);
         // per DP tech doc a center of (0, 0) means 'use natural image center',
         // and anything else is a point on the image measured from its top left
-        // corner; either way it needs the AINF dimensions and those only exist
-        // once the loader is done, hence a separate pass to be run right after
-        // the ECB_LOAD barrier
-        auto &side = sides_[left];
-        if ((side.flags_ & centered) || !is_ready(left)) return;
-        set_flag(left, true, centered);
+        // corner; either way it needs the AINF dimensions
         decltype(side.center_.x) xdim = side.image_.xdim;
         decltype(side.center_.y) ydim = side.image_.ydim;
         side.center_ = (side.center_.x || side.center_.y)
                      ? T2IV{{side.center_.x, ydim - side.center_.y}}
                      : T2IV{{xdim >> 1, ydim >> 1}};
     }
-    void resolve_center() { resolve_center(false); resolve_center(true); }
+    void finalize() { finalize(false); finalize(true); }
 
     T2IV center(bool left) const { return sides_[left].center_; }
 
@@ -130,7 +138,7 @@ public:
         }
         if (time <= time_next) return 0;
         auto &side = sides_[left];
-        bool wrap = frame >= (side.image_.fcnt - 1);
+        bool wrap = (frame + 1 >= side.image_.fcnt);
         if (!wrap || (side.flags_ & repeat)) {
             frame = (!wrap) ? frame + 1 : 0;
             if (time > (time_next += side.image_.time[frame]))
