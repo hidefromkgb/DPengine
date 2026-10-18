@@ -201,7 +201,7 @@ private:
         , size_(size)
         , categories_(std::move(categories))
         , unit_(unit)
-        , frame_iter_(0)
+        , frame_iter_(UINT32_MAX)
         , frame_time_(0) {
             auto engd_ = intptr_t(engd);
             imagebox_ = {p, engd_, idx, FCT_IBOX, 0, 0, size.x, size.y, fc2e};

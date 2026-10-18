@@ -117,22 +117,28 @@ public:
 
     T2IV center(bool left) const { return sides_[left].center_; }
 
-    intptr_t advance(
-            bool left, int64_t time, int64_t &old, uint32_t &frame) const {
-        if (time <= old) return 0;
+    // returns the uuid whenever there is a new frame to show, 0 otherwise.
+    // TIME_NEXT is when the current frame ends.
+    intptr_t advance(bool left, int64_t time,
+            int64_t &time_next, uint32_t &frame) const {
+        if (frame == UINT32_MAX) {
+            frame = 0;
+            auto &side = sides_[left];
+            if (!side.image_.fcnt) return 0;
+            time_next = time + side.image_.time[frame];
+            return side.image_.uuid;
+        }
+        if (time <= time_next) return 0;
         auto &side = sides_[left];
         bool wrap = frame >= (side.image_.fcnt - 1);
         if (!wrap || (side.flags_ & repeat)) {
-            if (time > (old += side.image_.time[frame]))
-                old = time; // > 1 frame skipped, resetting
             frame = (!wrap) ? frame + 1 : 0;
+            if (time > (time_next += side.image_.time[frame]))
+                time_next = time + side.image_.time[frame]; // >1 frame skipped
             return side.image_.uuid;
-        } else {
-            old = std::numeric_limits<int64_t>::max(); // never expires
-            wrap = frame >= side.image_.fcnt;
-            frame = side.image_.fcnt - 1;
-            return (wrap) ? side.image_.uuid : 0;
         }
+        time_next = std::numeric_limits<int64_t>::max(); // never expires
+        return 0;
     }
 };
 
