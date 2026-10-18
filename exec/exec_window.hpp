@@ -279,9 +279,11 @@ private:
     std::vector<std::unique_ptr<preview_t>> previews_;
     menu_t global_menu_;
     menu_t local_menu_;
+    std::string local_menu_title_;
 
     static void global_menu_handler(MENU *item);
     std::vector<MENU> get_global_template();
+    std::vector<MENU> get_local_template();
 
     std::vector<CTRL> get_template(engine_t &engcref, const conf_t &conf);
     static intptr_t FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data);
@@ -351,6 +353,7 @@ public:
     void discard_tray_icon(intptr_t icon);
 
     void sync_menu_flags(uint32_t flgs);
+    void open_local_menu(const std::string &name);
 
     void main_loop(uint32_t fram) {
         rInternalMainLoop(&get_root(), fram, update_previews, intptr_t(this));

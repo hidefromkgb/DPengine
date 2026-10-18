@@ -222,6 +222,7 @@ void main_window_t::relocalize() {
     auto text = (conf_.flgs & conf_t::exact) ? TXT_AGRP : TXT_OGRP;
     set_control_text_stock(text, MCT_OGRP);
     global_menu_.reload(get_global_template());
+    local_menu_.reload(get_local_template());
 }
 
 void main_window_t::try_update_checkbox(CTRL &c, int flag) {
@@ -718,6 +719,36 @@ std::vector<MENU> main_window_t::get_global_template() {
         {.text = get_text_stock(TXT_EXIT)->data(), .data = (intptr_t)engd_,
                            .uuid = TXT_EXIT, .func = global_menu_handler}
     };
+}
+
+// [TODO:] handlers for everything but EXIT
+std::vector<MENU> main_window_t::get_local_template() {
+    return std::vector<MENU>{
+        {.text = "", .flgs = MFL_GRAY}, // the title, see open_local_menu()
+        {.text = ""},
+        {.text = get_text_stock(TXT_CDEL)->data(), .uuid = TXT_CDEL},
+        {.text = get_text_stock(TXT_ADEL)->data(), .uuid = TXT_ADEL},
+        {.text = ""},
+        {.text = get_text_stock(TXT_CSLP)->data(),
+         .flgs = MFL_CCHK, .uuid = TXT_CSLP},
+        {.text = get_text_stock(TXT_ASLP)->data(), .uuid = TXT_ASLP},
+        {.text = ""},
+        {.text = get_text_stock(TXT_TPL1)->data(),
+         .flgs = MFL_CCHK, .uuid = TXT_TPL1},
+        {.text = get_text_stock(TXT_TPL2)->data(),
+         .flgs = MFL_CCHK, .uuid = TXT_TPL2},
+        {.text = ""},
+        {.text = get_text_stock(TXT_OPTS)->data(), .uuid = TXT_OPTS},
+        {.text = get_text_stock(TXT_EXIT)->data(), .data = (intptr_t)engd_,
+                           .uuid = TXT_EXIT, .func = global_menu_handler}
+    };
+}
+
+void main_window_t::open_local_menu(const std::string &name) {
+    local_menu_title_ = "[ " + name + " ]";
+    auto menu = local_menu_.get();
+    menu[0].text = local_menu_title_.c_str();
+    rOpenContextMenu(menu);
 }
 
 MENU *main_window_t::menu_t::get() {

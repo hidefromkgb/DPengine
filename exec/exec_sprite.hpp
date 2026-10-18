@@ -31,9 +31,13 @@ public:
 
     void update(uint32_t *seed, int64_t time, T2IV area);
 
-    bool maybe_append(std::vector<T4FV> &display_list) const {
-        if (uuid_) display_list.emplace_back(T4FV{{position_.x, position_.y,
-                        float(curr_frame_), float(uuid_)}});
+    const library_t &library() const { return lib_; }
+
+    // returns whether the entry is to be shown at all; the ones that are not
+    // never had anything to show, and are sorted last, see choose_behaviour()
+    bool append(std::vector<T4FV> &display_list) const {
+        display_list.emplace_back(T4FV{{position_.x, position_.y,
+                                        float(curr_frame_), float(uuid_)}});
         return uuid_;
     }
     static bool depth_sort(const sprite_t &a, const sprite_t &b) {

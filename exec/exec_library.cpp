@@ -275,7 +275,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     auto &preview = lib->get_preview();
     auto dims = preview.dims(false);
     size_t preview_size = sizeof(uint32_t) * dims.x * dims.y;
-    uint32_t frame = 0;
+    uint32_t frame = UINT32_MAX;
     int64_t time = 0;
     AINF ainf = {preview.advance(false, 1, time, frame), (uint32_t)dims.x,
         (uint32_t)dims.y, 0, (typeof(ainf.time))realloc(nullptr, preview_size)};

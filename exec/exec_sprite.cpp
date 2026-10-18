@@ -53,14 +53,18 @@ bool sprite_t::choose_behaviour(uint32_t *seed, int64_t time, T2IV area) {
     if (velocity_.x) left_ = (velocity_.x < 0.f);
     else if (!prev_bhv) left_ = RNG_Load(seed) & 1;
     const auto center = bhv_->center(left_);
-    if (prev_bhv) { // existing sprite: aligning the new center with the old
+    if (prev_bhv) { // sprite already on screen: aligning the new center
         const auto prev_center = prev_bhv->center(prev_left);
         position_.x += prev_center.x - center.x;
         position_.y -= prev_center.y - center.y;
-    } else { // newly created sprite: performing the initial placement
+    } else if (bhv_->dims(left_).x) { // first anim of the sprite: placing it
         position_.x = RNG_Load(seed) % std::max(area.x - 2 * center.x, 1);
         position_.y = RNG_Load(seed) % std::max(area.y - 2 * center.y, 1)
                     + 2 * center.y;
+    } else { // nothing to show yet: staying put at -INFINITY, sorted last
+        next_bhv_time_ = std::numeric_limits<int64_t>::max();
+        position_ = T2FV{{0.f, -INFINITY}};
+        velocity_ = T2FV{{}};
     }
     // [TODO:] spawn the behaviour effects here, if allowed
     return true;

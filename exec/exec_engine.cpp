@@ -233,8 +233,11 @@ uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
         uint64_t time, intptr_t user, uint32_t attr,
         int32_t xptr, int32_t yptr, int32_t isel) {
     auto engc = (engine_t*)user;
-    // [TODO:] mouse handling (dragging, mouseover and the per-sprite context
-    //         menu) belongs here, and is what XPTR, YPTR and ISEL are for
+    const auto pick = (isel >= 0) ? engc->sprites_[isel].get() : nullptr;
+    // [TODO:] the rest of mouse handling (dragging, mouseover) belongs here,
+    //         and is what XPTR and YPTR are for
+    if ((attr & UFR_MOUS) && (~attr & engc->ppos_.z & UFR_RBTN) && pick)
+        engc->mctl_.open_local_menu(pick->library().name());
 
     // timekeeping (with dilation and partial timestamp accumulator)
     if (!engc->tpre_) engc->tpre_ = time;
@@ -248,13 +251,15 @@ uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
     for (auto &s : engc->sprites_)
         s->update(engc->seed_, engc->tcur_, area);
 
-    // sorting the sprites by depth and building the display list
+    // sorting the sprites by depth and building the display list; those with
+    // nothing to show get sorted last and the renderer should never see them
     using sp_t = const std::unique_ptr<sprite_t>;
     std::stable_sort(engc->sprites_.begin(), engc->sprites_.end(),
             [](sp_t &a, sp_t &b) { return sprite_t::depth_sort(*a, *b); });
+    uint32_t shown = 0;
     engc->display_.clear();
     for (auto &s : engc->sprites_)
-        s->maybe_append(engc->display_);
+        shown += s->append(engc->display_);
 
     engc->ppos_.z = attr; // remembering the button state for the next frame
     *data = engc->display_.data();
@@ -263,7 +268,7 @@ uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
     // (see MakeRendererOGL() in core/ogl/oglstd.c), so it has to be the
     // maximum for the whole run; reporting 0 is how the engine is told to stop
     *size = (!engc->sprites_.empty()) ? engc->pmax_ : 0;
-    return engc->display_.size();
+    return shown;
 }
 
 void engine_t::display_loop() {
