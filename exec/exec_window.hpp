@@ -146,7 +146,7 @@ private:
         int32_t name_len_;
         int32_t name_iter_;
         int64_t name_time_;
-        lib_id_t lib_id_;
+        library_t &lib_;
         conf_t::spin_t count_;
         flags_t flags_;
         T2IV lower_left_;
@@ -189,12 +189,12 @@ private:
         }
         preview_t(CTRL *p, int32_t idx, T4IV size, FCTL fc2e,
                 conf_t::categories_t categories, ENGD *engd, const unit_t &unit,
-                const std::string &name, lib_id_t lib_id)
+                const std::string &name, library_t &lib)
         : name_(std::to_string(idx + 1) + ". " + name)
         , name_len_(0)
         , name_iter_(0)
         , name_time_(0)
-        , lib_id_(lib_id)
+        , lib_(lib)
         , count_(0, 0, 30000)
         , flags_{}
         , lower_left_{}
@@ -211,7 +211,7 @@ private:
                 = {p, intptr_t(&count_), idx, FCT_SPIN, 0, 0, size.x, 0, fc2e};
         }
         bool is_eligible() const { return flags_ & eligible; }
-        lib_id_t lib_id() const { return lib_id_; }
+        library_t &library() const { return lib_; }
         void set_pos(T2IV lower_left) {
             lower_left_ = lower_left;
             flags_ &= ~visible;
@@ -344,7 +344,7 @@ public:
 
     void init_preview(const unit_t &preview,
             conf_t::categories_t categories, const std::string &name,
-            lib_id_t lib_id);
+            library_t &lib);
 
     void categorize_previews();
     void finalize_previews();

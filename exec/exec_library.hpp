@@ -110,6 +110,7 @@ private:
     size_t preview_id_;
     uint32_t speech_fg_;
     uint32_t speech_bg_;
+    uint32_t max_effects_;
 
     inline static bhv_id_t init_bhv_id(movement_flags_t move, int16_t group);
 
@@ -127,6 +128,7 @@ private:
     void create_behaviours(build_ctx_t &ctx);
     void init_probabilities(const build_ctx_t &ctx);
     void init_follow_groups(const build_ctx_t &ctx);
+    void init_max_effects();
     void dump_stats() const;
 
 public:
@@ -149,6 +151,8 @@ public:
         return preview;
     }
     void load(ENGD *engd);
+
+    uint32_t max_effects() const { return max_effects_; }
 
     // to be called after every ECB_LOAD with 0, see unit_t::finalize()
     void finalize();

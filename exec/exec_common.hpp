@@ -12,13 +12,17 @@
 
 
 
-using lib_id_t = size_t;
-using bhv_id_t = uint32_t;
-using selection_t = std::vector<std::pair<lib_id_t, uint32_t>>;
+class library_t;
 
+using lib_id_t = size_t; // [TODO:] consider phasing lib_id_t out
+using bhv_id_t = uint32_t;
+using selection_t =
+        std::vector<std::pair<std::reference_wrapper<library_t>, uint32_t>>;
 enum {
 /*  framerate limiter in msec    */ FRM_WAIT = 40,
 };
+// timekeeping constant designating a point in a /very/ far future
+static constexpr auto never = INT64_MAX;
 
 #define assert_and_discard(a, d) assert(a), ((void)(d))
 

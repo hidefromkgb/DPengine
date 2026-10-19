@@ -7,7 +7,7 @@
 
 
 class library_t;
-class sprite_t;
+class sprite_bank_t;
 
 // engine data (client side)
 class engine_t : public no_copy_t {
@@ -32,12 +32,7 @@ private:
 
     std::unordered_map<lib_id_t, std::unique_ptr<library_t>> libs_;
 
-    // sprites are held by pointer because the pool gets reordered every
-    // frame by the depth sort, while the sprites have to stay put: effects
-    // will be pointing at the sprites they belong to
-    std::vector<std::unique_ptr<sprite_t>> sprites_;
-    std::vector<T4FV> display_; // display list, refilled every frame
-    uint32_t pmax_; // maximum sprite count for the whole run, see update_frame
+    std::unique_ptr<sprite_bank_t> bank_; // the sprites, for one run only
 
     static conf_t get_def_conf(const std::string_view base);
 
@@ -64,8 +59,6 @@ public:
     ~engine_t();
     engine_t(const std::string_view fcnf, const std::string_view base,
             const T2IV tray, const T4IV area);
-
-    const library_t &get_library(lib_id_t lib_id) const;
 
     void display_loop();
     void main_loop();

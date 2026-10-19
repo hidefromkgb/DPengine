@@ -586,12 +586,27 @@ void library_t::init_follow_groups(const build_ctx_t &ctx) {
 }
 
 void library_t::dump_stats() const {
-    printf("Total behaviours: %lu\n", behaviours_.size());
+    printf("Total behaviours: %lu (max effects: %u)\n",
+            behaviours_.size(), max_effects_);
     for (auto &g : groups_) {
         printf("[%d] %lu + %lu + %lu + %lu + %lu + %lu\n", g.first,
             g.second.bhv[nonzero_prob].size(), g.second.bhv[stationary].size(),
             g.second.bhv[moving].size(), g.second.bhv[mouseover].size(),
             g.second.bhv[dragged].size(), g.second.bhv[sleeping].size());
+    }
+}
+
+void library_t::init_max_effects() {
+    // compute the max number of effects the sprite belonging to their library
+    // can spawn: summed as effects may outlive their behaviours
+    max_effects_ = 0;
+    for (auto &b : behaviours_) {
+        const auto d_bhv = b->duration();
+        for (auto &e : b->effects()) {
+            const auto d_eff = e->duration();
+            const auto life = (!d_eff.u) ? d_bhv.u + d_bhv.v : d_eff.u;
+            max_effects_ += (d_eff.v) ? life / d_eff.v + 2 : 2;
+        }
     }
 }
 
@@ -601,7 +616,8 @@ library_t::library_t(std::string path, const input_t &in,
 , readable_name_(in.name)
 , preview_id_(0)
 , speech_fg_(0xFF000000)
-, speech_bg_(0xFFFFFFFF) {
+, speech_bg_(0xFFFFFFFF)
+, max_effects_(0) {
     build_ctx_t ctx(in, bhv_id_map);
     init_interactions(ctx);
     map_effects(ctx);
@@ -609,5 +625,6 @@ library_t::library_t(std::string path, const input_t &in,
     create_behaviours(ctx);
     init_probabilities(ctx);
     init_follow_groups(ctx);
+    init_max_effects();
     dump_stats();
 }
