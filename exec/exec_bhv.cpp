@@ -4,7 +4,7 @@
 
 
 
-inline T2IV effect_t::select_gravity(bool left, uint32_t *seed) const {
+T2FV effect_t::select_gravity(bool left, uint32_t *seed) const {
     return random_selection<false>(gravity_[left], seed);
 }
 

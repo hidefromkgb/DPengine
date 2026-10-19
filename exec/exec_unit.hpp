@@ -145,7 +145,7 @@ public:
                 time_next = time + side.image_.time[frame]; // >1 frame skipped
             return side.image_.uuid;
         }
-        time_next = std::numeric_limits<int64_t>::max(); // never expires
+        time_next = never;
         return 0;
     }
 };

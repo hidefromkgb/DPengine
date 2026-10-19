@@ -77,8 +77,7 @@ engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
 , area_(area)
 , ppos_{}
 , tcur_{}
-, tpre_{}
-, pmax_{} {
+, tpre_{} {
     mctl_.set_options_window(octl_.get_id()); // link options window to main
     build_library_structure(cini_.base); // read configuration, load everything
 }
@@ -87,11 +86,11 @@ bool engine_t::load_selection(const selection_t &sel, bool show_progress) {
     if (sel.empty()) return false;
     cEngineCallback(engd_, ECB_LOAD, ~0); // interrupt to load more animations
     for (size_t iter = 0; iter < sel.size(); iter++) {
-        (*find_in_map(libs_, sel[iter].first))->load(engd_);
+        sel[iter].first.get().load(engd_);
         if (show_progress) mctl_.set_progress_load(iter + 1, sel.size());
     }
     cEngineCallback(engd_, ECB_LOAD, 0); // wait for the loading to complete
-    for (auto &s : sel) (*find_in_map(libs_, s.first))->finalize();
+    for (auto &s : sel) s.first.get().finalize();
     return true;
 }
 
@@ -112,11 +111,6 @@ conf_t engine_t::get_def_conf(const std::string_view base) {
     return retn;
 }
     
-const library_t &engine_t::get_library(lib_id_t lib_id) const {
-    auto il = find_in_map(libs_, lib_id);
-    assert(il);
-    return *il->get();
-}
 
 void engine_t::save_ini_conf() const {
     auto header = [](const char *h) { return DEF_CRLF + std::string(h); };
@@ -232,43 +226,31 @@ uint32_t engine_t::update_flags(ENGD *engd, intptr_t user, uint32_t flgs) {
 uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
         uint64_t time, intptr_t user, uint32_t attr,
         int32_t xptr, int32_t yptr, int32_t isel) {
-    auto engc = (engine_t*)user;
-    const auto pick = (isel >= 0) ? engc->sprites_[isel].get() : nullptr;
+    auto &engc = *(engine_t*)user;
+    auto &bank = *engc.bank_;
+    const auto pick = bank.pick(isel); // points to the sprite under the cursor
     // [TODO:] the rest of mouse handling (dragging, mouseover) belongs here,
     //         and is what XPTR and YPTR are for
-    if ((attr & UFR_MOUS) && (~attr & engc->ppos_.z & UFR_RBTN) && pick)
-        engc->mctl_.open_local_menu(pick->library().name());
+    if (pick && (attr & UFR_MOUS) && (~attr & engc.ppos_.z & UFR_RBTN))
+        engc.mctl_.open_local_menu(pick->name());
 
     // timekeeping (with dilation and partial timestamp accumulator)
-    if (!engc->tpre_) engc->tpre_ = time;
-    engc->tacc_ += 0.01f * engc->ccur_.ndil.get() * (time - engc->tpre_);
-    engc->tpre_ = time;
-    engc->tcur_ += (uint64_t)engc->tacc_;
-    engc->tacc_ -= (uint64_t)engc->tacc_;
+    if (!engc.tpre_) engc.tpre_ = time;
+    engc.tacc_ += 0.01f * engc.ccur_.ndil.get() * (time - engc.tpre_);
+    engc.tpre_ = time;
+    engc.tcur_ += (uint64_t)engc.tacc_;
+    engc.tacc_ -= (uint64_t)engc.tacc_;
 
-    // animating the sprites
-    T2IV area{{engc->area_.xdim, engc->area_.ydim}};
-    for (auto &s : engc->sprites_)
-        s->update(engc->seed_, engc->tcur_, area);
+    bank.update(engc.seed_, engc.tcur_); // animating the sprites
+    *data = bank.display(); // passing the updated sprites to the renderer
+    engc.ppos_.z = attr; // remembering the button state for the next frame
 
-    // sorting the sprites by depth and building the display list; those with
-    // nothing to show get sorted last and the renderer should never see them
-    using sp_t = const std::unique_ptr<sprite_t>;
-    std::stable_sort(engc->sprites_.begin(), engc->sprites_.end(),
-            [](sp_t &a, sp_t &b) { return sprite_t::depth_sort(*a, *b); });
-    uint32_t shown = 0;
-    engc->display_.clear();
-    for (auto &s : engc->sprites_)
-        shown += s->append(engc->display_);
-
-    engc->ppos_.z = attr; // remembering the button state for the next frame
-    *data = engc->display_.data();
     // SIZE is the capacity of the sprite array rather than its length: the GPU
     // renderer is built once, out of whatever the very first frame reports
     // (see MakeRendererOGL() in core/ogl/oglstd.c), so it has to be the
     // maximum for the whole run; reporting 0 is how the engine is told to stop
-    *size = (!engc->sprites_.empty()) ? engc->pmax_ : 0;
-    return shown;
+    *size = bank.capacity();
+    return bank.shown();
 }
 
 void engine_t::display_loop() {
@@ -285,15 +267,8 @@ void engine_t::display_loop() {
         //rMessage("Nothing selected!", nullptr, "OK", nullptr);
         return;
     }
-    T2IV area{{area_.xdim, area_.ydim}};
-    for (auto &s : sel)
-        for (uint32_t iter = 0; iter < s.second; iter++)
-            sprites_.emplace_back(std::make_unique<sprite_t>(
-                    get_library(s.first), seed_, tcur_, area));
-    // [TODO:] once effects and speeches can spawn sprites of their own, this
-    //         has to budget for them the way master's Q-formula did
-    pmax_ = sprites_.size();
-    display_.reserve(pmax_);
+    bank_ = std::make_unique<sprite_bank_t>(sel, seed_, tcur_,
+                T2IV{{area_.xdim, area_.ydim}}, ccur_.flgs & conf_t::effects);
 
     uint32_t engd_flags = 0;
     for (auto &f : render_flags)
@@ -311,9 +286,7 @@ void engine_t::display_loop() {
     for (auto &f : render_flags)
         if (engd_flags & f.second) ccur_.flgs |= f.first;
 
-    sprites_.clear();
-    display_.clear();
-    pmax_ = 0;
+    bank_.reset();
 }
 
 void engine_t::main_loop() {
@@ -398,8 +371,8 @@ void engine_t::build_library_structure(const std::string &base) {
     for (size_t ctg_idx = 0; ctg_idx < ctg.size(); ctg_idx++) {
         auto &c = ctg[ctg_idx];
         auto &il = *find_in_map(libs_, c.first);
-        mctl_.init_preview(il->load_preview(engd_), std::move(c.second),
-                il->name(), c.first);
+        mctl_.init_preview(
+                il->load_preview(engd_), std::move(c.second), il->name(), *il);
         mctl_.set_progress_load(ctg_idx + 1, ctg.size());
     }
 }

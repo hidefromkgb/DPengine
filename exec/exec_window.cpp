@@ -359,7 +359,7 @@ selection_t main_window_t::collect_selection(uint32_t *seed) const {
     selection_t retn;
     for (size_t iter = 0; iter < previews_.size(); iter++)
         if (auto count = previews_[iter]->count() + rand_count[iter])
-            retn.emplace_back(previews_[iter]->lib_id(), count);
+            retn.emplace_back(previews_[iter]->library(), count);
     return retn;
 }
 
@@ -469,10 +469,11 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 }
 
 void main_window_t::init_preview(const unit_t &preview,
-        conf_t::categories_t categories, const std::string &name, lib_id_t id) {
+        conf_t::categories_t categories, const std::string &name,
+        library_t &lib) {
     previews_.emplace_back(std::make_unique<preview_t>(&get(MCT_CHAR),
                 previews_.size(), get_min_preview_size(), FC2EI,
-                std::move(categories), engd_, preview, name, id));
+                std::move(categories), engd_, preview, name, lib));
 }
 
 void main_window_t::categorize_previews() {

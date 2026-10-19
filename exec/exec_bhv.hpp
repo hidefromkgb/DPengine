@@ -29,9 +29,7 @@ protected:
     } gravity_flags_[2];
     const T2IV duration_; // u = duration, v = repeat_delay
     const bool follow_;
-    std::vector<T2IV> gravity_[2]; // can't be made const: size unknown at init
-
-    inline T2IV select_gravity(bool left, uint32_t *seed) const;
+    std::vector<T2FV> gravity_[2]; // can't be made const: size unknown at init
 
 public:
     class input_t {
@@ -66,6 +64,11 @@ public:
 
     effect_t(const input_t &in, const std::string &path);
 
+    T2IV duration() const { return duration_; } // u = duration, v = repeat
+    bool follow() const { return follow_; }
+    // offset from the parent's lower left corner, Y going up
+    T2FV select_gravity(bool left, uint32_t *seed) const;
+
     // TODO: check if everything is correct with both horz and vert axes
     void finalize(T2IV bhv_right_size, T2IV bhv_left_size) {
         auto process_side = [](gravity_flags_t geff, gravity_flags_t gbhv,
@@ -88,12 +91,12 @@ public:
                 {{0, 2}}, {{1, 2}}, {{2, 2}}, {{0, 1}}, {{1, 1}},
                 {{2, 1}}, {{0, 0}}, {{1, 0}}, {{2, 0}},
             }};
-            std::vector<T2IV> retn;
+            std::vector<T2FV> retn;
             for (auto &b : i[gbhv])
                 for (auto &e : i[geff])
-                    retn.emplace_back(T2IV{{
-                                (g[b].x * bhv.x - g[e].x * eff.x) / 2,
-                                (g[b].y * bhv.y - g[e].y * eff.y) / 2}});
+                    retn.emplace_back(T2FV{{
+                            float((g[b].x * bhv.x - g[e].x * eff.x) >> 1),
+                            float((g[b].y * bhv.y - g[e].y * eff.y) >> 1)}});
             return retn;
         };
         unit_t::finalize();
@@ -227,6 +230,10 @@ public:
     bhv_id_t id() const { return id_; }
     bhv_id_t linked_id() const { return linked_id_; }
     bhv_id_t follow_grp_id() const { return follow_grp_id_; }
+    T2IV duration() const { return duration_; } // u = min, v = extension
+    const std::vector<std::unique_ptr<effect_t>> &effects() const {
+        return effects_;
+    }
 
     T2FV choose_velocity(uint32_t *seed) const;
     int32_t choose_duration(uint32_t *seed) const;
