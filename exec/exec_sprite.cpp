@@ -80,6 +80,11 @@ bool sprite_t::move_behaviour(int64_t time, T2IV area) {
 
 void sprite_t::move_effect(bool reset) {
     if (!reset && !eff()->follow()) return;
+    if (reset || parent_moved_on()) { // a new image or side
+        parent_bhv_ = parent_->bhv()->id();
+        offset_ = eff()->gravity(
+                left_, gravity_, parent_->bhv()->dims(parent_->left_));
+    }
     position_ = T2FV{{parent_->position_.x + offset_.x,
                       parent_->position_.y - offset_.y}};
     depth_ = (eff()->follow()) ? parent_->depth_ : position_.y;
@@ -96,7 +101,7 @@ void sprite_t::init_effect(uint32_t *seed, int64_t time) {
     assert(is_effect());
     uuid_ = 0;
     left_ = parent_->left_;
-    offset_ = eff()->select_gravity(left_, seed);
+    gravity_ = eff()->select_gravity(left_, seed);
     const auto span = eff()->duration(); // u = duration, v = repeat
     next_wait_time_ = (span.u) ? time + span.u : never;
     next_rep_time_ = (span.v) ? time + span.v : never;
@@ -143,9 +148,9 @@ bool sprite_t::update_effect(uint32_t *seed, int64_t time) {
     const bool flipped = eff()->follow() && (left_ != parent_->left_);
     if (flipped) {
         left_ = parent_->left_;
-        offset_ = eff()->select_gravity(left_, seed);
+        gravity_ = eff()->select_gravity(left_, seed);
     }
-    move_effect(false);
+    move_effect(flipped);
     advance(time, flipped);
     return true;
 }

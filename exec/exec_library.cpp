@@ -426,7 +426,7 @@ void library_t::load(ENGD *engd) {
 
 void library_t::finalize() {
     for (auto &b : behaviours_) b->finalize_full();
-    for (auto &s : speeches_) s->finalize(T2IV{}, T2IV{});
+    for (auto &s : speeches_) s->finalize();
 }
 
 struct library_t::build_ctx_t {
