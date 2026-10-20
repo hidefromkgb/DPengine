@@ -118,10 +118,10 @@ behaviour_t::behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
 , bgn_speech_idx_(std::move(bgn_speech))
 , end_speech_idx_(std::move(end_speech))
 , follow_tgt_(follow_tgt)
-, follow_offset_{in.target_xy, (in.mirror_target_xy)
-                                   ? T2IV{{-in.target_xy.x, in.target_xy.y}}
-                                   : in.target_xy}
-, effects_(process_effects(path, eff)) {
+, follow_offset_{process_follow_offset(false, in, follow_tgt),
+                 process_follow_offset(true, in, follow_tgt)}
+, effects_(process_effects(path, eff))
+, follow_(follow_tgt || in.target_xy.x || in.target_xy.y) {
 #ifdef DEV_MODE
     debug_ = in;
 #endif // DEV_MODE

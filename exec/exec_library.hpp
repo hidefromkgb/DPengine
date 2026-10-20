@@ -100,6 +100,7 @@ private:
         }
     };
 
+    lib_id_t id_;
     std::string library_path_;
     std::string readable_name_;
     std::vector<std::unique_ptr<interaction_t>> interactions_;
@@ -136,10 +137,12 @@ public:
 
     const behaviour_t *next_behaviour(
             uint32_t *seed, const behaviour_t *curr) const;
+    const unit_t &follow_override(
+            uint32_t *seed, const behaviour_t &bhv, bool move) const;
 
     static bhv_id_desc_t build_bhv_id_desc(const input_t &in);
 
-    library_t(std::string path, const input_t &in,
+    library_t(lib_id_t id, std::string path, const input_t &in,
             const bhv_id_map_t &bhv_id_map);
 
     // both *_preview() methods intentionally non-const:
@@ -160,6 +163,7 @@ public:
     static void extract_speech_colors(
             ENGD *engd, const std::vector<library_t*> &libs);
 
+    lib_id_t id() const { return id_; };
     const std::string &name() const { return readable_name_; }
 };
 

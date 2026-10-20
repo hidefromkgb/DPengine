@@ -346,8 +346,9 @@ void engine_t::build_library_structure(const std::string &base) {
     for (auto &i : ins) {
         // initialize the libraries
         printf("%s\n", i.name.c_str());
-        libs_.emplace(str_hash(i.name), std::make_unique<library_t>(
-                    concat_path({path, i.name}), i, bhv_id_map));
+        const lib_id_t hash = str_hash(i.name);
+        libs_.emplace(hash, std::make_unique<library_t>(
+                    hash, concat_path({path, i.name}), i, bhv_id_map));
         // process follow targets (nothing to do beside report missing ones)
         for (auto &b : i.behaviours)
             if (!b.follow_target.empty())

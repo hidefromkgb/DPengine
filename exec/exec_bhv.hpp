@@ -214,8 +214,9 @@ private:
     const std::vector<int16_t> bgn_speech_idx_; // speech indices from library
     const std::vector<int16_t> end_speech_idx_;
     const lib_id_t follow_tgt_;
-    const T2IV follow_offset_[2];
+    const T2FV follow_offset_[2];
     const std::vector<std::unique_ptr<effect_t>> effects_;
+    const bool follow_;
 
     std::vector<std::unique_ptr<effect_t>> process_effects(
             const std::string &path, const eff_vec_t &eff) {
@@ -224,12 +225,27 @@ private:
             retn.emplace_back(std::make_unique<effect_t>(e, path));
         return retn;
     }
+    static T2FV process_follow_offset(bool left, const input_t &in, bool tgt) {
+        // no target: if the offset is non-0 this follow is area-based, given
+        // as 0..100% of the drawing area, so let's translate to 0..1 - or if
+        // the offset is 0 then multiplying it does no harm, cannot get zeroer
+        if (!tgt) return {{.01f * in.target_xy.x, .01f * in.target_xy.y}};
+        left &= !!in.mirror_target_xy;
+        return {{decltype(T2FV::x)((left) ? -in.target_xy.x : in.target_xy.x),
+                 decltype(T2FV::y)(in.target_xy.y)}};
+    }
 
 public:
     bhv_id_t id() const { return id_; }
     bhv_id_t linked_id() const { return linked_id_; }
     bhv_id_t follow_grp_id() const { return follow_grp_id_; }
     T2IV duration() const { return duration_; } // u = min, v = extension
+    float speed() const { return movement_speed_; }
+    bool follow() const { return follow_; }
+    lib_id_t follow_target() const { return follow_tgt_; } // 0 = none
+    T2FV follow_offset(bool target_left) const {
+        return follow_offset_[target_left];
+    }
     const std::vector<std::unique_ptr<effect_t>> &effects() const {
         return effects_;
     }
