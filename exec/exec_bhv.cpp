@@ -4,7 +4,7 @@
 
 
 
-T2FV effect_t::select_gravity(bool left, uint32_t *seed) const {
+gravity_t effect_t::select_gravity(bool left, uint32_t *seed) const {
     return random_selection<false>(gravity_[left], seed);
 }
 
@@ -33,11 +33,11 @@ effect_t::input_t::input_t(const std::string_view &str) {
 }
 
 effect_t::effect_t(const input_t &in, const std::string &path)
-: gravity_flags_{{in.placement_right, in.centering_right},
-                 {in.placement_left, in.centering_left}}
-, duration_{{(decltype(duration_.x))(1000.f * in.duration),
+: duration_{{(decltype(duration_.x))(1000.f * in.duration),
              (decltype(duration_.y))(1000.f * in.repeat_delay)}}
-, follow_(in.follow) {
+, follow_(in.follow)
+, gravity_{init_gravity(in.placement_right, in.centering_right),
+           init_gravity(in.placement_left, in.centering_left)} {
 #ifdef DEV_MODE
     debug_ = in;
 #endif // DEV_MODE

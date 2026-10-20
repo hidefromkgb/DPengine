@@ -22,6 +22,7 @@ private:
     bhv_id_t parent_bhv_;       // parent's behaviour, 0 in non-effect sprites
     float depth_;               // sorting key, see depth_sort()
     bool left_;                 // the sprite faces left
+    gravity_t gravity_;         // effects only, see effect_t::select_gravity()
     union {
         struct { // behaviours only
             const library_t *lib_;      // parent library
@@ -33,7 +34,7 @@ private:
             const sprite_t *parent_;    // the sprite that deployed it
             int64_t next_wait_time_;    // when the effect is due to end + wait
             int64_t next_rep_time_;     // when the effect is due to repeat
-            T2FV offset_;               // see effect_t::select_gravity()
+            T2FV offset_;               // see effect_t::gravity()
         };
     };
 

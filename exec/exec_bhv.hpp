@@ -20,18 +20,56 @@ enum movement_flags_t : uint32_t {
 
 class effect_t : public unit_t {
 protected:
-    enum gravity_flags_t : uint8_t { top_left = 0, top, top_right,
-        center_left, center, center_right, bottom_left, bottom, bottom_right,
-        any, not_center, };
-    const struct {
-        gravity_flags_t placement:4;
-        gravity_flags_t centering:4;
-    } gravity_flags_[2];
+    // a 3x3 grid row by row from the top, each row padded to 4 entries, so
+    // that X = ID & 3, Y = ID >> 2 (after an up-correction), see gravity();
+    // X = {0, 1, 2}, Y = {0, 1, 2} so it's okay to use them as coefficients
+    enum gravity_flags_t : uint8_t {
+           top_left =  0,    top,    top_right,    _top_spacer_gravity,
+        center_left =  4, center, center_right, _center_spacer_gravity,
+        bottom_left =  8, bottom, bottom_right, _bottom_spacer_gravity,
+        any = 12, not_center,
+        _max_gravity = not_center,
+    };
     const T2IV duration_; // u = duration, v = repeat_delay
     const bool follow_;
-    std::vector<T2FV> gravity_[2]; // can't be made const: size unknown at init
+    // placement/centering point pairs to choose from, see gravity()
+    const std::vector<gravity_t> gravity_[2];
+
+    static std::vector<gravity_t> init_gravity(
+            gravity_flags_t placement, gravity_flags_t centering) {
+        using gravity_table_t = std::vector<gravity_flags_t>;
+        static const std::array<gravity_table_t, _max_gravity + 1> gravity = {{
+            {   top_left}, {   top}, {   top_right}, {   _top_spacer_gravity},
+            {center_left}, {center}, {center_right}, {_center_spacer_gravity},
+            {bottom_left}, {bottom}, {bottom_right}, {_bottom_spacer_gravity},
+            {   top_left,      top,      top_right,
+             center_left,   center,   center_right,
+             bottom_left,   bottom,   bottom_right}, // any
+            {   top_left,      top,      top_right,
+             center_left,             center_right,
+             bottom_left,   bottom,   bottom_right}, // not_center
+        }};
+        auto up = [](gravity_flags_t flags) {
+            return uint8_t((8 - (flags & ~3)) | (flags & 3));
+        }; // this precomputes Y = 2 - (ID >> 2) early, making it Y = ID >> 2
+        std::vector<gravity_t> retn;
+        for (auto bhv : gravity[placement])
+            for (auto eff : gravity[centering])
+                retn.emplace_back(gravity_t{up(bhv), up(eff)});
+        return retn;
+    }
 
 public:
+    // offset from the parent's lower left corner, Y going up
+    T2FV gravity(bool left, gravity_t pair, T2IV parent_dims) const {
+        const T2IV bhv{{pair.bhv & 3, pair.bhv >> 2}};
+        const T2IV eff{{pair.eff & 3, pair.eff >> 2}};
+        const auto g_x = (bhv.x * parent_dims.x - eff.x * dims(left).x) >> 1;
+        const auto g_y = (bhv.y * parent_dims.y - eff.y * dims(left).y) >> 1;
+        return {{(decltype(T2FV::x))g_x, (decltype(T2FV::y))g_y}};
+    }
+    gravity_t select_gravity(bool left, uint32_t *seed) const;
+
     class input_t {
     public:
         std::string name;                                        // NOT USED
@@ -66,45 +104,6 @@ public:
 
     T2IV duration() const { return duration_; } // u = duration, v = repeat
     bool follow() const { return follow_; }
-    // offset from the parent's lower left corner, Y going up
-    T2FV select_gravity(bool left, uint32_t *seed) const;
-
-    // TODO: check if everything is correct with both horz and vert axes
-    void finalize(T2IV bhv_right_size, T2IV bhv_left_size) {
-        auto process_side = [](gravity_flags_t geff, gravity_flags_t gbhv,
-                T2IV eff, T2IV bhv) {
-            // depends on the order of elements in gravity_flags_t!
-            static const std::array<std::vector<gravity_flags_t>, 9 + 2> i = {{
-                {top_left    }, {top         }, {top_right   }, {center_left },
-                {center      }, {center_right}, {bottom_left }, {bottom      },
-                {bottom_right},
-                // any
-                {top_left    , top         , top_right   , center_left ,
-                 center      , center_right, bottom_left , bottom      ,
-                 bottom_right},
-                // not_center
-                {top_left    , top         , top_right   , center_left ,
-                 center_right, bottom_left , bottom      , bottom_right},
-            }};
-            // depends on the order of elements in gravity_flags_t!
-            static const std::array<T2IV, 9> g = {{
-                {{0, 2}}, {{1, 2}}, {{2, 2}}, {{0, 1}}, {{1, 1}},
-                {{2, 1}}, {{0, 0}}, {{1, 0}}, {{2, 0}},
-            }};
-            std::vector<T2FV> retn;
-            for (auto &b : i[gbhv])
-                for (auto &e : i[geff])
-                    retn.emplace_back(T2FV{{
-                            float((g[b].x * bhv.x - g[e].x * eff.x) >> 1),
-                            float((g[b].y * bhv.y - g[e].y * eff.y) >> 1)}});
-            return retn;
-        };
-        unit_t::finalize();
-        gravity_[false] = process_side(gravity_flags_[false].centering,
-                gravity_flags_[false].placement, dims(false), bhv_right_size);
-        gravity_[true] = process_side(gravity_flags_[true].centering,
-                gravity_flags_[true].placement, dims(true), bhv_left_size);
-    }
 };
 
 using eff_vec_t = ref_vec_t<effect_t::input_t>;
@@ -247,7 +246,7 @@ public:
     }
     void finalize_full() {
         finalize();
-        for (auto &e : effects_) e->finalize(dims(false), dims(true));
+        for (auto &e : effects_) e->finalize();
     }
 
     behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
