@@ -109,6 +109,18 @@ const behaviour_t *library_t::next_behaviour(
             grp->bhv[nonzero_prob], grp->nonzero_weights, seed).get();
 }
 
+const unit_t &library_t::follow_override(
+        uint32_t *seed, const behaviour_t &bhv, bool move) const {
+    const auto mode = (move) ? moving : stationary;
+    const bhv_id_internal_t iid = {bhv.follow_grp_id()};
+    if (iid.group < 0) // custom, unless rejected by init_follow_groups()
+        if (auto ig = find_in_map(groups_, iid.group))
+            return ig->bhv[mode][0].get();
+    auto ig = find_in_map(groups_, bhv_id_internal_t{bhv.id()}.group);
+    return (ig && !ig->bhv[mode].empty())
+            ? random_selection<false>(ig->bhv[mode], seed).get() : bhv;
+}
+
 const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
         bhv_id_t prev, bhv_id_t curr) const {
     auto b_prev = get(prev), b_curr = get(curr);
@@ -610,9 +622,10 @@ void library_t::init_max_effects() {
     }
 }
 
-library_t::library_t(std::string path, const input_t &in,
+library_t::library_t(lib_id_t id, std::string path, const input_t &in,
         const bhv_id_map_t &bhv_id_map)
-: library_path_(std::move(path))
+: id_(id)
+, library_path_(std::move(path))
 , readable_name_(in.name)
 , preview_id_(0)
 , speech_fg_(0xFF000000)
