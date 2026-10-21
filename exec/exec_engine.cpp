@@ -85,8 +85,10 @@ engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
 bool engine_t::load_selection(const selection_t &sel, bool show_progress) {
     if (sel.empty()) return false;
     cEngineCallback(engd_, ECB_LOAD, ~0); // interrupt to load more animations
+    const auto text_fn = mctl_.text_fn();
     for (size_t iter = 0; iter < sel.size(); iter++) {
-        sel[iter].first.get().load(engd_);
+        sel[iter].first.get().load(engd_, ccur_.flgs & conf_t::speech,
+                ccur_.flgs & conf_t::cspeech, text_fn);
         if (show_progress) mctl_.set_progress_load(iter + 1, sel.size());
     }
     cEngineCallback(engd_, ECB_LOAD, 0); // wait for the loading to complete
@@ -104,7 +106,7 @@ conf_t engine_t::get_def_conf(const std::string_view base) {
     retn.nrun = conf_t::spin_t(  5,    0,  1000);
     retn.nsca = conf_t::spin_t(100,   25,   300);
     retn.ndil = conf_t::spin_t(100,   10,  1000);
-    retn.nsay = conf_t::spin_t( 50,    0,   100);
+    retn.nspk = conf_t::spin_t( 50,    0,   100);
     retn.ncdr = conf_t::spin_t(  0,    0,  1000);
     retn.spec = conf_t::spin_t(  0, -100,   100);
     retn.rgpu = conf_t::spin_t(  0,    0, 30000);
@@ -123,7 +125,7 @@ void engine_t::save_ini_conf() const {
     retn += header(CFG_RUNS) + ivalue(ccur_.nrun.get()) + ivalue(runs_);
     retn += header(CFG_SCAL) + ivalue(ccur_.nsca.get());
     retn += header(CFG_TDIL) + ivalue(ccur_.ndil.get());
-    retn += header(CFG_RSAY) + ivalue(ccur_.nsay.get());
+    retn += header(CFG_RSAY) + ivalue(ccur_.nspk.get());
     retn += header(CFG_PCDR) + ivalue(ccur_.ncdr.get());
     retn += header(CFG_SPEC) + ivalue(ccur_.spec.get());
     retn += header(CFG_RGPU) + ivalue(ccur_.rgpu.get());
@@ -185,7 +187,7 @@ conf_t engine_t::load_ini_conf(const conf_t &def, const std::string &cfnm) {
                     retn.ndil = process_spin(line, def.ndil);
                     break;
                 case str_hash(CFG_RSAY):
-                    retn.nsay = process_spin(line, def.nsay);
+                    retn.nspk = process_spin(line, def.nspk);
                     break;
                 case str_hash(CFG_PCDR):
                     retn.ncdr = process_spin(line, def.ncdr);
@@ -268,7 +270,8 @@ void engine_t::display_loop() {
         return;
     }
     bank_ = std::make_unique<sprite_bank_t>(sel, seed_, tcur_,
-                T2IV{{area_.xdim, area_.ydim}}, ccur_.flgs & conf_t::effects);
+                T2IV{{area_.xdim, area_.ydim}}, ccur_.flgs & conf_t::effects,
+                ccur_.flgs & conf_t::speech, ccur_.nspk);
 
     uint32_t engd_flags = 0;
     for (auto &f : render_flags)

@@ -121,13 +121,16 @@ const unit_t &library_t::follow_override(
             ? random_selection<false>(ig->bhv[mode], seed).get() : bhv;
 }
 
-const speech_t *library_t::select_speech(uint32_t *seed, uint32_t chance,
-        bhv_id_t prev, bhv_id_t curr) const {
-    auto b_prev = get(prev), b_curr = get(curr);
-    if (!b_prev || !b_curr) return nullptr;
-    auto index = behaviour_t::select_speech(seed, chance, *b_prev, *b_curr);
-    assert(std::abs(index) <= speeches_.size());
-    return (index) ? speeches_[std::abs(index) - 1].get() : nullptr;
+const speech_t *library_t::select_speech(uint32_t *seed, uint64_t chance,
+        bool random, const behaviour_t &prev, const behaviour_t &curr) const {
+    if (curr.bgn_speech()) return curr.bgn_speech();
+    if (prev.end_speech()) return prev.end_speech();
+    if (!random || (RNG_Load(seed) >= chance)) return nullptr;
+    // in DP, random speech is also prohibited for behaviours that have an end
+    // speech, here that restriction is lifted; worth remembering though
+    auto ig = find_in_map(groups_, bhv_id_internal_t{curr.id()}.group);
+    return (ig && !ig->speeches.empty())
+            ? &random_selection<false>(ig->speeches, seed).get() : nullptr;
 }
 
 interaction_t::input_t::input_t(const std::string_view &str) {
@@ -421,7 +424,7 @@ void library_t::extract_speech_colors(
         ENGD *engd, const std::vector<library_t*> &libs) {
     auto parallel = rMakeParallel(extract_speech_colors_worker, 1);
     for (auto &l : libs) {
-        if (l->speeches_.empty()) continue;
+        if (!l->first_speech()) continue;
         auto data = (extract_speech_colors_worker_data_t *)realloc(
                 nullptr, sizeof(extract_speech_colors_worker_data_t));
         data->lib = l;
@@ -431,9 +434,18 @@ void library_t::extract_speech_colors(
     rFreeParallel(parallel);
 }
 
-void library_t::load(ENGD *engd) {
+void library_t::load(ENGD *engd, bool speech, bool cspeech,
+        const speech_t::text_fn_t &text_fn) {
+    if (speech) {
+        auto dims = get_preview_internal().dims(false);
+        dims = {{dims.x * 2, dims.y * 8}};
+        for (auto &s : speeches_) {
+            s->render((cspeech) ? speech_fg_ : def_speech_fg_,
+                      (cspeech) ? speech_bg_ : def_speech_bg_, dims, text_fn);
+            s->schedule_upload(engd);
+        }
+    }
     for (auto &b : behaviours_) b->schedule_upload_full(engd);
-    for (auto &s : speeches_) s->schedule_upload(engd);
 }
 
 void library_t::finalize() {
@@ -449,8 +461,8 @@ struct library_t::build_ctx_t {
     // filled by map_effects:
     std::unordered_map<std::string, eff_vec_t> eff_by_bhv_name;
     // filled by map_speeches:
-    std::unordered_map<std::string, int> spk_by_name;
-    std::unordered_map<int, std::vector<int>> spk_by_group;
+    std::unordered_map<std::string, const speech_t*> spk_by_name;
+    std::unordered_map<int, ref_vec_t<speech_t>> spk_by_group;
     // filled by create_behaviours:
     std::unordered_map<std::string, behaviour_t*> bhv_by_name;
 
@@ -496,32 +508,20 @@ void library_t::map_speeches(build_ctx_t &ctx) {
                     (s.skip) ? ", non-selectable (dropped)" : ", selectable");
         if (!dejavu || !s.skip) {
             speeches_.emplace_back(std::make_unique<speech_t>(s));
-            ctx.spk_by_name.emplace(s.name, -int(speeches_.size()));
+            ctx.spk_by_name.emplace(s.name, speeches_.back().get());
             if (!s.skip)
-                ctx.spk_by_group[s.group].emplace_back(int(speeches_.size()));
+                ctx.spk_by_group[s.group].emplace_back(*speeches_.back());
         }
     }
 }
 
 void library_t::create_behaviours(build_ctx_t &ctx) {
     eff_vec_t e_null;
-    auto i0 = find_in_map(ctx.spk_by_group, 0); // random speeches from group 0
     const auto &bhv_id_desc = ctx.bhv_id_desc();
     for (size_t i = 0; i < ctx.in.behaviours.size(); i++) {
-        std::vector<int16_t> b_spk, e_spk;
         auto &b = ctx.in.behaviours[i];
-        auto ig = find_in_map(ctx.spk_by_group, b.group);
-        if (auto ib = find_in_map(ctx.spk_by_name, b.bgn_speech)) {
-            b_spk.emplace_back(*ib); // found behaviour-specific start speech
-        } else if (ig || i0) {
-            // no start speech found, substituting it with random speeches;
-            // no speech can belong to >1 group, don't look for duplicates
-            if (ig) b_spk.insert(b_spk.end(), ig->begin(), ig->end());
-            if (i0 && (b.group != 0))
-                b_spk.insert(b_spk.end(), i0->begin(), i0->end());
-        }
-        if (auto ie = find_in_map(ctx.spk_by_name, b.end_speech))
-            e_spk.emplace_back(*ie); // found behaviour-specific end speech
+        auto ib = find_in_map(ctx.spk_by_name, b.bgn_speech);
+        auto ie = find_in_map(ctx.spk_by_name, b.end_speech);
 
         bhv_id_internal_t iid{bhv_id_desc.v[i]};
         bhv_id_internal_t linked_iid = {};
@@ -539,13 +539,25 @@ void library_t::create_behaviours(build_ctx_t &ctx) {
             printf("[%s] WARNING, inconsistent follow behaviours in '%s'\n",
                    ctx.in.name.c_str(), b.name.c_str());
 
-        auto ie = find_in_map(ctx.eff_by_bhv_name, b.name);
+        auto ix = find_in_map(ctx.eff_by_bhv_name, b.name);
         behaviours_.emplace_back(std::make_unique<behaviour_t>(b, iid._,
                     linked_iid._, follow_grp_iid._, str_hash(b.follow_target),
-                    library_path_, b_spk, e_spk, (ie) ? *ie : e_null));
+                    library_path_, (ib) ? *ib : nullptr, (ie) ? *ie : nullptr,
+                    (ix) ? *ix : e_null));
         groups_[iid.group].bhv[iid.type].emplace_back(*behaviours_.back());
         ctx.bhv_by_name.emplace(b.name, behaviours_.back().get());
         assert(iid.index == groups_[iid.group].bhv[iid.type].size());
+    }
+}
+
+void library_t::init_random_speeches(const build_ctx_t &ctx) {
+    auto i0 = find_in_map(ctx.spk_by_group, 0);
+    for (auto &g : groups_) {
+        if (auto ig = find_in_map(ctx.spk_by_group, g.first))
+            g.second.speeches = *ig;
+        if (i0 && (g.first != 0))
+            g.second.speeches.insert(
+                    g.second.speeches.end(), i0->begin(), i0->end());
     }
 }
 
@@ -601,10 +613,11 @@ void library_t::dump_stats() const {
     printf("Total behaviours: %lu (max effects: %u)\n",
             behaviours_.size(), max_effects_);
     for (auto &g : groups_) {
-        printf("[%d] %lu + %lu + %lu + %lu + %lu + %lu\n", g.first,
+        printf("[%d] %lu + %lu + %lu + %lu + %lu + %lu + %lu\n", g.first,
             g.second.bhv[nonzero_prob].size(), g.second.bhv[stationary].size(),
             g.second.bhv[moving].size(), g.second.bhv[mouseover].size(),
-            g.second.bhv[dragged].size(), g.second.bhv[sleeping].size());
+            g.second.bhv[dragged].size(), g.second.bhv[sleeping].size(),
+            g.second.speeches.size());
     }
 }
 
@@ -628,14 +641,15 @@ library_t::library_t(lib_id_t id, std::string path, const input_t &in,
 , library_path_(std::move(path))
 , readable_name_(in.name)
 , preview_id_(0)
-, speech_fg_(0xFF000000)
-, speech_bg_(0xFFFFFFFF)
-, max_effects_(0) {
+, max_effects_(0)
+, speech_fg_(def_speech_fg_)
+, speech_bg_(def_speech_bg_) {
     build_ctx_t ctx(in, bhv_id_map);
     init_interactions(ctx);
     map_effects(ctx);
     map_speeches(ctx);
     create_behaviours(ctx);
+    init_random_speeches(ctx);
     init_probabilities(ctx);
     init_follow_groups(ctx);
     init_max_effects();

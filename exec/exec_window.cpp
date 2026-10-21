@@ -56,14 +56,14 @@ enum {
 /*  Always on top                */ TXT_ETOP,
 /*  Enable effects               */ TXT_EEFF,
 /*  Enable interactions          */ TXT_EINT,
-/*  Enable speech                */ TXT_ESAY,
+/*  Enable speech                */ TXT_ESPK,
 /*  Enable colored speech        */ TXT_ECLR,
 /*  React to cursor hover        */ TXT_ERCH,
 
 /*   runs between updates        */ TXT_RUNS,
 /*   % base scaling factor       */ TXT_SCAL,
 /*   % time dilation factor      */ TXT_TDIL,
-/*   % random speech chance      */ TXT_RSAY,
+/*   % random speech chance      */ TXT_RSPK,
 /*   pix. cursor dodge radius    */ TXT_PCDR,
 
 /*  Choose...                    */ TXT_CHOO,
@@ -125,7 +125,7 @@ std::vector<CTRL> options_window_t::get_template(
     CTRL{nullptr, intptr_t(conf_t::interaction),
                         TXT_EINT, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
     CTRL{nullptr, intptr_t(conf_t::speech),
-                        TXT_ESAY, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
+                        TXT_ESPK, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
     CTRL{nullptr, intptr_t(conf_t::cspeech),
                         TXT_ECLR, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
     CTRL{nullptr, intptr_t(conf_t::hover),
@@ -140,9 +140,9 @@ std::vector<CTRL> options_window_t::get_template(
     CTRL{nullptr, intptr_t(&conf.ndil),
                         TXT_TDIL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
     CTRL{nullptr, here, TXT_TDIL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
-    CTRL{nullptr, intptr_t(&conf.nsay),
-                        TXT_RSAY, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
-    CTRL{nullptr, here, TXT_RSAY, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+    CTRL{nullptr, intptr_t(&conf.nspk),
+                        TXT_RSPK, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
+    CTRL{nullptr, here, TXT_RSPK, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
     CTRL{nullptr, intptr_t(&conf.ncdr),
                         TXT_PCDR, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
     CTRL{nullptr, here, TXT_PCDR, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
@@ -265,11 +265,11 @@ intptr_t main_window_t::FC2EI(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 
 void options_window_t::try_update_checkbox(CTRL &c, int flag) {
     if (conf_window_t::try_update_checkbox(c, flag)) {
-        if (c.uuid == TXT_ESAY) {
+        if (c.uuid == TXT_ESPK) {
             auto w = (options_window_t*)get_root(c).data;
             RUN_FE2C(w->get(OCT_ECLR), MSG__ENB, flag);
-            RUN_FE2C(w->get(OCT_NSAY), MSG__ENB, flag);
-            RUN_FE2C(w->get(OCT_TSAY), MSG__ENB, flag);
+            RUN_FE2C(w->get(OCT_NSPK), MSG__ENB, flag);
+            RUN_FE2C(w->get(OCT_TSPK), MSG__ENB, flag);
         } else if (c.uuid == TXT_ERCH) {
             auto w = (options_window_t*)get_root(c).data;
             RUN_FE2C(w->get(OCT_NCDR), MSG__ENB, flag);

@@ -59,6 +59,82 @@ speech_t::input_t::input_t(const std::string_view &str) {
     group = process_float(line, group);
 }
 
+effect_t::input_t speech_t::convert_input(const speech_t::input_t &in) {
+    // in DP, character names are prepended to the speech text like this:
+    // 'name: "text"' - which adds name.size() + 4 chars to the total length
+    // that is used to compute the speech time, and the average name length
+    // over the DP animation base is 11 characters, 11 + 4 = 15; the formula
+    // budgets 1 s per 15 chars, the const below represents this extra time
+    constexpr float extension = 1.f;
+
+    size_t chars = 0;
+    for (std::string_view str(in.text); !str.empty(); chars++)
+        utf8_skip_char(str);
+    effect_t::input_t retn;
+    retn.name = in.name;
+    retn.bhv = "group = " + std::to_string(in.group) + ", skip = "
+             + std::to_string(in.skip) + ", sound = " + in.sound;
+    retn.right_image = retn.left_image = in.text;
+    retn.duration = extension + 0.5f + (1.f / 15.f) * chars;
+    retn.repeat_delay = retn.duration + 10.f; // the end + 10 s, same as in DP
+    retn.placement_right = retn.placement_left = gravity_flags_t::top;
+    retn.centering_right = retn.centering_left = gravity_flags_t::bottom;
+    retn.prevent_loop = true;
+    retn.follow = true;
+    return retn;
+}
+
+void speech_t::render(
+        uint32_t fg, uint32_t bg, T2IV max_dims, const text_fn_t &text_fn) {
+    if (!is_empty()) return;
+    // text margins: 8 px on the sides, 4 on top, 12 at the bottom (arrow too)
+    constexpr uint32_t arrow = 8, side = 8, top = 4, bottom = 12;
+    AINF anim = {0, uint32_t(max_dims.x), uint32_t(max_dims.y), 0,
+                 (uint32_t*)text_.c_str()};
+    const auto size = text_fn(MSG_WTGD, &anim);
+    const uint32_t xdim = std::max(2 * side + uint16_t(size), 64u);
+    const uint32_t ydim = top + bottom + 1 + uint16_t(size >> 16);
+    auto draw = [&](uint32_t *bits) {
+        // body, with a 2 px border
+        for (uint32_t y = 0; y < ydim - arrow; y++)
+            for (uint32_t x = 0; x < xdim; x++)
+                bits[y * xdim + x] = ((y < 2) || (y >= ydim - arrow - 2)
+                                   || (x < 2) || (x >= xdim - 2)) ? fg : bg;
+        for (uint32_t y = ydim - arrow; y < ydim; y++)
+            for (uint32_t x = 0; x < xdim; x++)
+                bits[y * xdim + x] = 0;
+        // rounded corners, drawn in 2x2 blocks
+        for (uint32_t y = 0; y < 4; y++)
+            for (uint32_t x = 0; x < 4; x++) {
+                const auto c = ((x < 2) || (y < 2))
+                             ? (x * y > 1) ? fg : 0 : bg;
+                const uint32_t rows[2] = {2 * y, ydim - arrow - 2 - 2 * y};
+                const uint32_t cols[2] = {2 * x, xdim - 2 - 2 * x};
+                for (auto r : rows)
+                    for (auto l : cols)
+                        bits[r * xdim + l] = bits[r * xdim + l + 1] =
+                        bits[(r + 1) * xdim + l] =
+                        bits[(r + 1) * xdim + l + 1] = c;
+            }
+        // the arrow, at 2/3 of the width, overlapping the bottom border
+        for (int32_t y = 0; y < 10; y++)
+            for (int32_t x = -2; x < 10; x++)
+                bits[(ydim - 1 - y) * xdim + xdim - xdim / 3 + x] =
+                        ((x >= 0) && ((x & -2) != (y & -2)))
+                      ? ((x & -2) > (y & -2)) ? 0 : bg : fg;
+        // the text
+        AINF text = {(intptr_t)bits, xdim | (side << 16) | (side << 24),
+                     ydim | (top << 16) | (bottom << 24), fg,
+                     (uint32_t*)text_.c_str()};
+        text_fn(MSG_WTDA, &text);
+    };
+    char colors[24];
+    sprintf(colors, "#%08X / #%08X: ", fg, bg);
+    for (bool left : {false, true})
+        if (is_empty(left))
+            prepare_source(left, colors + text_, xdim, ydim, draw);
+}
+
 behaviour_t::input_t::input_t(const std::string_view &str) {
     static const std::unordered_map<std::string, movement_flags_t> m = {
         {"horizontal_vertical", move_hv  }, {"mouseover", move_mouse},
@@ -107,7 +183,7 @@ static const T2IV process_duration(float min_d, float max_d) {
 
 behaviour_t::behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
         bhv_id_t follow_grp_id, lib_id_t follow_tgt, const std::string &path,
-        std::vector<int16_t> bgn_speech, std::vector<int16_t> end_speech,
+        const speech_t *bgn_speech, const speech_t *end_speech,
         const eff_vec_t &eff)
 : id_(id)
 , linked_id_(linked_id)
@@ -115,8 +191,8 @@ behaviour_t::behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
 , duration_(process_duration(in.min_duration, in.max_duration))
 , movement_speed_(in.speed * FRM_WAIT / 30.f)
 , movement_(in.movement)
-, bgn_speech_idx_(std::move(bgn_speech))
-, end_speech_idx_(std::move(end_speech))
+, bgn_speech_(bgn_speech)
+, end_speech_(end_speech)
 , follow_tgt_(follow_tgt)
 , follow_offset_{process_follow_offset(false, in, follow_tgt),
                  process_follow_offset(true, in, follow_tgt)}
@@ -133,26 +209,6 @@ behaviour_t::behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
     set_center(true, in.left_img_center);
     set_loop(false, !in.prevent_loop);
     set_loop(true, !in.prevent_loop);
-}
-
-// this is the whole speech switching logic from Desktop Ponies, trust me.
-// 0 means no speech, negatives are behaviour-specific speeches, positives
-// are random speeches. END can only yield negatives (end speech from bhv,
-// if present) or 0; BGN might yield 0, negatives (start speech from bhv),
-// or positives (pre-filled random speeches taken from library that match
-// the BGN group, if start speech is absent)
-int16_t behaviour_t::select_speech(uint32_t *seed, uint32_t chance,
-        const behaviour_t &prev, const behaviour_t &curr) {
-    constexpr uint64_t max_chance = 100;
-    constexpr uint64_t mul_chance // [0;max_chance]->[0;~0+5], type matters
-            = (double(uint32_t(~0 - 1)) + max_chance) / max_chance;
-    auto bgn = random_selection<true>(curr.bgn_speech_idx_, seed);
-    auto end = random_selection<true>(prev.end_speech_idx_, seed);
-    // priority in DP: 1. start speech; 2. end speech; 3. random speech;
-    end = (bgn >= 0) ? (end >= 0) ? bgn : end : bgn;
-    // TODO: fix the case when (end > 0) gets replaced with (bgn = 0);
-    //       at the time this is hypothetical, but can become relevant
-    return ((end < 0) || (RNG_Load(seed) < mul_chance * chance)) ? end : 0;
 }
 
 static constexpr std::array<T2FV, 32> get_cos_sin_lut() {

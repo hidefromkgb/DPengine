@@ -45,6 +45,8 @@ size_t constexpr str_hash(const std::string_view &str, bool ascii2low = true) {
     return retn;
 }
 
+void utf8_skip_char(std::string_view &str);
+
 std::string concat_path(const std::initializer_list<const std::string> &list);
 
 bool next_line(token_t &t);

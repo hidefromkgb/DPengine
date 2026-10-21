@@ -9,9 +9,9 @@
 //       and resolution are set, then everything is deterministic and these
 //       output logs can be validated by comparing them to a reference log.
 
-// TODO: content downloading
-// TODO: speech bubbles
-// TODO: the go button
+// TODO: special behaviours
+// TODO: more menu items, including the per-OS submenu
+// TODO: network updates for the animation base
 
 
 
