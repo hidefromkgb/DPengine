@@ -69,8 +69,10 @@ const sprite_t *sprite_t::pick_target(
     auto ic = find_in_map(cast, bhv.follow_target());
     if (!ic) return nullptr;
     assert(lib_->id() != bhv.follow_target()); // illegal to follow own library
-    return (*ic)[RNG_Load(seed) % ic->size()]; // [TODO:] ^- prohibit on import
-} // [TODO:] DP tech doc allows self-follows, but the DP base has 0 such cases
+    // [TODO:] DP tech doc allows self-follows but the DP base has 0 such cases
+    //         (might be worth considering to prohibit on import?)
+    return (*ic)[uint64_t(RNG_Load(seed)) * ic->size() >> 32];
+}
 
 bool sprite_t::has_target() const {
     return (bhv_->follow_target()) ? !!parent_ : bhv_->follow();
@@ -102,7 +104,7 @@ static float fast_rsqrt(float x) { // I'm a John Carmack wannabe, mmkay?
     union { float f; uint32_t u; } y = {x};
     x *= -.5f;
     // technically, in C++ this is illegal - but a-okay for the future C port:
-    y.u = 0x5F3759DFu - (y.u >> 1);
+    y.u = (0xBE6EB3BFu - y.u) >> 1;
     y.f *= 1.5f + x * y.f * y.f; // repeat this line for better precision
     return y.f;
 }
@@ -201,7 +203,18 @@ bool sprite_t::update_behaviour(
     const bool flipped = move_behaviour(seed, time, area);
     depth_ = position_.y;
     advance(time, changed || flipped);
-    return bhv_ != prev_bhv;
+    return changed && (prev_bhv != bhv_);
+}
+
+void sprite_t::track_parent(uint32_t *seed, int64_t time) {
+    // a follower turning with its parent is redeployed on the other side
+    const bool flipped = eff()->follow() && (is_left() != parent_->is_left());
+    if (flipped) {
+        set_flag(left, parent_->is_left());
+        gravity_ = eff()->select_gravity(is_left(), seed);
+    }
+    move_effect(flipped);
+    advance(time, flipped);
 }
 
 bool sprite_t::update_effect(uint32_t *seed, int64_t time) {
@@ -214,14 +227,7 @@ bool sprite_t::update_effect(uint32_t *seed, int64_t time) {
             uuid_ = 0; // waiting
         return false;
     }
-    // a follower turning with its parent is redeployed on the other side
-    const bool flipped = eff()->follow() && (is_left() != parent_->is_left());
-    if (flipped) {
-        set_flag(left, parent_->is_left());
-        gravity_ = eff()->select_gravity(is_left(), seed);
-    }
-    move_effect(flipped);
-    advance(time, flipped);
+    track_parent(seed, time);
     return true;
 }
 
@@ -240,6 +246,41 @@ bool sprite_t::wake_effect(uint32_t *seed, int64_t time) {
     return false;
 }
 
+void sprite_t::preinit_speech(const sprite_t &parent, const speech_t &initial) {
+    flags_ = flags_t(effect | speech);
+    unit_ = &initial;
+    parent_ = &parent;
+    bhv_ = parent.bhv_; // no speech at spawn
+    uuid_ = 0;
+    next_wait_time_ = next_rep_time_ = 0; // random speeches allowed at once
+}
+
+bool sprite_t::do_speech(uint32_t *seed, int64_t time, uint64_t chance) {
+    if (!parent_moved_on()) return false;
+    const auto speech = parent_->lib_->select_speech(seed, chance,
+        (time >= next_rep_time_) && !parent_->parent_, *bhv_, *parent_->bhv_);
+    bhv_ = parent_->bhv_;        // ^--- not following someone
+    if (!speech) return false;
+    const auto cooldown = next_rep_time_;
+    unit_ = speech;
+    init_effect(seed, time);
+    if (!is_free()) return true; // loaded, reporting success
+    unit_ = speech;
+    next_wait_time_ = 0;
+    next_rep_time_ = cooldown;
+    return false; // failed to load, going idle
+}
+
+bool sprite_t::update_speech(uint32_t *seed, int64_t time, uint64_t chance) {
+    if (do_speech(seed, time, chance)) return true; // replaced in-situ
+    if (time >= next_wait_time_) {
+        uuid_ = 0; // idle
+        return false;
+    }
+    track_parent(seed, time);
+    return true;
+}
+
 const std::string &sprite_t::name() const {
     assert(!owner().is_effect());
     return owner().lib_->name();
@@ -250,15 +291,14 @@ bool sprite_t::parent_moved_on() const {
 }
 
 sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
-        int64_t time, T2IV area, bool effects)
-: shown_(0), waiting_(0), area_(area), effects_(effects) {
-    // [TODO:] budget for the speeches, once there are any
-    if (effects_) {
-        for (auto &s : sel)
-            waiting_ += s.second * (1 + s.first.get().max_effects());
-    } else {
-        for (auto &s : sel)
-            waiting_ += s.second;
+        int64_t time, T2IV area, bool effects, bool speech,
+        const conf_t::spin_t &speech_chance)
+: shown_(0), waiting_(0), area_(area), effects_(effects), speech_(speech)
+, speech_chance_(speech_chance) {
+    for (auto &s : sel) {
+        auto &lib = s.first.get();
+        waiting_ += s.second * (1 + ((effects_) ? lib.max_effects() : 0)
+                                  + ((speech_ && lib.first_speech()) ? 1 : 0));
     }
     sprites_.reserve(waiting_);
     for (uint32_t iter = 0; iter < waiting_; iter++)
@@ -279,7 +319,11 @@ void sprite_bank_t::add_behaviour(
     assert(shown_ < waiting_);
     auto slot = sprites_[shown_].get();
     slot->init_behaviour(lib, seed, time, area_, cast_);
-    if (!slot->is_free()) shown_++;
+    if (slot->is_free()) return;
+    shown_++;
+    const auto placeholder = (speech_) ? lib.first_speech() : nullptr;
+    if (placeholder && (shown_ < waiting_)) // the character's speech slot
+        sprites_[--waiting_]->preinit_speech(*slot, *placeholder);
 }
 
 void sprite_bank_t::add_effect(const sprite_t &parent, const effect_t &eff) {
@@ -293,18 +337,25 @@ void sprite_bank_t::deploy_effects(const sprite_t &chr) {
 }
 
 void sprite_bank_t::update(uint32_t *seed, int64_t time) {
+    const auto speech_chance
+            = (uint64_t(speech_chance_.get()) << 32) / speech_chance_.max();
     // behaviours first, as followers need updated positions
-    for (uint32_t iter = 0; iter < shown_; iter++)
-        if (sprites_[iter]->update_behaviour(seed, time, area_, cast_)
-                && effects_)
-            deploy_effects(*sprites_[iter]);
+    for (uint32_t iter = 0; iter < shown_; iter++) {
+        auto &chr = *sprites_[iter];
+        if (chr.update_behaviour(seed, time, area_, cast_) && effects_)
+            deploy_effects(chr);
+    }
     // backwards, so that swapped-in slots are already updated
-    for (uint32_t iter = (effects_) ? shown_ : 0; iter--; ) {
+    for (uint32_t iter = (effects_ || speech_) ? shown_ : 0; iter--; ) {
         auto &fx = *sprites_[iter];
         if (!fx.is_effect()) continue;
-        // fires when duration >= repeat: active effect spawns more of itself
-        if (fx.repeat_effect(time)) add_effect(fx.owner(), *fx.eff());
-        if (fx.update_effect(seed, time)) continue;
+        if (fx.is_speech()) {
+            if (fx.update_speech(seed, time, speech_chance)) continue;
+        } else {
+            // fires when duration >= repeat: effect spawns more of itself
+            if (fx.repeat_effect(time)) add_effect(fx.owner(), *fx.eff());
+            if (fx.update_effect(seed, time)) continue;
+        }
         // reaching this point means the sprite is inactive, remove it
         std::swap(sprites_[iter], sprites_[--shown_]); // ...from shown sprites
         if (!fx.is_free()) // ...maybe it's alive, then it belongs in wait list
@@ -315,7 +366,9 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time) {
         auto &fx = *sprites_[iter];
         assert(fx.is_effect());
         // wakes due effects: those just added and those with duration < repeat
-        if (!fx.wake_effect(seed, time) && !fx.is_free()) continue;
+        bool awake = (fx.is_speech()) ? fx.do_speech(seed, time, speech_chance)
+                                      : fx.wake_effect(seed, time);
+        if (!awake && !fx.is_free()) continue;
         // at this point the sprite must be taken out of the wait list
         std::swap(sprites_[iter], sprites_[waiting_++]); // ...to the dumpster
         if (!fx.is_free()) // ...or, if it's alive, to the shown sprites

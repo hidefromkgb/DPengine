@@ -34,7 +34,7 @@ static bool utf8_is_wspace(const std::string_view &str) {
     return false;
 }
 
-static inline void utf8_skip_char(std::string_view &str) {
+void utf8_skip_char(std::string_view &str) {
     static const char skip[] = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 6};
     str.remove_prefix((str[0] & 0x80) ? skip[(str[0] >> 2) & 0x0F] : 1);
 }

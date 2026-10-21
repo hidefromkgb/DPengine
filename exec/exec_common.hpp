@@ -187,7 +187,7 @@ public:
     spin_t nrun; // runs between updates
     spin_t nsca; // base scaling factor
     spin_t ndil; // time dilation factor
-    spin_t nsay; // random speech chance
+    spin_t nspk; // random speech chance
     spin_t ncdr; // cursor dodge radius
     spin_t spec; // group selection
     spin_t rgpu; // random selection

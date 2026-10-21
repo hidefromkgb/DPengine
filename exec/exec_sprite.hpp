@@ -7,10 +7,11 @@ class unit_t;
 class library_t;
 class behaviour_t;
 class effect_t;
+class speech_t;
 class sprite_bank_t;
 class sprite_t;
 
-// the characters on display by library, see sprite_t::pick_target()
+// the sprites on display by library, see sprite_t::pick_target()
 using cast_t = std::unordered_map<lib_id_t, std::vector<const sprite_t*>>;
 
 // a slot of sprite_bank_t: empty, a behaviour, or an effect
@@ -18,7 +19,7 @@ class sprite_t : public no_copy_t {
     friend class sprite_bank_t;
 
 private:
-    enum flags_t : uint32_t { GEN_FLAGS(left, effect, enroute) };
+    enum flags_t : uint32_t { GEN_FLAGS(left, effect, speech, enroute) };
 
     const unit_t *unit_;        // what is being animated, nullptr = empty slot
     const behaviour_t *bhv_;    // what the sprite belongs to; UNIT_ if empty
@@ -49,6 +50,7 @@ private:
 
     bool is_left() const { return flags_ & left; }
     bool is_effect() const { return flags_ & effect; }
+    bool is_speech() const { return flags_ & speech; }
     bool is_enroute() const { return flags_ & enroute; }
     void set_flag(flags_t flag, bool value) {
         flags_ = (value) ? (flags_ | flag) : (flags_ & ~flag);
@@ -78,8 +80,7 @@ private:
             uint32_t *seed, int64_t time, T2IV area, const cast_t &cast);
     bool move_behaviour(uint32_t *seed, int64_t time, T2IV area);
     bool follow_behaviour(uint32_t *seed, T2IV area);
-    // returns whether a different behaviour started
-    bool update_behaviour(
+    bool update_behaviour( // returns whether a different behaviour got picked
             uint32_t *seed, int64_t time, T2IV area, const cast_t &cast);
 
     const sprite_t *pick_target(
@@ -93,6 +94,16 @@ private:
     bool repeat_effect(int64_t time); // returns whether to add a repeat effect
     bool wake_effect(uint32_t *seed, int64_t time); // returns whether deployed
     bool update_effect(uint32_t *seed, int64_t time); // false if freed/waiting
+    void track_parent(uint32_t *seed, int64_t time);
+
+    // a speech slot: one per character, idle in the wait list between speeches;
+    // BHV_ is the parent's last seen behaviour, NEXT_REP_TIME_ is when random
+    // speeches are allowed again
+    void preinit_speech(const sprite_t &parent, const speech_t &initial);
+    // starts a new speech in place if the parent's behaviour changed
+    bool do_speech(uint32_t *seed, int64_t time, uint64_t chance);
+    // returns false if idle
+    bool update_speech(uint32_t *seed, int64_t time, uint64_t chance);
 
 public:
     const std::string &name() const;
@@ -113,6 +124,8 @@ private:
     uint32_t waiting_;
     T2IV area_;
     bool effects_;
+    bool speech_;
+    const conf_t::spin_t &speech_chance_;
 
     void add_behaviour(const library_t &lib, uint32_t *seed, int64_t time);
     void add_effect(const sprite_t &parent, const effect_t &eff);
@@ -120,7 +133,8 @@ private:
 
 public:
     sprite_bank_t(const selection_t &sel, uint32_t *seed, int64_t time,
-            T2IV area, bool effects);
+            T2IV area, bool effects, bool speech,
+            const conf_t::spin_t &speech_chance);
 
     uint32_t capacity() const { return sprites_.size(); }
     uint32_t shown() const { return shown_; }

@@ -318,6 +318,13 @@ public:
         RUN_FE2C(get(MCT_OGRP), MSG_LADD, (intptr_t)name.c_str());
     }
 
+    // see speech_t::text_fn_t
+    std::function<intptr_t(uint32_t, AINF*)> text_fn() {
+        return [this](uint32_t msg, AINF *anim) {
+            return RUN_FE2C(get_root(), msg, (intptr_t)anim);
+        };
+    }
+
     void set_options_window(intptr_t opt_id) {
         get(MCT_OPTS).data = opt_id;
     }
@@ -363,9 +370,9 @@ public:
 class options_window_t : public conf_window_t {
 private:
     enum elements_t { OCT_OPTS = 0,
-        OCT_UONR, OCT_ETOP, OCT_EEFF, OCT_EINT, OCT_ESAY, OCT_ECLR, OCT_ERCH,
-        OCT_NRUN, OCT_TRUN, OCT_NSCA, OCT_TSCA, OCT_NDIL, OCT_TDIL, OCT_NSAY,
-        OCT_TSAY, OCT_NCDR, OCT_TCDR, OCT_LSEP, OCT_LHDR, OCT_LCHO, OCT_LREL,
+        OCT_UONR, OCT_ETOP, OCT_EEFF, OCT_EINT, OCT_ESPK, OCT_ECLR, OCT_ERCH,
+        OCT_NRUN, OCT_TRUN, OCT_NSCA, OCT_TSCA, OCT_NDIL, OCT_TDIL, OCT_NSPK,
+        OCT_TSPK, OCT_NCDR, OCT_TCDR, OCT_LSEP, OCT_LHDR, OCT_LCHO, OCT_LREL,
         OCT_LRES, OCT_LGUI, OCT_BSEP, OCT_BHDR, OCT_BCHO, OCT_BREL, OCT_BRES,
         OCT_BDIR, OCT_FSEP, OCT_FREL, OCT_FRES,
         OCT__MAX = OCT_FRES

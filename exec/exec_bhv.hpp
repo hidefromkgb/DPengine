@@ -112,8 +112,8 @@ class speech_t : public effect_t {
 public:
     class input_t {
     public:
-        std::string name;   // NOT USED
-        std::string text;   // NOT USED
+        std::string name;   // USED
+        std::string text;   // USED
         std::string sound;  // NOT USED
         bool skip = false;  // USED
         int group = 0;      // USED
@@ -123,42 +123,31 @@ public:
         bool validate() const { return !text.empty(); }
     };
 
+    // sends MSG_WTGD / MSG_WTDA to a window that has a font
+    using text_fn_t = std::function<intptr_t(uint32_t msg, AINF *anim)>;
+
 #ifdef DEV_MODE
     input_t debug_;
 #endif // DEV_MODE
 
 private:
+    const std::string text_;
     const std::string sound_;
 
-    static effect_t::input_t convert_input(const speech_t::input_t &in) {
-        effect_t::input_t retn;
-        retn.name = in.name;
-        retn.bhv = "group = " + std::to_string(in.group) + ", skip = "
-                 + std::to_string(in.skip) + ", sound = " + in.sound;
-        retn.right_image = retn.left_image = in.text;
-        retn.duration = 0.5f + 0.065f * in.text.size();
-        // fixed value taken from DP codebase - only applies to random speech:
-        retn.repeat_delay = 10.f;
-        retn.placement_right = retn.placement_left = gravity_flags_t::top;
-        retn.centering_right = retn.centering_left = gravity_flags_t::bottom;
-        retn.follow = true;
-        retn.prevent_loop = true;
-        return retn;
-    }
-
-    static void render_text(uint32_t *data) {
-    }
+    static effect_t::input_t convert_input(const speech_t::input_t &in);
 
 public:
     speech_t(const input_t &in)
     : effect_t(convert_input(in), std::string())
+    , text_(in.text)
     , sound_(in.sound) {
 #ifdef DEV_MODE
         debug_ = in;
 #endif // DEV_MODE
-        // TODO: call this one properly!
-        prepare_source(false, in.text, 1, 1, render_text);
     }
+
+    void render( // draws the speech bubble unless already done
+            uint32_t fg, uint32_t bg, T2IV max_dims, const text_fn_t &text_fn);
 };
 
 class behaviour_t : public unit_t {
@@ -211,8 +200,8 @@ private:
     const T2IV duration_; // u = min, v = possible extension above min
     const float movement_speed_;
     const movement_flags_t movement_;
-    const std::vector<int16_t> bgn_speech_idx_; // speech indices from library
-    const std::vector<int16_t> end_speech_idx_;
+    const speech_t *const bgn_speech_; // nullptr = none
+    const speech_t *const end_speech_; // nullptr = none
     const lib_id_t follow_tgt_;
     const T2FV follow_offset_[2];
     const std::vector<std::unique_ptr<effect_t>> effects_;
@@ -253,8 +242,8 @@ public:
     T2FV choose_velocity(uint32_t *seed) const;
     int32_t choose_duration(uint32_t *seed) const;
 
-    static int16_t select_speech(uint32_t *seed, uint32_t chance,
-            const behaviour_t &prev, const behaviour_t &curr);
+    const speech_t *bgn_speech() const { return bgn_speech_; }
+    const speech_t *end_speech() const { return end_speech_; }
 
     void schedule_upload_full(ENGD *engd) {
         schedule_upload(engd);
@@ -267,8 +256,8 @@ public:
 
     behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
             bhv_id_t follow_grp_id, lib_id_t follow_tgt,
-            const std::string &path, std::vector<int16_t> bgn_speech,
-            std::vector<int16_t> end_speech, const eff_vec_t &eff);
+            const std::string &path, const speech_t *bgn_speech,
+            const speech_t *end_speech, const eff_vec_t &eff);
 };
 
 #endif // EXEC_BHV_HPP

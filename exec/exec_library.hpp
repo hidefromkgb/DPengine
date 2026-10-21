@@ -74,6 +74,9 @@ public:
     };
 
 private:
+    static constexpr uint32_t def_speech_fg_ = 0xFF000000;
+    static constexpr uint32_t def_speech_bg_ = 0xFFFFFFFF;
+
     enum bhv_type_t : uint32_t { nonzero_prob = 0,
         stationary, moving, mouseover, dragged, sleeping,
         max_ = sleeping, };
@@ -92,6 +95,7 @@ private:
     struct group_t {
         weighted_rng_t nonzero_weights;
         std::array<ref_vec_t<behaviour_t>, bhv_type_t::max_ + 1> bhv;
+        ref_vec_t<speech_t> speeches; // random ones, this group's and group 0's
 
         void append(const group_t &rhs) {
             for (size_t i = 0; i <= bhv_type_t::max_; i++)
@@ -109,14 +113,11 @@ private:
     // TODO: remap groups sequenitially and make this a vector?
     std::unordered_map<int, group_t> groups_;
     size_t preview_id_;
+    uint32_t max_effects_;
     uint32_t speech_fg_;
     uint32_t speech_bg_;
-    uint32_t max_effects_;
 
     inline static bhv_id_t init_bhv_id(movement_flags_t move, int16_t group);
-
-    const speech_t *select_speech(uint32_t *seed, uint32_t chance,
-            bhv_id_t prev, bhv_id_t curr) const;
 
     static void extract_speech_colors_worker(intptr_t data, uint64_t unused);
     unit_t &get_preview_internal() { return *behaviours_[preview_id_]; }
@@ -127,6 +128,7 @@ private:
     void map_effects(build_ctx_t &ctx);
     void map_speeches(build_ctx_t &ctx);
     void create_behaviours(build_ctx_t &ctx);
+    void init_random_speeches(const build_ctx_t &ctx);
     void init_probabilities(const build_ctx_t &ctx);
     void init_follow_groups(const build_ctx_t &ctx);
     void init_max_effects();
@@ -139,6 +141,9 @@ public:
             uint32_t *seed, const behaviour_t *curr) const;
     const unit_t &follow_override(
             uint32_t *seed, const behaviour_t &bhv, bool move) const;
+    // CURR's start, else PREV's end, else (if RANDOM) a chance roll
+    const speech_t *select_speech(uint32_t *seed, uint64_t chance, bool random,
+            const behaviour_t &prev, const behaviour_t &curr) const;
 
     static bhv_id_desc_t build_bhv_id_desc(const input_t &in);
 
@@ -153,9 +158,15 @@ public:
         preview.schedule_upload(false, engd);
         return preview;
     }
-    void load(ENGD *engd);
+    // CSPEECH: library colors instead of black on white
+    void load(ENGD *engd, bool speech, bool cspeech,
+            const speech_t::text_fn_t &text_fn);
 
     uint32_t max_effects() const { return max_effects_; }
+    // any speech, nullptr if none; see sprite_t::preinit_speech()
+    const speech_t *first_speech() const {
+        return (speeches_.empty()) ? nullptr : speeches_.front().get();
+    }
 
     // to be called after every ECB_LOAD with 0, see unit_t::finalize()
     void finalize();

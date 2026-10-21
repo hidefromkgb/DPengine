@@ -40,7 +40,6 @@ bool unit_t::prepare_source(bool left, const std::string &name, uint32_t xdim,
     //  +buf: time
     // +time: name
     if (!maybe_discard(left)) return false;
-/*
     set_flag(left, true, prepare);
     set_flag(left, false, from_path);
     auto anim = (AINF*)allocate(left, sizeof(AINF) + name.size() + 1
@@ -49,10 +48,10 @@ bool unit_t::prepare_source(bool left, const std::string &name, uint32_t xdim,
     anim->time = ((uint32_t*)anim->uuid) + xdim * ydim;
     anim->xdim = xdim;
     anim->ydim = ydim;
+    anim->fcnt = 1;
     anim->time[0] = 0; // single frame only for this image type
     strncpy((char*)(anim->time + 1), name.c_str(), name.size() + 1);
     draw((uint32_t*)anim->uuid); // drawing something in the buffer
-//*/
     return true;
 }
 
