@@ -40,7 +40,7 @@ inline T random_selection(const std::vector<T> &v, uint32_t *seed) {
     } else if (v.empty()) {
         return T{};
     }
-    return v[(v.size() > 1) ? RNG_Load(seed) % v.size() : 0];
+    return v[(v.size() > 1) ? uint64_t(RNG_Load(seed)) * v.size() >> 32 : 0];
 };
 
 template <bool allow_empty, typename T>

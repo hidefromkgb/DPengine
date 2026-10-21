@@ -350,7 +350,7 @@ selection_t main_window_t::collect_selection(uint32_t *seed) const {
             for (size_t iter = 0; iter < previews_.size(); iter++)
                 if (previews_[iter]->is_eligible()) pool.emplace_back(iter);
             for (auto left = pool.size(); left && (rand > 0); rand--) {
-                auto indx = RNG_Load(seed) % left;
+                auto indx = uint64_t(RNG_Load(seed)) * left >> 32;
                 rand_count[pool[indx]]++;
                 if (!(conf_.flgs & conf_t::copies))
                     if (indx < --left) pool[indx] = pool[left];

@@ -57,9 +57,10 @@ bool sprite_t::next_behaviour(
         position_.x += prev_center.x - center.x;
         position_.y -= prev_center.y - center.y;
     } else if (unit_->dims(is_left()).x) { // first anim: placing the sprite
-        position_.x = RNG_Load(seed) % std::max(area.x - 2 * center.x, 1);
-        position_.y = RNG_Load(seed) % std::max(area.y - 2 * center.y, 1)
-                    + 2 * center.y;
+        auto x = uint64_t(RNG_Load(seed)) * std::max(area.x - 2 * center.x, 1);
+        auto y = uint64_t(RNG_Load(seed)) * std::max(area.y - 2 * center.y, 1);
+        position_ = {{decltype(position_.x)(x >> 32),
+                      decltype(position_.y)(y >> 32) + 2 * center.y}};
     }
     return true;
 }

@@ -270,5 +270,6 @@ T2FV behaviour_t::choose_velocity(uint32_t *seed) const {
 }
 
 int32_t behaviour_t::choose_duration(uint32_t *seed) const {
-    return duration_.u + ((duration_.v) ? RNG_Load(seed) % duration_.v : 0);
+    auto v = (duration_.v) ? uint64_t(RNG_Load(seed)) * duration_.v >> 32 : 0;
+    return duration_.u + v;
 }
