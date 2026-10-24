@@ -17,8 +17,7 @@ public:
     ~weighted_rng_t();
     weighted_rng_t() : weighted_rng_t(std::vector<uint32_t>{}) {}
     // raw DATA_ makes implicit copies double free, and the destructor kills
-    // implicit moves; moved-from DATA_ is null, hence the destructor's test:
-    // realloc(0, 0) allocates (WHY? Just... WHY?)
+    // implicit moves; moved-from DATA_ is null, hence the destructor's test
     weighted_rng_t(const weighted_rng_t &) = delete;
     weighted_rng_t &operator=(const weighted_rng_t &) = delete;
     weighted_rng_t(weighted_rng_t &&rhs) : data_(rhs.data_) {

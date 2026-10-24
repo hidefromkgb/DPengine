@@ -436,7 +436,7 @@ long rLoadHTTPS(intptr_t user, char *page, char **dest,
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, ctxt[0]);
     if (curl_easy_perform(curl)) {
-        data[1] = (intptr_t)realloc((char*)data[1], 0);
+        free((char*)data[1]);
         data[1] = data[0] = 0;
     }
     curl_easy_cleanup(curl);

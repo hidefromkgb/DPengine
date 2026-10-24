@@ -31,7 +31,7 @@ private:
     // the engine calls this once it no longer needs the source buffer, which
     // is NOT the same as the AINF being filled in
     static void release(void *data) {
-        if (data) data = realloc(data, 0);
+        free(data);
     }
     void set_flag(bool left, bool value, flags_t flag) {
         auto &side = sides_[left];

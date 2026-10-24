@@ -25,7 +25,7 @@ conf_t::lang_map_t conf_t::get_lang_map(const std::string &file_name) {
         token_t text({}, std::string_view(file, size));
         for (int32_t idx = 0; next_line(text); idx++)
             if (!text.first.empty()) retn[idx] = text.first;
-        if (!file_name.empty()) file = (typeof(file))realloc(file, 0);
+        if (!file_name.empty()) free(file);
     }
     return retn;
 }

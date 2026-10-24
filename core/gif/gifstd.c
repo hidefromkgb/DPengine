@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#define GIF_MGET(m,s,a,c) if (c) m = (uint8_t*)realloc(NULL, s); else free(m);
 #include "load/gif_load.h"
 #include "gifstd.h"
 #include <string.h>
