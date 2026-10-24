@@ -8,7 +8,7 @@
 
 void RNG_Free(uint32_t **seed) {
     if (!seed || !*seed) return;
-    *seed = (uint32_t*)realloc(*seed, 0);
+    free(*seed);
     *seed = 0;
 }
 
@@ -46,7 +46,7 @@ uint32_t RNG_Load(uint32_t *seed) {
 
 static void RNG_FreeWeighted(uint32_t **rngw) { // identical to RNG_Free()
     if (!rngw || !*rngw) return;
-    *rngw = (uint32_t*)realloc(*rngw, 0);
+    free(*rngw);
     *rngw = 0;
 }
 
@@ -105,7 +105,7 @@ static uint32_t *RNG_MakeWeighted(uint32_t w_size, const uint32_t *weights) {
         rngw[prep[i].index * 2 + 2] = prep[i].alias;
         rngw[prep[i].index * 2 + 1] = (prep[i].probability << 32) / full;
     }      // ^--- PROBABILITY == FULL yields (1 << 32), it overflows to 0, but
-    prep = (struct RNG_PREP*)realloc(prep, 0); // it's ok (see top comment)
+    free(prep); // it's ok (see top comment)
     return rngw; // TODO: maybe allow FULL > UINT32_MAX and just rescale it?
 }
 

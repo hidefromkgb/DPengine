@@ -212,7 +212,7 @@ conf_t engine_t::load_ini_conf(const conf_t &def, const std::string &cfnm) {
                     break;
             }
         }
-        file = (typeof(file))realloc(file, 0);
+        free(file);
         retn.flgs = render | general;
     }
     return retn;
@@ -326,7 +326,7 @@ void engine_t::build_library_structure(const std::string &base) {
     auto find = rFindMake(path.c_str());
     while (auto file = rFindFile(find)) {
         ins.emplace_back(library_t::input_t(path, file));
-        file = (typeof(file))realloc(file, 0);
+        free(file);
     }
 
     for (auto &i : ins) {

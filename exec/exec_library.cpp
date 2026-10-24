@@ -56,7 +56,7 @@ library_t::input_t::input_t(const std::string &base, const std::string &dir) {
                     break;
             }
         }
-        file = (typeof(file))realloc(file, 0);
+        free(file);
     }
 }
 
@@ -284,7 +284,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     // reading the inputs, freeing temporary data
     auto lib = ((extract_speech_colors_worker_data_t *)data)->lib;
     auto engd = ((extract_speech_colors_worker_data_t *)data)->engd;
-    data = (typeof(data))realloc((void *)data, 0);
+    free((void *)data);
 
     // allocating the color buffer and drawing frame #0 of the preview to it
     auto &preview = lib->get_preview();
@@ -343,10 +343,10 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
                         cells[m].clr; m = (m + 1) & mask) {}
                 cells[m] = cell;
             }
-            prev = (cell_t *)realloc(prev, 0);
+            free(prev);
         } while (false);
     }
-    ainf.time = (typeof(ainf.time))realloc(ainf.time, 0);
+    free(ainf.time);
 
     // extracting the most prominent colors from the histogram; end = size - 1
     constexpr size_t end = 2;
@@ -361,7 +361,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
                 top_clrs[k] = top_clrs[k - 1];
             top_clrs[j] = {cell.clr, cell.cnt};
         }
-    cells = (cell_t *)realloc(cells, 0);
+    free(cells);
 
     // saving the color order for debugging
     std::string colors;

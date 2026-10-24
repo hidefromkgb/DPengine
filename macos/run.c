@@ -532,7 +532,7 @@ long rLoadHTTPS(intptr_t user, char *page, char **dest,
         curl_easy_setopt_(curl, CURLOPT_USERAGENT, ctxt[0]);
     }
     if (curl_easy_perform_ && curl_easy_perform_(curl)) {
-        data[1] = (intptr_t)realloc((char*)data[1], 0);
+        free((char*)data[1]);
         data[1] = data[0] = 0;
     }
     if (curl_easy_cleanup_) curl_easy_cleanup_(curl);

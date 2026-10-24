@@ -311,7 +311,7 @@ intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                     auto base = rChooseDir(ctrl, path.c_str());
                     if (!base) return 0;
                     w->conf_.base = base;
-                    base = (typeof(base))realloc(base, 0);
+                    free(base);
                     // TODO: add some checks to verify that the new dir is ok?
                     break;
                 }
@@ -321,7 +321,7 @@ intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                     auto lang = rChooseFile(ctrl, "lang", path.c_str());
                     if (!lang) return 0;
                     w->conf_.lang = lang;
-                    lang = (typeof(lang))realloc(lang, 0);
+                    free(lang);
                     w->conf_.lang_map = conf_t::get_lang_map(w->conf_.lang);
                     break;
                 }
@@ -611,7 +611,7 @@ intptr_t main_window_t::prepare_tray_icon(T2IV tray) {
     cEngineCallback(engd_, ECB_DRAW, (intptr_t)&icon);
     auto retn = rMakeTrayIcon(global_menu_.get(),
             get_text_stock(TXT_HEAD)->data(), icon.time, icon.xdim, icon.ydim);
-    icon.time = (decltype(icon.time))realloc(icon.time, 0);
+    free(icon.time);
     toggle_visibility(false);
     return retn;
 }
