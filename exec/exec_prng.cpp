@@ -37,6 +37,11 @@ uint32_t RNG_Load(uint32_t *seed) {
     return retn ^ (retn >> 18);
 }
 
+// yields 0 if UPPER is 0 (who would want it anyway?), otherwise [0; UPPER - 1]
+uint32_t RNG_LoadBounded(uint32_t *seed, uint32_t upper) {
+    return (upper > 1) ? (uint64_t)RNG_Load(seed) * upper >> 32 : 0;
+}
+
 
 
 // this is an RNG helper that given a uniform distribution can choose an index
@@ -66,13 +71,13 @@ static uint32_t *RNG_MakeWeighted(uint32_t w_size, const uint32_t *weights) {
     // fit all PROBABILITY values with no gap by redistributing over the slots.
     struct RNG_PREP { uint32_t index, alias; uint64_t probability; } *prep;
     uint64_t full = 0;
-    uint32_t *rngw = (uint32_t*)realloc(
-            NULL, sizeof(*rngw) * ((w_size) ? w_size * 2 + 1 : 3)), donor = 0;
-    *rngw = w_size;
+    uint32_t donor = 0;
+    uint32_t *rngw = (uint32_t*)realloc(NULL, sizeof(*rngw) * (w_size * 2 + 1));
     for (uint32_t i = 0; i < w_size; full += weights[i++]) {}
+    *rngw = w_size;
     if (!full || (full > UINT32_MAX)) { // fallback to uniform distribution
         assert(!(full > UINT32_MAX)); // signal the overflow in debug mode
-        for (uint32_t i = 0, size = (w_size) ? w_size : 1; i < size; i++) {
+        for (uint32_t i = 0; i < w_size; i++) {
             rngw[i * 2 + 2] = i;
             rngw[i * 2 + 1] = 0;
         }
@@ -109,11 +114,12 @@ static uint32_t *RNG_MakeWeighted(uint32_t w_size, const uint32_t *weights) {
     return rngw; // TODO: maybe allow FULL > UINT32_MAX and just rescale it?
 }
 
-static uint32_t RNG_LoadWeighted(const uint32_t *rngw, uint32_t seed) {
+static uint32_t RNG_LoadWeighted(const uint32_t *rngw, uint32_t *seed) {
     // no NULL check for RNGW; we die like men.
     // one 32x32->64 multiplication splits the seed: the high half picks a slot
     // and the low half is weighed against THRESHOLD to pick one of its 2 items
-    uint64_t both = (uint64_t)seed * rngw[0]; // == seed * size
+    if (rngw[0] <= 1) return 0;
+    uint64_t both = (uint64_t)RNG_Load(seed) * rngw[0]; // == RNG_Load() * size
     uint32_t slot = (uint32_t)(both >> 32);
     return ((uint32_t)both >= rngw[slot * 2 + 1]) ? rngw[slot * 2 + 2] : slot;
 }
@@ -127,6 +133,6 @@ weighted_rng_t::~weighted_rng_t() { RNG_FreeWeighted(&data_); }
 
 size_t weighted_rng_t::size() const { return (data_) ? data_[0] : 0; }
 
-uint32_t weighted_rng_t::random_selection(uint32_t seed) const {
+uint32_t weighted_rng_t::random_selection(uint32_t *seed) const {
     return RNG_LoadWeighted(data_, seed);
 }

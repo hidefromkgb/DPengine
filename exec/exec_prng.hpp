@@ -8,6 +8,7 @@
 void RNG_Free(uint32_t **seed);
 uint32_t *RNG_Make(uint32_t init);
 uint32_t RNG_Load(uint32_t *seed);
+uint32_t RNG_LoadBounded(uint32_t *seed, uint32_t upper);
 
 class weighted_rng_t {
 private:
@@ -28,7 +29,7 @@ public:
         return *this;
     }
     size_t size() const;
-    uint32_t random_selection(uint32_t seed) const;
+    uint32_t random_selection(uint32_t *seed) const;
     weighted_rng_t(const std::vector<uint32_t> &weights);
 };
 
@@ -39,7 +40,7 @@ inline T random_selection(const std::vector<T> &v, uint32_t *seed) {
     } else if (v.empty()) {
         return T{};
     }
-    return v[(v.size() > 1) ? uint64_t(RNG_Load(seed)) * v.size() >> 32 : 0];
+    return v[RNG_LoadBounded(seed, v.size())];
 };
 
 template <bool allow_empty, typename T>
@@ -51,7 +52,7 @@ inline T weighted_random_selection(
     } else if (v.empty()) {
         return T{};
     }
-    return v[(v.size() > 1) ? weight.random_selection(RNG_Load(seed)) : 0];
+    return v[weight.random_selection(seed)];
 };
 
 #endif // EXEC_PRNG_HPP

@@ -50,17 +50,18 @@ bool sprite_t::next_behaviour(
     // side unless it has none yet - either way the side has to be settled
     // before the center is looked up, as the two sides differ
     if (velocity_.x || !prev_unit)
-        set_flag(left, (velocity_.x) ? velocity_.x < 0.f : RNG_Load(seed) & 1);
+        set_flag(left, (velocity_.x) ? velocity_.x < 0.f
+                                     : RNG_LoadBounded(seed, 2));
     const auto center = unit_->center(is_left());
     if (prev_unit) { // sprite already on screen: aligning the new center
         const auto prev_center = prev_unit->center(prev_left);
         position_.x += prev_center.x - center.x;
         position_.y -= prev_center.y - center.y;
     } else if (unit_->dims(is_left()).x) { // first anim: placing the sprite
-        auto x = uint64_t(RNG_Load(seed)) * std::max(area.x - 2 * center.x, 1);
-        auto y = uint64_t(RNG_Load(seed)) * std::max(area.y - 2 * center.y, 1);
-        position_ = {{decltype(position_.x)(x >> 32),
-                      decltype(position_.y)(y >> 32) + 2 * center.y}};
+        auto x = RNG_LoadBounded(seed, std::max(area.x - 2 * center.x, 0));
+        auto y = RNG_LoadBounded(seed, std::max(area.y - 2 * center.y, 0));
+        position_ = {{decltype(position_.x)(x),
+                      decltype(position_.y)(y) + 2 * center.y}};
     }
     return true;
 }
@@ -72,7 +73,7 @@ const sprite_t *sprite_t::pick_target(
     assert(lib_->id() != bhv.follow_target()); // illegal to follow own library
     // [TODO:] DP tech doc allows self-follows but the DP base has 0 such cases
     //         (might be worth considering to prohibit on import?)
-    return (*ic)[uint64_t(RNG_Load(seed)) * ic->size() >> 32];
+    return (*ic)[RNG_LoadBounded(seed, ic->size())];
 }
 
 bool sprite_t::has_target() const {
