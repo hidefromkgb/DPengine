@@ -19,8 +19,9 @@ const effect_t *sprite_t::eff() const {
 void sprite_t::advance(int64_t time, bool reset) {
     if (reset) curr_frame_ = UINT32_MAX;
     assert(unit_);
-    if (auto u = unit_->advance(is_left(), time, next_frame_time_, curr_frame_))
-        uuid_ = u;
+    if (auto uuid = unit_->advance(
+            get_flag(left), time, next_frame_time_, curr_frame_))
+        uuid_ = uuid;
 }
 
 bool sprite_t::next_behaviour(
@@ -40,7 +41,7 @@ bool sprite_t::next_behaviour(
         parent_ = nullptr;
     }
     const auto prev_unit = unit_;
-    const bool prev_left = is_left();
+    const bool prev_left = get_flag(left);
     bhv_ = next;
     unit_ = (has_target()) ? &lib_->follow_override(seed, *bhv_, false) : bhv_;
     set_flag(enroute, false);
@@ -52,12 +53,12 @@ bool sprite_t::next_behaviour(
     if (velocity_.x || !prev_unit)
         set_flag(left, (velocity_.x) ? velocity_.x < 0.f
                                      : RNG_LoadBounded(seed, 2));
-    const auto center = unit_->center(is_left());
+    const auto center = unit_->center(get_flag(left));
     if (prev_unit) { // sprite already on screen: aligning the new center
         const auto prev_center = prev_unit->center(prev_left);
         position_.x += prev_center.x - center.x;
         position_.y -= prev_center.y - center.y;
-    } else if (unit_->dims(is_left()).x) { // first anim: placing the sprite
+    } else if (unit_->dims(get_flag(left)).x) { // first anim: placing sprite
         auto x = RNG_LoadBounded(seed, std::max(area.x - 2 * center.x, 0));
         auto y = RNG_LoadBounded(seed, std::max(area.y - 2 * center.y, 0));
         position_ = {{decltype(position_.x)(x),
@@ -85,15 +86,16 @@ bool sprite_t::move_behaviour(uint32_t *seed, int64_t time, T2IV area) {
     next_move_time_ = ((time > next_move_time_ + FRM_WAIT)
                       ? time : next_move_time_) + FRM_WAIT;
     if (has_target()) return follow_behaviour(seed, area);
-    const auto dims = unit_->dims(is_left());
+    const auto dims = unit_->dims(get_flag(left));
     // [TODO:] player-controlled characters should stop at the area boundary
     //         instead of flipping the velocity
     const bool flipped
             = bound_crossed(velocity_.x, position_.x + dims.x, dims.x, area.x);
     if (flipped) {
-        position_.x += unit_->center(is_left()).x - unit_->center(!is_left()).x;
+        position_.x += unit_->center(get_flag(left)).x
+                     - unit_->center(!get_flag(left)).x;
         velocity_.x = -velocity_.x;
-        set_flag(left, !is_left());
+        set_flag(left, !get_flag(left));
     }
     if (bound_crossed(velocity_.y, position_.y, dims.y, area.y))
         velocity_.y = -velocity_.y;
@@ -112,11 +114,11 @@ static float fast_rsqrt(float x) { // I'm a John Carmack wannabe, mmkay?
 }
 
 bool sprite_t::follow_behaviour(uint32_t *seed, T2IV area) {
-    const T2FV curr{{position_.x + unit_->center(is_left()).x,
-                     position_.y - unit_->center(is_left()).y}};
+    const T2FV curr{{position_.x + unit_->center(get_flag(left)).x,
+                     position_.y - unit_->center(get_flag(left)).y}};
     if (parent_) { // target X/Y is an offset from the target's center
-        const auto offset = bhv_->follow_offset(parent_->is_left());
-        const auto center = parent_->unit_->center(parent_->is_left());
+        const auto offset = bhv_->follow_offset(parent_->get_flag(left));
+        const auto center = parent_->unit_->center(parent_->get_flag(left));
         velocity_ = {{parent_->position_.x + offset.x + center.x - curr.x,
                       parent_->position_.y + offset.y - center.y - curr.y}};
     } else { // target X/Y is area-based: 0 = min, 1 = max
@@ -134,18 +136,18 @@ bool sprite_t::follow_behaviour(uint32_t *seed, T2IV area) {
         velocity_.y *= step;
     } // otherwise, VELOCITY_ would bring the sprite to the exact ending spot
     const auto prev_unit = unit_;
-    const bool prev_left = is_left();
+    const bool prev_left = get_flag(left);
     if (movement && velocity_.x) set_flag(left, velocity_.x < 0.f);
-    if (movement != is_enroute()) { // images get re-picked on stopping/moving
+    if (movement != get_flag(enroute)) { // images re-picked on stopping/moving
         set_flag(enroute, movement);
         unit_ = &lib_->follow_override(seed, *bhv_, movement);
     }
-    if ((is_left() == prev_left) && (unit_ == prev_unit)) {
+    if ((get_flag(left) == prev_left) && (unit_ == prev_unit)) {
         position_ = {{position_.x + velocity_.x, position_.y + velocity_.y}};
         return false;
     }
-    position_ = {{curr.x + velocity_.x - unit_->center(is_left()).x,
-                  curr.y + velocity_.y + unit_->center(is_left()).y}};
+    position_ = {{curr.x + velocity_.x - unit_->center(get_flag(left)).x,
+                  curr.y + velocity_.y + unit_->center(get_flag(left)).y}};
     return true;
 }
 
@@ -153,8 +155,8 @@ void sprite_t::move_effect(bool reset) {
     if (!reset && !eff()->follow()) return;
     if (reset || (parent_->unit_ != parent_unit_)) { // a new image or side
         parent_unit_ = parent_->unit_;
-        offset_ = eff()->gravity(
-                is_left(), gravity_, parent_unit_->dims(parent_->is_left()));
+        offset_ = eff()->gravity(get_flag(left), gravity_,
+                parent_unit_->dims(parent_->get_flag(left)));
     }
     position_ = {{parent_->position_.x + offset_.x,
                   parent_->position_.y - offset_.y}};
@@ -170,10 +172,10 @@ void sprite_t::preinit_effect(const sprite_t &parent, const effect_t &eff) {
 }
 
 void sprite_t::init_effect(uint32_t *seed, int64_t time) {
-    assert(is_effect());
+    assert(get_flag(effect));
     uuid_ = 0;
-    set_flag(left, parent_->is_left());
-    gravity_ = eff()->select_gravity(is_left(), seed);
+    set_flag(left, parent_->get_flag(left));
+    gravity_ = eff()->select_gravity(get_flag(left), seed);
     const auto span = eff()->duration(); // u = duration, v = repeat
     next_wait_time_ = (span.u) ? time + span.u : never;
     next_rep_time_ = (span.v) ? time + span.v : never;
@@ -199,7 +201,7 @@ void sprite_t::init_behaviour(const library_t &lib, uint32_t *seed,
 
 bool sprite_t::update_behaviour(
         uint32_t *seed, int64_t time, T2IV area, const cast_t &cast) {
-    if (is_effect()) return false;
+    if (get_flag(effect)) return false;
     const auto prev_bhv = bhv_;
     const bool changed = next_behaviour(seed, time, area, cast);
     const bool flipped = move_behaviour(seed, time, area);
@@ -210,10 +212,11 @@ bool sprite_t::update_behaviour(
 
 void sprite_t::track_parent(uint32_t *seed, int64_t time) {
     // a follower turning with its parent is redeployed on the other side
-    const bool flipped = eff()->follow() && (is_left() != parent_->is_left());
+    const bool flipped = eff()->follow()
+            && (get_flag(left) != parent_->get_flag(left));
     if (flipped) {
-        set_flag(left, parent_->is_left());
-        gravity_ = eff()->select_gravity(is_left(), seed);
+        set_flag(left, parent_->get_flag(left));
+        gravity_ = eff()->select_gravity(get_flag(left), seed);
     }
     move_effect(flipped);
     advance(time, flipped);
@@ -284,7 +287,7 @@ bool sprite_t::update_speech(uint32_t *seed, int64_t time, uint64_t chance) {
 }
 
 const std::string &sprite_t::name() const {
-    assert(!owner().is_effect());
+    assert(!owner().get_flag(effect));
     return owner().lib_->name();
 }
 
@@ -350,8 +353,8 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time) {
     // backwards, so that swapped-in slots are already updated
     for (uint32_t iter = (effects_ || speech_) ? shown_ : 0; iter--; ) {
         auto &fx = *sprites_[iter];
-        if (!fx.is_effect()) continue;
-        if (fx.is_speech()) {
+        if (!fx.get_flag(sprite_t::effect)) continue;
+        if (fx.get_flag(sprite_t::speech)) {
             if (fx.update_speech(seed, time, speech_chance)) continue;
         } else {
             // fires when duration >= repeat: effect spawns more of itself
@@ -366,10 +369,11 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time) {
     // forwards, for the same reason; this deploys new effects too
     for (uint32_t iter = waiting_; iter < sprites_.size(); iter++) {
         auto &fx = *sprites_[iter];
-        assert(fx.is_effect());
+        assert(fx.get_flag(sprite_t::effect));
         // wakes due effects: those just added and those with duration < repeat
-        bool awake = (fx.is_speech()) ? fx.do_speech(seed, time, speech_chance)
-                                      : fx.wake_effect(seed, time);
+        bool awake = (fx.get_flag(sprite_t::speech))
+                   ? fx.do_speech(seed, time, speech_chance)
+                   : fx.wake_effect(seed, time);
         if (!awake && !fx.is_free()) continue;
         // at this point the sprite must be taken out of the wait list
         std::swap(sprites_[iter], sprites_[waiting_++]); // ...to the dumpster

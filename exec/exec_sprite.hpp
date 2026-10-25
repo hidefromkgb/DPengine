@@ -48,10 +48,7 @@ private:
         };
     };
 
-    bool is_left() const { return flags_ & left; }
-    bool is_effect() const { return flags_ & effect; }
-    bool is_speech() const { return flags_ & speech; }
-    bool is_enroute() const { return flags_ & enroute; }
+    bool get_flag(flags_t flag) const { return flags_ & flag; }
     void set_flag(flags_t flag, bool value) {
         flags_ = (value) ? (flags_ | flag) : (flags_ & ~flag);
     }
@@ -61,9 +58,9 @@ private:
     sprite_t() { free(); }
 
     static bool depth_sort(const sprite_t &a, const sprite_t &b) {
-        // followers go in front of their parent
-        return (a.depth_ != b.depth_) ? (a.depth_ > b.depth_)
-                                      : (a.is_effect() && !b.is_effect());
+        return (a.depth_ != b.depth_) // followers go in front of their parent
+             ? (a.depth_ >= b.depth_)
+             : (a.get_flag(effect) && !b.get_flag(effect));
     }
     void append(std::vector<T4FV> &display_list) const {
         display_list.emplace_back(T4FV{{position_.x, position_.y,
@@ -72,7 +69,9 @@ private:
     void advance(int64_t time, bool reset);
     const effect_t *eff() const;
     // the actual sprite to pick when this sprite is clicked
-    const sprite_t &owner() const { return (is_effect()) ? *parent_ : *this; }
+    const sprite_t &owner() const {
+        return (get_flag(effect)) ? *parent_ : *this;
+    }
 
     void init_behaviour(const library_t &lib, uint32_t *seed, int64_t time,
             T2IV area, const cast_t &cast); // frees the slot if not loaded
