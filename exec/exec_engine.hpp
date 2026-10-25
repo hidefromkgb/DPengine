@@ -26,7 +26,6 @@ private:
     options_window_t octl_; // options window
     T2IV tray_; // tray icon dimensions
     T4IV area_; // drawing area position and dimensions
-    T3IV ppos_; // mouse pointer position (z = flags)
     uint64_t tcur_; // current, dilation-adjusted timestamp
     uint64_t tpre_; // previous raw timestamp
 
@@ -55,6 +54,9 @@ private:
             int32_t xptr, int32_t yptr, int32_t isel);
     static uint32_t update_flags(ENGD *engd, intptr_t user, uint32_t flgs);
 
+    // the argument is sprite_bank_t::action_t in disguise
+    void menu_handler_internal(uint32_t a);
+
 public:
     ~engine_t();
     engine_t(const std::string_view fcnf, const std::string_view base,
@@ -62,6 +64,15 @@ public:
 
     void display_loop();
     void main_loop();
+
+    // local menu handlers, ITEM->DATA is the engine
+    static void remove_one_handler(MENU *item);
+    static void remove_all_handler(MENU *item);
+    static void sleep_one_handler(MENU *item);
+    static void sleep_all_handler(MENU *item);
+    static void control_p1_handler(MENU *item);
+    static void control_p2_handler(MENU *item);
+    static void options_handler(MENU *item);
 };
 
 #endif // EXEC_ENGINE_HPP

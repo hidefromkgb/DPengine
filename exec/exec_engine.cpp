@@ -75,7 +75,6 @@ engine_t::engine_t(const std::string_view fcnf, const std::string_view base,
 , octl_(mctl_.get_id(), ccur_, cini_, cdef_)
 , tray_(tray)
 , area_(area)
-, ppos_{}
 , tcur_{}
 , tpre_{} {
     mctl_.set_options_window(octl_.get_id()); // link options window to main
@@ -230,11 +229,6 @@ uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
         int32_t xptr, int32_t yptr, int32_t isel) {
     auto &engc = *(engine_t*)user;
     auto &bank = *engc.bank_;
-    const auto pick = bank.pick(isel); // points to the sprite under the cursor
-    // [TODO:] the rest of mouse handling (dragging, mouseover) belongs here,
-    //         and is what XPTR and YPTR are for
-    if (pick && (attr & UFR_MOUS) && (~attr & engc.ppos_.z & UFR_RBTN))
-        engc.mctl_.open_local_menu(pick->name());
 
     // timekeeping (with dilation and partial timestamp accumulator)
     if (!engc.tpre_) engc.tpre_ = time;
@@ -243,9 +237,13 @@ uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
     engc.tcur_ += (uint64_t)engc.tacc_;
     engc.tacc_ -= (uint64_t)engc.tacc_;
 
-    bank.update(engc.seed_, engc.tcur_); // animating the sprites
+    // [TODO:] the rest of mouse handling (dragging, mouseover) belongs to
+    //         sprite_bank_t::handle_input(), and is what XPTR and YPTR are for
+    bank.update(engc.seed_, engc.tcur_, {attr, (uint32_t)isel}); // animating
     *data = bank.display(); // passing the updated sprites to the renderer
-    engc.ppos_.z = attr; // remembering the button state for the next frame
+    if (auto chr = bank.menu_request())
+        engc.mctl_.open_local_menu(chr->name(), bank.is_asleep(*chr),
+                bank.controller(*chr));
 
     // SIZE is the capacity of the sprite array rather than its length: the GPU
     // renderer is built once, out of whatever the very first frame reports
@@ -313,6 +311,37 @@ void engine_t::main_loop() {
     mctl_.main_loop(FRM_WAIT);
 
     save_ini_conf();
+}
+
+void engine_t::menu_handler_internal(uint32_t a) {
+    if (bank_) bank_->menu_action(seed_, tcur_, sprite_bank_t::action_t(a));
+}
+
+void engine_t::remove_one_handler(MENU *item) {
+    ((engine_t*)item->data)->menu_handler_internal(sprite_bank_t::remove_one);
+}
+
+void engine_t::remove_all_handler(MENU *item) {
+    ((engine_t*)item->data)->menu_handler_internal(sprite_bank_t::remove_all);
+}
+
+void engine_t::sleep_one_handler(MENU *item) {
+    ((engine_t*)item->data)->menu_handler_internal(sprite_bank_t::sleep_one);
+}
+
+void engine_t::sleep_all_handler(MENU *item) {
+    ((engine_t*)item->data)->menu_handler_internal(sprite_bank_t::sleep_all);
+}
+
+void engine_t::control_p1_handler(MENU *item) {
+    ((engine_t*)item->data)->menu_handler_internal(sprite_bank_t::control_p1);
+}
+
+void engine_t::control_p2_handler(MENU *item) {
+    ((engine_t*)item->data)->menu_handler_internal(sprite_bank_t::control_p2);
+}
+
+void engine_t::options_handler(MENU *item) {
 }
 
 void engine_t::build_library_structure(const std::string &base) {

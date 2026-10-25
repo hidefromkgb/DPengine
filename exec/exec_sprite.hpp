@@ -111,6 +111,15 @@ public:
 // the sprites of a run: [0, SHOWN_) on display, [SHOWN_, WAITING_) free,
 // [WAITING_, end) effects waiting to be deployed
 class sprite_bank_t : public no_copy_t {
+public:
+    struct input_t {
+        uint32_t attr; // UFR_ flags
+        uint32_t isel; // the sprite under the cursor, > INT32_MAX if none
+    };
+    enum action_t { // see menu_action()
+        remove_one, remove_all, sleep_one, sleep_all, control_p1, control_p2,
+    };
+
 private:
     // lets std::make_unique() reach the private constructor
     struct slot_t : public sprite_t { slot_t() = default; };
@@ -125,10 +134,14 @@ private:
     bool effects_;
     bool speech_;
     const conf_t::spin_t &speech_chance_;
+    const sprite_t *menu_target_; // the character the local menu is for
+    bool menu_pending_; // see menu_request()
+    uint32_t buttons_; // the mouse buttons held during the previous update
 
     void add_behaviour(const library_t &lib, uint32_t *seed, int64_t time);
     void add_effect(const sprite_t &parent, const effect_t &eff);
     void deploy_effects(const sprite_t &chr);
+    void handle_input(const input_t &in);
 
 public:
     sprite_bank_t(const selection_t &sel, uint32_t *seed, int64_t time,
@@ -137,8 +150,20 @@ public:
 
     uint32_t capacity() const { return sprites_.size(); }
     uint32_t shown() const { return shown_; }
-    const sprite_t *pick(int32_t isel) const;
-    void update(uint32_t *seed, int64_t time);
+    const sprite_t *pick(uint32_t isel) const;
+    void update(uint32_t *seed, int64_t time, const input_t &in);
+    bool is_asleep(const sprite_t &chr) const { return false; }
+    // the player controlling CHR, 0 if none
+    uint32_t controller(const sprite_t &chr) const { return 0; }
+    // the character right-clicked during the last update(), once per click
+    const sprite_t *menu_request() {
+        if (!menu_pending_) return nullptr;
+        menu_pending_ = false;
+        return menu_target_;
+    }
+    // the target's state is read when the action comes, not when the menu
+    // opens, as frames keep running in between
+    void menu_action(uint32_t *seed, int64_t time, action_t action);
     T4FV *display() { return display_.data(); }
 };
 

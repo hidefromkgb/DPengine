@@ -299,7 +299,8 @@ sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
         int64_t time, T2IV area, bool effects, bool speech,
         const conf_t::spin_t &speech_chance)
 : shown_(0), waiting_(0), area_(area), effects_(effects), speech_(speech)
-, speech_chance_(speech_chance) {
+, speech_chance_(speech_chance)
+, menu_target_(nullptr), menu_pending_(false), buttons_(0) {
     for (auto &s : sel) {
         auto &lib = s.first.get();
         waiting_ += s.second * (1 + ((effects_) ? lib.max_effects() : 0)
@@ -341,9 +342,34 @@ void sprite_bank_t::deploy_effects(const sprite_t &chr) {
     for (auto &e : chr.bhv_->effects()) add_effect(chr, *e);
 }
 
-void sprite_bank_t::update(uint32_t *seed, int64_t time) {
+void sprite_bank_t::handle_input(const input_t &in) {
+    const auto held = (in.attr & UFR_MOUS) ? in.attr : 0u;
+    const auto released = buttons_ & ~held;
+    buttons_ = held;
+    const auto under = (held & UFR_MOUS) ? pick(in.isel) : nullptr;
+    if (under && (released & UFR_RBTN)) { // see menu_request()
+        menu_target_ = under;
+        menu_pending_ = true;
+    }
+}
+
+void sprite_bank_t::menu_action(
+        uint32_t *seed, int64_t time, action_t action) {
+    if (!menu_target_) return;
+    switch (action) {
+        case remove_one: break;
+        case remove_all: break;
+        case sleep_one: break;
+        case sleep_all: break;
+        case control_p1: break;
+        case control_p2: break;
+    }
+}
+
+void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
     const auto speech_chance
             = (uint64_t(speech_chance_.get()) << 32) / speech_chance_.max();
+    handle_input(in);
     // behaviours first, as followers need updated positions
     for (uint32_t iter = 0; iter < shown_; iter++) {
         auto &chr = *sprites_[iter];
@@ -388,6 +414,6 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time) {
         sprites_[iter]->append(display_); // building the display list
 }
 
-const sprite_t *sprite_bank_t::pick(int32_t isel) const {
-    return (isel >= 0) ? &sprites_[isel]->owner() : nullptr;
+const sprite_t *sprite_bank_t::pick(uint32_t isel) const {
+    return (isel < shown_) ? &sprites_[isel]->owner() : nullptr;
 }

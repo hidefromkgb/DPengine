@@ -722,33 +722,49 @@ std::vector<MENU> main_window_t::get_global_template() {
     };
 }
 
-// [TODO:] handlers for everything but EXIT
 std::vector<MENU> main_window_t::get_local_template() {
+    using e = engine_t;
     return std::vector<MENU>{
         {.text = "", .flgs = MFL_GRAY}, // the title, see open_local_menu()
         {.text = ""},
-        {.text = get_text_stock(TXT_CDEL)->data(), .uuid = TXT_CDEL},
-        {.text = get_text_stock(TXT_ADEL)->data(), .uuid = TXT_ADEL},
+        {.text = get_text_stock(TXT_CDEL)->data(), .data = (intptr_t)engc_,
+                           .uuid = TXT_CDEL, .func = e::remove_one_handler},
+        {.text = get_text_stock(TXT_ADEL)->data(), .data = (intptr_t)engc_,
+                           .uuid = TXT_ADEL, .func = e::remove_all_handler},
         {.text = ""},
-        {.text = get_text_stock(TXT_CSLP)->data(),
-         .flgs = MFL_CCHK, .uuid = TXT_CSLP},
-        {.text = get_text_stock(TXT_ASLP)->data(), .uuid = TXT_ASLP},
+        {.text = get_text_stock(TXT_CSLP)->data(), .data = (intptr_t)engc_,
+         .flgs = MFL_CCHK, .uuid = TXT_CSLP, .func = e::sleep_one_handler},
+        {.text = get_text_stock(TXT_ASLP)->data(), .data = (intptr_t)engc_,
+                           .uuid = TXT_ASLP, .func = e::sleep_all_handler},
         {.text = ""},
-        {.text = get_text_stock(TXT_TPL1)->data(),
-         .flgs = MFL_CCHK, .uuid = TXT_TPL1},
-        {.text = get_text_stock(TXT_TPL2)->data(),
-         .flgs = MFL_CCHK, .uuid = TXT_TPL2},
+        {.text = get_text_stock(TXT_TPL1)->data(), .data = (intptr_t)engc_,
+         .flgs = MFL_CCHK, .uuid = TXT_TPL1, .func = e::control_p1_handler},
+        {.text = get_text_stock(TXT_TPL2)->data(), .data = (intptr_t)engc_,
+         .flgs = MFL_CCHK, .uuid = TXT_TPL2, .func = e::control_p2_handler},
         {.text = ""},
-        {.text = get_text_stock(TXT_OPTS)->data(), .uuid = TXT_OPTS},
+        {.text = get_text_stock(TXT_OPTS)->data(), .data = (intptr_t)engc_,
+                           .uuid = TXT_OPTS, .func = e::options_handler},
         {.text = get_text_stock(TXT_EXIT)->data(), .data = (intptr_t)engd_,
                            .uuid = TXT_EXIT, .func = global_menu_handler}
     };
 }
 
-void main_window_t::open_local_menu(const std::string &name) {
+void main_window_t::open_local_menu(
+        const std::string &name, bool asleep, uint32_t player) {
     local_menu_title_ = "[ " + name + " ]";
     auto menu = local_menu_.get();
     menu[0].text = local_menu_title_.c_str();
+    for (auto item = menu; item->text; item++) {
+        bool check;
+        switch (item->uuid) {
+            case TXT_CSLP: check = asleep; break;
+            case TXT_TPL1: check = (player == 1); break;
+            case TXT_TPL2: check = (player == 2); break;
+            default: continue;
+        }
+        item->flgs = (check) ? (item->flgs | MFL_VCHK)
+                             : (item->flgs & ~MFL_VCHK);
+    }
     rOpenContextMenu(menu);
 }
 
