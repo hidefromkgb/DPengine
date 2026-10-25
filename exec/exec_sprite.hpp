@@ -12,18 +12,25 @@ class sprite_bank_t;
 class sprite_t;
 
 // the sprites on display by library, see sprite_t::pick_target()
-using cast_t = std::unordered_map<lib_id_t, std::vector<const sprite_t*>>;
+using cast_t = std::unordered_map<lib_id_t, std::vector<sprite_t*>>;
 
-// a slot of sprite_bank_t: empty, a behaviour, or an effect
+// a slot of sprite_bank_t: empty / behaviour / effect (speeches are effects)
 class sprite_t : public no_copy_t {
     friend class sprite_bank_t;
 
 private:
-    enum flags_t : uint32_t { GEN_FLAGS(left, effect, speech, enroute) };
+    // a stopgap solution to make behaviour field names fit the max length
+    #define bhv_t behaviour_t
+
+    enum flags_t : uint32_t {
+        GEN_FLAGS(left, wanteffects, effect, speech, enroute,
+                  asleep, dragged, hovered)
+        special = asleep | dragged | hovered,
+    };
 
     const unit_t *unit_;        // what is being animated, nullptr = empty slot
-    const behaviour_t *bhv_;    // what the sprite belongs to; UNIT_ if empty
-    const sprite_t *parent_;    // what the sprite follows / effect belongs to
+    const bhv_t *bhv_;          // what the sprite belongs to; UNIT_ if empty
+    sprite_t *parent_;          // what the sprite follows / effect belongs to
     T2FV position_;             // position, Y being the sprite's lower edge
     intptr_t uuid_;             // animation the frame belongs to, 0 = nothing
     int64_t next_frame_time_;   // start time of the next frame
@@ -36,21 +43,28 @@ private:
     union {
         struct { // behaviours only
             const library_t *lib_;      // the sprite's library
-            int64_t next_bhv_time_;     // when the behaviour is due to change
-            int64_t next_move_time_;    // when the sprite should move
             T2FV velocity_;             // per-frame velocity
+            int64_t next_move_time_;    // when the sprite should move
+            union { // (this is possible because special states do not expire)
+                int64_t next_bhv_time_; // when the behaviour is due to change
+                const bhv_t *resume_;   // what to resume after special states
+            };
         };
         struct { // effects only
             const unit_t *parent_unit_; // what OFFSET_ was computed for
+            T2FV offset_;               // see effect_t::gravity()
             int64_t next_wait_time_;    // when the effect is due to end + wait
             int64_t next_rep_time_;     // when the effect is due to repeat
-            T2FV offset_;               // see effect_t::gravity()
         };
     };
 
+    #undef bhv_t
+
     bool get_flag(flags_t flag) const { return flags_ & flag; }
-    void set_flag(flags_t flag, bool value) {
+    bool set_flag(flags_t flag, bool value) {
+        const auto prev_flag = get_flag(flag);
         flags_ = (value) ? (flags_ | flag) : (flags_ & ~flag);
+        return prev_flag;
     }
 
     bool is_free() const { return !unit_; }
@@ -59,7 +73,7 @@ private:
 
     static bool depth_sort(const sprite_t &a, const sprite_t &b) {
         return (a.depth_ != b.depth_) // followers go in front of their parent
-             ? (a.depth_ >= b.depth_)
+             ? (a.depth_ > b.depth_)
              : (a.get_flag(effect) && !b.get_flag(effect));
     }
     void append(std::vector<T4FV> &display_list) const {
@@ -68,26 +82,35 @@ private:
     }
     void advance(int64_t time, bool reset);
     const effect_t *eff() const;
-    // the actual sprite to pick when this sprite is clicked
-    const sprite_t &owner() const {
-        return (get_flag(effect)) ? *parent_ : *this;
-    }
 
     void init_behaviour(const library_t &lib, uint32_t *seed, int64_t time,
             T2IV area, const cast_t &cast); // frees the slot if not loaded
     bool next_behaviour(
             uint32_t *seed, int64_t time, T2IV area, const cast_t &cast);
+    // all but NEXT_BHV_TIME_, which stays up to the caller (if not special)
+    void apply_behaviour(uint32_t *seed, T2IV area, const behaviour_t &next);
     bool move_behaviour(uint32_t *seed, int64_t time, T2IV area);
     bool follow_behaviour(uint32_t *seed, T2IV area);
-    bool update_behaviour( // returns whether a different behaviour got picked
+    void update_behaviour(
             uint32_t *seed, int64_t time, T2IV area, const cast_t &cast);
 
-    const sprite_t *pick_target(
+    // special states: no expiry, no movement, no following; on leaving the
+    // last one, RESUME_ is re-applied with a fresh duration and PARENT_ kept
+    const behaviour_t &base_bhv() const; // RESUME_ if special
+    void pick_special(uint32_t *seed, T2IV area, flags_t state,
+            const behaviour_t &special_bhv);
+    void drop_special(uint32_t *seed, T2IV area, flags_t state, int64_t time);
+    const behaviour_t *hover(uint32_t *seed, T2IV cursor, ENGD *engd) const;
+
+    void set_drag(uint32_t *seed, int64_t time, T2IV area, bool on, bool hover);
+    void set_sleep(uint32_t *seed, int64_t time, T2IV area, bool on);
+
+    sprite_t *pick_target(
             uint32_t *seed, const behaviour_t &bhv, const cast_t &cast) const;
     bool has_target() const; // a follow target is set, or an area point
     bool parent_moved_on() const;
 
-    void preinit_effect(const sprite_t &parent, const effect_t &eff);
+    void preinit_effect(sprite_t &parent, const effect_t &eff);
     void init_effect(uint32_t *seed, int64_t time); // frees slot if not loaded
     void move_effect(bool reset); // moves effects to their parent sprite
     bool repeat_effect(int64_t time); // returns whether to add a repeat effect
@@ -96,9 +119,10 @@ private:
     void track_parent(uint32_t *seed, int64_t time);
 
     // a speech slot: one per character, idle in the wait list between speeches;
-    // BHV_ is the parent's last seen behaviour, NEXT_REP_TIME_ is when random
-    // speeches are allowed again
-    void preinit_speech(const sprite_t &parent, const speech_t &initial);
+    // BHV_ is the parent's last seen behaviour, SPECIAL flags whether it
+    // was in a special state then, NEXT_REP_TIME_ is when random speeches
+    // are allowed again
+    void preinit_speech(sprite_t &parent, const speech_t &initial);
     // starts a new speech in place if the parent's behaviour changed
     bool do_speech(uint32_t *seed, int64_t time, uint64_t chance);
     // returns false if idle
@@ -113,8 +137,11 @@ public:
 class sprite_bank_t : public no_copy_t {
 public:
     struct input_t {
+        T2IV cursor;
         uint32_t attr; // UFR_ flags
         uint32_t isel; // the sprite under the cursor, > INT32_MAX if none
+        bool hover; // conf_t::hover, may change mid-run
+        ENGD *engd;
     };
     enum action_t { // see menu_action()
         remove_one, remove_all, sleep_one, sleep_all, control_p1, control_p2,
@@ -134,14 +161,20 @@ private:
     bool effects_;
     bool speech_;
     const conf_t::spin_t &speech_chance_;
-    const sprite_t *menu_target_; // the character the local menu is for
+    T2FV grab_; // ACTIVE_'s position relative to the cursor, if dragged
+    sprite_t *active_; // the dragged or hovered character, see its flags
+    sprite_t *menu_target_; // the character the local menu is for
     bool menu_pending_; // see menu_request()
     uint32_t buttons_; // the mouse buttons held during the previous update
 
     void add_behaviour(const library_t &lib, uint32_t *seed, int64_t time);
-    void add_effect(const sprite_t &parent, const effect_t &eff);
-    void deploy_effects(const sprite_t &chr);
-    void handle_input(const input_t &in);
+    void add_effect(sprite_t &parent, const effect_t &eff);
+    // CHR's behaviour effects, if WANTEFFECTS (see apply_behaviour()) is set;
+    // unlike DP, entering special states deploys their effects too
+    void deploy_effects(sprite_t &chr);
+    void handle_input(uint32_t *seed, int64_t time, const input_t &in);
+    // ALL: every character of CHR's library, all set to the same state
+    void toggle_sleep(uint32_t *seed, int64_t time, sprite_t &chr, bool all);
 
 public:
     sprite_bank_t(const selection_t &sel, uint32_t *seed, int64_t time,
@@ -150,9 +183,10 @@ public:
 
     uint32_t capacity() const { return sprites_.size(); }
     uint32_t shown() const { return shown_; }
-    const sprite_t *pick(uint32_t isel) const;
     void update(uint32_t *seed, int64_t time, const input_t &in);
-    bool is_asleep(const sprite_t &chr) const { return false; }
+    bool is_asleep(const sprite_t &chr) const {
+        return chr.get_flag(sprite_t::asleep);
+    }
     // the player controlling CHR, 0 if none
     uint32_t controller(const sprite_t &chr) const { return 0; }
     // the character right-clicked during the last update(), once per click

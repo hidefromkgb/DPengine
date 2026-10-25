@@ -177,8 +177,6 @@ std::vector<CTRL> options_window_t::get_template(
     return std::vector(tmpl.begin(), tmpl.end());
 }
 
-
-    
 window_t::window_t(std::vector<CTRL> controls) : visible_(false) {
     controls_ = std::move(controls);
     assert(!controls_.empty() && (get_type(get_root()) == FCT_WNDW));

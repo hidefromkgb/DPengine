@@ -26,9 +26,8 @@ void sprite_t::advance(int64_t time, bool reset) {
 
 bool sprite_t::next_behaviour(
         uint32_t *seed, int64_t time, T2IV area, const cast_t &cast) {
-    // [TODO:] the special mouse-driven states (dragged, mouseover, sleeping)
-    //         and the player-controlled ones belong here
-    if (time < next_bhv_time_) return false;
+    // [TODO:] the player-controlled states belong here
+    if ((time < next_bhv_time_) || get_flag(special)) return false;
     const auto next = lib_->next_behaviour(seed, bhv_);
     assert(next);
     if (next->follow_target()) {
@@ -40,13 +39,20 @@ bool sprite_t::next_behaviour(
     } else {
         parent_ = nullptr;
     }
+    apply_behaviour(seed, area, *next);
+    next_bhv_time_ = time + bhv_->choose_duration(seed);
+    return true;
+}
+
+void sprite_t::apply_behaviour(
+        uint32_t *seed, T2IV area, const behaviour_t &next) {
     const auto prev_unit = unit_;
     const bool prev_left = get_flag(left);
-    bhv_ = next;
-    unit_ = (has_target()) ? &lib_->follow_override(seed, *bhv_, false) : bhv_;
+    bhv_ = &next;
+    unit_ = (has_target()) ? &lib_->follow_override(seed, next, false) : &next;
     set_flag(enroute, false);
-    next_bhv_time_ = time + bhv_->choose_duration(seed);
-    velocity_ = bhv_->choose_velocity(seed);
+    set_flag(wanteffects, true); // see sprite_bank_t::deploy_effects()
+    velocity_ = (get_flag(special)) ? T2FV{} : bhv_->choose_velocity(seed);
     // a moving sprite faces where it goes, a static one keeps its current
     // side unless it has none yet - either way the side has to be settled
     // before the center is looked up, as the two sides differ
@@ -64,10 +70,82 @@ bool sprite_t::next_behaviour(
         position_ = {{decltype(position_.x)(x),
                       decltype(position_.y)(y) + 2 * center.y}};
     }
-    return true;
 }
 
-const sprite_t *sprite_t::pick_target(
+const behaviour_t &sprite_t::base_bhv() const {
+    return *((get_flag(special)) ? resume_ : bhv_);
+}
+
+void sprite_t::pick_special(uint32_t *seed, T2IV area, flags_t state,
+        const behaviour_t &special_bhv) {
+    assert(state && ((special & state) == state));
+    const bool was_special = get_flag(special);
+    if (set_flag(state, true)) return; // STATE was set already, exit early
+    if (was_special && (&special_bhv == bhv_)) return; // already in place
+    if (!was_special) resume_ = bhv_; // NEXT_BHV_TIME_ is of no use from now
+    apply_behaviour(seed, area, special_bhv); // never expires, never moves
+    curr_frame_ = UINT32_MAX; // restarted by the next update_behaviour()
+}
+
+void sprite_t::drop_special(
+        uint32_t *seed, T2IV area, flags_t state, int64_t time) {
+    assert(state && ((special & state) == state));
+    if (!set_flag(state, false)) return; // STATE was reset already, exit early
+    if (get_flag(special)) return; // still in another special state
+    // PARENT_ is still RESUME_'s target, has_target() ignored it until now
+    apply_behaviour(seed, area, *resume_);
+    next_bhv_time_ = time + bhv_->choose_duration(seed); // overwrites RESUME_
+    curr_frame_ = UINT32_MAX; // restarted by the next update_behaviour()
+}
+
+void sprite_t::set_sleep(uint32_t *seed, int64_t time, T2IV area, bool on) {
+    if (on == get_flag(asleep)) return;
+    if (on) { // sleep overrides hover, while drag keeps going
+        pick_special(seed, area, asleep, lib_->sleep_bhv(seed, base_bhv()));
+        drop_special(seed, area, hovered, time);
+    } else if (get_flag(dragged)) { // woke up mid-drag
+        drop_special(seed, area, dragged, time); // only to be re-picked
+        pick_special(seed, area, dragged, lib_->drag_bhv(seed, base_bhv()));
+        drop_special(seed, area, asleep, time);
+    } else {
+        drop_special(seed, area, asleep, time);
+    }
+}
+
+void sprite_t::set_drag(
+        uint32_t *seed, int64_t time, T2IV area, bool on, bool hover) {
+    if (on == get_flag(dragged)) return;
+    if (on) { // sleeping characters keep sleeping
+        auto &d = (get_flag(asleep)) ? *bhv_ : lib_->drag_bhv(seed, base_bhv());
+        pick_special(seed, area, dragged, d);
+        drop_special(seed, area, hovered, time);
+    } else if (get_flag(asleep) || !hover) {
+        drop_special(seed, area, dragged, time);
+    } else { // as in DP
+        pick_special(seed, area, hovered, lib_->hover_bhv(seed, base_bhv()));
+        drop_special(seed, area, dragged, time);
+    }
+}
+
+const behaviour_t *sprite_t::hover(
+        uint32_t *seed, T2IV cursor, ENGD *engd) const {
+    if (get_flag(special)) return nullptr;
+    const auto &hover_bhv = lib_->hover_bhv(seed, *bhv_);
+    // HOVER_BHV has to be under the cursor too, or it flickers in and out
+    const auto prev_center = unit_->center(get_flag(left));
+    const auto center = hover_bhv.center(get_flag(left));
+    int64_t time_next = 0;
+    AINF test = {0, 0, 0, UINT32_MAX}; // HOVER_BHV starts anew, from frame #0
+    test.uuid = hover_bhv.advance(get_flag(left), 0, time_next, test.fcnt);
+    if (!test.uuid) return nullptr;
+    test.xdim = cursor.x - prev_center.x + center.x - (int32_t)position_.x;
+    test.ydim = cursor.y + prev_center.y - center.y - (int32_t)position_.y;
+    cEngineCallback(engd, ECB_TEST, intptr_t(&test));
+    if (!test.fcnt) return nullptr; // missed, see ECB_TEST in core/core.c
+    return &hover_bhv;
+}
+
+sprite_t *sprite_t::pick_target(
         uint32_t *seed, const behaviour_t &bhv, const cast_t &cast) const {
     auto ic = find_in_map(cast, bhv.follow_target());
     if (!ic) return nullptr;
@@ -78,7 +156,8 @@ const sprite_t *sprite_t::pick_target(
 }
 
 bool sprite_t::has_target() const {
-    return (bhv_->follow_target()) ? !!parent_ : bhv_->follow();
+    return !get_flag(special)
+        && ((bhv_->follow_target()) ? !!parent_ : bhv_->follow());
 }
 
 bool sprite_t::move_behaviour(uint32_t *seed, int64_t time, T2IV area) {
@@ -89,6 +168,8 @@ bool sprite_t::move_behaviour(uint32_t *seed, int64_t time, T2IV area) {
     const auto dims = unit_->dims(get_flag(left));
     // [TODO:] player-controlled characters should stop at the area boundary
     //         instead of flipping the velocity
+    // [TODO:] dodging the cursor within NCDR px when hover is on, see DP's
+    //         ReboundToAvoidCursor(); the squared radius can be per frame
     const bool flipped
             = bound_crossed(velocity_.x, position_.x + dims.x, dims.x, area.x);
     if (flipped) {
@@ -163,7 +244,7 @@ void sprite_t::move_effect(bool reset) {
     depth_ = (eff()->follow()) ? parent_->depth_ : position_.y;
 }
 
-void sprite_t::preinit_effect(const sprite_t &parent, const effect_t &eff) {
+void sprite_t::preinit_effect(sprite_t &parent, const effect_t &eff) {
     flags_ = effect;
     unit_ = &eff;
     parent_ = &parent;
@@ -199,15 +280,13 @@ void sprite_t::init_behaviour(const library_t &lib, uint32_t *seed,
     if (!uuid_) free(); // failed to load, never placed
 }
 
-bool sprite_t::update_behaviour(
+void sprite_t::update_behaviour(
         uint32_t *seed, int64_t time, T2IV area, const cast_t &cast) {
-    if (get_flag(effect)) return false;
-    const auto prev_bhv = bhv_;
+    if (get_flag(effect)) return;
     const bool changed = next_behaviour(seed, time, area, cast);
     const bool flipped = move_behaviour(seed, time, area);
     depth_ = position_.y;
     advance(time, changed || flipped);
-    return changed && (prev_bhv != bhv_);
 }
 
 void sprite_t::track_parent(uint32_t *seed, int64_t time) {
@@ -251,20 +330,33 @@ bool sprite_t::wake_effect(uint32_t *seed, int64_t time) {
     return false;
 }
 
-void sprite_t::preinit_speech(const sprite_t &parent, const speech_t &initial) {
-    flags_ = flags_t(effect | speech);
+void sprite_t::preinit_speech(sprite_t &parent, const speech_t &initial) {
+    flags_ = effect | speech;
     unit_ = &initial;
     parent_ = &parent;
-    bhv_ = parent.bhv_; // no speech at spawn
+    bhv_ = parent.bhv_; // no speech at spawn, as parent_moved_on() == false
     uuid_ = 0;
     next_wait_time_ = next_rep_time_ = 0; // random speeches allowed at once
 }
 
 bool sprite_t::do_speech(uint32_t *seed, int64_t time, uint64_t chance) {
-    if (!parent_moved_on()) return false;
-    const auto speech = parent_->lib_->select_speech(seed, chance,
-        (time >= next_rep_time_) && !parent_->parent_, *bhv_, *parent_->bhv_);
-    bhv_ = parent_->bhv_;        // ^--- not following someone
+    if (!parent_moved_on()) return false; // v-- screw the type: it's an effect
+    const bool was_special = set_flag(special, parent_->get_flag(special));
+    // random lines need the cooldown to be over and no target to follow;
+    // in special states the target is kept but ignored, see has_target()
+    const bool random = (time >= next_rep_time_)
+                     && (get_flag(special) || !parent_->parent_);
+    const speech_t *speech = nullptr; // silent when resuming, as in DP
+    if (parent_->get_flag(hovered)) { // random line on enter but not from drag
+        if (!was_special && random)
+            speech = parent_->lib_->force_random_speech(seed, *parent_->bhv_);
+    } else if (get_flag(special)) { // sleep or drag: the start line only
+        speech = parent_->bhv_->bgn_speech();
+    } else if (!was_special) {
+        speech = parent_->lib_->transition_speech(
+                seed, (random) ? chance : 0, *bhv_, *parent_->bhv_);
+    }
+    bhv_ = parent_->bhv_;
     if (!speech) return false;
     const auto cooldown = next_rep_time_;
     unit_ = speech;
@@ -287,8 +379,8 @@ bool sprite_t::update_speech(uint32_t *seed, int64_t time, uint64_t chance) {
 }
 
 const std::string &sprite_t::name() const {
-    assert(!owner().get_flag(effect));
-    return owner().lib_->name();
+    assert(!get_flag(effect));
+    return lib_->name();
 }
 
 bool sprite_t::parent_moved_on() const {
@@ -298,9 +390,17 @@ bool sprite_t::parent_moved_on() const {
 sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
         int64_t time, T2IV area, bool effects, bool speech,
         const conf_t::spin_t &speech_chance)
-: shown_(0), waiting_(0), area_(area), effects_(effects), speech_(speech)
+: shown_(0)
+, waiting_(0)
+, area_(area)
+, effects_(effects)
+, speech_(speech)
 , speech_chance_(speech_chance)
-, menu_target_(nullptr), menu_pending_(false), buttons_(0) {
+, grab_{}
+, active_(nullptr)
+, menu_target_(nullptr)
+, menu_pending_(false)
+, buttons_(0) {
     for (auto &s : sel) {
         auto &lib = s.first.get();
         waiting_ += s.second * (1 + ((effects_) ? lib.max_effects() : 0)
@@ -316,8 +416,6 @@ sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
     // empty until here, so the first behaviours follow no one
     for (uint32_t iter = 0; iter < shown_; iter++)
         cast_[sprites_[iter]->lib_->id()].emplace_back(sprites_[iter].get());
-    for (uint32_t iter = (effects_) ? 0 : shown_; iter < shown_; iter++)
-        deploy_effects(*sprites_[iter]);
 }
 
 void sprite_bank_t::add_behaviour(
@@ -332,35 +430,80 @@ void sprite_bank_t::add_behaviour(
         sprites_[--waiting_]->preinit_speech(*slot, *placeholder);
 }
 
-void sprite_bank_t::add_effect(const sprite_t &parent, const effect_t &eff) {
+void sprite_bank_t::add_effect(sprite_t &parent, const effect_t &eff) {
     if (shown_ >= waiting_) return; // too bad, no more space in the pool
-    // initialize the bare minimum and put the effect on the wait list:
+    // initialize the bare minimum and put the effect on the wait list
     sprites_[--waiting_]->preinit_effect(parent, eff);
 }
 
-void sprite_bank_t::deploy_effects(const sprite_t &chr) {
-    for (auto &e : chr.bhv_->effects()) add_effect(chr, *e);
+void sprite_bank_t::deploy_effects(sprite_t &chr) {
+    // the flag first: cleared even when EFFECTS_ is off, so that turning it
+    // on mid-run doesn't deploy the effects of an earlier behaviour change
+    if (chr.set_flag(sprite_t::wanteffects, false) && effects_)
+        for (auto &e : chr.bhv_->effects()) add_effect(chr, *e);
 }
 
-void sprite_bank_t::handle_input(const input_t &in) {
+void sprite_bank_t::handle_input(
+        uint32_t *seed, int64_t time, const input_t &in) {
     const auto held = (in.attr & UFR_MOUS) ? in.attr : 0u;
+    const auto pressed = held & ~buttons_;
     const auto released = buttons_ & ~held;
     buttons_ = held;
-    const auto under = (held & UFR_MOUS) ? pick(in.isel) : nullptr;
+    sprite_t *under = ((held & UFR_MOUS) && (in.isel < shown_))
+                    ? sprites_[in.isel].get() : nullptr;
+    if (under && under->get_flag(sprite_t::effect)) // effects pick the owner
+        under = under->parent_;
     if (under && (released & UFR_RBTN)) { // see menu_request()
         menu_target_ = under;
         menu_pending_ = true;
+    }
+    if (active_ && active_->get_flag(sprite_t::dragged)) {
+        if (held & UFR_LBTN) { // still dragged, nothing else to do
+            active_->position_ = {{in.cursor.x + grab_.x,
+                                   in.cursor.y + grab_.y}};
+            return;
+        }
+        active_->set_drag(seed, time, area_, false, in.hover); // dropped
+    }
+    if (active_ && (!in.hover || (under != active_)
+            || !active_->get_flag(sprite_t::hovered))) {
+        active_->drop_special(seed, area_, sprite_t::hovered, time);
+        active_ = nullptr;
+    }
+    if (under && (pressed & UFR_LBTN)) { // grabbed, which ends its hover
+        under->set_drag(seed, time, area_, true, in.hover);
+        active_ = under;
+        grab_ = {{under->position_.x - in.cursor.x,
+                  under->position_.y - in.cursor.y}};
+    }
+    if (!active_ && in.hover && under
+            && !(held & (UFR_LBTN | UFR_MBTN | UFR_RBTN))) { // no buttons held
+        if (auto hover_bhv = under->hover(seed, in.cursor, in.engd)) {
+            active_ = under;
+            active_->pick_special(seed, area_, sprite_t::hovered, *hover_bhv);
+        }
+    }
+}
+
+void sprite_bank_t::toggle_sleep(
+        uint32_t *seed, int64_t time, sprite_t &chr, bool all) {
+    const bool on = !chr.get_flag(sprite_t::asleep);
+    if (!all) {
+        chr.set_sleep(seed, time, area_, on);
+    } else if (auto ic = find_in_map(cast_, chr.lib_->id())) {
+        for (auto c : *ic) c->set_sleep(seed, time, area_, on);
     }
 }
 
 void sprite_bank_t::menu_action(
         uint32_t *seed, int64_t time, action_t action) {
     if (!menu_target_) return;
+    auto &chr = *menu_target_;
     switch (action) {
         case remove_one: break;
         case remove_all: break;
-        case sleep_one: break;
-        case sleep_all: break;
+        case sleep_one: toggle_sleep(seed, time, chr, false); break;
+        case sleep_all: toggle_sleep(seed, time, chr, true); break;
         case control_p1: break;
         case control_p2: break;
     }
@@ -369,12 +512,12 @@ void sprite_bank_t::menu_action(
 void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
     const auto speech_chance
             = (uint64_t(speech_chance_.get()) << 32) / speech_chance_.max();
-    handle_input(in);
+    handle_input(seed, time, in);
     // behaviours first, as followers need updated positions
     for (uint32_t iter = 0; iter < shown_; iter++) {
         auto &chr = *sprites_[iter];
-        if (chr.update_behaviour(seed, time, area_, cast_) && effects_)
-            deploy_effects(chr);
+        chr.update_behaviour(seed, time, area_, cast_);
+        deploy_effects(chr);
     }
     // backwards, so that swapped-in slots are already updated
     for (uint32_t iter = (effects_ || speech_) ? shown_ : 0; iter--; ) {
@@ -384,7 +527,7 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
             if (fx.update_speech(seed, time, speech_chance)) continue;
         } else {
             // fires when duration >= repeat: effect spawns more of itself
-            if (fx.repeat_effect(time)) add_effect(fx.owner(), *fx.eff());
+            if (fx.repeat_effect(time)) add_effect(*fx.parent_, *fx.eff());
             if (fx.update_effect(seed, time)) continue;
         }
         // reaching this point means the sprite is inactive, remove it
@@ -412,8 +555,4 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
     display_.clear();
     for (uint32_t iter = 0; iter < shown_; iter++)
         sprites_[iter]->append(display_); // building the display list
-}
-
-const sprite_t *sprite_bank_t::pick(uint32_t isel) const {
-    return (isel < shown_) ? &sprites_[isel]->owner() : nullptr;
 }

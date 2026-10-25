@@ -121,16 +121,29 @@ const unit_t &library_t::follow_override(
             ? random_selection<false>(ig->bhv[mode], seed).get() : bhv;
 }
 
-const speech_t *library_t::select_speech(uint32_t *seed, uint64_t chance,
-        bool random, const behaviour_t &prev, const behaviour_t &curr) const {
+const speech_t *library_t::transition_speech(uint32_t *seed, uint64_t chance,
+        const behaviour_t &prev, const behaviour_t &curr) const {
     if (curr.bgn_speech()) return curr.bgn_speech();
     if (prev.end_speech()) return prev.end_speech();
-    if (!random || (RNG_Load(seed) >= chance)) return nullptr;
+    if (!chance || (RNG_Load(seed) >= chance)) return nullptr;
     // in DP, random speech is also prohibited for behaviours that have an end
     // speech, here that restriction is lifted; worth remembering though
+    return force_random_speech(seed, curr);
+}
+
+const speech_t *library_t::force_random_speech(
+        uint32_t *seed, const behaviour_t &curr) const {
     auto ig = find_in_map(groups_, bhv_id_internal_t{curr.id()}.group);
     return (ig && !ig->speeches.empty())
             ? &random_selection<false>(ig->speeches, seed).get() : nullptr;
+}
+
+const behaviour_t &library_t::special_bhv_internal(
+        uint32_t *seed, const behaviour_t &curr, bhv_type_t type) const {
+    auto ig = find_in_map(groups_, bhv_id_internal_t{curr.id()}.group);
+    assert(ig && !ig->bhv[type].empty()); // see init_special_behaviours()
+    return (ig && !ig->bhv[type].empty())
+            ? random_selection<false>(ig->bhv[type], seed).get() : curr;
 }
 
 interaction_t::input_t::input_t(const std::string_view &str) {
@@ -609,6 +622,38 @@ void library_t::init_follow_groups(const build_ctx_t &ctx) {
         }
 }
 
+void library_t::init_special_behaviours(const build_ctx_t &ctx) {
+    if (behaviours_.empty()) return;
+    // stationary candidates by group: nonzero chance, no skip, no follow
+    std::unordered_map<int, ref_vec_t<behaviour_t>> idle;
+    size_t slowest = 0;
+    for (size_t i = 0; i < behaviours_.size(); i++) {
+        auto &b = ctx.in.behaviours[i];
+        auto &bhv = *behaviours_[i];
+        if (bhv.speed() < behaviours_[slowest]->speed()) slowest = i;
+        if (!b.skip && (b.chance > 0.f) && b.follow_target.empty()
+                && !bhv.speed())
+            idle[bhv_id_internal_t{bhv.id()}.group].emplace_back(bhv);
+    }
+    // only the lists left without dedicated behaviours get fallbacks
+    for (auto &g : groups_) {
+        if (g.first < 0) continue; // custom follow groups
+        auto &bhv = g.second.bhv;
+        auto fallback = [&](ref_vec_t<behaviour_t> &list) {
+            if (!list.empty()) return;
+            if (auto ii = find_in_map(idle, g.first)) list = *ii;
+            else if (auto ii = find_in_map(idle, 0)) list = *ii;
+            else list.emplace_back(*behaviours_[slowest]);
+        };
+        // as in DP: dedicated drag, else dedicated sleep (hence before its
+        // fallback), else the final mouseover list (hence after its fallback)
+        if (bhv[dragged].empty()) bhv[dragged] = bhv[sleeping];
+        fallback(bhv[sleeping]);
+        fallback(bhv[mouseover]);
+        if (bhv[dragged].empty()) bhv[dragged] = bhv[mouseover];
+    }
+}
+
 void library_t::dump_stats() const {
     printf("Total behaviours: %lu (max effects: %u)\n",
             behaviours_.size(), max_effects_);
@@ -652,6 +697,7 @@ library_t::library_t(lib_id_t id, std::string path, const input_t &in,
     init_random_speeches(ctx);
     init_probabilities(ctx);
     init_follow_groups(ctx);
+    init_special_behaviours(ctx);
     init_max_effects();
     dump_stats();
 }

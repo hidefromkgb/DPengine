@@ -131,6 +131,9 @@ private:
     void init_random_speeches(const build_ctx_t &ctx);
     void init_probabilities(const build_ctx_t &ctx);
     void init_follow_groups(const build_ctx_t &ctx);
+    void init_special_behaviours(const build_ctx_t &ctx);
+    const behaviour_t &special_bhv_internal(
+            uint32_t *seed, const behaviour_t &curr, bhv_type_t type) const;
     void init_max_effects();
     void dump_stats() const;
 
@@ -141,9 +144,25 @@ public:
             uint32_t *seed, const behaviour_t *curr) const;
     const unit_t &follow_override(
             uint32_t *seed, const behaviour_t &bhv, bool move) const;
-    // CURR's start, else PREV's end, else (if RANDOM) a chance roll
-    const speech_t *select_speech(uint32_t *seed, uint64_t chance, bool random,
+    // CURR's start, else PREV's end, else a CHANCE roll (if CHANCE > 0)
+    const speech_t *transition_speech(uint32_t *seed, uint64_t chance,
             const behaviour_t &prev, const behaviour_t &curr) const;
+    // a random line of CURR's group, nullptr only if the group has none
+    const speech_t *force_random_speech(
+            uint32_t *seed, const behaviour_t &curr) const;
+
+    // random special behaviours of CURR's group, see init_special_behaviours()
+    const behaviour_t &sleep_bhv(
+            uint32_t *seed, const behaviour_t &curr) const {
+        return special_bhv_internal(seed, curr, sleeping);
+    }
+    const behaviour_t &hover_bhv(
+            uint32_t *seed, const behaviour_t &curr) const {
+        return special_bhv_internal(seed, curr, mouseover);
+    }
+    const behaviour_t &drag_bhv(uint32_t *seed, const behaviour_t &curr) const {
+        return special_bhv_internal(seed, curr, dragged);
+    }
 
     static bhv_id_desc_t build_bhv_id_desc(const input_t &in);
 

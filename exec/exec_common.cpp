@@ -9,7 +9,7 @@
 //       and resolution are set, then everything is deterministic and these
 //       output logs can be validated by comparing them to a reference log.
 
-// TODO: special behaviours
+// TODO: cursor dodging within the NCDR radius
 // TODO: more menu items, including the per-OS submenu
 // TODO: network updates for the animation base
 

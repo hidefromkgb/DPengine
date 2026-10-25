@@ -111,7 +111,6 @@ conf_t engine_t::get_def_conf(const std::string_view base) {
     retn.rgpu = conf_t::spin_t(  0,    0, 30000);
     return retn;
 }
-    
 
 void engine_t::save_ini_conf() const {
     auto header = [](const char *h) { return DEF_CRLF + std::string(h); };
@@ -237,9 +236,8 @@ uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
     engc.tcur_ += (uint64_t)engc.tacc_;
     engc.tacc_ -= (uint64_t)engc.tacc_;
 
-    // [TODO:] the rest of mouse handling (dragging, mouseover) belongs to
-    //         sprite_bank_t::handle_input(), and is what XPTR and YPTR are for
-    bank.update(engc.seed_, engc.tcur_, {attr, (uint32_t)isel}); // animating
+    bank.update(engc.seed_, engc.tcur_, {{{xptr, yptr}}, attr, (uint32_t)isel,
+            !!(engc.ccur_.flgs & conf_t::hover), engd}); // animating
     *data = bank.display(); // passing the updated sprites to the renderer
     if (auto chr = bank.menu_request())
         engc.mctl_.open_local_menu(chr->name(), bank.is_asleep(*chr),
