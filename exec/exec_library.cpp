@@ -170,7 +170,7 @@ interaction_t::interaction_t(const input_t &in, const std::string &lib_name,
         const bhv_id_map_t &bhv_id_map)
 : all_(in.target_activation_all)
 , proximity_(in.proximity)
-, chance_(double(uint32_t(~0)) * std::clamp(in.chance, 0.f, 1.f))
+, chance_(double((uint64_t)1 << 32) * std::clamp(in.chance, 0.f, 1.f))
 , duration_{{std::numeric_limits<decltype(duration_.x)>::max(),
             (decltype(duration_.y))(1000.f * in.reactivation_delay)}} {
 #ifdef DEV_MODE
@@ -263,14 +263,12 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
             // build the table before the workers are spawned instead
             static const struct lut_t {
                 float lin[256];
-
                 lut_t() {
-                    for (uint32_t i = 0; i < 256; i++)
-                        lin[i] = std::pow((to_fp32(i) + 0.055f)
-                                        * (1.f / 1.055f), 2.4f);
+                    for (uint32_t i = 0; i < sizeof(lin) / sizeof(*lin); i++)
+                        lin[i] = std::pow(
+                                (to_fp32(i) + 0.055f) * (1.f / 1.055f), 2.4f);
                 }
             } lut;
-
             return lut.lin[int8];
         }
         static float get_luminance(uint32_t bgra) {
@@ -303,89 +301,66 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     auto &preview = lib->get_preview();
     auto dims = preview.dims(false);
     size_t preview_size = sizeof(uint32_t) * dims.x * dims.y;
-    uint32_t frame = UINT32_MAX;
     int64_t time = 0;
-    AINF ainf = {preview.advance(false, 1, time, frame), (uint32_t)dims.x,
-        (uint32_t)dims.y, 0, (typeof(ainf.time))realloc(nullptr, preview_size)};
+    AINF ainf = {0, (uint32_t)dims.x, (uint32_t)dims.y, UINT32_MAX,
+                (typeof(ainf.time))realloc(nullptr, preview_size)};
+    ainf.uuid = preview.advance(false, 0, time, ainf.fcnt);
     for (size_t i = dims.x * dims.y; i; ainf.time[--i] = 0) {}
     cEngineCallback(engd, ECB_DRAW, (intptr_t)&ainf);
 
     // building the color histogram. The preview is drawn from a palette, so
     // the number of distinct colors is tiny next to the number of pixels and
     // a flat open-addressed table beats a node-based map by a wide margin.
-    // CLR == 0 marks a free cell and never clashes with a stored key, as the
-    // fully transparent pixels are skipped here: they could never win the
-    // selection below anyway, it used to test the very same alpha
-    struct cell_t {uint32_t clr, cnt;};
-    uint32_t bits = 9, mask = (1u << bits) - 1, used = 0;
-    cell_t *cells = (cell_t *)realloc(nullptr, sizeof(*cells) * (mask + 1));
-    for (uint32_t i = mask + 1; i; cells[--i] = {}) {}
-    for (size_t i = dims.x * dims.y; i;) {
-        const uint32_t clr = ainf.time[--i];
-        uint32_t j;
-
-        if (!(clr & 0xFF000000))
-            continue;
-        for (j = (clr * 2654435761u) >> (32 - bits);
-                cells[j].clr && (cells[j].clr != clr); j = (j + 1) & mask) {}
-        if (cells[j].clr) {
-            cells[j].cnt++;
+    // COLOR == 0 marks a free slot and never clashes with a stored key, as
+    // the fully transparent pixels are skipped here: they could never win
+    // the selection below anyway, it used to test the very same alpha
+    const uint32_t bits = 9, mask = (1u << bits) - 1;
+    struct slot_t { uint32_t color, value; } *histogram
+                = (slot_t *)realloc(nullptr, sizeof(*histogram) * (mask + 1));
+    for (uint32_t i = mask + 1; i; histogram[--i] = {}) {}
+    for (size_t used = 0, i = dims.x * dims.y; i; ) {
+        const uint32_t color = ainf.time[--i];
+        if (!(color & 0xFF000000)) continue;
+        uint32_t slot = (color * 2654435761u) >> (32 - bits);
+        for (; histogram[slot].color && (histogram[slot].color != color);
+             slot = (slot + 1) & mask) {}
+        if (histogram[slot].color) {
+            histogram[slot].value++;
             continue;
         }
-        cells[j] = {clr, 1};
-        if (2 * ++used <= mask + 1)
-            continue;
-        // the table went half full, so double it and reinsert everything to
-        // keep the probe chains short. A palette of 256 colors never gets
-        // anywhere near here, this is the way out should the preview ever
-        // start coming from a source with a truer color depth
-        do {
-            cell_t *prev = cells;
-            uint32_t size = mask + 1;
-
-            mask = (1u << ++bits) - 1;
-            cells = (cell_t *)realloc(nullptr, sizeof(*cells) * (mask + 1));
-            for (uint32_t k = mask + 1; k; cells[--k] = {}) {}
-            for (uint32_t k = size; k;) {
-                const cell_t cell = prev[--k];
-                uint32_t m;
-
-                if (!cell.clr)
-                    continue;
-                for (m = (cell.clr * 2654435761u) >> (32 - bits);
-                        cells[m].clr; m = (m + 1) & mask) {}
-                cells[m] = cell;
-            }
-            free(prev);
-        } while (false);
+        histogram[slot] = {color, 1};
+        if (2 * ++used <= mask + 1) continue; // still within half capacity?
+        static_assert(bits > 8);
+        assert(false); // 256-color palettes can never get to this spot
+        break;
     }
     free(ainf.time);
 
     // extracting the most prominent colors from the histogram; end = size - 1
     constexpr size_t end = 2;
     size_t bgn = 0;
-    struct {uint32_t clr, idx;} top_clrs[end + 1] = {};
-    for (uint32_t i = mask + 1; i;)
-        if (const cell_t cell = cells[--i];
-                cell.clr && (cell.cnt >= top_clrs[end].idx)) {
-            size_t j = end;
-            for (; j && (cell.cnt >= top_clrs[j - 1].idx); j--) {}
-            for (size_t k = end; k > j; k--)
-                top_clrs[k] = top_clrs[k - 1];
-            top_clrs[j] = {cell.clr, cell.cnt};
-        }
-    free(cells);
+    slot_t top_clrs[end + 1] = {};
+    for (uint32_t i = mask + 1; i; ) {
+        const slot_t slot = histogram[--i];
+        if (!slot.color || (slot.value < top_clrs[end].value)) continue;
+        size_t j = end;
+        for (; j && (slot.value >= top_clrs[j - 1].value); j--) {}
+        for (size_t k = end; k > j; k--)
+            top_clrs[k] = top_clrs[k - 1];
+        top_clrs[j] = {slot.color, slot.value};
+    }
+    free(histogram);
 
     // saving the color order for debugging
     std::string colors;
     for (size_t i = bgn; i <= end; i++)
-        colors += hsl_t::ttycolor(top_clrs[i].clr, top_clrs[i].clr, "   ");
+        colors += hsl_t::ttycolor(top_clrs[i].color, top_clrs[i].color, "   ");
 
     // sorting the colors by luminance
     // more sorting networks: bertdobbelaere.github.io/sorting_networks.html
     for (size_t i = bgn; i <= end; i++)
-        top_clrs[i].idx = hsl_t::get_luminance(top_clrs[i].clr);
-    #define SORT(v, i, j) if (v[i].idx > v[j].idx) std::swap(v[i], v[j])
+        top_clrs[i].value = hsl_t::get_luminance(top_clrs[i].color);
+    #define SORT(v, i, j) if (v[i].value > v[j].value) std::swap(v[i], v[j])
     static_assert(end == 2);
     SORT(top_clrs, 0, 1);
     SORT(top_clrs, 0, 2);
@@ -393,25 +368,25 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     #undef SORT
 
     // emphasizing the contrast artificially in case it's insufficient
-    for (; (bgn < end) && !(top_clrs[bgn].clr & 0xFF000000); bgn++) {}
-    hsl_t dk(top_clrs[bgn].clr); // dark
-    hsl_t bt(top_clrs[end].clr); // bright
+    for (; (bgn < end) && !(top_clrs[bgn].color & 0xFF000000); bgn++) {}
+    hsl_t dk(top_clrs[bgn].color); // dark
+    hsl_t bt(top_clrs[end].color); // bright
     float contrast = -hsl_t::get_contrast(dk, bt);
     constexpr float readable_contrast = 5.f; // W3C WCAG recommends >4.5
     constexpr auto bin_iter = 16; // number of binary search iterations
     if (-contrast < readable_contrast) {
         constexpr float min_l = 0.f, max_l = 1.f;
         const float dk_l = dk.l, bt_l = bt.l, delta_l = bt_l - dk_l;
-        const float mid_part = ((max_l - bt_l) < (dk_l - min_l))
-                ?       1.f / (1.f + (max_l - bt_l) / (dk_l - min_l))
-                : 1.f - 1.f / (1.f + (dk_l - min_l) / (max_l - bt_l));
+        const float mid_part = ((dk_l - min_l) < (max_l - bt_l))
+                ? 1.f - 1.f / (1.f + (dk_l - min_l) / (max_l - bt_l))
+                :       1.f / (1.f + (max_l - bt_l) / (dk_l - min_l));
         for (float min = min_l, max = max_l;
                 max - min > (max_l - min_l) / (1 << bin_iter); ) {
-            const float mid = 0.5f * (min + max) - delta_l;
-            dk.l = std::clamp(dk_l - mid * mid_part, min_l, max_l);
-            bt.l = std::clamp(bt_l - mid * mid_part + mid, min_l, max_l);
+            const float mid = delta_l - 0.5f * (min + max);
+            dk.l = std::clamp(dk_l + mid * mid_part, min_l, max_l);
+            bt.l = std::clamp(bt_l + mid * mid_part - mid, min_l, max_l);
             contrast = hsl_t::get_contrast(dk, bt);
-            ((contrast < readable_contrast) ? min : max) = mid + delta_l;
+            ((contrast < readable_contrast) ? min : max) = delta_l - mid;
         }
     }
 
@@ -422,8 +397,8 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     // printing the debug output
     std::string text(40, '#');
     text.replace(0, lib->name().size() + 1, lib->name() + " ");
-    char temp[32];
-    sprintf(temp, "%06X %06X - ", lib->speech_fg_ & 0xFFFFFF,
+    char temp[24];
+    sprintf(temp, " %06X / %06X: ", lib->speech_fg_ & 0xFFFFFF,
             lib->speech_bg_ & 0xFFFFFF);
     text = hsl_t::ttycolor(lib->speech_fg_, lib->speech_bg_, temp + text + " ");
     sprintf(temp, "%5.2f ", std::fabs(contrast));
@@ -472,7 +447,7 @@ struct library_t::build_ctx_t {
     const std::string hashable_name;
 
     // filled by map_effects:
-    std::unordered_map<std::string, eff_vec_t> eff_by_bhv_name;
+    std::unordered_map<std::string, fx_vec_t> fx_by_bhv_name;
     // filled by map_speeches:
     std::unordered_map<std::string, const speech_t*> spk_by_name;
     std::unordered_map<int, ref_vec_t<speech_t>> spk_by_group;
@@ -502,12 +477,12 @@ void library_t::init_interactions(const build_ctx_t &ctx) {
 
 void library_t::map_effects(build_ctx_t &ctx) {
     const auto &bhv_id_desc = ctx.bhv_id_desc();
-    for (auto &e : ctx.in.effects) {
-        if (find_in_map(bhv_id_desc.m, e.bhv)) {
-            ctx.eff_by_bhv_name[e.bhv].emplace_back(e);
+    for (auto &fx : ctx.in.effects) {
+        if (find_in_map(bhv_id_desc.m, fx.bhv)) {
+            ctx.fx_by_bhv_name[fx.bhv].emplace_back(fx);
         } else {
             printf("[%s] WARNING, unused effect '%s'\n",
-                   ctx.in.name.c_str(), e.name.c_str());
+                   ctx.in.name.c_str(), fx.name.c_str());
         }
     }
 }
@@ -529,7 +504,7 @@ void library_t::map_speeches(build_ctx_t &ctx) {
 }
 
 void library_t::create_behaviours(build_ctx_t &ctx) {
-    eff_vec_t e_null;
+    fx_vec_t fx_null;
     const auto &bhv_id_desc = ctx.bhv_id_desc();
     for (size_t i = 0; i < ctx.in.behaviours.size(); i++) {
         auto &b = ctx.in.behaviours[i];
@@ -552,11 +527,11 @@ void library_t::create_behaviours(build_ctx_t &ctx) {
             printf("[%s] WARNING, inconsistent follow behaviours in '%s'\n",
                    ctx.in.name.c_str(), b.name.c_str());
 
-        auto ix = find_in_map(ctx.eff_by_bhv_name, b.name);
+        auto ix = find_in_map(ctx.fx_by_bhv_name, b.name);
         behaviours_.emplace_back(std::make_unique<behaviour_t>(b, iid._,
                     linked_iid._, follow_grp_iid._, str_hash(b.follow_target),
                     library_path_, (ib) ? *ib : nullptr, (ie) ? *ie : nullptr,
-                    (ix) ? *ix : e_null));
+                    (ix) ? *ix : fx_null));
         groups_[iid.group].bhv[iid.type].emplace_back(*behaviours_.back());
         ctx.bhv_by_name.emplace(b.name, behaviours_.back().get());
         assert(iid.index == groups_[iid.group].bhv[iid.type].size());
@@ -672,10 +647,10 @@ void library_t::init_max_effects() {
     max_effects_ = 0;
     for (auto &b : behaviours_) {
         const auto d_bhv = b->duration();
-        for (auto &e : b->effects()) {
-            const auto d_eff = e->duration();
-            const auto life = (!d_eff.u) ? d_bhv.u + d_bhv.v : d_eff.u;
-            max_effects_ += (d_eff.v) ? life / d_eff.v + 2 : 2;
+        for (auto &fx : b->effects()) {
+            const auto d_fx = fx->duration();
+            const auto life = (!d_fx.u) ? d_bhv.u + d_bhv.v : d_fx.u;
+            max_effects_ += (d_fx.v) ? life / d_fx.v + 2 : 2;
         }
     }
 }

@@ -12,7 +12,7 @@ static int bound_crossed(float move, float offs, int32_t bmin, int32_t bmax) {
     return 0;
 }
 
-const effect_t *sprite_t::eff() const {
+const effect_t *sprite_t::fx() const {
     return static_cast<const effect_t*>(unit_);
 }
 
@@ -65,8 +65,10 @@ void sprite_t::apply_behaviour(
         position_.x += prev_center.x - center.x;
         position_.y -= prev_center.y - center.y;
     } else if (unit_->dims(get_flag(left)).x) { // first anim: placing sprite
-        auto x = RNG_LoadBounded(seed, std::max(area.x - 2 * center.x, 0));
-        auto y = RNG_LoadBounded(seed, std::max(area.y - 2 * center.y, 0));
+        auto x = area.x - 2 * center.x;
+        x = (x <= 1) ? x >> 1 : (decltype(x))RNG_LoadBounded(seed, x);
+        auto y = area.y - 2 * center.y;
+        y = (y <= 1) ? y : (decltype(y))RNG_LoadBounded(seed, y);
         position_ = {{decltype(position_.x)(x),
                       decltype(position_.y)(y) + 2 * center.y}};
     }
@@ -102,14 +104,11 @@ void sprite_t::set_sleep(uint32_t *seed, int64_t time, T2IV area, bool on) {
     if (on == get_flag(asleep)) return;
     if (on) { // sleep overrides hover, while drag keeps going
         pick_special(seed, area, asleep, lib_->sleep_bhv(seed, base_bhv()));
-        drop_special(seed, area, hovered, time);
     } else if (get_flag(dragged)) { // woke up mid-drag
         drop_special(seed, area, dragged, time); // only to be re-picked
         pick_special(seed, area, dragged, lib_->drag_bhv(seed, base_bhv()));
-        drop_special(seed, area, asleep, time);
-    } else {
-        drop_special(seed, area, asleep, time);
     }
+    drop_special(seed, area, (on) ? hovered : asleep, time);
 }
 
 void sprite_t::set_drag(
@@ -118,13 +117,10 @@ void sprite_t::set_drag(
     if (on) { // sleeping characters keep sleeping
         auto &d = (get_flag(asleep)) ? *bhv_ : lib_->drag_bhv(seed, base_bhv());
         pick_special(seed, area, dragged, d);
-        drop_special(seed, area, hovered, time);
-    } else if (get_flag(asleep) || !hover) {
-        drop_special(seed, area, dragged, time);
-    } else { // as in DP
+    } else if (!get_flag(asleep) && hover) { // as in DP
         pick_special(seed, area, hovered, lib_->hover_bhv(seed, base_bhv()));
-        drop_special(seed, area, dragged, time);
     }
+    drop_special(seed, area, (on) ? hovered : dragged, time);
 }
 
 const behaviour_t *sprite_t::hover(
@@ -141,8 +137,7 @@ const behaviour_t *sprite_t::hover(
     test.xdim = cursor.x - prev_center.x + center.x - (int32_t)position_.x;
     test.ydim = cursor.y + prev_center.y - center.y - (int32_t)position_.y;
     cEngineCallback(engd, ECB_TEST, intptr_t(&test));
-    if (!test.fcnt) return nullptr; // missed, see ECB_TEST in core/core.c
-    return &hover_bhv;
+    return (test.fcnt) ? &hover_bhv : nullptr;
 }
 
 sprite_t *sprite_t::pick_target(
@@ -233,20 +228,20 @@ bool sprite_t::follow_behaviour(uint32_t *seed, T2IV area) {
 }
 
 void sprite_t::move_effect(bool reset) {
-    if (!reset && !eff()->follow()) return;
+    if (!reset && !fx()->follow()) return;
     if (reset || (parent_->unit_ != parent_unit_)) { // a new image or side
         parent_unit_ = parent_->unit_;
-        offset_ = eff()->gravity(get_flag(left), gravity_,
+        offset_ = fx()->gravity(get_flag(left), gravity_,
                 parent_unit_->dims(parent_->get_flag(left)));
     }
     position_ = {{parent_->position_.x + offset_.x,
                   parent_->position_.y - offset_.y}};
-    depth_ = (eff()->follow()) ? parent_->depth_ : position_.y;
+    depth_ = (fx()->follow()) ? parent_->depth_ : position_.y;
 }
 
-void sprite_t::preinit_effect(sprite_t &parent, const effect_t &eff) {
+void sprite_t::preinit_effect(sprite_t &parent, const effect_t &fx) {
     flags_ = effect;
-    unit_ = &eff;
+    unit_ = &fx;
     parent_ = &parent;
     bhv_ = parent.bhv_; // the behaviour that deploys it
     next_rep_time_ = 0; // deploy ASAP
@@ -256,8 +251,8 @@ void sprite_t::init_effect(uint32_t *seed, int64_t time) {
     assert(get_flag(effect));
     uuid_ = 0;
     set_flag(left, parent_->get_flag(left));
-    gravity_ = eff()->select_gravity(get_flag(left), seed);
-    const auto span = eff()->duration(); // u = duration, v = repeat
+    gravity_ = fx()->select_gravity(get_flag(left), seed);
+    const auto span = fx()->duration(); // u = duration, v = repeat
     next_wait_time_ = (span.u) ? time + span.u : never;
     next_rep_time_ = (span.v) ? time + span.v : never;
     move_effect(true);
@@ -291,11 +286,11 @@ void sprite_t::update_behaviour(
 
 void sprite_t::track_parent(uint32_t *seed, int64_t time) {
     // a follower turning with its parent is redeployed on the other side
-    const bool flipped = eff()->follow()
+    const bool flipped = fx()->follow()
             && (get_flag(left) != parent_->get_flag(left));
     if (flipped) {
         set_flag(left, parent_->get_flag(left));
-        gravity_ = eff()->select_gravity(get_flag(left), seed);
+        gravity_ = fx()->select_gravity(get_flag(left), seed);
     }
     move_effect(flipped);
     advance(time, flipped);
@@ -430,17 +425,17 @@ void sprite_bank_t::add_behaviour(
         sprites_[--waiting_]->preinit_speech(*slot, *placeholder);
 }
 
-void sprite_bank_t::add_effect(sprite_t &parent, const effect_t &eff) {
+void sprite_bank_t::add_effect(sprite_t &parent, const effect_t &fx) {
     if (shown_ >= waiting_) return; // too bad, no more space in the pool
     // initialize the bare minimum and put the effect on the wait list
-    sprites_[--waiting_]->preinit_effect(parent, eff);
+    sprites_[--waiting_]->preinit_effect(parent, fx);
 }
 
 void sprite_bank_t::deploy_effects(sprite_t &chr) {
     // the flag first: cleared even when EFFECTS_ is off, so that turning it
     // on mid-run doesn't deploy the effects of an earlier behaviour change
     if (chr.set_flag(sprite_t::wanteffects, false) && effects_)
-        for (auto &e : chr.bhv_->effects()) add_effect(chr, *e);
+        for (auto &fx : chr.bhv_->effects()) add_effect(chr, *fx);
 }
 
 void sprite_bank_t::handle_input(
@@ -471,28 +466,24 @@ void sprite_bank_t::handle_input(
         active_ = nullptr;
     }
     if (under && (pressed & UFR_LBTN)) { // grabbed, which ends its hover
-        under->set_drag(seed, time, area_, true, in.hover);
-        active_ = under;
+        (active_ = under)->set_drag(seed, time, area_, true, in.hover);
         grab_ = {{under->position_.x - in.cursor.x,
                   under->position_.y - in.cursor.y}};
     }
     if (!active_ && in.hover && under
-            && !(held & (UFR_LBTN | UFR_MBTN | UFR_RBTN))) { // no buttons held
-        if (auto hover_bhv = under->hover(seed, in.cursor, in.engd)) {
-            active_ = under;
-            active_->pick_special(seed, area_, sprite_t::hovered, *hover_bhv);
-        }
-    }
+            && !(held & (UFR_LBTN | UFR_MBTN | UFR_RBTN))) // no buttons held
+        if (auto hover_bhv = under->hover(seed, in.cursor, in.engd))
+            (active_ = under)->pick_special(
+                    seed, area_, sprite_t::hovered, *hover_bhv);
 }
 
 void sprite_bank_t::toggle_sleep(
         uint32_t *seed, int64_t time, sprite_t &chr, bool all) {
     const bool on = !chr.get_flag(sprite_t::asleep);
-    if (!all) {
-        chr.set_sleep(seed, time, area_, on);
-    } else if (auto ic = find_in_map(cast_, chr.lib_->id())) {
-        for (auto c : *ic) c->set_sleep(seed, time, area_, on);
-    }
+    const auto ic = find_in_map(cast_, chr.lib_->id());
+    assert(!all || ic);
+    sprite_t::cast_t::mapped_type one{&chr};
+    for (auto c : (all) ? *ic : one) c->set_sleep(seed, time, area_, on);
 }
 
 void sprite_bank_t::menu_action(
@@ -527,7 +518,7 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
             if (fx.update_speech(seed, time, speech_chance)) continue;
         } else {
             // fires when duration >= repeat: effect spawns more of itself
-            if (fx.repeat_effect(time)) add_effect(*fx.parent_, *fx.eff());
+            if (fx.repeat_effect(time)) add_effect(*fx.parent_, *fx.fx());
             if (fx.update_effect(seed, time)) continue;
         }
         // reaching this point means the sprite is inactive, remove it

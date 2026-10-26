@@ -19,7 +19,7 @@ enum movement_flags_t : uint32_t {
 };
 
 class effect_t : public unit_t {
-protected:
+private:
     // a 3x3 grid row by row from the top, each row padded to 4 entries, so
     // that X = ID & 3, Y = ID >> 2 (after an up-correction), see gravity();
     // X = {0, 1, 2}, Y = {0, 1, 2} so it's okay to use them as coefficients
@@ -53,19 +53,19 @@ protected:
             return uint8_t((8 - (flags & ~3)) | (flags & 3));
         }; // this precomputes Y = 2 - (ID >> 2) early, making it Y = ID >> 2
         std::vector<gravity_t> retn;
-        for (auto bhv : gravity[placement])
-            for (auto eff : gravity[centering])
-                retn.emplace_back(gravity_t{up(bhv), up(eff)});
+        for (auto pt : gravity[placement])
+            for (auto fx : gravity[centering])
+                retn.emplace_back(gravity_t{up(pt), up(fx)});
         return retn;
     }
 
 public:
     // offset from the parent's lower left corner, Y going up
     T2FV gravity(bool left, gravity_t pair, T2IV parent_dims) const {
-        const T2IV bhv{{pair.bhv & 3, pair.bhv >> 2}};
-        const T2IV eff{{pair.eff & 3, pair.eff >> 2}};
-        const auto g_x = (bhv.x * parent_dims.x - eff.x * dims(left).x) >> 1;
-        const auto g_y = (bhv.y * parent_dims.y - eff.y * dims(left).y) >> 1;
+        const T2IV pt{{pair.pt & 3, pair.pt >> 2}}; // parent
+        const T2IV fx{{pair.fx & 3, pair.fx >> 2}}; // effect
+        const auto g_x = (pt.x * parent_dims.x - fx.x * dims(left).x) >> 1;
+        const auto g_y = (pt.y * parent_dims.y - fx.y * dims(left).y) >> 1;
         return {{(decltype(T2FV::x))g_x, (decltype(T2FV::y))g_y}};
     }
     gravity_t select_gravity(bool left, uint32_t *seed) const;
@@ -106,7 +106,7 @@ public:
     bool follow() const { return follow_; }
 };
 
-using eff_vec_t = ref_vec_t<effect_t::input_t>;
+using fx_vec_t = ref_vec_t<effect_t::input_t>;
 
 class speech_t : public effect_t {
 public:
@@ -208,10 +208,10 @@ private:
     const bool follow_;
 
     std::vector<std::unique_ptr<effect_t>> process_effects(
-            const std::string &path, const eff_vec_t &eff) {
+            const std::string &path, const fx_vec_t &fx) {
         std::vector<std::unique_ptr<effect_t>> retn;
-        for (auto &e : eff)
-            retn.emplace_back(std::make_unique<effect_t>(e, path));
+        for (auto &f : fx)
+            retn.emplace_back(std::make_unique<effect_t>(f, path));
         return retn;
     }
     static T2FV process_follow_offset(bool left, const input_t &in, bool tgt) {
@@ -257,7 +257,7 @@ public:
     behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
             bhv_id_t follow_grp_id, lib_id_t follow_tgt,
             const std::string &path, const speech_t *bgn_speech,
-            const speech_t *end_speech, const eff_vec_t &eff);
+            const speech_t *end_speech, const fx_vec_t &fx);
 };
 
 #endif // EXEC_BHV_HPP

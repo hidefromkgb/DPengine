@@ -60,6 +60,7 @@ speech_t::input_t::input_t(const std::string_view &str) {
 }
 
 effect_t::input_t speech_t::convert_input(const speech_t::input_t &in) {
+    using gravity_flags_t = decltype(effect_t::input_t::placement_right);
     // in DP, character names are prepended to the speech text like this:
     // 'name: "text"' - which adds name.size() + 4 chars to the total length
     // that is used to compute the speech time, and the average name length
@@ -129,7 +130,7 @@ void speech_t::render(
         text_fn(MSG_WTDA, &text);
     };
     char colors[24];
-    sprintf(colors, "#%08X / #%08X: ", fg, bg);
+    sprintf(colors, " %06X / %06X: ", fg & 0xFFFFFF, bg & 0xFFFFFF);
     for (bool left : {false, true})
         if (is_empty(left))
             prepare_source(left, colors + text_, xdim, ydim, draw);
@@ -184,7 +185,7 @@ static const T2IV process_duration(float min_d, float max_d) {
 behaviour_t::behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
         bhv_id_t follow_grp_id, lib_id_t follow_tgt, const std::string &path,
         const speech_t *bgn_speech, const speech_t *end_speech,
-        const eff_vec_t &eff)
+        const fx_vec_t &fx)
 : id_(id)
 , linked_id_(linked_id)
 , follow_grp_id_(follow_grp_id)
@@ -196,7 +197,7 @@ behaviour_t::behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
 , follow_tgt_(follow_tgt)
 , follow_offset_{process_follow_offset(false, in, follow_tgt),
                  process_follow_offset(true, in, follow_tgt)}
-, effects_(process_effects(path, eff))
+, effects_(process_effects(path, fx))
 , follow_(follow_tgt || in.target_xy.x || in.target_xy.y) {
 #ifdef DEV_MODE
     debug_ = in;

@@ -11,9 +11,6 @@ class speech_t;
 class sprite_bank_t;
 class sprite_t;
 
-// the sprites on display by library, see sprite_t::pick_target()
-using cast_t = std::unordered_map<lib_id_t, std::vector<sprite_t*>>;
-
 // a slot of sprite_bank_t: empty / behaviour / effect (speeches are effects)
 class sprite_t : public no_copy_t {
     friend class sprite_bank_t;
@@ -21,6 +18,9 @@ class sprite_t : public no_copy_t {
 private:
     // a stopgap solution to make behaviour field names fit the max length
     #define bhv_t behaviour_t
+
+    // the sprites on display by library, see pick_target()
+    using cast_t = std::unordered_map<lib_id_t, std::vector<sprite_t*>>;
 
     enum flags_t : uint32_t {
         GEN_FLAGS(left, wanteffects, effect, speech, enroute,
@@ -81,7 +81,7 @@ private:
                                         float(curr_frame_), float(uuid_)}});
     }
     void advance(int64_t time, bool reset);
-    const effect_t *eff() const;
+    const effect_t *fx() const;
 
     void init_behaviour(const library_t &lib, uint32_t *seed, int64_t time,
             T2IV area, const cast_t &cast); // frees the slot if not loaded
@@ -110,7 +110,7 @@ private:
     bool has_target() const; // a follow target is set, or an area point
     bool parent_moved_on() const;
 
-    void preinit_effect(sprite_t &parent, const effect_t &eff);
+    void preinit_effect(sprite_t &parent, const effect_t &fx);
     void init_effect(uint32_t *seed, int64_t time); // frees slot if not loaded
     void move_effect(bool reset); // moves effects to their parent sprite
     bool repeat_effect(int64_t time); // returns whether to add a repeat effect
@@ -154,7 +154,7 @@ private:
     // by pointer: sorted on each update, while cross-pointers stay valid
     std::vector<std::unique_ptr<slot_t>> sprites_;
     std::vector<T4FV> display_; // display list, refilled on each update
-    cast_t cast_;
+    sprite_t::cast_t cast_;
     uint32_t shown_;
     uint32_t waiting_;
     T2IV area_;
@@ -168,7 +168,7 @@ private:
     uint32_t buttons_; // the mouse buttons held during the previous update
 
     void add_behaviour(const library_t &lib, uint32_t *seed, int64_t time);
-    void add_effect(sprite_t &parent, const effect_t &eff);
+    void add_effect(sprite_t &parent, const effect_t &fx);
     // CHR's behaviour effects, if WANTEFFECTS (see apply_behaviour()) is set;
     // unlike DP, entering special states deploys their effects too
     void deploy_effects(sprite_t &chr);

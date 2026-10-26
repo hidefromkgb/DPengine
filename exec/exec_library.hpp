@@ -21,7 +21,7 @@ class interaction_t : public no_copy_t {
 private:
     bool all_;
     uint16_t proximity_;
-    uint32_t chance_;
+    uint64_t chance_;
     const T2IV duration_; // u = duration (INT_MAX), v = reactivation delay
     std::vector<bhv_id_t> initiator_;
     std::unordered_map<lib_id_t, std::vector<bhv_id_t>>

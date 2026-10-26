@@ -14,10 +14,10 @@
 
 class library_t;
 
-// EFF is a point on the effect (CENTERING in the DP tech doc);
-// BHV is a point on the effect's parent (PLACEMENT in tech doc);
+// FX is a point on the effect (CENTERING in the DP tech doc);
+// PT is a point on the effect's parent (PLACEMENT in tech doc);
 // the effect is put so that they meet, see effect_t::gravity()
-struct gravity_t { uint8_t bhv:4; uint8_t eff:4; };
+struct gravity_t { uint8_t pt:4; uint8_t fx:4; };
 using lib_id_t = size_t; // [TODO:] consider phasing lib_id_t out
 using bhv_id_t = uint32_t;
 using selection_t =
