@@ -592,6 +592,23 @@ void main_window_t::set_progress_select(uint32_t frac, uint32_t full) {
     set_progress(TXT_SELE, frac, full);
 }
 
+void main_window_t::set_progress_update(uint32_t frac, uint32_t full) {
+    set_progress(TXT_UPTO, frac, full);
+}
+
+bool main_window_t::confirm_update() const {
+    return rMessage(get_text_stock(TXT_CTUP)->data(),
+            get_text_stock(TXT_CCUP)->data(),
+            get_text_stock(TXT_BYES)->data(), get_text_stock(TXT_BNAY)->data());
+}
+
+void main_window_t::report_update_failure(const char *dir) const {
+    auto text = *get_text_stock((dir) ? TXT_FDIR : TXT_INET);
+    if (dir) text += std::string(" \"") + dir + "\"";
+    rMessage(text.c_str(), get_text_stock(TXT_CCUP)->data(),
+            get_text_stock(TXT_BYES)->data(), nullptr);
+}
+
 intptr_t main_window_t::prepare_tray_icon(T2IV tray) {
     INCBIN("../exec/icon.gif", MainIcon); (void)(MainIcon_end);
 

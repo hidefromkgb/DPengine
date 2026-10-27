@@ -6,6 +6,7 @@
 #include "exec_parser.hpp"
 #include "exec_prng.hpp"
 #include "exec_sprite.hpp"
+#include "exec_web.hpp"
 
 
 
@@ -211,7 +212,7 @@ conf_t engine_t::load_ini_conf(const conf_t &def, const std::string &cfnm) {
             }
         }
         free(file);
-        retn.flgs = render | general;
+        retn.flgs |= render | general; // keeping the update from CFG_RUNS
     }
     return retn;
 }
@@ -349,13 +350,20 @@ void engine_t::build_library_structure(const std::string &base) {
     bhv_id_map_t bhv_id_map;
 
     std::vector<library_t::input_t> ins;
-    auto path = concat_path({base, DEF_FLDR, "Ponies"});
-    auto find = rFindMake(path.c_str());
-    while (auto file = rFindFile(find)) {
-        ins.emplace_back(library_t::input_t(path, file));
-        free(file);
+    const auto path = concat_path({base, DEF_FLDR, "Ponies"});
+    for (bool synced = false; ; ccur_.flgs &= ~conf_t::update, synced = true) {
+        if (!(ccur_.flgs & conf_t::update)) {
+            const intptr_t find = rFindMake(path.c_str());
+            while (char *file = rFindFile(find)) {
+                ins.emplace_back(library_t::input_t(path, file));
+                free(file);
+            }
+            if (!ins.empty() || synced) break;
+        }
+        mctl_.toggle_visibility(true); // show the progress bar
+        try_get_from_github(mctl_, "DPE", "RoosterDragon", "Desktop-Ponies",
+                "master", "Content", concat_path({base, DEF_FLDR}).c_str());
     }
-
     for (auto &i : ins) {
         // construct the behaviour ID descriptors and extract categories
         auto ib = bhv_id_map.emplace(

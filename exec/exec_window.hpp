@@ -346,6 +346,10 @@ public:
 
     void set_progress_load(uint32_t frac, uint32_t full);
     void set_progress_select(uint32_t frac, uint32_t full);
+    void set_progress_update(uint32_t frac, uint32_t full);
+
+    bool confirm_update() const;
+    void report_update_failure(const char *dir) const; // DIR: not created
 
     selection_t collect_selection(uint32_t *seed) const;
 

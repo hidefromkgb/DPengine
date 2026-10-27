@@ -11,7 +11,6 @@
 
 // TODO: cursor dodging within the NCDR radius
 // TODO: more menu items, including the per-OS submenu
-// TODO: network updates for the animation base
 
 
 
