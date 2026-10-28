@@ -8,7 +8,7 @@ gravity_t effect_t::select_gravity(bool left, uint32_t *seed) const {
     return random_selection<false>(gravity_[left], seed);
 }
 
-effect_t::input_t::input_t(const std::string_view &str) {
+effect_t::input_t::input_t(string_view_t str) {
     static const std::unordered_map<std::string, gravity_flags_t> p = {
         {"any",         any        }, {"any-not_center", not_center  },
         {"top_left",    top_left   }, {"top_right",      top_right   },
@@ -17,11 +17,11 @@ effect_t::input_t::input_t(const std::string_view &str) {
         {"left",        center_left}, {"right",          center_right},
         {"center",      center     },
     };
-    token_t line({}, str);
-    name = process_string(line);
-    bhv = ascii_to_lower(process_string(line));
-    right_image = process_string(line);
-    left_image = process_string(line);
+    auto line = local_make_tokenizer(str);
+    name = process_string(line, 'N');
+    bhv = process_string(line, 'L');
+    right_image = process_string(line, 'N');
+    left_image = process_string(line, 'N');
     duration = process_float(line, duration);
     repeat_delay = process_float(line, repeat_delay);
     placement_right = process_map(line, p, placement_right);
@@ -49,12 +49,12 @@ effect_t::effect_t(const input_t &in, const std::string &path)
     set_loop(true, !in.prevent_loop);
 }
 
-speech_t::input_t::input_t(const std::string_view &str) {
-    token_t line({}, str);
-    name = ascii_to_lower(process_string(line));
-    text = process_string(line);
+speech_t::input_t::input_t(string_view_t str) {
+    auto line = local_make_tokenizer(str);
+    name = process_string(line, 'L');
+    text = process_string(line, 'N');
     auto sound_files = process_array(line);
-    if (!sound_files.empty()) sound = sound_files[0];
+    if (!sound_files.empty()) sound = to_string(sound_files[0], 'N');
     skip = process_bool(line, skip);
     group = process_float(line, group);
 }
@@ -69,8 +69,8 @@ effect_t::input_t speech_t::convert_input(const speech_t::input_t &in) {
     constexpr float extension = 1.f;
 
     size_t chars = 0;
-    for (std::string_view str(in.text); !str.empty(); chars++)
-        utf8_skip_char(str);
+    for (auto str = to_view(in.text); str.size; chars++)
+        str = utf8_skip_char(str);
     effect_t::input_t retn;
     retn.name = in.name;
     retn.bhv = "group = " + std::to_string(in.group) + ", skip = "
@@ -136,7 +136,7 @@ void speech_t::render(
             prepare_source(left, colors + text_, xdim, ydim, draw);
 }
 
-behaviour_t::input_t::input_t(const std::string_view &str) {
+behaviour_t::input_t::input_t(string_view_t str) {
     static const std::unordered_map<std::string, movement_flags_t> m = {
         {"horizontal_vertical", move_hv  }, {"mouseover", move_mouse},
         {"diagonal_horizontal", move_dh  }, {"dragged",   move_drag },
@@ -149,25 +149,25 @@ behaviour_t::input_t::input_t(const std::string_view &str) {
         {"false", false}, {"true",   true},
         {"fixed", false}, {"mirror", true},
     };
-    token_t line({}, str);
-    name = ascii_to_lower(process_string(line));
+    auto line = local_make_tokenizer(str);
+    name = process_string(line, 'L');
     chance = process_float(line, chance);
     max_duration = process_float(line, max_duration);
     min_duration = process_float(line, min_duration);
     speed = process_float(line, speed);
-    right_image = process_string(line);
-    left_image = process_string(line);
+    right_image = process_string(line, 'N');
+    left_image = process_string(line, 'N');
     movement = process_map(line, m, movement);
-    linked_bhv = ascii_to_lower(process_string(line));
-    bgn_speech = ascii_to_lower(process_string(line));
-    end_speech = ascii_to_lower(process_string(line));
+    linked_bhv = process_string(line, 'L');
+    bgn_speech = process_string(line, 'L');
+    end_speech = process_string(line, 'L');
     skip = process_bool(line, skip);
     target_xy.x = process_float(line, target_xy.x);
     target_xy.y = process_float(line, target_xy.y);
-    follow_target = ascii_to_lower(process_string(line));
+    follow_target = process_string(line, 'L');
     auto_follow_img = process_bool(line, auto_follow_img);
-    follow_stop_bhv = ascii_to_lower(process_string(line));
-    follow_mov_bhv = ascii_to_lower(process_string(line));
+    follow_stop_bhv = process_string(line, 'L');
+    follow_mov_bhv = process_string(line, 'L');
     right_img_center = process_quoted_int_pair(line, right_img_center);
     left_img_center = process_quoted_int_pair(line, left_img_center);
     prevent_loop = process_bool(line, prevent_loop);
@@ -182,10 +182,10 @@ static const T2IV process_duration(float min_d, float max_d) {
                  (decltype(T2IV::y))(1000.f * max_d)}};
 }
 
-behaviour_t::behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
-        bhv_id_t follow_grp_id, lib_id_t follow_tgt, const std::string &path,
+behaviour_t::behaviour_t(const input_t &in, bhv_id_t id,
+        bhv_id_t linked_id, bhv_id_t follow_grp_id, const fx_vec_t &fx,
         const speech_t *bgn_speech, const speech_t *end_speech,
-        const fx_vec_t &fx)
+        lib_id_t follow_tgt, const std::string &path)
 : id_(id)
 , linked_id_(linked_id)
 , follow_grp_id_(follow_grp_id)

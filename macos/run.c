@@ -527,8 +527,8 @@ long rLoadHTTPS(intptr_t user, char *page, char **dest,
         curl_easy_setopt_(
                 curl, CURLOPT_URL, strcat(strcat(hreq, ctxt[1]), page));
         curl_easy_setopt_(curl, CURLOPT_WRITEFUNCTION, WriteHTTPS);
-        curl_easy_setopt_(curl, CURLOPT_WRITEDATA, data);
-        curl_easy_setopt_(curl, CURLOPT_FOLLOWLOCATION, 1);
+        curl_easy_setopt_(curl, CURLOPT_WRITEDATA, (void*)data);
+        curl_easy_setopt_(curl, CURLOPT_FOLLOWLOCATION, (long)1);
         curl_easy_setopt_(curl, CURLOPT_USERAGENT, ctxt[0]);
     }
     if (curl_easy_perform_ && curl_easy_perform_(curl)) {

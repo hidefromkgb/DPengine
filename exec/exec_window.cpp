@@ -1,6 +1,7 @@
 #include <cassert>
 
 #include "exec_engine.hpp"
+#include "exec_parser.hpp"
 #include "exec_prng.hpp"
 #include "exec_window.hpp"
 
@@ -492,9 +493,10 @@ void main_window_t::categorize_previews() {
 }
 
 void main_window_t::finalize_previews() {
-    static const std::string_view spaces("    ");
-    float inv_space_width = float(spaces.size())
-                          / get_string_dims(get_root(), spaces.data()).x;
+    static const char spaces_data[] = "    ";
+    static const string_view_t spaces{sizeof(spaces_data) - 1, spaces_data};
+    float inv_space_width = float(spaces.size)
+                          / get_string_dims(get_root(), spaces).x;
 
     for (auto &p : previews_)
         p->finalize(inv_space_width);
@@ -549,7 +551,7 @@ void main_window_t::preview_t::finalize(float inv_space_width) {
     size_.y = std::max(size_.y, dims.y);
 
     constexpr int leeway = 6;
-    auto name_size = get_string_dims(get_root(charname_), name_.data());
+    auto name_size = get_string_dims(get_root(charname_), to_view(name_));
     if (name_size.x + leeway > size_.x) { // consider scrolling
         auto maybe_name_len
                   = std::ceil(inv_space_width * (name_size.x - size_.x));
@@ -579,9 +581,9 @@ void main_window_t::preview_t::render(int64_t time) {
         if (!(flags_ & visible)) return;
         RUN_FE2C(imagebox_, MSG_IFRM, (frame_iter_ & 0x3FF) | (uuid << 10));
     }
-    auto str = name_scroll_advance(time);
-    if (!str.empty() && (flags_ & visible))
-        RUN_FE2C(charname_, MSG__TXT, (intptr_t)str.data());
+    const auto text = name_scroll_advance(time);
+    if (text.size && (flags_ & visible))
+        RUN_FE2C(charname_, MSG__TXT, (intptr_t)text.str);
 }
 
 void main_window_t::set_progress_load(uint32_t frac, uint32_t full) {

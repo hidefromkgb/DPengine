@@ -63,14 +63,11 @@ bool unit_t::schedule_upload(bool left, ENGD *engd) {
     char *data = (char*)side.image_.time;
     side.image_.time = nullptr;
     if (side.flags_ & from_path) {
-        std::string_view temp(data);
-        auto pos = temp.find_last_of(DEF_DSEP);
-        if ((pos != std::string_view::npos) && (pos > 0))
-            pos = temp.find_last_of(DEF_DSEP, pos - 1);
-        pos = (pos != std::string_view::npos) ? pos + 1 : 0;
-        temp.remove_prefix(pos); // animation hash: last dir + gif name
-        cEngineLoadAnimAsync(engd, &side.image_, (uint8_t*)temp.data(),
-                data, ELA_DISK, release);
+        auto hash = data + strlen(data); // animation hash: last dir + gif
+        for (auto dirs = 2;
+            (hash > data) && ((hash[-1] != *DEF_DSEP) || --dirs); hash--) {}
+        cEngineLoadAnimAsync(
+                engd, &side.image_, (uint8_t*)hash, data, ELA_DISK, release);
     } else if (auto anim = (AINF*)data) {
         cEngineLoadAnimAsync(engd, &side.image_, (uint8_t*)(anim->time + 1),
                 anim, ELA_AINF, release);

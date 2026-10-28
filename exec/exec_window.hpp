@@ -163,16 +163,18 @@ private:
             auto ymax = lower_left_.y - y_scroll;
             return (ymax >= 0) && (ymax - get_size().y < y_visible);
         }
-        std::string_view name_scroll_advance(int64_t time) {
+        string_view_t name_scroll_advance(int64_t time) {
             #define ABS(v) (((v) < 0) ? -(v) : (v))
             constexpr int FRM_TEXT = FRM_WAIT * 1.5f;
-            if (!name_len_ || (time <= name_time_ + FRM_TEXT)) return {};
+            if (!name_len_ || (time <= name_time_ + FRM_TEXT))
+                return (string_view_t){};
             name_time_ = time + FRM_TEXT;
             const auto true_len = name_.size() - name_len_ * 2;
             name_[true_len + name_len_ + ABS(name_iter_)] = ' ';
             if (++name_iter_ >= name_len_) name_iter_ = -name_iter_;
             name_[true_len + name_len_ + ABS(name_iter_)] = 0;
-            return {name_.data() + ABS(name_iter_), true_len + name_len_};
+            return (string_view_t){true_len + name_len_,
+                                   name_.data() + ABS(name_iter_)};
             #undef ABS
         }
         void toggle_visibility(bool visible) {
@@ -338,8 +340,8 @@ public:
                 uint16_t(sgrp >> 16), uint16_t(spec >> 16)}};
     }
 
-    static T2IV get_string_dims(CTRL &window, const std::string_view &str) {
-        AINF atmp{0, 0, 0, 0, (uint32_t*)str.data()};
+    static T2IV get_string_dims(CTRL &window, string_view_t text) {
+        AINF atmp{0, 0, 0, 0, (uint32_t*)text.str};
         auto f = RUN_FE2C(window, MSG_WTGD, (intptr_t)&atmp);
         return {{uint16_t(f), uint16_t(f >> 16)}};
     }

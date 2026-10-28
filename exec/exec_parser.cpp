@@ -1,43 +1,6 @@
 #include <cassert>
-#include <charconv>
 
 #include "exec_parser.hpp"
-
-
-
-static bool utf8_is_wspace(const std::string_view &str) {
-    const auto size = str.size();
-    if (size == 0) return false;
-    switch (str[0]) {
-        case '\x09': case '\x20': return true;
-        case '\xC2':
-            return (size > 1) && (str[1] == '\xA0');
-        case '\xE1':
-            return (size > 2) && (str[1] == '\x9A') && (str[2] == '\x80');
-        case '\xE3':
-            return (size > 2) && (str[1] == '\x80') && (str[2] == '\x80');
-        case '\xEF':
-            return (size > 2) && (str[1] == '\xBB') && (str[2] == '\xBF');
-        case '\xE2':
-            if (size <= 2) return false;
-            switch (str[1]) {
-                case '\x81': return str[2] == '\x9F';
-                case '\x80':
-                    switch (str[2]) {
-                        case '\x80': case '\x81': case '\x82': case '\x83':
-                        case '\x84': case '\x85': case '\x86': case '\x87':
-                        case '\x88': case '\x89': case '\x8A': case '\x8B':
-                        case '\xAF': return true;
-                    }
-            }
-    }
-    return false;
-}
-
-void utf8_skip_char(std::string_view &str) {
-    static const char skip[] = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 6};
-    str.remove_prefix((str[0] & 0x80) ? skip[(str[0] >> 2) & 0x0F] : 1);
-}
 
 
 
@@ -47,85 +10,77 @@ std::string concat_path(const std::initializer_list<const std::string> &list) {
     return retn;
 }
 
-std::string ascii_to_lower(const std::string_view &str) {
-    std::string retn(str);
-    for (auto &c : retn) c = ascii_to_lower(c);
-    return retn;
-}
-
-std::string ascii_to_upper(const std::string_view &str) {
-    std::string retn(str);
-    for (auto &c : retn) c = ascii_to_upper(c);
-    return retn;
-}
-
-token_t next_token(const std::string_view &str, char c, char s, char q) {
-    assert(s != q);
-    auto sep = s;
-    auto iter = str;
-    while (utf8_is_wspace(iter)) utf8_skip_char(iter);
-    // abort if token begins with comment char
-    if (iter.empty() || (iter[0] == c)) return {};
-    // look for the next quote instead of separator if token begins with quote
-    if (iter[0] == q) {
-        utf8_skip_char(iter);
-        sep = q;
+std::string to_string(string_view_t str, char mode) {
+    std::string retn(str.str, str.size);
+    switch (mode) {
+        default:
+            assert(false); // unknown character transformation mode
+        case 'N': // no transformation
+            return retn;
+        case 'L': // ASCII to lowercase
+            for (auto &c : retn) c = CHR_HASH_CL(c);
+            return retn;
+        case 'U': // ASCII to uppercase
+            for (auto &c : retn) c = CHR_HASH_CU(c);
+            return retn;
     }
-    auto found = iter.find(sep);
-    if (found == std::string_view::npos) return {iter, {}};
-    std::string_view token((found > 0) ? iter.data() : nullptr, found);
-    iter.remove_prefix(found + sizeof(sep));
-    if (sep != s) {
-        found = iter.find(s);
-        if (found == std::string_view::npos) iter = {};
-        else iter.remove_prefix(found + sizeof(s));
-        //if (found > 0) printf("'%s': tokens delimited past quotes!\n");
+}
+
+size_t str_hash(string_view_t str, char mode) {
+    size_t retn = (str.size) ? CHR_HASH_BIAS : 0uLL;
+    switch (mode) {
+        default:
+            assert(false); // unknown character transformation mode
+        case 'N': // no transformation
+            for (size_t i = 0; i < str.size; i++)
+                retn = CHR_HASH_O1() retn CHR_HASH_CN1(str.str[i]);
+            return retn;
+        case 'L': // ASCII to lowercase
+            for (size_t i = 0; i < str.size; i++)
+                retn = CHR_HASH_O1() retn CHR_HASH_CL1(str.str[i]);
+            return retn;
+        case 'U': // ASCII to uppercase
+            for (size_t i = 0; i < str.size; i++)
+                retn = CHR_HASH_O1() retn CHR_HASH_CU1(str.str[i]);
+            return retn;
     }
-    return {token, iter};
 }
 
-bool next_line(token_t &t) {
-    t = next_token(t.second, 0, DEF_CRLF, 0);
-    if (!t.first.empty() && (t.first.back() == DEF_LFCR))
-        t.first.remove_suffix(sizeof(DEF_LFCR));
-    return !is_empty(t);
-}
-
-float to_float(const std::string_view &line, float def) {
+float to_float(string_view_t line, float def) {
     char *end = nullptr;
     errno = 0;
-    float retn = (!line.empty()) ? ::strtof(line.data(), &end) : def;
-    return (errno || (line.data() == end)) ? def : retn;
+    float retn = (line.size) ? ::strtof(line.str, &end) : def;
+    return (errno || (line.str == end)) ? def : retn;
 }
 
-bool process_bool(token_t &line, bool def, char s, char q) {
+bool process_bool(tokenizer_t *line, bool def, char s, char q) {
     static const std::unordered_map<std::string, bool>
         map = { {"false", false}, {"true", true}, };
     return process_map(line, map, def, s, q);
 }
 
-float process_float(token_t &line, float def, char s, char q) {
-    line = next_token(line.second, 0, s, q);
-    return to_float(line.first, def);
+float process_float(tokenizer_t *line, float def, char s, char q) {
+    next_token(line, get_remainder(line), 0, s, q);
+    return to_float(get_token(line), def);
 }
 
-std::vector<std::string_view> process_array(
-        token_t &line, char s, char q, char bgn, char end) {
-    std::vector<std::string_view> retn;
-    line = next_token(line.second, 0, bgn, 0);
-    if (line.second.empty()) { // no array beginning detected, array = {token}
-        line = next_token(line.first, 0, s, q);
-        return {line.first};
+std::vector<string_view_t> process_array(
+        tokenizer_t *line, char s, char q, char bgn, char end) {
+    std::vector<string_view_t> retn;
+    next_token(line, get_remainder(line), 0, bgn, 0);
+    if (!get_remainder(line).size) { // no array start found, array = {token}
+        next_token(line, get_token(line), 0, s, q);
+        return {get_token(line)};
     }
-    line = next_token(line.second, 0, end, 0);
-    for (token_t iter({}, line.first); !is_empty(iter);
-            iter = next_token(iter.second, 0, s, q))
-        if (!iter.first.empty()) retn.emplace_back(iter.first);
-    line = next_token(line.second, 0, s, q);
+    next_token(line, get_remainder(line), 0, end, 0);
+    for (auto iter = local_make_tokenizer(get_token(line)); !is_empty(iter);
+            next_token(iter, get_remainder(iter), 0, s, q))
+        if (get_token(iter).size) retn.emplace_back(get_token(iter));
+    next_token(line, get_remainder(line), 0, s, q);
     return retn;
 }
 
-T2IV process_quoted_int_pair(token_t &line, T2IV def, char s, char q) {
+T2IV process_quoted_int_pair(tokenizer_t *line, T2IV def, char s, char q) {
     auto pair = process_array(line, s, 0, q, q);
     if (pair.size() > 0)
         def.x = to_float(pair[0], def.x);
@@ -134,7 +89,7 @@ T2IV process_quoted_int_pair(token_t &line, T2IV def, char s, char q) {
     return def; // 23 bits per value are more than enough here
 }
 
-std::string process_string(token_t &line, char s, char q) {
-    line = next_token(line.second, 0, s, q);
-    return std::string(line.first);
+std::string process_string(tokenizer_t *line, char mode, char s, char q) {
+    next_token(line, get_remainder(line), 0, s, q);
+    return to_string(get_token(line), mode);
 }

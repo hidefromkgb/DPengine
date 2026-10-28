@@ -21,9 +21,10 @@ conf_t::lang_map_t conf_t::get_lang_map(const std::string &file_name) {
                                     : rLoadFile(file_name.c_str(), &size);
     lang_map_t retn;
     if (file) {
-        token_t text({}, std::string_view(file, size));
+        auto text = local_make_tokenizer((string_view_t){(size_t)size, file});
         for (int32_t idx = 0; next_line(text); idx++)
-            if (!text.first.empty()) retn[idx] = text.first;
+            if (get_token(text).size)
+                retn[idx] = to_string(get_token(text), 'N');
         if (!file_name.empty()) free(file);
     }
     return retn;
@@ -34,7 +35,8 @@ void eExecuteEngine(char *fcnf, char *base, ulong xico, ulong yico,
     T2IV ico{{(decltype(ico.x))xico, (decltype(ico.y))yico}};
     T4IV scr{{(decltype(scr.x))(xpos), (decltype(scr.y))(ypos),
               (decltype(scr.z))(xdim - xpos), (decltype(scr.w))(ydim - ypos)}};
-    engine_t engc(fcnf, base, ico, scr);
+    engine_t engc((string_view_t){strlen(fcnf), fcnf},
+                  (string_view_t){strlen(base), base}, ico, scr);
 
     engc.main_loop();
 }

@@ -2,78 +2,82 @@
 #define EXEC_PARSER_HPP
 
 #include <string>
-#include <string_view>
 #include <unordered_map>
 
 #include "exec_common.hpp"
+#include "exec_string.h"
 
-using token_t = std::pair<std::string_view, std::string_view>;
+#define DEF_DSEP "/" /* default directory separator (string) */
+#define DEF_ABGN '{' /* default array start character */
+#define DEF_AEND '}' /* default array end character */
 
-inline bool is_empty(const token_t &t) {
-    return t.first.empty() && t.second.empty();
+// hashes at most 32 comma-separated 'char'-s using FNV-1a; empty list yields 0
+#define CHR_HASH(mode, ...) (CHR_HASH_L(CHR_HASH_O,##__VA_ARGS__)    \
+            CHR_HASH_BIAS * (CHR_HASH_L(CHR_HASH_B,##__VA_ARGS__) 0) \
+                       CHR_HASH_L(CHR_HASH_C##mode,##__VA_ARGS__))
+#define CHR_HASH_L(f, ...)   CHR_HASH_L4(f,,,,,,,,,,,,,,,,,##__VA_ARGS__) \
+                             CHR_HASH_L4(f                ,##__VA_ARGS__)
+#define CHR_HASH_L4(f, ...) \
+CHR_HASH_L3(f,,,,,,,,,,,,,__VA_ARGS__) CHR_HASH_L3(f,,,,,,,,,__VA_ARGS__) \
+CHR_HASH_L3(f        ,,,,,__VA_ARGS__) CHR_HASH_L3(f        ,__VA_ARGS__)
+#define CHR_HASH_L3(f, ...) \
+CHR_HASH_L2(f         ,,,,__VA_ARGS__) CHR_HASH_L2(f      ,,,__VA_ARGS__) \
+CHR_HASH_L2(f           ,,__VA_ARGS__) CHR_HASH_L2(f        ,__VA_ARGS__)
+#define CHR_HASH_L2(...) CHR_HASH_L1(__VA_ARGS__, \
+1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1, \
+0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, )
+#define CHR_HASH_L1(    ___,s1,s2,s3,s4,s5,s6,s7, t0,t1,t2,t3,t4,t5,t6,t7, \
+u0,u1,u2,u3,u4,u5,u6,u7, v0,v1,v2,v3,v4,v5,v6,v7, __,a1,a2,a3,a4,a5,a6,a7, \
+b0,b1,b2,b3,b4,b5,b6,b7, c0,c1,c2,c3,c4,c5,c6,c7, d0,d1,d2,d3,d4,d5,d6,d7, \
+_, ...) ___##_(__)
+#define CHR_HASH_O0(c) /* opening parentheses */
+#define CHR_HASH_O1(c) (
+#define CHR_HASH_B0(c) /* initial bias multiplier unless the input is empty */
+#define CHR_HASH_B1(c) 1 |
+#define CHR_HASH_CN0(c) /* the rest of the FNV-1a hash + closing parentheses */
+#define CHR_HASH_CN1(c) ^ (size_t)(c)) * CHR_HASH_MULT
+#define CHR_HASH_CL(c) /* y/A-Z/a-z/ */ \
+            (char)(((c) >= 'A') && ((c) <= 'Z') ? (c) + ('a' - 'A') : (c))
+#define CHR_HASH_CL0(c) /* same as CHR_HASH_CN* but with case lowering */
+#define CHR_HASH_CL1(c) ^ (size_t)CHR_HASH_CL(c)) * CHR_HASH_MULT
+#define CHR_HASH_CU(c) /* y/a-z/A-Z/ */ \
+            (char)(((c) >= 'a') && ((c) <= 'z') ? (c) - ('a' - 'A') : (c))
+#define CHR_HASH_CU0(c) /* same as CHR_HASH_CL* but upper instead of lower */
+#define CHR_HASH_CU1(c) ^ (size_t)CHR_HASH_CU(c)) * CHR_HASH_MULT
+#define CHR_HASH_BIAS (size_t)14695981039346656037uLL
+#define CHR_HASH_MULT (size_t)1099511628211uLL
+
+// C++ only: std::string -> string_view_t
+inline string_view_t to_view(const std::string &str) {
+    return (string_view_t){str.size(), str.c_str()};
 }
 
-// default comment character
-#define DEF_CMNT '\''
-// default end-of-line character
-#define DEF_CRLF '\n'
-// non-default end-of-line character
-#define DEF_LFCR '\r'
-// default quotation character - inhibits tokenization
-#define DEF_QUOT '"'
-// default token separator
-#define DEF_TSEP ','
-// default dir slash (string)
-#define DEF_DSEP "/"
-
-std::string ascii_to_lower(const std::string_view &str);
-std::string ascii_to_upper(const std::string_view &str);
-
-static inline constexpr char ascii_to_lower(char c) {
-    return ((c >= 'A') && (c <= 'Z')) ? c + ('a' - 'A') : c;
-}
-static inline constexpr char ascii_to_upper(char c) {
-    return ((c >= 'a') && (c <= 'z')) ? c - ('a' - 'A') : c;
-}
-size_t constexpr str_hash(const std::string_view &str, bool ascii2low = true) {
-    size_t retn = (str.size()) ? 14695981039346656037uLL : 0uLL;
-    const size_t mult = 1099511628211uLL;
-    if (ascii2low)
-        for (auto c : str) retn = (retn ^ (size_t)ascii_to_lower(c)) * mult;
-    else
-        for (auto c : str) retn = (retn ^ (size_t)c) * mult;
-    return retn;
-}
-
-void utf8_skip_char(std::string_view &str);
+// MODE: 'N' as is, 'L' ASCII to lowercase, 'U' ASCII to uppercase
+std::string to_string(string_view_t str, char mode);
+size_t str_hash(string_view_t str, char mode);
 
 std::string concat_path(const std::initializer_list<const std::string> &list);
 
-bool next_line(token_t &t);
-
-token_t next_token(const std::string_view &str,
-        char c = DEF_CMNT, char s = DEF_TSEP, char q = DEF_QUOT);
-
 bool process_bool(
-        token_t &line, bool def, char s = DEF_TSEP, char q = DEF_QUOT);
+        tokenizer_t *line, bool def, char s = DEF_TSEP, char q = DEF_QUOT);
 
 float process_float(
-        token_t &line, float def, char s = DEF_TSEP, char q = DEF_QUOT);
+        tokenizer_t *line, float def, char s = DEF_TSEP, char q = DEF_QUOT);
 
-std::vector<std::string_view> process_array(token_t &line,
-        char s = DEF_TSEP, char q = DEF_QUOT, char bgn = '{', char end = '}');
+std::vector<string_view_t> process_array(tokenizer_t *line, char s = DEF_TSEP,
+        char q = DEF_QUOT, char bgn = DEF_ABGN, char end = DEF_AEND);
 
-T2IV process_quoted_int_pair(token_t &line,
-        T2IV def, char s = DEF_TSEP, char q = DEF_QUOT);
+T2IV process_quoted_int_pair(
+        tokenizer_t *line, T2IV def, char s = DEF_TSEP, char q = DEF_QUOT);
 
 std::string process_string(
-        token_t &line, char s = DEF_TSEP, char q = DEF_QUOT);
+        tokenizer_t *line, char mode, char s = DEF_TSEP, char q = DEF_QUOT);
 
 template <typename T>
-T process_map(token_t &line, const std::unordered_map<std::string, T> &map,
+T process_map(tokenizer_t *line, const std::unordered_map<std::string, T> &map,
         T def, char s = DEF_TSEP, char q = DEF_QUOT) {
-    line = next_token(line.second, 0, s, q);
-    auto it = find_in_map(map, ascii_to_lower(line.first));
+    next_token(line, get_remainder(line), 0, s, q);
+    auto it = find_in_map(map, to_string(get_token(line), 'L'));
     return (it) ? *it : def;
 }
 

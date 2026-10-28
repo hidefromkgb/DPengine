@@ -86,7 +86,7 @@ public:
         bool prevent_loop = false;                               // USED
 
         input_t() = default;
-        input_t(const std::string_view &str);
+        input_t(string_view_t str);
         bool validate() const {
             bool okay = !name.empty();
             okay &= !bhv.empty();
@@ -119,7 +119,7 @@ public:
         int group = 0;      // USED
 
         input_t() = default;
-        input_t(const std::string_view &str);
+        input_t(string_view_t str);
         bool validate() const { return !text.empty(); }
     };
 
@@ -178,7 +178,7 @@ public:
         bool mirror_target_xy = false;         // USED
 
         input_t() = default;
-        input_t(const std::string_view &str);
+        input_t(string_view_t str);
         bool validate() const {
             bool okay = !name.empty();
             okay &= !right_image.empty();
@@ -255,9 +255,9 @@ public:
     }
 
     behaviour_t(const input_t &in, bhv_id_t id, bhv_id_t linked_id,
-            bhv_id_t follow_grp_id, lib_id_t follow_tgt,
-            const std::string &path, const speech_t *bgn_speech,
-            const speech_t *end_speech, const fx_vec_t &fx);
+            bhv_id_t follow_grp_id, const fx_vec_t &fx,
+            const speech_t *bgn_speech, const speech_t *end_speech,
+            lib_id_t follow_tgt, const std::string &path);
 };
 
 #endif // EXEC_BHV_HPP

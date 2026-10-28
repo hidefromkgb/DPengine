@@ -27,32 +27,36 @@ library_t::input_t::input_t(const std::string &base, const std::string &dir) {
     auto config = concat_path({base, dir, DEF_CONF});
     if (auto file = rLoadFile(config.c_str(), nullptr)) {
         name = dir;
-        for (token_t text({}, file); next_line(text); ) {
-            auto line = next_token(text.first);
-            switch (str_hash(line.first)) {
-                //case str_hash("Name"):
-                //case str_hash("BehaviorGroup"):
+        auto line = local_make_tokenizer((string_view_t){});
+        auto text = local_make_tokenizer((string_view_t){strlen(file), file});
+        while (next_line(text)) {
+            next_token(line, get_token(text), DEF_CMNT, DEF_TSEP, DEF_QUOT);
+            switch (str_hash(get_token(line), 'L')) {
+                //case CHR_HASH(L, 'N','a','m','e'):
+                //case CHR_HASH(L,
+                //      'B','e','h','a','v','i','o','r','G','r','o','u','p'):
                 default: break;
-                case str_hash("Categories"):
-                    for (line.first = {}; !is_empty(line);
-                            line = next_token(line.second, 0))
-                        if (!line.first.empty()) {
-                            auto category = ascii_to_lower(line.first);
-                            category[0] = ascii_to_upper(category[0]);
+                case CHR_HASH(L, 'C','a','t','e','g','o','r','i','e','s'):
+                    for (; !is_empty(line);
+                            next_token(line,
+                                get_remainder(line), 0, DEF_TSEP, DEF_QUOT))
+                        if (get_token(line).size) {
+                            auto category = to_string(get_token(line), 'L');
+                            category[0] = CHR_HASH_CU(category[0]);
                             categories.emplace_back(category);
                         }
                     break;
-                case str_hash("Behavior"):
-                    behaviours.emplace_back(line.second);
+                case CHR_HASH(L, 'B','e','h','a','v','i','o','r'):
+                    behaviours.emplace_back(get_remainder(line));
                     break;
-                case str_hash("Effect"):
-                    effects.emplace_back(line.second);
+                case CHR_HASH(L, 'E','f','f','e','c','t'):
+                    effects.emplace_back(get_remainder(line));
                     break;
-                case str_hash("Speak"):
-                    speeches.emplace_back(line.second);
+                case CHR_HASH(L, 'S','p','e','a','k'):
+                    speeches.emplace_back(get_remainder(line));
                     break;
-                case str_hash("Interaction"):
-                    interactions.emplace_back(line.second);
+                case CHR_HASH(L, 'I','n','t','e','r','a','c','t','i','o','n'):
+                    interactions.emplace_back(get_remainder(line));
                     break;
             }
         }
@@ -146,23 +150,23 @@ const behaviour_t &library_t::special_bhv_internal(
             ? random_selection<false>(ig->bhv[type], seed).get() : curr;
 }
 
-interaction_t::input_t::input_t(const std::string_view &str) {
+interaction_t::input_t::input_t(string_view_t str) {
     // TODO: is 'any' really equivalent to 'one'? check if there are
     //       relevant interactions where 'any' means '>1'
     static const std::unordered_map<std::string, bool> activations = {
         {"true", true}, {"false",  false}, {"any", false},
         {"all",  true}, {"random", false}, {"one", false},
     };
-    token_t line({}, str);
-    name = process_string(line);
+    auto line = local_make_tokenizer(str);
+    name = process_string(line, 'N');
     chance = process_float(line, chance);
     proximity = process_float(line, proximity);
     auto tgt_s = process_array(line);
-    for (auto &t : tgt_s) targets.emplace_back(ascii_to_lower(t));
+    for (auto &t : tgt_s) targets.emplace_back(to_string(t, 'L'));
     target_activation_all
             = process_map(line, activations, target_activation_all);
     auto bhv_s = process_array(line);
-    for (auto &b : bhv_s) bhv.emplace_back(ascii_to_lower(b));
+    for (auto &b : bhv_s) bhv.emplace_back(to_string(b, 'L'));
     reactivation_delay = process_float(line, reactivation_delay);
 }
 
@@ -177,7 +181,8 @@ interaction_t::interaction_t(const input_t &in, const std::string &lib_name,
     debug_ = in;
 #endif // DEV_MODE
     auto append_bhv = [&](const std::string &lib_id, bool target) {
-        auto &retn = (target) ? targets_[str_hash(lib_id)] : initiator_;
+        auto &retn = (target) ? targets_[str_hash(to_view(lib_id), 'L')]
+                              : initiator_;
         if (auto bhv_id_desc = find_in_map(bhv_id_map, lib_id))
             for (auto &b : in.bhv)
                 if (auto bhv_id = find_in_map(bhv_id_desc->m, b))
@@ -463,7 +468,7 @@ struct library_t::build_ctx_t {
     build_ctx_t(const input_t &i, const bhv_id_map_t &m)
     : in(i)
     , bhv_id_map(m)
-    , hashable_name(ascii_to_lower(i.name)) {}
+    , hashable_name(to_string(to_view(i.name), 'L')) {}
 };
 
 void library_t::init_interactions(const build_ctx_t &ctx) {
@@ -529,9 +534,9 @@ void library_t::create_behaviours(build_ctx_t &ctx) {
 
         auto ix = find_in_map(ctx.fx_by_bhv_name, b.name);
         behaviours_.emplace_back(std::make_unique<behaviour_t>(b, iid._,
-                    linked_iid._, follow_grp_iid._, str_hash(b.follow_target),
-                    library_path_, (ib) ? *ib : nullptr, (ie) ? *ie : nullptr,
-                    (ix) ? *ix : fx_null));
+                    linked_iid._, follow_grp_iid._, (ix) ? *ix : fx_null,
+                    (ib) ? *ib : nullptr, (ie) ? *ie : nullptr,
+                    str_hash(to_view(b.follow_target), 'L'), library_path_));
         groups_[iid.group].bhv[iid.type].emplace_back(*behaviours_.back());
         ctx.bhv_by_name.emplace(b.name, behaviours_.back().get());
         assert(iid.index == groups_[iid.group].bhv[iid.type].size());

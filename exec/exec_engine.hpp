@@ -33,7 +33,7 @@ private:
 
     std::unique_ptr<sprite_bank_t> bank_; // the sprites, for one run only
 
-    static conf_t get_def_conf(const std::string_view base);
+    static conf_t get_def_conf(string_view_t base);
 
     void save_ini_conf() const;
 
@@ -59,7 +59,7 @@ private:
 
 public:
     ~engine_t();
-    engine_t(const std::string_view fcnf, const std::string_view base,
+    engine_t(string_view_t fcnf, string_view_t base,
             const T2IV tray, const T4IV area);
 
     void display_loop();

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "exec.h"
+#include "exec_string.h"
 
 
 

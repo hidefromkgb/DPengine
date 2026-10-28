@@ -39,7 +39,7 @@ public:
         float reactivation_delay = 60.f;     // NOT USED
 
         input_t() = default;
-        input_t(const std::string_view &str);
+        input_t(string_view_t str);
         bool validate() const {
             bool okay = !targets.empty();
             okay &= !bhv.empty();
