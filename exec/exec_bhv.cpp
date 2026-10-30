@@ -106,7 +106,7 @@ void speech_t::render(
     AINF anim = {0, uint32_t(max_dims.x), uint32_t(max_dims.y), 0,
                  (uint32_t*)get_view(text_).str};
     const auto size = text_fn(MSG_WTGD, &anim);
-    const uint32_t xdim = std::max(2 * side + uint16_t(size), 64u);
+    const uint32_t xdim = std_max(2 * side + uint16_t(size), 64u);
     const uint32_t ydim = top + bottom + 1 + uint16_t(size >> 16);
     auto draw = [&](uint32_t *bits) {
         // body, with a 2 px border
@@ -204,7 +204,7 @@ behaviour_t::input_t::input_t(string_view_t str) {
 }
 
 static const T2IV process_duration(float min_d, float max_d) {
-    if (min_d > max_d) std::swap(min_d, max_d);
+    if (min_d > max_d) std_swap(min_d, max_d);
     max_d -= min_d;
     return T2IV{{(decltype(T2IV::x))(1000.f * min_d),
                  (decltype(T2IV::y))(1000.f * max_d)}};
@@ -291,7 +291,7 @@ T2FV behaviour_t::choose_velocity(uint32_t *seed) const {
             retn = cos_sin_lut[prng & 0x1F];
             if (((prng & 0x200) && ((hv == move_none) || (hv == move_hv)))
                     || (hv == move_vert))
-                std::swap(retn.x, retn.y);
+                std_swap(retn.x, retn.y);
         }
         retn.x *= (prng & 0x400) ? -movement_speed_ : movement_speed_;
         retn.y *= (prng & 0x800) ? -movement_speed_ : movement_speed_;

@@ -25,7 +25,9 @@ public:
         rhs.data_ = nullptr;
     }
     weighted_rng_t &operator=(weighted_rng_t &&rhs) {
-        std::swap(data_, rhs.data_);
+        auto data = data_;
+        data_ = rhs.data_;
+        rhs.data_ = data;
         return *this;
     }
     size_t size() const;

@@ -164,19 +164,17 @@ private:
             return (ymax >= 0) && (ymax - get_size().y < y_visible);
         }
         string_view_t name_scroll_advance(int64_t time) {
-            #define ABS(v) (((v) < 0) ? -(v) : (v))
             constexpr int FRM_TEXT = FRM_WAIT * 1.5f;
             if (!name_len_ || (time <= name_time_ + FRM_TEXT))
                 return (string_view_t){};
             name_time_ = time + FRM_TEXT;
-            auto n_view = get_view(name_);
-            const auto true_len = n_view.size - name_len_ * 2;
-            ((char*)n_view.str)[true_len + name_len_ + ABS(name_iter_)] = ' ';
+            auto nv = get_view(name_);
+            const auto true_len = nv.size - name_len_ * 2;
+            ((char*)nv.str)[true_len + name_len_ + std_abs(name_iter_)] = ' ';
             if (++name_iter_ >= name_len_) name_iter_ = -name_iter_;
-            ((char*)n_view.str)[true_len + name_len_ + ABS(name_iter_)] = 0;
+            ((char*)nv.str)[true_len + name_len_ + std_abs(name_iter_)] = 0;
             return (string_view_t){true_len + name_len_,
-                                   n_view.str + ABS(name_iter_)};
-            #undef ABS
+                                   nv.str + std_abs(name_iter_)};
         }
         void toggle_visibility(bool visible) {
             if (imagebox_.fe2c) RUN_FE2C(imagebox_, MSG__SHW, visible);

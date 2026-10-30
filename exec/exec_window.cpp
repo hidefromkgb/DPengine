@@ -188,14 +188,14 @@ window_t::window_t(std::vector<CTRL> controls) : visible_(false) {
     for (size_t indx = 1; indx < controls_.size(); indx++) {
         get(indx).prev = &get_root();
         rMakeControl(&get(indx), &xoff, &yoff);
-        xmax = (xmax > xoff) ? xmax : xoff;
-        ymax = (ymax > yoff) ? ymax : yoff;
+        xmax = std_max(xmax, xoff);
+        ymax = std_max(ymax, yoff);
     }
     // resizing and showing the window
-    FCTL fc2e = nullptr;
-    std::swap(fc2e, get_root().fc2e); // no size request forwarding for now
+    auto fc2e = get_root().fc2e;
+    get_root().fc2e = nullptr; // no size request forwarding for now
     RUN_FE2C(get_root(), MSG_WSZC, (uint16_t)xmax | ((uint32_t)ymax << 16));
-    std::swap(fc2e, get_root().fc2e);
+    get_root().fc2e = fc2e;
 }
 
 CTRL &window_t::get(int32_t ctl) {
@@ -544,7 +544,7 @@ size_t main_window_t::rearrange_previews(T2IV preview_area) {
             rows.emplace_back(T2IV{{rows.back().x, size.y}});
         } else {
             xmax += size.x + xysp;
-            rows.back().y = std::max(rows.back().y, size.y);
+            rows.back().y = std_max(rows.back().y, size.y);
         }
     }
     T2IV here = {{xysp, -xysp}};
@@ -556,7 +556,7 @@ size_t main_window_t::rearrange_previews(T2IV preview_area) {
             here.x += previews_[p]->get_size().x + xysp;
         }
     }
-    return std::max(here.y, preview_area.y);
+    return std_max(here.y, preview_area.y);
 }
 
 void main_window_t::update_previews(intptr_t data, uint64_t time) {
@@ -570,14 +570,14 @@ void main_window_t::preview_t::finalize(float inv_space_width) {
     if ((flags_ & finalized) || !unit_.is_ready(false)) return;
 
     auto dims = unit_.dims(false);
-    size_.x = std::max(size_.x, dims.x);
-    size_.y = std::max(size_.y, dims.y);
+    size_.x = std_max(size_.x, dims.x);
+    size_.y = std_max(size_.y, dims.y);
 
     constexpr int leeway = 6;
     auto name_size = get_string_dims(get_root(charname_), get_view(name_));
     if (name_size.x + leeway > size_.x) { // consider scrolling
         auto maybe_name_len
-                  = std::ceil(inv_space_width * (name_size.x - size_.x));
+                  = std_ceil(inv_space_width * (name_size.x - size_.x));
         if (maybe_name_len < 8) { // too tight, widen the box instead
             size_.x = name_size.x + leeway;
         } else {
@@ -586,7 +586,7 @@ void main_window_t::preview_t::finalize(float inv_space_width) {
             for (int32_t i = 0; i < name_len_; padding[i++] = ' ') {}
             string_view_t p_view{(size_t)name_len_, padding};
             local_string_t *temp = make_string(p_view, get_view(name_), p_view);
-            std::swap(name_, temp);
+            std_swap(name_, temp);
             free(padding);
         }
     }

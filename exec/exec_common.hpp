@@ -1,7 +1,6 @@
 #ifndef EXEC_COMMON_HPP
 #define EXEC_COMMON_HPP
 
-#include <algorithm>
 #include <array>
 #include <memory>
 #include <unordered_map>
@@ -29,6 +28,16 @@ enum {
 static constexpr auto never = INT64_MAX;
 
 #define assert_and_discard(a, d) assert(a), ((void)(d))
+
+#define std_swap(a, b) do { typeof(a) c = (a); (a) = (b); (b) = c; } while (0)
+#define std_ceil(a) (typeof(a))((((a) != 0) && ((a) > (typeof(a))-INT64_MAX) \
+                                            && ((a) < (typeof(a))INT64_MAX)) \
+                                  ? (int64_t)(a) + ((a) > (int64_t)(a)) : (a))
+#define std_abs(a) (((a) < 0) ? -(a) : (a))
+#define std_min(a, b) (((a) < (b)) ? (a) : (b))
+#define std_max(a, b) (((a) > (b)) ? (a) : (b))
+#define std_clamp(v, min, max) \
+        (((v) > (min)) ? ((v) < (max)) ? (v) : (max) : (min))
 
 /*
 // GEN_FLAGS(): 64-bit flag enum generation machinery
@@ -128,13 +137,13 @@ public:
     public:
         spin_t() : curr_{}, min_{}, max_{} {};
         spin_t(int16_t curr, int16_t min, int16_t max)
-            : curr_{std::clamp(curr, min, max)}, min_{min}, max_{max} {}
+            : curr_{std_clamp(curr, min, max)}, min_{min}, max_{max} {}
         void set_min(int16_t m) { min_ = m; move(0); }
         void set_max(int16_t m) { max_ = m; move(0); }
         int16_t min() const { return min_; }
         int16_t max() const { return max_; }
         int16_t set(int16_t dist) {
-            return curr_ = std::clamp(dist, min_, max_);
+            return curr_ = std_clamp(dist, min_, max_);
         }
         int16_t get() const { return curr_; }
         int16_t move(int16_t dist) { return set(get() + dist); }
@@ -164,14 +173,14 @@ public:
         bool match(const categories_t &rhs, bool all_at_once) const {
             bool retn = all_at_once;
             if (all_at_once) {
-                size_t size = std::max(data_.size(), rhs.data_.size());
+                size_t size = std_max(data_.size(), rhs.data_.size());
                 for (size_t i = 0; retn && (i < size); i++) {
                     auto a = (i < data_.size()) ? data_[i] : type_t(0);
                     auto b = (i < rhs.data_.size()) ? rhs.data_[i] : type_t(0);
                     retn &= (a & b) == b;
                 }
             } else {
-                size_t size = std::min(data_.size(), rhs.data_.size());
+                size_t size = std_min(data_.size(), rhs.data_.size());
                 for (size_t i = 0; !retn && (i < size); i++)
                     retn |= data_[i] & rhs.data_[i];
             }

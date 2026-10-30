@@ -176,6 +176,9 @@ private:
     // ALL: every character of CHR's library, all set to the same state
     void toggle_sleep(uint32_t *seed, int64_t time, sprite_t &chr, bool all);
 
+    // moves sprites between regions: shown / free / waiting
+    static bool try_recycle(uint32_t iter, uint32_t if_free, uint32_t if_not,
+                        std::vector<std::unique_ptr<slot_t>> &sprites);
 public:
     sprite_bank_t(const selection_t &sel, uint32_t *seed, int64_t time,
             T2IV area, bool effects, bool speech,

@@ -500,6 +500,18 @@ void sprite_bank_t::menu_action(
     }
 }
 
+bool sprite_bank_t::try_recycle(uint32_t iter, uint32_t if_free,
+        uint32_t if_not, std::vector<std::unique_ptr<slot_t>> &sprites) {
+    auto temp = std::move(sprites[iter]);
+    sprites[iter] = std::move(sprites[if_free]);
+    if (!temp->is_free()) {
+        sprites[if_free] = std::move(sprites[if_not]);
+    } else {
+        if_not = if_free;
+    }
+    return !(sprites[if_not] = std::move(temp))->is_free();
+}
+
 void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
     const auto speech_chance
             = (uint64_t(speech_chance_.get()) << 32) / speech_chance_.max();
@@ -521,10 +533,7 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
             if (fx.repeat_effect(time)) add_effect(*fx.parent_, *fx.fx());
             if (fx.update_effect(seed, time)) continue;
         }
-        // reaching this point means the sprite is inactive, remove it
-        std::swap(sprites_[iter], sprites_[--shown_]); // ...from shown sprites
-        if (!fx.is_free()) // ...maybe it's alive, then it belongs in wait list
-            std::swap(sprites_[shown_], sprites_[--waiting_]);
+        if (!try_recycle(iter, --shown_, --waiting_, sprites_)) waiting_++;
     }
     // forwards, for the same reason; this deploys new effects too
     for (uint32_t iter = waiting_; iter < sprites_.size(); iter++) {
@@ -534,11 +543,8 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
         bool awake = (fx.get_flag(sprite_t::speech))
                    ? fx.do_speech(seed, time, speech_chance)
                    : fx.wake_effect(seed, time);
-        if (!awake && !fx.is_free()) continue;
-        // at this point the sprite must be taken out of the wait list
-        std::swap(sprites_[iter], sprites_[waiting_++]); // ...to the dumpster
-        if (!fx.is_free()) // ...or, if it's alive, to the shown sprites
-            std::swap(sprites_[waiting_ - 1], sprites_[shown_++]);
+        if ((awake || fx.is_free())
+                && try_recycle(iter, waiting_++, shown_, sprites_)) shown_++;
     }
     using sp_t = const std::unique_ptr<slot_t>; // sorting the sprites by Y
     std::stable_sort(sprites_.begin(), sprites_.begin() + shown_,

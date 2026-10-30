@@ -186,7 +186,7 @@ interaction_t::interaction_t(const input_t &in, string_view_t lib_name,
         const bhv_id_map_t &bhv_id_map)
 : all_(in.target_activation_all)
 , proximity_(in.proximity)
-, chance_(double((uint64_t)1 << 32) * std::clamp(in.chance, 0.f, 1.f))
+, chance_(double((uint64_t)1 << 32) * std_clamp(in.chance, 0.f, 1.f))
 , duration_{{std::numeric_limits<decltype(duration_.x)>::max(),
             (decltype(duration_.y))(1000.f * in.reactivation_delay)}} {
     auto append_bhv = [&](string_view_t lib_id, bool target) {
@@ -230,8 +230,8 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
             const float r = to_fp32(bgra >> 16);
             const float g = to_fp32(bgra >> 8);
             const float b = to_fp32(bgra);
-            const float min = std::min(std::min(r, g), b);
-            const float max = std::max(std::max(r, g), b);
+            const float min = std_min(std_min(r, g), b);
+            const float max = std_max(std_max(r, g), b);
             if ((l = (max + min) * 0.5f) <= 0.f) return;
             if ((s = max - min) <= 0.f) return;
             const float inv_diff = 1.f / (max - min);
@@ -380,7 +380,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     // more sorting networks: bertdobbelaere.github.io/sorting_networks.html
     for (size_t i = bgn; i <= end; i++)
         top_clrs[i].value = hsl_t::get_luminance(top_clrs[i].color);
-    #define SORT(v, i, j) if (v[i].value > v[j].value) std::swap(v[i], v[j])
+    #define SORT(v, i, j) if (v[i].value > v[j].value) std_swap(v[i], v[j])
     static_assert(end == 2);
     SORT(top_clrs, 0, 1);
     SORT(top_clrs, 0, 2);
@@ -403,8 +403,8 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
         for (float min = min_l, max = max_l;
                 max - min > (max_l - min_l) / (1 << bin_iter); ) {
             const float mid = delta_l - 0.5f * (min + max);
-            dk.l = std::clamp(dk_l + mid * mid_part, min_l, max_l);
-            bt.l = std::clamp(bt_l + mid * mid_part - mid, min_l, max_l);
+            dk.l = std_clamp(dk_l + mid * mid_part, min_l, max_l);
+            bt.l = std_clamp(bt_l + mid * mid_part - mid, min_l, max_l);
             contrast = hsl_t::get_contrast(dk, bt);
             ((contrast < readable_contrast) ? min : max) = delta_l - mid;
         }
@@ -416,7 +416,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
 
     // printing the debug output: first prepare the contrast
     char temp[24];
-    auto ct_size = sprintf(temp, "%5.2f ", std::fabs(contrast));
+    auto ct_size = sprintf(temp, "%5.2f ", std_abs(contrast));
     local_string_t *text = hsl_t::ttycolor(
             (contrast < 0.f) ? lib->speech_fg_ : lib->speech_bg_,
             (contrast < 0.f) ? lib->speech_bg_ : lib->speech_fg_,
@@ -586,7 +586,7 @@ void library_t::init_probabilities(const build_ctx_t &ctx) {
         auto &b = ctx.in.behaviours[i];
         if ((!b.skip) && (b.chance > 0.f)) {
             prob_by_group[b.group].emplace_back(
-                    10000.f * std::clamp(b.chance, 0.f, 1.f));
+                    10000.f * std_clamp(b.chance, 0.f, 1.f));
             groups_[b.group].bhv[nonzero_prob].emplace_back(*behaviours_[i]);
         }
     }

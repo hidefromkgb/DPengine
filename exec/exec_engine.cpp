@@ -214,8 +214,8 @@ conf_t engine_t::load_ini_conf(const conf_t &def, string_view_t cfnm) {
                     // (see fixup_min() in constructor for more info)
                     int16_t max = process_float(line, def.nrun.get());
                     int16_t runs = process_float(line, def.nrun.min()) + 1;
-                    max = std::clamp(max, def.nrun.min(), def.nrun.max());
-                    runs = std::clamp(runs, def.nrun.min(), max);
+                    max = std_clamp(max, def.nrun.min(), def.nrun.max());
+                    runs = std_clamp(runs, def.nrun.min(), max);
                     if ((max > def.nrun.min()) && (max == runs)) {
                         retn.flgs |= conf_t::update;
                         runs = def.nrun.min();
@@ -447,14 +447,13 @@ void engine_t::build_library_structure(string_view_t base) {
     }
 
     // order the libraries by name
-    using ctg_val_t = decltype(ctg)::value_type;
+    using ctg_val_t = const decltype(ctg)::value_type;
     auto names = [&](ctg_val_t &a, ctg_val_t &b) {
-        auto lib_a = (*find_in_map(libs_, a.first))->name();
-        auto lib_b = (*find_in_map(libs_, b.first))->name();
-        return strncmp(lib_a.str, lib_b.str,
-                (lib_a.size > lib_b.size) ? lib_a.size : lib_b.size) < 0;
+        auto _a = (*find_in_map(libs_, a.first))->name();
+        auto _b = (*find_in_map(libs_, b.first))->name();
+        return strncmp(_a.str, _b.str, std_max(_a.size, _b.size)) < 0;
     };
-    std::sort(ctg.begin(), ctg.end(), names);
+    std::stable_sort(ctg.begin(), ctg.end(), names);
 
     // show the main window, initialize the previews
     mctl_.toggle_visibility(true);
