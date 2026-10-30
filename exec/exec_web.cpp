@@ -206,7 +206,8 @@ void try_get_from_github(main_window_t &mctl, const char *user,
     }
     rFreeHTTPS(desc);
     if (iter || (!path && !desc && !iter)) {
-        if (!path && (!desc || iter)) mctl.report_update_failure(nullptr);
+        if (!path && (!desc || iter))
+            mctl.report_update_failure((string_view_t){});
         return;
     }
     if ((desc = rMakeHTTPS((char*)user, (char*)GIT_SAPI))) {
@@ -273,7 +274,8 @@ void try_get_from_github(main_window_t &mctl, const char *user,
                 for (temp = file + 1; (temp = strstr(temp, DEF_DSEP)); ) {
                     *temp = 0;
                     if (!rMakeDir(file, 0)) {
-                        mctl.report_update_failure(file);
+                        string_view_t f_view{(size_t)(temp - file), file};
+                        mctl.report_update_failure(f_view);
                         free(file);
                         path = 0;
                         break;
@@ -297,7 +299,7 @@ void try_get_from_github(main_window_t &mctl, const char *user,
         free(text);
         rFreeHTTPS(desc);
     } else { // do NOT invert if/else, since conditions have side-effects
-        mctl.report_update_failure(nullptr);
+        mctl.report_update_failure((string_view_t){});
     }
     #undef GIT_SAPI
     #undef GIT_SRAW

@@ -50,8 +50,8 @@ protected:
 
     // return true = AINF prepared successfully
     // return false = AINF busy, could not prepare
-    bool prepare_source(bool left, const std::string &name);
-    bool prepare_source(bool left, const std::string &name, uint32_t xdim,
+    bool prepare_source(bool left, string_view_t name);
+    bool prepare_source(bool left, string_view_t name, uint32_t xdim,
             uint32_t ydim, const std::function<void(uint32_t*)> &draw);
 
 public:

@@ -9,19 +9,26 @@ gravity_t effect_t::select_gravity(bool left, uint32_t *seed) const {
 }
 
 effect_t::input_t::input_t(string_view_t str) {
-    static const std::unordered_map<std::string, gravity_flags_t> p = {
-        {"any",         any        }, {"any-not_center", not_center  },
-        {"top_left",    top_left   }, {"top_right",      top_right   },
-        {"top",         top        }, {"bottom",         bottom      },
-        {"bottom_left", bottom_left}, {"bottom_right",   bottom_right},
-        {"left",        center_left}, {"right",          center_right},
-        {"center",      center     },
+    static const std::unordered_map<size_t, gravity_flags_t> p = {
+        {CHR_HASH(L, 'a','n','y'),                                         any},
+        {CHR_HASH(L, 't','o','p','_','l','e','f','t'),                top_left},
+        {CHR_HASH(L, 't','o','p'),                                         top},
+        {CHR_HASH(L, 't','o','p','_','r','i','g','h','t'),           top_right},
+        {CHR_HASH(L, 'l','e','f','t'),                             center_left},
+        {CHR_HASH(L, 'c','e','n','t','e','r'),                          center},
+        {CHR_HASH(L, 'r','i','g','h','t'),                        center_right},
+        {CHR_HASH(L, 'b','o','t','t','o','m','_','l','e','f','t'), bottom_left},
+        {CHR_HASH(L, 'b','o','t','t','o','m'),                          bottom},
+        {CHR_HASH(L, 'b','o','t','t','o','m','_',
+                     'r','i','g','h','t'),                        bottom_right},
+        {CHR_HASH(L, 'a','n','y','-','n','o','t','_',
+                     'c','e','n','t','e','r'),                      not_center},
     };
     auto line = local_make_tokenizer(str);
-    name = process_string(line, 'N');
-    bhv = process_string(line, 'L');
-    right_image = process_string(line, 'N');
-    left_image = process_string(line, 'N');
+    name = process_string(line);
+    bhv = process_string(line);
+    right_image = process_string(line);
+    left_image = process_string(line);
     duration = process_float(line, duration);
     repeat_delay = process_float(line, repeat_delay);
     placement_right = process_map(line, p, placement_right);
@@ -32,18 +39,19 @@ effect_t::input_t::input_t(string_view_t str) {
     prevent_loop = process_bool(line, prevent_loop);
 }
 
-effect_t::effect_t(const input_t &in, const std::string &path)
+effect_t::effect_t(const input_t &in, string_view_t path)
 : duration_{{(decltype(duration_.x))(1000.f * in.duration),
              (decltype(duration_.y))(1000.f * in.repeat_delay)}}
 , follow_(in.follow)
 , gravity_{init_gravity(in.placement_right, in.centering_right),
            init_gravity(in.placement_left, in.centering_left)} {
-#ifdef DEV_MODE
-    debug_ = in;
-#endif // DEV_MODE
-    if (!path.empty()) {
-        prepare_source(false, concat_path({path, in.right_image}));
-        prepare_source(true, concat_path({path, in.left_image}));
+    if (path.size) {
+        local_string_t *right
+                = make_string(path, ILV_DSEP, get_view(in.right_image));
+        local_string_t *left
+                = make_string(path, ILV_DSEP, get_view(in.left_image));
+        prepare_source(false, get_view(right));
+        prepare_source(true, get_view(left));
     }
     set_loop(false, !in.prevent_loop);
     set_loop(true, !in.prevent_loop);
@@ -51,10 +59,10 @@ effect_t::effect_t(const input_t &in, const std::string &path)
 
 speech_t::input_t::input_t(string_view_t str) {
     auto line = local_make_tokenizer(str);
-    name = process_string(line, 'L');
-    text = process_string(line, 'N');
+    name = process_string(line);
+    text = process_string(line);
     auto sound_files = process_array(line);
-    if (!sound_files.empty()) sound = to_string(sound_files[0], 'N');
+    if (!sound_files.empty()) sound = make_string(sound_files[0]);
     skip = process_bool(line, skip);
     group = process_float(line, group);
 }
@@ -69,13 +77,18 @@ effect_t::input_t speech_t::convert_input(const speech_t::input_t &in) {
     constexpr float extension = 1.f;
 
     size_t chars = 0;
-    for (auto str = to_view(in.text); str.size; chars++)
+    for (auto str = get_view(in.text); str.size; chars++)
         str = utf8_skip_char(str);
     effect_t::input_t retn;
-    retn.name = in.name;
-    retn.bhv = "group = " + std::to_string(in.group) + ", skip = "
-             + std::to_string(in.skip) + ", sound = " + in.sound;
-    retn.right_image = retn.left_image = in.text;
+    char group[16], skip[16];
+    string_view_t g_view{(size_t)sprintf(group, "%d", in.group), group};
+    string_view_t s_view{(size_t)sprintf(skip, "%d", in.skip), skip};
+    retn.name = make_string(get_view(in.name));
+    retn.bhv = make_string(get_imm_view("group = "), g_view,
+                           get_imm_view(", skip = "), s_view,
+                           get_imm_view(", sound = "), get_view(in.sound));
+    retn.right_image = make_string(get_view(in.text));
+    retn.left_image = make_string(get_view(in.text));
     retn.duration = extension + 0.5f + (1.f / 15.f) * chars;
     retn.repeat_delay = retn.duration + 10.f; // the end + 10 s, same as in DP
     retn.placement_right = retn.placement_left = gravity_flags_t::top;
@@ -91,7 +104,7 @@ void speech_t::render(
     // text margins: 8 px on the sides, 4 on top, 12 at the bottom (arrow too)
     constexpr uint32_t arrow = 8, side = 8, top = 4, bottom = 12;
     AINF anim = {0, uint32_t(max_dims.x), uint32_t(max_dims.y), 0,
-                 (uint32_t*)text_.c_str()};
+                 (uint32_t*)get_view(text_).str};
     const auto size = text_fn(MSG_WTGD, &anim);
     const uint32_t xdim = std::max(2 * side + uint16_t(size), 64u);
     const uint32_t ydim = top + bottom + 1 + uint16_t(size >> 16);
@@ -126,48 +139,63 @@ void speech_t::render(
         // the text
         AINF text = {(intptr_t)bits, xdim | (side << 16) | (side << 24),
                      ydim | (top << 16) | (bottom << 24), fg,
-                     (uint32_t*)text_.c_str()};
+                     (uint32_t*)get_view(text_).str};
         text_fn(MSG_WTDA, &text);
     };
     char colors[24];
-    sprintf(colors, " %06X / %06X: ", fg & 0xFFFFFF, bg & 0xFFFFFF);
+    size_t clr_size = sprintf(
+            colors, " %06X / %06X: ", fg & 0xFFFFFF, bg & 0xFFFFFF);
+    local_string_t *source = make_string({clr_size, colors}, get_view(text_));
     for (bool left : {false, true})
         if (is_empty(left))
-            prepare_source(left, colors + text_, xdim, ydim, draw);
+            prepare_source(left, get_view(source), xdim, ydim, draw);
 }
 
 behaviour_t::input_t::input_t(string_view_t str) {
-    static const std::unordered_map<std::string, movement_flags_t> m = {
-        {"horizontal_vertical", move_hv  }, {"mouseover", move_mouse},
-        {"diagonal_horizontal", move_dh  }, {"dragged",   move_drag },
-        {"diagonal_vertical",   move_dv  }, {"sleep",     move_sleep},
-        {"horizontal_only",     move_horz}, {"none",      move_none },
-        {"vertical_only",       move_vert}, {"all",       move_all  },
-        {"diagonal_only",       move_diag},
+    static const std::unordered_map<size_t, movement_flags_t> m = {
+        {CHR_HASH(L, 'h','o','r','i','z','o','n','t','a','l','_',
+                     'v','e','r','t','i','c','a','l'),         move_hv},
+        {CHR_HASH(L, 'd','i','a','g','o','n','a','l','_',
+                     'h','o','r','i','z','o','n','t','a','l'), move_dh},
+        {CHR_HASH(L, 'd','i','a','g','o','n','a','l','_',
+                     'v','e','r','t','i','c','a','l'),         move_dv},
+        {CHR_HASH(L, 'h','o','r','i','z','o','n','t','a','l','_',
+                     'o','n','l','y'),                       move_horz},
+        {CHR_HASH(L, 'v','e','r','t','i','c','a','l','_',
+                     'o','n','l','y'),                       move_vert},
+        {CHR_HASH(L, 'd','i','a','g','o','n','a','l','_',
+                     'o','n','l','y'),                       move_diag},
+        {CHR_HASH(L, 'm','o','u','s','e','o','v','e','r'),  move_mouse},
+        {CHR_HASH(L, 'd','r','a','g','g','e','d'),           move_drag},
+        {CHR_HASH(L, 's','l','e','e','p'),                  move_sleep},
+        {CHR_HASH(L, 'n','o','n','e'),                       move_none},
+        {CHR_HASH(L, 'a','l','l'),                            move_all},
     };
-    static const std::unordered_map<std::string, bool> f = {
-        {"false", false}, {"true",   true},
-        {"fixed", false}, {"mirror", true},
+    static const std::unordered_map<size_t, bool> f = {
+        {CHR_HASH(L, 'f','a','l','s','e'),    false},
+        {CHR_HASH(L, 't','r','u','e'),         true},
+        {CHR_HASH(L, 'f','i','x','e','d'),    false},
+        {CHR_HASH(L, 'm','i','r','r','o','r'), true},
     };
     auto line = local_make_tokenizer(str);
-    name = process_string(line, 'L');
+    name = process_string(line);
     chance = process_float(line, chance);
     max_duration = process_float(line, max_duration);
     min_duration = process_float(line, min_duration);
     speed = process_float(line, speed);
-    right_image = process_string(line, 'N');
-    left_image = process_string(line, 'N');
+    right_image = process_string(line);
+    left_image = process_string(line);
     movement = process_map(line, m, movement);
-    linked_bhv = process_string(line, 'L');
-    bgn_speech = process_string(line, 'L');
-    end_speech = process_string(line, 'L');
+    linked_bhv = process_string(line);
+    bgn_speech = process_string(line);
+    end_speech = process_string(line);
     skip = process_bool(line, skip);
     target_xy.x = process_float(line, target_xy.x);
     target_xy.y = process_float(line, target_xy.y);
-    follow_target = process_string(line, 'L');
+    follow_target = process_string(line);
     auto_follow_img = process_bool(line, auto_follow_img);
-    follow_stop_bhv = process_string(line, 'L');
-    follow_mov_bhv = process_string(line, 'L');
+    follow_stop_bhv = process_string(line);
+    follow_mov_bhv = process_string(line);
     right_img_center = process_quoted_int_pair(line, right_img_center);
     left_img_center = process_quoted_int_pair(line, left_img_center);
     prevent_loop = process_bool(line, prevent_loop);
@@ -185,7 +213,7 @@ static const T2IV process_duration(float min_d, float max_d) {
 behaviour_t::behaviour_t(const input_t &in, bhv_id_t id,
         bhv_id_t linked_id, bhv_id_t follow_grp_id, const fx_vec_t &fx,
         const speech_t *bgn_speech, const speech_t *end_speech,
-        lib_id_t follow_tgt, const std::string &path)
+        lib_id_t follow_tgt, string_view_t path)
 : id_(id)
 , linked_id_(linked_id)
 , follow_grp_id_(follow_grp_id)
@@ -199,12 +227,13 @@ behaviour_t::behaviour_t(const input_t &in, bhv_id_t id,
                  process_follow_offset(true, in, follow_tgt)}
 , effects_(process_effects(path, fx))
 , follow_(follow_tgt || in.target_xy.x || in.target_xy.y) {
-#ifdef DEV_MODE
-    debug_ = in;
-#endif // DEV_MODE
-    if (!path.empty()) {
-        prepare_source(false, concat_path({path, in.right_image}));
-        prepare_source(true, concat_path({path, in.left_image}));
+    if (path.size) {
+        local_string_t *right
+                = make_string(path, ILV_DSEP, get_view(in.right_image));
+        local_string_t *left
+                = make_string(path, ILV_DSEP, get_view(in.left_image));
+        prepare_source(false, get_view(right));
+        prepare_source(true, get_view(left));
     }
     set_center(false, in.right_img_center);
     set_center(true, in.left_img_center);

@@ -10,10 +10,10 @@
 
 
 struct bhv_id_desc_t {
-    std::unordered_map<std::string, bhv_id_t> m;
+    std::unordered_map<size_t, bhv_id_t> m;
     std::vector<bhv_id_t> v;
 };
-using bhv_id_map_t = std::unordered_map<std::string, bhv_id_desc_t>;
+using bhv_id_map_t = std::unordered_map<size_t, bhv_id_desc_t>;
 
 
 
@@ -30,32 +30,48 @@ private:
 public:
     class input_t {
     public:
-        std::string name;                    // NOT USED
-        float chance = 0.f;                  // NOT USED
-        float proximity = 125.f;             // NOT USED
-        std::vector<std::string> targets;    // NOT USED
-        bool target_activation_all = false;  // NOT USED
-        std::vector<std::string> bhv;        // NOT USED
-        float reactivation_delay = 60.f;     // NOT USED
+        string_t *name = nullptr;
+        float chance = 0.f;
+        float proximity = 125.f;
+        std::vector<string_t*> targets = {};
+        bool target_activation_all = false;
+        std::vector<string_t*> bhv = {};
+        float reactivation_delay = 60.f;
 
+        input_t(const input_t &) = delete;
+        input_t &operator=(const input_t &) = delete;
+        input_t(input_t &&rhs)
+        : name(rhs.name)
+        , chance(rhs.chance)
+        , proximity(rhs.proximity)
+        , targets(std::move(rhs.targets))
+        , target_activation_all(rhs.target_activation_all)
+        , bhv(std::move(rhs.bhv))
+        , reactivation_delay(rhs.reactivation_delay) {
+            rhs.name = nullptr;
+            rhs.targets.clear();
+            rhs.bhv.clear();
+        }
+        input_t &operator=(input_t &&) = delete;
+        ~input_t() {
+            free_string(name);
+            for (auto t : targets) free_string(t);
+            for (auto b : bhv) free_string(b);
+        }
         input_t() = default;
         input_t(string_view_t str);
         bool validate() const {
             bool okay = !targets.empty();
             okay &= !bhv.empty();
-            for (auto &t : targets) okay &= !t.empty();
-            for (auto &b : bhv) okay &= !b.empty();
+            for (auto t : targets) okay &= get_view(t).size;
+            for (auto b : bhv) okay &= get_view(b).size;
             return okay;
         }
     };
 
-#ifdef DEV_MODE
-    input_t debug_;
-#endif // DEV_MODE
-
     bool is_empty() const { return initiator_.empty() || targets_.empty(); }
 
-    interaction_t(const input_t &in, const std::string &lib_name,
+    interaction_t(const input_t &in, string_view_t lib_name,
             const bhv_id_map_t &bhv_id_map);
 };
 
@@ -63,14 +79,32 @@ class library_t : public no_copy_t {
 public:
     class input_t {
     public:
-        std::string name;
-        std::vector<std::string> categories;
-        std::vector<speech_t::input_t> speeches;
-        std::vector<effect_t::input_t> effects;
-        std::vector<behaviour_t::input_t> behaviours;
-        std::vector<interaction_t::input_t> interactions;
+        string_t *name = nullptr;
+        std::vector<string_t*> categories = {};
+        std::vector<speech_t::input_t> speeches = {};
+        std::vector<effect_t::input_t> effects = {};
+        std::vector<behaviour_t::input_t> behaviours = {};
+        std::vector<interaction_t::input_t> interactions = {};
 
-        input_t(const std::string &base, const std::string &dir);
+        input_t(const input_t &) = delete;
+        input_t &operator=(const input_t &) = delete;
+        input_t(input_t &&rhs)
+        : name(rhs.name)
+        , categories(std::move(rhs.categories))
+        , speeches(std::move(rhs.speeches))
+        , effects(std::move(rhs.effects))
+        , behaviours(std::move(rhs.behaviours))
+        , interactions(std::move(rhs.interactions)) {
+            rhs.name = nullptr;
+            rhs.categories.clear();
+        }
+        input_t &operator=(input_t &&) = delete;
+        ~input_t() {
+            free_string(name);
+            for (auto c : categories) free_string(c);
+        }
+        input_t() = default;
+        input_t(string_view_t base, string_view_t dir);
     };
 
 private:
@@ -105,8 +139,8 @@ private:
     };
 
     lib_id_t id_;
-    std::string library_path_;
-    std::string readable_name_;
+    string_t *library_path_;
+    string_t *readable_name_;
     std::vector<std::unique_ptr<interaction_t>> interactions_;
     std::vector<std::unique_ptr<behaviour_t>> behaviours_;
     std::vector<std::unique_ptr<speech_t>> speeches_;
@@ -166,7 +200,8 @@ public:
 
     static bhv_id_desc_t build_bhv_id_desc(const input_t &in);
 
-    library_t(lib_id_t id, std::string path, const input_t &in,
+    ~library_t();
+    library_t(lib_id_t id, string_view_t path, const input_t &in,
             const bhv_id_map_t &bhv_id_map);
 
     // both *_preview() methods intentionally non-const:
@@ -194,7 +229,7 @@ public:
             ENGD *engd, const std::vector<library_t*> &libs);
 
     lib_id_t id() const { return id_; };
-    const std::string &name() const { return readable_name_; }
+    string_view_t name() const { return get_view(readable_name_); }
 };
 
 #endif // EXEC_LIBRARY_HPP

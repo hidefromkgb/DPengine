@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <array>
 #include <memory>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -181,9 +180,9 @@ public:
         categories_t() = default;
         categories_t(size_t ctg_id) { add(ctg_id); }
     };
-    using lang_map_t = std::unordered_map<int32_t, std::string>;
-    std::string base; // path to the animation base
-    std::string lang; // name of the language file
+    using lang_map_t = std::unordered_map<size_t, const string_t*>;
+    string_t *base = nullptr; // path to the animation base
+    string_t *lang = nullptr; // name of the language file
     lang_map_t lang_map; // localization taken from the language file
     spin_t nrun; // runs between updates
     spin_t nsca; // base scaling factor
@@ -196,7 +195,15 @@ public:
     categories_t ctg_nonex = {};
     categories_t ctg_exact = {};
 
-    static lang_map_t get_lang_map(const std::string &file_name);
+    ~conf_t() {
+        free_string(base);
+        free_string(lang);
+        free_lang_map(&lang_map);
+    }
+    static void free_lang_map(lang_map_t *lang_map);
+    // replaces the strings with own copies, e.g. after a shallow copy
+    static void dup_strings(conf_t *conf);
+    static lang_map_t get_lang_map(string_view_t file_name);
 };
 
 #endif // EXEC_COMMON_HPP

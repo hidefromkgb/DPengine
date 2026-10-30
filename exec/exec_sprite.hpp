@@ -129,7 +129,7 @@ private:
     bool update_speech(uint32_t *seed, int64_t time, uint64_t chance);
 
 public:
-    const std::string &name() const;
+    string_view_t name() const;
 };
 
 // the sprites of a run: [0, SHOWN_) on display, [SHOWN_, WAITING_) free,

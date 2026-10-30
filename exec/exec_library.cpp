@@ -13,38 +13,48 @@ bhv_id_desc_t library_t::build_bhv_id_desc(const input_t &in) {
         if (!find_in_map(bhv_grp, iid.group)) bhv_grp[iid.group] = {};
         iid.index += bhv_grp[iid.group][iid.type]++;
         retn.v.emplace_back(iid._);
-        if (!b.name.empty() && !find_in_map(retn.m, b.name)) {
-            retn.m.emplace(b.name, iid._);
+        auto b_view = get_view(b.name);
+        auto in_view = get_view(in.name);
+        auto b_hash = str_view_hash(b_view, 'L');
+        if (b_view.size && !find_in_map(retn.m, b_hash)) {
+            retn.m.emplace(b_hash, iid._);
         } else {
             printf("[%s] WARNING, behaviour name collision: '%s'\n",
-                    in.name.c_str(), b.name.c_str());
+                    in_view.str, b_view.str);
         }
     }
     return retn;
 }
 
-library_t::input_t::input_t(const std::string &base, const std::string &dir) {
-    auto config = concat_path({base, dir, DEF_CONF});
-    if (auto file = rLoadFile(config.c_str(), nullptr)) {
-        name = dir;
-        auto line = local_make_tokenizer((string_view_t){});
-        auto text = local_make_tokenizer((string_view_t){strlen(file), file});
+library_t::input_t::input_t(string_view_t base, string_view_t dir) {
+    long size = 0;
+    local_string_t *config = make_string(
+            base, ILV_DSEP, dir, get_imm_view(DEF_DSEP DEF_CONF));
+    if (auto file = rLoadFile(get_view(config).str, &size)) {
+        name = make_string(dir);
+        auto line = local_make_tokenizer({});
+        auto text = local_make_tokenizer({(size_t)size, file});
         while (next_line(text)) {
             next_token(line, get_token(text), DEF_CMNT, DEF_TSEP, DEF_QUOT);
-            switch (str_hash(get_token(line), 'L')) {
+            switch (str_view_hash(get_token(line), 'L')) {
                 //case CHR_HASH(L, 'N','a','m','e'):
                 //case CHR_HASH(L,
                 //      'B','e','h','a','v','i','o','r','G','r','o','u','p'):
                 default: break;
                 case CHR_HASH(L, 'C','a','t','e','g','o','r','i','e','s'):
-                    for (; !is_empty(line);
-                            next_token(line,
-                                get_remainder(line), 0, DEF_TSEP, DEF_QUOT))
-                        if (get_token(line).size) {
-                            auto category = to_string(get_token(line), 'L');
-                            category[0] = CHR_HASH_CU(category[0]);
-                            categories.emplace_back(category);
-                        }
+                    while (!is_empty(line)) {
+                        next_token(line, get_remainder(line),
+                                0, DEF_TSEP, DEF_QUOT);
+                        if (!get_token(line).size) continue;
+                        // non-empty here: empty tokens are skipped above
+                        auto category = make_string(get_token(line));
+                        auto first = get_view(category);
+                        auto rest = utf8_skip_char(first);
+                        first.size = rest.str - first.str;
+                        ascii_to_upper(first);
+                        ascii_to_lower(rest);
+                        categories.emplace_back(category);
+                    }
                     break;
                 case CHR_HASH(L, 'B','e','h','a','v','i','o','r'):
                     behaviours.emplace_back(get_remainder(line));
@@ -153,57 +163,56 @@ const behaviour_t &library_t::special_bhv_internal(
 interaction_t::input_t::input_t(string_view_t str) {
     // TODO: is 'any' really equivalent to 'one'? check if there are
     //       relevant interactions where 'any' means '>1'
-    static const std::unordered_map<std::string, bool> activations = {
-        {"true", true}, {"false",  false}, {"any", false},
-        {"all",  true}, {"random", false}, {"one", false},
+    static const std::unordered_map<size_t, bool> activations = {
+        {CHR_HASH(L, 't','r','u','e'), true}, {CHR_HASH(L, 'a','l','l'), true},
+        {CHR_HASH(L, 'o','n','e'), false}, {CHR_HASH(L, 'a','n','y'), false},
+        {CHR_HASH(L, 'r','a','n','d','o','m'), false},
+        {CHR_HASH(L, 'f','a','l','s','e'), false},
     };
     auto line = local_make_tokenizer(str);
-    name = process_string(line, 'N');
+    name = process_string(line);
     chance = process_float(line, chance);
     proximity = process_float(line, proximity);
     auto tgt_s = process_array(line);
-    for (auto &t : tgt_s) targets.emplace_back(to_string(t, 'L'));
+    for (auto t : tgt_s) targets.emplace_back(make_string(t));
     target_activation_all
             = process_map(line, activations, target_activation_all);
     auto bhv_s = process_array(line);
-    for (auto &b : bhv_s) bhv.emplace_back(to_string(b, 'L'));
+    for (auto b : bhv_s) bhv.emplace_back(make_string(b));
     reactivation_delay = process_float(line, reactivation_delay);
 }
 
-interaction_t::interaction_t(const input_t &in, const std::string &lib_name,
+interaction_t::interaction_t(const input_t &in, string_view_t lib_name,
         const bhv_id_map_t &bhv_id_map)
 : all_(in.target_activation_all)
 , proximity_(in.proximity)
 , chance_(double((uint64_t)1 << 32) * std::clamp(in.chance, 0.f, 1.f))
 , duration_{{std::numeric_limits<decltype(duration_.x)>::max(),
             (decltype(duration_.y))(1000.f * in.reactivation_delay)}} {
-#ifdef DEV_MODE
-    debug_ = in;
-#endif // DEV_MODE
-    auto append_bhv = [&](const std::string &lib_id, bool target) {
-        auto &retn = (target) ? targets_[str_hash(to_view(lib_id), 'L')]
-                              : initiator_;
-        if (auto bhv_id_desc = find_in_map(bhv_id_map, lib_id))
-            for (auto &b : in.bhv)
-                if (auto bhv_id = find_in_map(bhv_id_desc->m, b))
+    auto append_bhv = [&](string_view_t lib_id, bool target) {
+        auto lib_id_hash = str_view_hash(lib_id, 'L');
+        auto &retn = (target) ? targets_[lib_id_hash] : initiator_;
+        if (auto bhv_id_desc = find_in_map(bhv_id_map, lib_id_hash))
+            for (auto b : in.bhv)
+                if (auto bhv_id = find_in_map(bhv_id_desc->m, str_hash(b, 'L')))
                     retn.emplace_back(*bhv_id);
         if (retn.empty()) {
             printf("[%s] WARNING, no interaction behaviours with '%s' in "
                    "'%s', target dropped\n",
-                    lib_name.c_str(), lib_id.c_str(), in.name.c_str());
+                    lib_name.str, lib_id.str, get_view(in.name).str);
             return false;
         }
         return true;
     };
     if (append_bhv(lib_name, false)) {
-        for (auto &t : in.targets) append_bhv(t, true);
+        for (auto &t : in.targets) append_bhv(get_view(t), true);
         for (auto it = targets_.begin(); it != targets_.end(); )
             it = (it->second.empty()) ? targets_.erase(it) : std::next(it);
     }
     if (is_empty())
         printf("[%s] WARNING, no interaction behaviours in '%s', "
                "interaction dropped\n",
-                lib_name.c_str(), in.name.c_str());
+                lib_name.str, get_view(in.name).str);
 }
 
 
@@ -285,16 +294,20 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
             return (500 * 255 + get_luminance(bt.bgra()))
                  / (500 * 255 + get_luminance(dk.bgra()));
         }
-        static std::string ttycolor( // TODO: does WIN32 have something alike?
-                uint32_t fg, uint32_t bg, const std::string &text) {
-            std::string retn = "\033[48;2;" + std::to_string(uint8_t(bg >> 16))
-                    + ";" + std::to_string(uint8_t(bg >> 8))
-                    + ";" + std::to_string(uint8_t(bg));
-            if (fg != bg)
-                retn += ";38;2;" + std::to_string(uint8_t(fg >> 16))
-                        + ";" + std::to_string(uint8_t(fg >> 8))
-                        + ";" + std::to_string(uint8_t(fg));
-            return retn + "m" + text + "\033[0m";
+        static string_t *ttycolor( // TODO: does WIN32 have something alike?
+                uint32_t fg, uint32_t bg, string_view_t text) {
+            char bstr[16];
+            size_t bsz = sprintf(bstr, "%d;%d;%d",
+                    uint8_t(bg >> 16), uint8_t(bg >> 8), uint8_t(bg));
+            if (bg == fg) return make_string(get_imm_view("\033[48;2;"),
+                                        {bsz, bstr}, get_imm_view("m"),
+                                        text, get_imm_view("\033[0m"));
+            char fstr[16];
+            size_t fsz = sprintf(fstr, "%d;%d;%d",
+                    uint8_t(fg >> 16), uint8_t(fg >> 8), uint8_t(fg));
+            return make_string(get_imm_view("\033[48;2;"), {bsz, bstr},
+                        get_imm_view(";38;2;"), {fsz, fstr}, get_imm_view("m"),
+                        text, get_imm_view("\033[0m"));
         }
     };
     // reading the inputs, freeing temporary data
@@ -357,10 +370,12 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     free(histogram);
 
     // saving the color order for debugging
-    std::string colors;
-    for (size_t i = bgn; i <= end; i++)
-        colors += hsl_t::ttycolor(top_clrs[i].color, top_clrs[i].color, "   ");
-
+    local_string_t *colors = nullptr;
+    for (size_t i = bgn; i <= end; i++) {
+        local_string_t *color = hsl_t::ttycolor(
+                top_clrs[i].color, top_clrs[i].color, get_imm_view("   "));
+        colors = append_string(colors, get_view(color));
+    }
     // sorting the colors by luminance
     // more sorting networks: bertdobbelaere.github.io/sorting_networks.html
     for (size_t i = bgn; i <= end; i++)
@@ -399,18 +414,29 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     lib->speech_fg_ = dk.bgra();
     lib->speech_bg_ = bt.bgra();
 
-    // printing the debug output
-    std::string text(40, '#');
-    text.replace(0, lib->name().size() + 1, lib->name() + " ");
+    // printing the debug output: first prepare the contrast
     char temp[24];
-    sprintf(temp, " %06X / %06X: ", lib->speech_fg_ & 0xFFFFFF,
-            lib->speech_bg_ & 0xFFFFFF);
-    text = hsl_t::ttycolor(lib->speech_fg_, lib->speech_bg_, temp + text + " ");
-    sprintf(temp, "%5.2f ", std::fabs(contrast));
-    text = hsl_t::ttycolor((contrast < 0.f) ? lib->speech_fg_ : lib->speech_bg_,
-                (contrast < 0.f) ? lib->speech_bg_ : lib->speech_fg_, temp)
-         + text + colors;
-    printf("%s\n", text.c_str());
+    auto ct_size = sprintf(temp, "%5.2f ", std::fabs(contrast));
+    local_string_t *text = hsl_t::ttycolor(
+            (contrast < 0.f) ? lib->speech_fg_ : lib->speech_bg_,
+            (contrast < 0.f) ? lib->speech_bg_ : lib->speech_fg_,
+            (string_view_t){(size_t)ct_size, temp});
+    // ...then prepare the main header
+    auto clr_size = sprintf(temp, " %06X / %06X: ", lib->speech_fg_ & 0xFFFFFF,
+                                                    lib->speech_bg_ & 0xFFFFFF);
+    string_view_t clr_view{(size_t)clr_size, temp};
+    local_string_t *header = make_string(clr_view, lib->name(),
+            get_imm_view(" #######################################"));
+    auto hdr_view = get_view(header);
+    hdr_view.size = (lib->name().size * 2 < hdr_view.size - clr_view.size)
+            ? (hdr_view.size - lib->name().size)
+            : (clr_view.size + lib->name().size + 1);
+    ((char*)hdr_view.str)[hdr_view.size++] = ' '; // over the first cut '#'
+    local_string_t *colored_header = hsl_t::ttycolor(
+            lib->speech_fg_, lib->speech_bg_, hdr_view);
+    // ...then concatenate everything and put it to the screen
+    text = append_string(text, get_view(colored_header), get_view(colors));
+    printf("%s\n", get_view(text).str);
 }
 
 void library_t::extract_speech_colors(
@@ -449,32 +475,28 @@ void library_t::finalize() {
 struct library_t::build_ctx_t {
     const input_t &in;
     const bhv_id_map_t &bhv_id_map;
-    const std::string hashable_name;
 
     // filled by map_effects:
-    std::unordered_map<std::string, fx_vec_t> fx_by_bhv_name;
+    std::unordered_map<size_t, fx_vec_t> fx_by_bhv_name;
     // filled by map_speeches:
-    std::unordered_map<std::string, const speech_t*> spk_by_name;
+    std::unordered_map<size_t, const speech_t*> spk_by_name;
     std::unordered_map<int, ref_vec_t<speech_t>> spk_by_group;
     // filled by create_behaviours:
-    std::unordered_map<std::string, behaviour_t*> bhv_by_name;
+    std::unordered_map<size_t, behaviour_t*> bhv_by_name;
 
     const bhv_id_desc_t &bhv_id_desc() const {
-        auto bhv_id_desc = find_in_map(bhv_id_map, hashable_name);
+        auto bhv_id_desc = find_in_map(bhv_id_map, str_hash(in.name, 'L'));
         assert(bhv_id_desc);
         return *bhv_id_desc;
     }
-
-    build_ctx_t(const input_t &i, const bhv_id_map_t &m)
-    : in(i)
-    , bhv_id_map(m)
-    , hashable_name(to_string(to_view(i.name), 'L')) {}
+    build_ctx_t(
+            const input_t &i, const bhv_id_map_t &m) : in(i), bhv_id_map(m) {}
 };
 
 void library_t::init_interactions(const build_ctx_t &ctx) {
     for (auto &i : ctx.in.interactions) {
         auto it = std::make_unique<interaction_t>(
-                i, ctx.hashable_name, ctx.bhv_id_map);
+                i, get_view(ctx.in.name), ctx.bhv_id_map);
         if (!it->is_empty())
             interactions_.emplace_back(std::move(it));
     }
@@ -483,25 +505,27 @@ void library_t::init_interactions(const build_ctx_t &ctx) {
 void library_t::map_effects(build_ctx_t &ctx) {
     const auto &bhv_id_desc = ctx.bhv_id_desc();
     for (auto &fx : ctx.in.effects) {
-        if (find_in_map(bhv_id_desc.m, fx.bhv)) {
-            ctx.fx_by_bhv_name[fx.bhv].emplace_back(fx);
+        auto bhv_hash = str_hash(fx.bhv, 'L');
+        if (find_in_map(bhv_id_desc.m, bhv_hash)) {
+            ctx.fx_by_bhv_name[bhv_hash].emplace_back(fx);
         } else {
             printf("[%s] WARNING, unused effect '%s'\n",
-                   ctx.in.name.c_str(), fx.name.c_str());
+                   get_view(ctx.in.name).str, get_view(fx.name).str);
         }
     }
 }
 
 void library_t::map_speeches(build_ctx_t &ctx) {
     for (auto &s : ctx.in.speeches) {
-        auto dejavu = find_in_map(ctx.spk_by_name, s.name);
+        auto name_hash = str_hash(s.name, 'L');
+        auto dejavu = find_in_map(ctx.spk_by_name, name_hash);
         if (dejavu)
             printf("[%s] WARNING, speech name collision: '%s'%s\n",
-                    ctx.in.name.c_str(), s.name.c_str(),
+                    get_view(ctx.in.name).str, get_view(s.name).str,
                     (s.skip) ? ", non-selectable (dropped)" : ", selectable");
         if (!dejavu || !s.skip) {
             speeches_.emplace_back(std::make_unique<speech_t>(s));
-            ctx.spk_by_name.emplace(s.name, speeches_.back().get());
+            ctx.spk_by_name.emplace(name_hash, speeches_.back().get());
             if (!s.skip)
                 ctx.spk_by_group[s.group].emplace_back(*speeches_.back());
         }
@@ -513,32 +537,33 @@ void library_t::create_behaviours(build_ctx_t &ctx) {
     const auto &bhv_id_desc = ctx.bhv_id_desc();
     for (size_t i = 0; i < ctx.in.behaviours.size(); i++) {
         auto &b = ctx.in.behaviours[i];
-        auto ib = find_in_map(ctx.spk_by_name, b.bgn_speech);
-        auto ie = find_in_map(ctx.spk_by_name, b.end_speech);
+        auto ib = find_in_map(ctx.spk_by_name, str_hash(b.bgn_speech, 'L'));
+        auto ie = find_in_map(ctx.spk_by_name, str_hash(b.end_speech, 'L'));
 
         bhv_id_internal_t iid{bhv_id_desc.v[i]};
         bhv_id_internal_t linked_iid = {};
-        if (auto il = find_in_map(bhv_id_desc.m, b.linked_bhv)) {
+        if (auto il = find_in_map(bhv_id_desc.m, str_hash(b.linked_bhv, 'L'))) {
             linked_iid._ = *il;
-        } else if (!b.linked_bhv.empty()) {
+        } else if (get_view(b.linked_bhv).size) {
             printf("[%s] WARNING, invalid linked behaviour name in '%s'\n",
-                    ctx.in.name.c_str(), b.name.c_str());
+                    get_view(ctx.in.name).str, get_view(b.name).str);
         }
-        auto is = find_in_map(bhv_id_desc.m, b.follow_stop_bhv);
-        auto im = find_in_map(bhv_id_desc.m, b.follow_mov_bhv);
+        auto is = find_in_map(bhv_id_desc.m, str_hash(b.follow_stop_bhv, 'L'));
+        auto im = find_in_map(bhv_id_desc.m, str_hash(b.follow_mov_bhv, 'L'));
         bhv_id_internal_t follow_grp_iid = {};
         follow_grp_iid.group = (is && im) ? -int16_t(i) : iid.group;
         if (!is != !im)
             printf("[%s] WARNING, inconsistent follow behaviours in '%s'\n",
-                   ctx.in.name.c_str(), b.name.c_str());
+                   get_view(ctx.in.name).str, get_view(b.name).str);
 
-        auto ix = find_in_map(ctx.fx_by_bhv_name, b.name);
+        auto b_hash = str_hash(b.name, 'L');
+        auto ix = find_in_map(ctx.fx_by_bhv_name, b_hash);
         behaviours_.emplace_back(std::make_unique<behaviour_t>(b, iid._,
                     linked_iid._, follow_grp_iid._, (ix) ? *ix : fx_null,
                     (ib) ? *ib : nullptr, (ie) ? *ie : nullptr,
-                    str_hash(to_view(b.follow_target), 'L'), library_path_));
+                    str_hash(b.follow_target, 'L'), get_view(library_path_)));
         groups_[iid.group].bhv[iid.type].emplace_back(*behaviours_.back());
-        ctx.bhv_by_name.emplace(b.name, behaviours_.back().get());
+        ctx.bhv_by_name.emplace(b_hash, behaviours_.back().get());
         assert(iid.index == groups_[iid.group].bhv[iid.type].size());
     }
 }
@@ -582,14 +607,14 @@ void library_t::init_probabilities(const build_ctx_t &ctx) {
 
 void library_t::init_follow_groups(const build_ctx_t &ctx) {
     for (size_t i = 0; i < ctx.in.behaviours.size(); i++)
-        if (!ctx.in.behaviours[i].follow_target.empty()
+        if (get_view(ctx.in.behaviours[i].follow_target).size
                 && !ctx.in.behaviours[i].auto_follow_img) {
             group_t grp;
-            if (auto is = find_in_map(
-                        ctx.bhv_by_name, ctx.in.behaviours[i].follow_stop_bhv))
+            auto fs_hash = str_hash(ctx.in.behaviours[i].follow_stop_bhv, 'L');
+            if (auto is = find_in_map(ctx.bhv_by_name, fs_hash))
                 grp.bhv[stationary].emplace_back(**is);
-            if (auto im = find_in_map(
-                        ctx.bhv_by_name, ctx.in.behaviours[i].follow_mov_bhv))
+            auto fm_hash = str_hash(ctx.in.behaviours[i].follow_mov_bhv, 'L');
+            if (auto im = find_in_map(ctx.bhv_by_name, fm_hash))
                 grp.bhv[moving].emplace_back(**im);
 
             if (!grp.bhv[moving].empty() && !grp.bhv[stationary].empty()) {
@@ -597,7 +622,8 @@ void library_t::init_follow_groups(const build_ctx_t &ctx) {
             } else {
                 printf("[%s] WARNING, invalid custom follow behaviours in "
                        "'%s', reverting to defaults\n",
-                        ctx.in.name.c_str(), ctx.in.behaviours[i].name.c_str());
+                        get_view(ctx.in.name).str,
+                        get_view(ctx.in.behaviours[i].name).str);
             }
         }
 }
@@ -611,7 +637,7 @@ void library_t::init_special_behaviours(const build_ctx_t &ctx) {
         auto &b = ctx.in.behaviours[i];
         auto &bhv = *behaviours_[i];
         if (bhv.speed() < behaviours_[slowest]->speed()) slowest = i;
-        if (!b.skip && (b.chance > 0.f) && b.follow_target.empty()
+        if (!b.skip && (b.chance > 0.f) && !get_view(b.follow_target).size
                 && !bhv.speed())
             idle[bhv_id_internal_t{bhv.id()}.group].emplace_back(bhv);
     }
@@ -660,11 +686,16 @@ void library_t::init_max_effects() {
     }
 }
 
-library_t::library_t(lib_id_t id, std::string path, const input_t &in,
+library_t::~library_t() {
+    free_string(library_path_);
+    free_string(readable_name_);
+}
+
+library_t::library_t(lib_id_t id, string_view_t path, const input_t &in,
         const bhv_id_map_t &bhv_id_map)
 : id_(id)
-, library_path_(std::move(path))
-, readable_name_(in.name)
+, library_path_(make_string(path))
+, readable_name_(make_string(get_view(in.name)))
 , preview_id_(0)
 , max_effects_(0)
 , speech_fg_(def_speech_fg_)

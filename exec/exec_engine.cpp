@@ -35,13 +35,19 @@
 
 
 
-const std::unordered_map<std::string, conf_t::flags_t> engine_t::all_flags = {
-#define CASE(what) {#what, conf_t::what}
-    CASE(gpu), CASE(opaque), CASE(draw), CASE(show),
-    CASE(wpbo), CASE(wbgra), CASE(wregion),
-    CASE(speech), CASE(cspeech), CASE(topmost), CASE(hover),
-    CASE(update), CASE(filters), CASE(effects), CASE(exact),
-    CASE(copies), CASE(randomsel), CASE(interaction),
+decltype(engine_t::all_flags) engine_t::all_flags = {
+#define CASE(what, ...) \
+        {CHR_HASH(L, __VA_ARGS__), {get_imm_view(#what), conf_t::what}}
+    CASE(interaction,'i','n','t','e','r','a','c','t','i','o','n'),
+    CASE(randomsel,'r','a','n','d','o','m','s','e','l'), CASE(gpu, 'g','p','u'),
+    CASE(cspeech,'c','s','p','e','e','c','h'), CASE(hover,'h','o','v','e','r'),
+    CASE(topmost,'t','o','p','m','o','s','t'), CASE(exact,'e','x','a','c','t'),
+    CASE(wregion,'w','r','e','g','i','o','n'), CASE(wbgra,'w','b','g','r','a'),
+    CASE(filters,'f','i','l','t','e','r','s'), CASE(wpbo,'w','p','b','o'),
+    CASE(effects,'e','f','f','e','c','t','s'), CASE(draw,'d','r','a','w'),
+    CASE(opaque,'o','p','a','q','u','e'), CASE(speech,'s','p','e','e','c','h'),
+    CASE(update,'u','p','d','a','t','e'), CASE(copies,'c','o','p','i','e','s'),
+    CASE(show,'s','h','o','w'),
 #undef CASE
 };
 
@@ -58,6 +64,7 @@ static inline uint32_t *init_seed() {
 }
 
 engine_t::~engine_t() {
+    free_string(cfnm_);
     RNG_Free(&seed_);
 }
 
@@ -65,10 +72,10 @@ engine_t::engine_t(string_view_t fcnf, string_view_t base,
         const T2IV tray, const T4IV area)
 : engd_(init_engd())
 , seed_(init_seed())
-, cfnm_((fcnf.size) ? concat_path({to_string(fcnf, 'N'), DEF_CORE})
-                    : std::string())
+, cfnm_((fcnf.size) ? make_string(fcnf, get_imm_view(DEF_DSEP DEF_CORE))
+                    : nullptr)
 , cdef_(get_def_conf(base))
-, cini_(load_ini_conf(cdef_, cfnm_))
+, cini_(load_ini_conf(cdef_, get_view(cfnm_)))
 , runs_(fixup_min(cini_.nrun, cdef_.nrun)) // do not move past ccur_()
 , tacc_{}
 , ccur_(cini_)
@@ -78,8 +85,9 @@ engine_t::engine_t(string_view_t fcnf, string_view_t base,
 , area_(area)
 , tcur_{}
 , tpre_{} {
+    conf_t::dup_strings(&ccur_); // CCUR_ was copied from CINI_ shallowly
     mctl_.set_options_window(octl_.get_id()); // link options window to main
-    build_library_structure(cini_.base); // read configuration, load everything
+    build_library_structure(get_view(cini_.base)); // read conf, load everything
 }
 
 bool engine_t::load_selection(const selection_t &sel, bool show_progress) {
@@ -98,11 +106,11 @@ bool engine_t::load_selection(const selection_t &sel, bool show_progress) {
 
 conf_t engine_t::get_def_conf(string_view_t base) {
     conf_t retn;
-    retn.base = to_string(base, 'N');
+    retn.base = make_string(base);
     retn.flgs = conf_t::show | conf_t::draw | conf_t::gpu | conf_t::hover
               | conf_t::interaction | conf_t::effects | conf_t::speech
               | conf_t::cspeech;
-    retn.lang_map = conf_t::get_lang_map({});
+    retn.lang_map = conf_t::get_lang_map(get_view(retn.lang));
     retn.nrun = conf_t::spin_t(  5,    0,  1000);
     retn.nsca = conf_t::spin_t(100,   25,   300);
     retn.ndil = conf_t::spin_t(100,   10,  1000);
@@ -113,62 +121,93 @@ conf_t engine_t::get_def_conf(string_view_t base) {
     return retn;
 }
 
-void engine_t::save_ini_conf() const {
-    #define header(name) header_((const char[]){name,0})
-    auto header_ = [](const char *h) { return DEF_CRLF + std::string(h); };
-    auto svalue = [](const std::string &v) { return DEF_TSEP + v; };
-    auto ivalue = [&](int v) { return svalue(std::to_string(v)); };
-    std::string retn;
-    retn = header(CFG_FLDR)
-         + svalue((ccur_.base != cdef_.base) ? ccur_.base : std::string());
-    retn += header(CFG_LGUI) + svalue(ccur_.lang);
-    retn += header(CFG_RUNS) + ivalue(ccur_.nrun.get()) + ivalue(runs_);
-    retn += header(CFG_SCAL) + ivalue(ccur_.nsca.get());
-    retn += header(CFG_TDIL) + ivalue(ccur_.ndil.get());
-    retn += header(CFG_RSAY) + ivalue(ccur_.nspk.get());
-    retn += header(CFG_PCDR) + ivalue(ccur_.ncdr.get());
-    retn += header(CFG_SPEC) + ivalue(ccur_.spec.get());
-    retn += header(CFG_RGPU) + ivalue(ccur_.rgpu.get());
-    auto render_flags = header(CFG_RNDR), general_flags = header(CFG_FLGS);
-    for (auto &f : all_flags) {
-        assert(f.second & (conf_t::render_mask | conf_t::general_mask));
-        auto &target = (f.second & conf_t::render_mask) ? render_flags
-                                                        : general_flags;
-        if ((ccur_.flgs & f.second)) target += svalue(f.first);
-    }
-    retn = retn.substr(1) + render_flags + general_flags;
-    rSaveFile(cfnm_.c_str(), retn.c_str(), retn.size());
-    #undef header
+static string_t *hdrs_(
+        string_t *str, string_view_t head, size_t n, const string_view_t *v) {
+    char tsep = DEF_TSEP, crlf = DEF_CRLF;
+    if (head.size) str = append_string(str, {1, &crlf}, head);
+    for (size_t i = 0; i < n; i++) str = append_string(str, {1, &tsep}, v[i]);
+    return str;
 }
 
-conf_t engine_t::load_ini_conf(const conf_t &def, const std::string &cfnm) {
+static string_t *vals_(string_t *str, size_t n, const int32_t *v) {
+    char tsep = DEF_TSEP, temp[16];
+    for (size_t i = 0; i < n; i++)
+        str = append_string(
+                str, {1, &tsep}, {(size_t)sprintf(temp, "%d", v[i]), temp});
+    return str;
+}
+
+void engine_t::save_ini_conf() const {
+    #define _(...) get_imm_view(((const char[]){__VA_ARGS__, 0}))
+    #define hdrs(retn, name, ...) hdrs_(retn, (string_view_t) name, \
+            sizeof((string_view_t[]){__VA_ARGS__}) / sizeof(string_view_t), \
+            (const string_view_t[]){__VA_ARGS__})
+    #define vals(retn, ...) vals_(retn, \
+            sizeof((int32_t[]){__VA_ARGS__}) / sizeof(int32_t), \
+            (const int32_t[]){__VA_ARGS__})
+    const auto cur = get_view(ccur_.base), def = get_view(cdef_.base);
+    const bool equal = (cur.size == def.size) ? (!cur.size) ? true
+                     : !strncmp(cur.str, def.str, cur.size) : false;
+    local_string_t *retn = nullptr, *render = nullptr, *general = nullptr;
+    retn = hdrs(retn, _(CFG_FLDR), (!equal) ? cur : (string_view_t){});
+    retn = hdrs(retn, _(CFG_LGUI), get_view(ccur_.lang));
+    retn = hdrs(retn, _(CFG_RUNS)); retn = vals(retn, ccur_.nrun.get(), runs_);
+    retn = hdrs(retn, _(CFG_SCAL)); retn = vals(retn, ccur_.nsca.get());
+    retn = hdrs(retn, _(CFG_TDIL)); retn = vals(retn, ccur_.ndil.get());
+    retn = hdrs(retn, _(CFG_RSAY)); retn = vals(retn, ccur_.nspk.get());
+    retn = hdrs(retn, _(CFG_PCDR)); retn = vals(retn, ccur_.ncdr.get());
+    retn = hdrs(retn, _(CFG_SPEC)); retn = vals(retn, ccur_.spec.get());
+    retn = hdrs(retn, _(CFG_RGPU)); retn = vals(retn, ccur_.rgpu.get());
+    render = hdrs(render, _(CFG_RNDR)); general = hdrs(general, _(CFG_FLGS));
+    for (auto &f : all_flags) {
+        assert(f.second.second & (conf_t::render_mask | conf_t::general_mask));
+        string_t **target
+                = (f.second.second & conf_t::render_mask) ? &render : &general;
+        if ((ccur_.flgs & f.second.second))
+            *target = hdrs(*target, {}, f.second.first);
+    }
+    retn = append_string(retn, get_view(render), get_view(general));
+    const auto retn_view = get_view(retn);
+    rSaveFile(get_view(cfnm_).str, retn_view.str + 1, retn_view.size - 1);
+    #undef vals
+    #undef hdrs
+    #undef _
+}
+
+conf_t engine_t::load_ini_conf(const conf_t &def, string_view_t cfnm) {
     auto process_spin = [](tokenizer_t *line, const conf_t::spin_t &def) {
         return conf_t::spin_t(
                 process_float(line, def.get()), def.min(), def.max());
     };
     auto render = def.flgs & conf_t::render_mask;
     auto general = def.flgs & conf_t::general_mask;
+    long size = 0;
     conf_t retn;
-    retn.base = def.base;
-    if (auto file = (!cfnm.empty()) ? rLoadFile(cfnm.c_str(), nullptr)
-                                    : nullptr) {
-        printf("Reading config from '%s'...\n", cfnm.c_str());
-        auto line = local_make_tokenizer((string_view_t){});
-        auto text = local_make_tokenizer((string_view_t){strlen(file), file});
+    retn.base = make_string(get_view(def.base));
+    if (auto file = (cfnm.size) ? rLoadFile(cfnm.str, &size) : nullptr) {
+        printf("Reading config from '%s'...\n", cfnm.str);
+        auto line = local_make_tokenizer({});
+        auto text = local_make_tokenizer({(size_t)size, file});
         while (next_line(text)) {
             next_token(line, get_token(text), DEF_CMNT, DEF_TSEP, DEF_QUOT);
-            switch (str_hash(get_token(line), 'L')) {
+            switch (str_view_hash(get_token(line), 'L')) {
                 default: break;
                 case CHR_HASH(L, CFG_LGUI):
-                    retn.lang = to_string(get_remainder(line), 'N');
-                    retn.lang_map = conf_t::get_lang_map(retn.lang);
-                    if (retn.lang_map.empty()) retn.lang = {};
+                    free_string(retn.lang);
+                    retn.lang = make_string(get_remainder(line));
+                    conf_t::free_lang_map(&retn.lang_map);
+                    retn.lang_map = conf_t::get_lang_map(get_view(retn.lang));
+                    if (retn.lang_map.empty()) {
+                        free_string(retn.lang);
+                        retn.lang = nullptr;
+                    }
                     break;
                 case CHR_HASH(L, CFG_FLDR):
                     next_token(
                             line, get_remainder(line), 0, DEF_TSEP, DEF_QUOT);
                     if (!get_token(line).size) break;
-                    retn.base = to_string(get_token(line), 'N');
+                    free_string(retn.base);
+                    retn.base = make_string(get_token(line));
                     break;
                 case CHR_HASH(L, CFG_RUNS): {
                     // a little hack: set min to equal the run count
@@ -205,13 +244,13 @@ conf_t engine_t::load_ini_conf(const conf_t &def, const std::string &cfnm) {
                 case CHR_HASH(L, CFG_RNDR):
                     render = {};
                     while (!is_empty(line))
-                        render |= process_map(line, all_flags, {})
+                        render |= process_map(line, all_flags, {}).second
                             & conf_t::render_mask;
                     break;
                 case CHR_HASH(L, CFG_FLGS):
                     general = {};
                     while (!is_empty(line))
-                        general |= process_map(line, all_flags, {})
+                        general |= process_map(line, all_flags, {}).second
                             & conf_t::general_mask;
                     break;
             }
@@ -348,65 +387,72 @@ void engine_t::control_p2_handler(MENU *item) {
 void engine_t::options_handler(MENU *item) {
 }
 
-void engine_t::build_library_structure(const std::string &base) {
+void engine_t::build_library_structure(string_view_t base) {
     size_t last_category = 0;
     std::vector<std::pair<lib_id_t, conf_t::categories_t>> ctg;
-    std::unordered_map<std::string, size_t> ctg_map;
+    std::unordered_map<size_t, size_t> ctg_map;
     bhv_id_map_t bhv_id_map;
 
     std::vector<library_t::input_t> ins;
-    const auto path = concat_path({base, DEF_FLDR, "Ponies"});
+    local_string_t *path = make_string(
+            base, get_imm_view(DEF_DSEP DEF_FLDR DEF_DSEP "Ponies"));
     for (bool synced = false; ; ccur_.flgs &= ~conf_t::update, synced = true) {
         if (!(ccur_.flgs & conf_t::update)) {
-            const intptr_t find = rFindMake(path.c_str());
+            const intptr_t find = rFindMake(get_view(path).str);
             while (char *file = rFindFile(find)) {
-                ins.emplace_back(library_t::input_t(path, file));
+                ins.emplace_back(library_t::input_t(
+                                get_view(path), get_pchar_view(file)));
                 free(file);
             }
             if (!ins.empty() || synced) break;
         }
         mctl_.toggle_visibility(true); // show the progress bar
+        local_string_t *webpath
+                = make_string(base, get_imm_view(DEF_DSEP DEF_FLDR));
         try_get_from_github(mctl_, "DPE", "RoosterDragon", "Desktop-Ponies",
-                "master", "Content", concat_path({base, DEF_FLDR}).c_str());
+                "master", "Content", get_view(webpath).str);
     }
     for (auto &i : ins) {
         // construct the behaviour ID descriptors and extract categories
-        auto ib = bhv_id_map.emplace(to_string(to_view(i.name), 'L'),
+        auto ib = bhv_id_map.emplace(str_hash(i.name, 'L'),
                                      library_t::build_bhv_id_desc(i));
         assert_and_discard(ib.second, ib); // make sure the library is unique
         conf_t::categories_t all_categories;
         for (auto &c : i.categories) {
-            if (auto ic = find_in_map(ctg_map, c)) {
+            auto ctg_hash = str_hash(c, 'L');
+            if (auto ic = find_in_map(ctg_map, ctg_hash)) {
                 all_categories.add(*ic);
             } else {
                 all_categories.add(last_category);
-                ctg_map[c] = last_category++;
-                mctl_.add_category(c);
+                ctg_map[ctg_hash] = last_category++;
+                mctl_.add_category(get_view(c));
             }
         }
-        ctg.emplace_back(str_hash(to_view(i.name), 'L'),
-                         std::move(all_categories));
+        ctg.emplace_back(str_hash(i.name, 'L'), std::move(all_categories));
     }
     for (auto &i : ins) {
         // initialize the libraries
-        printf("%s\n", i.name.c_str());
-        const lib_id_t hash = str_hash(to_view(i.name), 'L');
+        printf("%s\n", get_view(i.name).str);
+        const lib_id_t hash = str_hash(i.name, 'L');
+        local_string_t *full
+                = make_string(get_view(path), ILV_DSEP, get_view(i.name));
         libs_.emplace(hash, std::make_unique<library_t>(
-                    hash, concat_path({path, i.name}), i, bhv_id_map));
+                    hash, get_view(full), i, bhv_id_map));
         // process follow targets (nothing to do beside report missing ones)
         for (auto &b : i.behaviours)
-            if (!b.follow_target.empty())
-                if (!find_in_map(bhv_id_map, b.follow_target))
+            if (get_view(b.follow_target).size)
+                if (!find_in_map(bhv_id_map, str_hash(b.follow_target, 'L')))
                     printf("[%s] WARNING, invalid follow target name in '%s'\n",
-                            i.name.c_str(), b.name.c_str());
+                            get_view(i.name).str, get_view(b.name).str);
     }
 
     // order the libraries by name
     using ctg_val_t = decltype(ctg)::value_type;
     auto names = [&](ctg_val_t &a, ctg_val_t &b) {
-        auto lib_a = find_in_map(libs_, a.first);
-        auto lib_b = find_in_map(libs_, b.first);
-        return (*lib_a)->name() < (*lib_b)->name();
+        auto lib_a = (*find_in_map(libs_, a.first))->name();
+        auto lib_b = (*find_in_map(libs_, b.first))->name();
+        return strncmp(lib_a.str, lib_b.str,
+                (lib_a.size > lib_b.size) ? lib_a.size : lib_b.size) < 0;
     };
     std::sort(ctg.begin(), ctg.end(), names);
 

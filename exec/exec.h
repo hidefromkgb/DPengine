@@ -8,13 +8,17 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <unistd.h>
 
 #include "engine.h"
 
 #ifdef __cplusplus
 extern "C" {
+#else
+    #if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 202311L)
+    #define auto __auto_type
+    #define nullptr NULL
+    #endif
 #endif
 
 /** default config directory    **/ #define DEF_OPTS "/DesktopPonies"

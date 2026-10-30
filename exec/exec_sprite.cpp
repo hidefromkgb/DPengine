@@ -373,7 +373,7 @@ bool sprite_t::update_speech(uint32_t *seed, int64_t time, uint64_t chance) {
     return true;
 }
 
-const std::string &sprite_t::name() const {
+string_view_t sprite_t::name() const {
     assert(!get_flag(effect));
     return lib_->name();
 }

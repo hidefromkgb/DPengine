@@ -12,14 +12,15 @@ class sprite_bank_t;
 // engine data (client side)
 class engine_t : public no_copy_t {
 private:
-    static const std::unordered_map<std::string, conf_t::flags_t> all_flags;
+    static const std::unordered_map<
+        size_t, std::pair<string_view_t, conf_t::flags_t>> all_flags;
 
     ENGD *engd_; // rendering engine data
     uint32_t *seed_; // random number generator seed
-    std::string cfnm_; // main configuration file path
+    string_t *cfnm_; // main configuration file path
     conf_t cdef_; // default configuration
     conf_t cini_; // initial configuration read at the start
-    uint32_t runs_; // current run count between updates
+    uint16_t runs_; // current run count between updates
     float tacc_; // partial timestamp accumulator
     conf_t ccur_; // current configuration
     main_window_t mctl_; // main window
@@ -37,7 +38,7 @@ private:
 
     void save_ini_conf() const;
 
-    static conf_t load_ini_conf(const conf_t &def, const std::string &cfnm);
+    static conf_t load_ini_conf(const conf_t &def, string_view_t cfnm);
 
     static int16_t fixup_min(conf_t::spin_t &spin, const conf_t::spin_t &def) {
         auto retn = spin.min();
@@ -45,7 +46,7 @@ private:
         return retn;
     }
 
-    void build_library_structure(const std::string &base);
+    void build_library_structure(string_view_t base);
 
     bool load_selection(const selection_t &sel, bool show_progress);
 

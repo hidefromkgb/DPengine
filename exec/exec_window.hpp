@@ -47,7 +47,7 @@ protected:
         return *root;
     }
 
-    void set_control_text(const std::string &str, size_t ctl);
+    void set_control_text(string_view_t str, size_t ctl);
 };
 
 class conf_window_t : public window_t {
@@ -100,17 +100,17 @@ protected:
         return old_empty - !spin->get();
     }
 
-    const std::string *get_text_stock(int32_t idx) const {
+    string_view_t get_text_stock(size_t idx) const {
         if (auto in = find_in_map(conf_.lang_map, idx)) {
-            return in;
+            return get_view(*in);
         } else if (auto id = find_in_map(def_conf_.lang_map, idx)) {
-            return id;
+            return get_view(*id);
         }
-        return nullptr;
+        return string_view_t{};
     }
 
-    void set_control_text_stock(int32_t idx, size_t ctl) {
-        set_control_text(*get_text_stock(idx), ctl);
+    void set_control_text_stock(size_t idx, size_t ctl) {
+        set_control_text(get_text_stock(idx), ctl);
     }
 
     void relocalize() {
@@ -142,7 +142,7 @@ private:
         //  eligible && !visible: matches selection, not visible: need to show
         //  eligible &&  visible: matches selection, visible
         enum flags_t : uint32_t { GEN_FLAGS(finalized, eligible, visible) };
-        std::string name_; // padded name
+        string_t *name_; // padded name
         int32_t name_len_;
         int32_t name_iter_;
         int64_t name_time_;
@@ -169,12 +169,13 @@ private:
             if (!name_len_ || (time <= name_time_ + FRM_TEXT))
                 return (string_view_t){};
             name_time_ = time + FRM_TEXT;
-            const auto true_len = name_.size() - name_len_ * 2;
-            name_[true_len + name_len_ + ABS(name_iter_)] = ' ';
+            auto n_view = get_view(name_);
+            const auto true_len = n_view.size - name_len_ * 2;
+            ((char*)n_view.str)[true_len + name_len_ + ABS(name_iter_)] = ' ';
             if (++name_iter_ >= name_len_) name_iter_ = -name_iter_;
-            name_[true_len + name_len_ + ABS(name_iter_)] = 0;
+            ((char*)n_view.str)[true_len + name_len_ + ABS(name_iter_)] = 0;
             return (string_view_t){true_len + name_len_,
-                                   name_.data() + ABS(name_iter_)};
+                                   n_view.str + ABS(name_iter_)};
             #undef ABS
         }
         void toggle_visibility(bool visible) {
@@ -182,17 +183,23 @@ private:
             if (charname_.fe2c) RUN_FE2C(charname_, MSG__SHW, visible);
             if (spinner_.fe2c) RUN_FE2C(spinner_, MSG__SHW, visible);
         }
+        static string_t *get_preview_name(int32_t idx, string_view_t name) {
+            char temp[16];
+            string_view_t t_view{(size_t)sprintf(temp, "%d", idx + 1), temp};
+            return make_string(t_view, get_imm_view(". "), name);
+        }
 
     public:
         ~preview_t() {
+            free_string(name_);
             if (imagebox_.fe2c) rFreeControl(&imagebox_);
             if (charname_.fe2c) rFreeControl(&charname_);
             if (spinner_.fe2c) rFreeControl(&spinner_);
         }
         preview_t(CTRL *p, int32_t idx, T4IV size, FCTL fc2e,
                 conf_t::categories_t categories, ENGD *engd, const unit_t &unit,
-                const std::string &name, library_t &lib)
-        : name_(std::to_string(idx + 1) + ". " + name)
+                string_view_t name, library_t &lib)
+        : name_(get_preview_name(idx, name))
         , name_len_(0)
         , name_iter_(0)
         , name_time_(0)
@@ -237,7 +244,8 @@ private:
                 if (!imagebox_.fe2c) rMakeControl(&imagebox_, nullptr, nullptr);
                 if (!charname_.fe2c) {
                     rMakeControl(&charname_, nullptr, nullptr);
-                    RUN_FE2C(charname_, MSG__TXT, intptr_t(name_.c_str()));
+                    RUN_FE2C(charname_, MSG__TXT,
+                             intptr_t(get_view(name_).str));
                 }
                 if (!spinner_.fe2c) {
                     rMakeControl(&spinner_, nullptr, nullptr);
@@ -282,7 +290,7 @@ private:
     std::vector<std::unique_ptr<preview_t>> previews_;
     menu_t global_menu_;
     menu_t local_menu_;
-    std::string local_menu_title_;
+    string_t *local_menu_title_ = nullptr;
 
     static void global_menu_handler(MENU *item);
     std::vector<MENU> get_global_template();
@@ -302,9 +310,11 @@ private:
     }
 
     void set_progress(int32_t text, uint32_t frac, uint32_t full) {
-        std::string line = *get_text_stock(text) + " " + std::to_string(frac);
-        if (full) line += " / " + std::to_string(full);
-        set_control_text(line, MCT_SELE);
+        char temp[24];
+        size_t size = (full) ? sprintf(temp, " %u / %u", frac, full)
+                             : sprintf(temp, " %u", frac);
+        local_string_t *line = make_string(get_text_stock(text), {size, temp});
+        set_control_text(get_view(line), MCT_SELE);
         RUN_FE2C(get(MCT_SELE), MSG_PLIM, (full) ? full : 100);
         RUN_FE2C(get(MCT_SELE), MSG_PPOS, (full) ? frac : 0);
     }
@@ -312,14 +322,17 @@ private:
     void relocalize();
 
 public:
+    ~main_window_t() {
+        free_string(local_menu_title_);
+    }
     main_window_t(ENGD *engd, engine_t &engc, conf_t &conf,
             const conf_t &ini_conf, const conf_t &def_conf)
     : conf_window_t(get_template(engc, conf), conf, ini_conf, def_conf)
     , engd_(engd)
     , engc_(&engc) {}
 
-    void add_category(const std::string &name) {
-        RUN_FE2C(get(MCT_OGRP), MSG_LADD, (intptr_t)name.c_str());
+    void add_category(string_view_t name) {
+        RUN_FE2C(get(MCT_OGRP), MSG_LADD, (intptr_t)name.str);
     }
 
     // see speech_t::text_fn_t
@@ -351,15 +364,14 @@ public:
     void set_progress_update(uint32_t frac, uint32_t full);
 
     bool confirm_update() const;
-    void report_update_failure(const char *dir) const; // DIR: not created
+    void report_update_failure(string_view_t dir) const; // DIR: not created
 
     selection_t collect_selection(uint32_t *seed) const;
 
     static void update_previews(intptr_t data, uint64_t time);
 
-    void init_preview(const unit_t &preview,
-            conf_t::categories_t categories, const std::string &name,
-            library_t &lib);
+    void init_preview(const unit_t &preview, conf_t::categories_t categories,
+            string_view_t name, library_t &lib);
 
     void categorize_previews();
     void finalize_previews();
@@ -369,8 +381,7 @@ public:
 
     void sync_menu_flags(uint32_t flgs);
     // PLAYER: the one controlling the character, 0 if none
-    void open_local_menu(
-            const std::string &name, bool asleep, uint32_t player);
+    void open_local_menu(string_view_t name, bool asleep, uint32_t player);
 
     void main_loop(uint32_t fram) {
         rInternalMainLoop(&get_root(), fram, update_previews, intptr_t(this));
@@ -393,7 +404,7 @@ private:
 
     static void try_update_checkbox(CTRL &c, int flag = -1);
 
-    void maybe_set_control_text(const std::string &path, size_t ctl);
+    void maybe_set_control_text(string_view_t path, size_t ctl);
 
     void relocalize() {
         conf_window_t::relocalize();
@@ -401,8 +412,8 @@ private:
             try_update_checkbox(get(i));
             try_update_spinner(get(i));
         }
-        maybe_set_control_text(conf_.lang, OCT_LGUI);
-        maybe_set_control_text(conf_.base, OCT_BDIR);
+        maybe_set_control_text(get_view(conf_.lang), OCT_LGUI);
+        maybe_set_control_text(get_view(conf_.base), OCT_BDIR);
     }
 
 public:

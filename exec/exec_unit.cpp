@@ -23,16 +23,17 @@ bool unit_t::maybe_discard(bool left) {
     return true;
 }
 
-bool unit_t::prepare_source(bool left, const std::string &name) {
+bool unit_t::prepare_source(bool left, string_view_t name) {
     if (!maybe_discard(left)) return false;
     set_flag(left, true, prepare);
     set_flag(left, true, from_path);
-    auto data = (char*)allocate(left, name.size() + 1);
-    strncpy(data, name.c_str(), name.size() + 1);
+    auto data = (char*)allocate(left, name.size + 1);
+    strncpy(data, name.str, name.size);
+    data[name.size] = 0;
     return true;
 }
 
-bool unit_t::prepare_source(bool left, const std::string &name, uint32_t xdim,
+bool unit_t::prepare_source(bool left, string_view_t name, uint32_t xdim,
         uint32_t ydim, const std::function<void(uint32_t*)> &draw) {
     // the layout is as follows:
     //     0: AINF
@@ -42,7 +43,7 @@ bool unit_t::prepare_source(bool left, const std::string &name, uint32_t xdim,
     if (!maybe_discard(left)) return false;
     set_flag(left, true, prepare);
     set_flag(left, false, from_path);
-    auto anim = (AINF*)allocate(left, sizeof(AINF) + name.size() + 1
+    auto anim = (AINF*)allocate(left, sizeof(AINF) + name.size + 1
                                     + sizeof(uint32_t) * (xdim * ydim + 1));
     anim->uuid = (intptr_t)(anim + 1);
     anim->time = ((uint32_t*)anim->uuid) + xdim * ydim;
@@ -50,7 +51,8 @@ bool unit_t::prepare_source(bool left, const std::string &name, uint32_t xdim,
     anim->ydim = ydim;
     anim->fcnt = 1;
     anim->time[0] = 0; // single frame only for this image type
-    strncpy((char*)(anim->time + 1), name.c_str(), name.size() + 1);
+    strncpy((char*)(anim->time + 1), name.str, name.size);
+    ((char*)(anim->time + 1))[name.size] = 0;
     draw((uint32_t*)anim->uuid); // drawing something in the buffer
     return true;
 }

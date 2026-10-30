@@ -203,13 +203,13 @@ CTRL &window_t::get(int32_t ctl) {
     return controls_[ctl];
 }
 
-void window_t::set_control_text(const std::string &str, size_t ctl) {
+void window_t::set_control_text(string_view_t str, size_t ctl) {
     assert(ctl < size());
     const auto type = get_type(get(ctl));
     if ((type == FCT_WNDW) || (type == FCT_LIST) || (type == FCT_PBAR)
     ||  (type == FCT_BUTN) || (type == FCT_CBOX)
     || ((type == FCT_TEXT) && !(get(ctl).flgs & FST_SUNK)))
-        RUN_FE2C(get(ctl), MSG__TXT, intptr_t(str.c_str()));
+        RUN_FE2C(get(ctl), MSG__TXT, intptr_t(str.str));
 }
 
 void main_window_t::relocalize() {
@@ -277,9 +277,8 @@ void options_window_t::try_update_checkbox(CTRL &c, int flag) {
     }
 }
 
-void options_window_t::maybe_set_control_text(
-        const std::string &path, size_t ctl) {
-    if (!path.empty()) {
+void options_window_t::maybe_set_control_text(string_view_t path, size_t ctl) {
+    if (path.size) {
         set_control_text(path, ctl);
     } else {
         set_control_text_stock(TXT_DFLT, ctl);
@@ -305,33 +304,58 @@ intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
             auto w = (options_window_t*)ctrl->data;
             switch (ctrl - &w->get_root()) {
                 case OCT_BCHO: {
-                    auto path = (!w->conf_.base.empty()) ? w->conf_.base
-                                                         : std::string();
-                    auto base = rChooseDir(ctrl, path.c_str());
+                    auto path = (get_view(w->conf_.base).size)
+                              ? w->conf_.base : nullptr;
+                    auto base = rChooseDir(ctrl, get_view(path).str);
                     if (!base) return 0;
-                    w->conf_.base = base;
+                    free_string(w->conf_.base);
+                    w->conf_.base = make_string(get_pchar_view(base));
                     free(base);
                     // TODO: add some checks to verify that the new dir is ok?
                     break;
                 }
                 case OCT_LCHO: {
-                    auto path = (!w->conf_.lang.empty()) ? w->conf_.lang
-                                                         : std::string();
-                    auto lang = rChooseFile(ctrl, "lang", path.c_str());
+                    auto path = (get_view(w->conf_.lang).size)
+                              ? w->conf_.lang : nullptr;
+                    auto lang = rChooseFile(ctrl, "lang", get_view(path).str);
                     if (!lang) return 0;
-                    w->conf_.lang = lang;
+                    free_string(w->conf_.lang);
+                    w->conf_.lang = make_string(get_pchar_view(lang));
                     free(lang);
-                    w->conf_.lang_map = conf_t::get_lang_map(w->conf_.lang);
+                    conf_t::free_lang_map(&w->conf_.lang_map);
+                    w->conf_.lang_map
+                            = conf_t::get_lang_map(get_view(w->conf_.lang));
                     break;
                 }
-                case OCT_BREL: w->conf_.base = w->ini_conf_.base; break;
-                case OCT_BRES: w->conf_.base = w->def_conf_.base; break;
-                case OCT_LREL: w->conf_.lang_map = w->ini_conf_.lang_map;
-                               w->conf_.lang = w->ini_conf_.lang; break;
-                case OCT_LRES: w->conf_.lang_map = w->def_conf_.lang_map;
-                               w->conf_.lang = w->def_conf_.lang; break;
-                case OCT_FREL: w->conf_ = w->ini_conf_; break;
-                case OCT_FRES: w->conf_ = w->def_conf_; break;
+                case OCT_BREL:
+                case OCT_BRES: {
+                    auto &from = (ctrl - &w->get_root() == OCT_BREL)
+                               ? w->ini_conf_ : w->def_conf_;
+                    free_string(w->conf_.base);
+                    w->conf_.base = make_string(get_view(from.base));
+                    break;
+                }
+                case OCT_LREL:
+                case OCT_LRES: {
+                    auto &from = (ctrl - &w->get_root() == OCT_LREL)
+                               ? w->ini_conf_ : w->def_conf_;
+                    free_string(w->conf_.lang);
+                    w->conf_.lang = make_string(get_view(from.lang));
+                    conf_t::free_lang_map(&w->conf_.lang_map);
+                    for (auto &item : from.lang_map)
+                        w->conf_.lang_map[item.first]
+                                = make_string(get_view(item.second));
+                    break;
+                }
+                case OCT_FREL:
+                case OCT_FRES:
+                    free_string(w->conf_.base);
+                    free_string(w->conf_.lang);
+                    conf_t::free_lang_map(&w->conf_.lang_map);
+                    w->conf_ = (ctrl - &w->get_root() == OCT_FREL)
+                             ? w->ini_conf_ : w->def_conf_;
+                    conf_t::dup_strings(&w->conf_);
+                    break;
                 default: assert(false); break; // no buttons except those above
             }
             w->relocalize();
@@ -468,8 +492,7 @@ intptr_t main_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
 }
 
 void main_window_t::init_preview(const unit_t &preview,
-        conf_t::categories_t categories, const std::string &name,
-        library_t &lib) {
+        conf_t::categories_t categories, string_view_t name, library_t &lib) {
     previews_.emplace_back(std::make_unique<preview_t>(&get(MCT_CHAR),
                 previews_.size(), get_min_preview_size(), FC2EI,
                 std::move(categories), engd_, preview, name, lib));
@@ -551,7 +574,7 @@ void main_window_t::preview_t::finalize(float inv_space_width) {
     size_.y = std::max(size_.y, dims.y);
 
     constexpr int leeway = 6;
-    auto name_size = get_string_dims(get_root(charname_), to_view(name_));
+    auto name_size = get_string_dims(get_root(charname_), get_view(name_));
     if (name_size.x + leeway > size_.x) { // consider scrolling
         auto maybe_name_len
                   = std::ceil(inv_space_width * (name_size.x - size_.x));
@@ -559,8 +582,12 @@ void main_window_t::preview_t::finalize(float inv_space_width) {
             size_.x = name_size.x + leeway;
         } else {
             name_len_ = maybe_name_len + 1;
-            std::string padding(name_len_, ' ');
-            name_ = padding + name_ + padding;
+            auto padding = (char*)realloc(nullptr, name_len_); // not ASCIIZ!
+            for (int32_t i = 0; i < name_len_; padding[i++] = ' ') {}
+            string_view_t p_view{(size_t)name_len_, padding};
+            local_string_t *temp = make_string(p_view, get_view(name_), p_view);
+            std::swap(name_, temp);
+            free(padding);
         }
     }
     imagebox_.xdim = -size_.x;
@@ -599,16 +626,18 @@ void main_window_t::set_progress_update(uint32_t frac, uint32_t full) {
 }
 
 bool main_window_t::confirm_update() const {
-    return rMessage(get_text_stock(TXT_CTUP)->data(),
-            get_text_stock(TXT_CCUP)->data(),
-            get_text_stock(TXT_BYES)->data(), get_text_stock(TXT_BNAY)->data());
+    return rMessage(get_text_stock(TXT_CTUP).str,
+            get_text_stock(TXT_CCUP).str,
+            get_text_stock(TXT_BYES).str, get_text_stock(TXT_BNAY).str);
 }
 
-void main_window_t::report_update_failure(const char *dir) const {
-    auto text = *get_text_stock((dir) ? TXT_FDIR : TXT_INET);
-    if (dir) text += std::string(" \"") + dir + "\"";
-    rMessage(text.c_str(), get_text_stock(TXT_CCUP)->data(),
-            get_text_stock(TXT_BYES)->data(), nullptr);
+void main_window_t::report_update_failure(string_view_t dir) const {
+    local_string_t *msg
+            = make_string(get_text_stock((dir.size) ? TXT_FDIR : TXT_INET));
+    if (dir.size)
+        msg = append_string(msg, get_imm_view(" \""), dir, get_imm_view("\""));
+    rMessage(get_view(msg).str, get_text_stock(TXT_CCUP).str,
+            get_text_stock(TXT_BYES).str, nullptr);
 }
 
 intptr_t main_window_t::prepare_tray_icon(T2IV tray) {
@@ -627,7 +656,7 @@ intptr_t main_window_t::prepare_tray_icon(T2IV tray) {
     for (size_t iter = icon.xdim * icon.ydim; iter; icon.time[--iter] = 0);
     cEngineCallback(engd_, ECB_DRAW, (intptr_t)&icon);
     auto retn = rMakeTrayIcon(global_menu_.get(),
-            get_text_stock(TXT_HEAD)->data(), icon.time, icon.xdim, icon.ydim);
+            get_text_stock(TXT_HEAD).str, icon.time, icon.xdim, icon.ydim);
     free(icon.time);
     toggle_visibility(false);
     return retn;
@@ -656,8 +685,8 @@ void main_window_t::sync_menu_flags(uint32_t flgs) {
         // engine could not do what was asked; the only such case is the GPU
         if (!(flgs & flag) && (item->flgs & MFL_VCHK)
         &&  (flag == (uint32_t)COM_RGPU))
-            rMessage(get_text_stock(TXT_CIGL)->data(), nullptr,
-                    get_text_stock(TXT_BYES)->data(), nullptr);
+            rMessage(get_text_stock(TXT_CIGL).str, nullptr,
+                    get_text_stock(TXT_BYES).str, nullptr);
         item->flgs = (flgs & flag) ? (item->flgs | MFL_VCHK)
                                    : (item->flgs & ~MFL_VCHK);
     }
@@ -722,19 +751,19 @@ void main_window_t::global_menu_handler(MENU *item) {
 
 std::vector<MENU> main_window_t::get_global_template() {
     return std::vector<MENU>{
-        {.text = get_text_stock(TXT_HEAD)->data(), .flgs = MFL_GRAY},
+        {.text = get_text_stock(TXT_HEAD).str, .flgs = MFL_GRAY},
         {.text = ""},
-        {.text = get_text_stock(TXT_SPEC)->data()},
-        {.text = get_text_stock(TXT_RGPU)->data(), .data = (intptr_t)engd_,
+        {.text = get_text_stock(TXT_SPEC).str},
+        {.text = get_text_stock(TXT_RGPU).str, .data = (intptr_t)engd_,
          .flgs = MFL_CCHK, .uuid = TXT_RGPU, .func = global_menu_handler},
-        {.text = get_text_stock(TXT_OPAQ)->data(), .data = (intptr_t)engd_,
+        {.text = get_text_stock(TXT_OPAQ).str, .data = (intptr_t)engd_,
          .flgs = MFL_CCHK, .uuid = TXT_OPAQ, .func = global_menu_handler},
-        {.text = get_text_stock(TXT_DRAW)->data(), .data = (intptr_t)engd_,
+        {.text = get_text_stock(TXT_DRAW).str, .data = (intptr_t)engd_,
          .flgs = MFL_CCHK, .uuid = TXT_DRAW, .func = global_menu_handler},
-        {.text = get_text_stock(TXT_SHOW)->data(), .data = (intptr_t)engd_,
+        {.text = get_text_stock(TXT_SHOW).str, .data = (intptr_t)engd_,
          .flgs = MFL_CCHK, .uuid = TXT_SHOW, .func = global_menu_handler},
         {.text = ""},
-        {.text = get_text_stock(TXT_EXIT)->data(), .data = (intptr_t)engd_,
+        {.text = get_text_stock(TXT_EXIT).str, .data = (intptr_t)engd_,
                            .uuid = TXT_EXIT, .func = global_menu_handler}
     };
 }
@@ -744,33 +773,35 @@ std::vector<MENU> main_window_t::get_local_template() {
     return std::vector<MENU>{
         {.text = "", .flgs = MFL_GRAY}, // the title, see open_local_menu()
         {.text = ""},
-        {.text = get_text_stock(TXT_CDEL)->data(), .data = (intptr_t)engc_,
+        {.text = get_text_stock(TXT_CDEL).str, .data = (intptr_t)engc_,
                            .uuid = TXT_CDEL, .func = e::remove_one_handler},
-        {.text = get_text_stock(TXT_ADEL)->data(), .data = (intptr_t)engc_,
+        {.text = get_text_stock(TXT_ADEL).str, .data = (intptr_t)engc_,
                            .uuid = TXT_ADEL, .func = e::remove_all_handler},
         {.text = ""},
-        {.text = get_text_stock(TXT_CSLP)->data(), .data = (intptr_t)engc_,
+        {.text = get_text_stock(TXT_CSLP).str, .data = (intptr_t)engc_,
          .flgs = MFL_CCHK, .uuid = TXT_CSLP, .func = e::sleep_one_handler},
-        {.text = get_text_stock(TXT_ASLP)->data(), .data = (intptr_t)engc_,
+        {.text = get_text_stock(TXT_ASLP).str, .data = (intptr_t)engc_,
                            .uuid = TXT_ASLP, .func = e::sleep_all_handler},
         {.text = ""},
-        {.text = get_text_stock(TXT_TPL1)->data(), .data = (intptr_t)engc_,
+        {.text = get_text_stock(TXT_TPL1).str, .data = (intptr_t)engc_,
          .flgs = MFL_CCHK, .uuid = TXT_TPL1, .func = e::control_p1_handler},
-        {.text = get_text_stock(TXT_TPL2)->data(), .data = (intptr_t)engc_,
+        {.text = get_text_stock(TXT_TPL2).str, .data = (intptr_t)engc_,
          .flgs = MFL_CCHK, .uuid = TXT_TPL2, .func = e::control_p2_handler},
         {.text = ""},
-        {.text = get_text_stock(TXT_OPTS)->data(), .data = (intptr_t)engc_,
+        {.text = get_text_stock(TXT_OPTS).str, .data = (intptr_t)engc_,
                            .uuid = TXT_OPTS, .func = e::options_handler},
-        {.text = get_text_stock(TXT_EXIT)->data(), .data = (intptr_t)engd_,
+        {.text = get_text_stock(TXT_EXIT).str, .data = (intptr_t)engd_,
                            .uuid = TXT_EXIT, .func = global_menu_handler}
     };
 }
 
 void main_window_t::open_local_menu(
-        const std::string &name, bool asleep, uint32_t player) {
-    local_menu_title_ = "[ " + name + " ]";
+        string_view_t name, bool asleep, uint32_t player) {
+    free_string(local_menu_title_);
+    local_menu_title_
+            = make_string(get_imm_view("[ "), name, get_imm_view(" ]"));
     auto menu = local_menu_.get();
-    menu[0].text = local_menu_title_.c_str();
+    menu[0].text = get_view(local_menu_title_).str;
     for (auto item = menu; item->text; item++) {
         bool check;
         switch (item->uuid) {

@@ -1,12 +1,11 @@
 #include <assert.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "exec_string.h"
 
-#if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 202311L)
-#define auto __auto_type
-#define nullptr NULL
-#endif
+
 
 struct tokenizer_t { string_view_t token, remainder; };
 const size_t tokenizer_t_size = sizeof(tokenizer_t);
@@ -96,4 +95,76 @@ bool next_line(tokenizer_t *t) {
     if (t->token.size && (t->token.str[t->token.size - 1] == DEF_LFCR))
         t->token.size--;
     return !is_empty(t);
+}
+
+size_t str_view_hash(string_view_t str, char mode) {
+    size_t retn = (str.size) ? CHR_HASH_BIAS : 0uLL;
+    switch (mode) {
+        default:
+            assert(false); // unknown character transformation mode
+        case 'N': // no transformation
+            for (size_t i = 0; i < str.size; i++)
+                retn = CHR_HASH_O1() retn CHR_HASH_CN1(str.str[i]);
+            return retn;
+        case 'L': // ASCII to lowercase
+            for (size_t i = 0; i < str.size; i++)
+                retn = CHR_HASH_O1() retn CHR_HASH_CL1(str.str[i]);
+            return retn;
+        case 'U': // ASCII to uppercase
+            for (size_t i = 0; i < str.size; i++)
+                retn = CHR_HASH_O1() retn CHR_HASH_CU1(str.str[i]);
+            return retn;
+    }
+}
+
+size_t str_hash(const string_t *str, char mode) {
+    return str_view_hash(get_view(str), mode);
+}
+
+void ascii_to_lower(string_view_t str) {
+    for (size_t i = 0; i < str.size; i++)
+        ((char*)str.str)[i] = CHR_HASH_CL(str.str[i]);
+}
+
+void ascii_to_upper(string_view_t str) {
+    for (size_t i = 0; i < str.size; i++)
+        ((char*)str.str)[i] = CHR_HASH_CU(str.str[i]);
+}
+
+
+
+#define string_t_ag_p2 3 /* alloc granularity as a power of 2: (1 << 3) = 8 */
+#define string_t_size(s) ((((s) >> string_t_ag_p2) + 1) << string_t_ag_p2)
+
+string_view_t get_view(const string_t *str) {
+    return (str) ? (string_view_t){((const size_t*)str)[-1], (const char*)str}
+                 : (string_view_t){};
+}
+
+void free_string_internal_(string_t *const *str) {
+    if (str && *str) free((void*)((size_t*)*str - 1));
+}
+void free_string(const string_t *str) {
+    free_string_internal_((string_t *const *)&str);
+}
+
+string_t *append_string_internal_(string_t *head, size_t n,
+                                  const string_view_t *v) {
+    const auto str_v = get_view(head);
+    size_t size = str_v.size;
+    for (size_t i = 0; i < n; i++) size += v[i].size;
+    if (size == str_v.size) return head; // nothing to append
+    char *mem = (head) ? (char*)((size_t*)head - 1) : nullptr;
+    if (!head || (string_t_size(str_v.size) < string_t_size(size)))
+        mem = (char*)realloc((void*)mem, sizeof(size_t) + string_t_size(size));
+    *((size_t*)mem) = size;
+    mem += sizeof(size_t);
+    size = str_v.size;
+    for (size_t i = 0; i < n; i++) { // views into HEAD follow its reallocation
+        const uintptr_t offs = (uintptr_t)v[i].str - (uintptr_t)str_v.str;
+        const char *str = (head && (offs < str_v.size)) ? mem + offs : v[i].str;
+        for (size_t j = 0; j < v[i].size; j++) mem[size++] = str[j];
+    }
+    mem[size] = 0;
+    return (string_t*)mem;
 }
