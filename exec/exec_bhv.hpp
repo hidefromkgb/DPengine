@@ -34,13 +34,16 @@ private:
     // placement/centering point pairs to choose from, see gravity()
     const std::vector<gravity_t> gravity_[2];
 
+    static gravity_flags_t process_gravity(
+            tokenizer_t *line, gravity_flags_t def);
+
     static std::vector<gravity_t> init_gravity(
             gravity_flags_t placement, gravity_flags_t centering) {
-        static_assert(((1 <<    top_left) | (1 <<    top) | (1 <<    top_right)
+        STATIC_ASSERT(((1 <<    top_left) | (1 <<    top) | (1 <<    top_right)
                      | (1 << center_left) | (1 << center) | (1 << center_right)
                      | (1 << bottom_left) | (1 << bottom) | (1 << bottom_right))
                      == 0x777);
-        static_assert(((1 <<    top_left) | (1 <<    top) | (1 <<    top_right)
+        STATIC_ASSERT(((1 <<    top_left) | (1 <<    top) | (1 <<    top_right)
                      | (1 << center_left) |                 (1 << center_right)
                      | (1 << bottom_left) | (1 << bottom) | (1 << bottom_right))
                      == 0x757);

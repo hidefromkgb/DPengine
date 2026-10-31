@@ -8,22 +8,29 @@ gravity_t effect_t::select_gravity(bool left, uint32_t *seed) const {
     return random_selection<false>(gravity_[left], seed);
 }
 
+effect_t::gravity_flags_t effect_t::process_gravity(
+        tokenizer_t *line, gravity_flags_t def) {
+    next_token(line, get_remainder(line), 0, DEF_TSEP, DEF_QUOT);
+    auto t = get_token(line);
+    if (!t.size) return def;
+    switch (CHR_HASH_CL(t.str[0])) {
+        default: return def; // v--- [a]ny / [a]ny-not_center
+        case 'a': return (t.size < 4) ? any : not_center;
+        case 'b': if (t.size < 7) return bottom; // [b]ottom
+            // [b]ottom_[l]eft / [b]ottom_right
+            return (t.size > 7) ? (CHR_HASH_CL(t.str[7]) == 'l')
+                                ? bottom_left : bottom_right : def;
+        case 'c': return center;       // [c]enter
+        case 'l': return center_left;  // [l]eft
+        case 'r': return center_right; // [r]ight
+        case 't': if (t.size < 4) return top; // [t]op
+            // [t]op_[l]eft / [t]op_right
+            return (t.size > 4) ? (CHR_HASH_CL(t.str[4]) == 'l')
+                                ? top_left : top_right : def;
+    }
+}
+
 effect_t::input_t::input_t(string_view_t str) {
-    static const std::unordered_map<size_t, gravity_flags_t> p = {
-        {CHR_HASH(L, 'a','n','y'),                                         any},
-        {CHR_HASH(L, 't','o','p','_','l','e','f','t'),                top_left},
-        {CHR_HASH(L, 't','o','p'),                                         top},
-        {CHR_HASH(L, 't','o','p','_','r','i','g','h','t'),           top_right},
-        {CHR_HASH(L, 'l','e','f','t'),                             center_left},
-        {CHR_HASH(L, 'c','e','n','t','e','r'),                          center},
-        {CHR_HASH(L, 'r','i','g','h','t'),                        center_right},
-        {CHR_HASH(L, 'b','o','t','t','o','m','_','l','e','f','t'), bottom_left},
-        {CHR_HASH(L, 'b','o','t','t','o','m'),                          bottom},
-        {CHR_HASH(L, 'b','o','t','t','o','m','_',
-                     'r','i','g','h','t'),                        bottom_right},
-        {CHR_HASH(L, 'a','n','y','-','n','o','t','_',
-                     'c','e','n','t','e','r'),                      not_center},
-    };
     auto line = local_make_tokenizer(str);
     name = process_string(line);
     bhv = process_string(line);
@@ -31,10 +38,10 @@ effect_t::input_t::input_t(string_view_t str) {
     left_image = process_string(line);
     duration = process_float(line, duration);
     repeat_delay = process_float(line, repeat_delay);
-    placement_right = process_map(line, p, placement_right);
-    centering_right = process_map(line, p, centering_right);
-    placement_left = process_map(line, p, placement_left);
-    centering_left = process_map(line, p, centering_left);
+    placement_right = process_gravity(line, placement_right);
+    centering_right = process_gravity(line, centering_right);
+    placement_left = process_gravity(line, placement_left);
+    centering_left = process_gravity(line, centering_left);
     follow = process_bool(line, follow);
     prevent_loop = process_bool(line, prevent_loop);
 }
@@ -151,32 +158,39 @@ void speech_t::render(
             prepare_source(left, get_view(source), xdim, ydim, draw);
 }
 
+static movement_flags_t process_movement(
+        tokenizer_t *line, movement_flags_t def) {
+    next_token(line, get_remainder(line), 0, DEF_TSEP, DEF_QUOT);
+    auto t = get_token(line);
+    if (t.size < 2) return def;
+    switch (CHR_HASH_CL(t.str[0])) {
+        default: return def;
+        case 'a': return move_all; // [a]ll
+        case 'd': if (CHR_HASH_CL(t.str[1]) == 'r') return move_drag;
+            if (t.size <= 9) return def; // [d][r]agged ---^
+            switch (CHR_HASH_CL(t.str[9])) {
+                default: return def;
+                case 'h': return move_dh;   // [d]iagonal_[h]orizontal
+                case 'o': return move_diag; // [d]iagonal_[o]nly
+                case 'v': return move_dv;   // [d]iagonal_[v]ertical
+            } // v--- [h]orizontal_[v]ertical / [h]orizontal_[o]nly
+        case 'h': return (t.size > 11) ? (CHR_HASH_CL(t.str[11]) == 'v')
+                                       ? move_hv : move_horz : def;
+        case 'm': return move_mouse; // [m]ouseover
+        case 'n': return move_none;  // [n]one
+        case 's': return move_sleep; // [s]leep
+        case 'v': return move_vert;  // [v]ertical_only
+
+    }
+}
+
+static bool process_mirror_target(tokenizer_t *line, bool def) {
+    next_token(line, get_remainder(line), 0, DEF_TSEP, DEF_QUOT);
+    auto t = get_token(line); // 'false' = 'fixed' = 0; 'true' = 'mirror' = 1
+    return (t.size) ? CHR_HASH_CL(t.str[0]) != 'f' : def;
+}
+
 behaviour_t::input_t::input_t(string_view_t str) {
-    static const std::unordered_map<size_t, movement_flags_t> m = {
-        {CHR_HASH(L, 'h','o','r','i','z','o','n','t','a','l','_',
-                     'v','e','r','t','i','c','a','l'),         move_hv},
-        {CHR_HASH(L, 'd','i','a','g','o','n','a','l','_',
-                     'h','o','r','i','z','o','n','t','a','l'), move_dh},
-        {CHR_HASH(L, 'd','i','a','g','o','n','a','l','_',
-                     'v','e','r','t','i','c','a','l'),         move_dv},
-        {CHR_HASH(L, 'h','o','r','i','z','o','n','t','a','l','_',
-                     'o','n','l','y'),                       move_horz},
-        {CHR_HASH(L, 'v','e','r','t','i','c','a','l','_',
-                     'o','n','l','y'),                       move_vert},
-        {CHR_HASH(L, 'd','i','a','g','o','n','a','l','_',
-                     'o','n','l','y'),                       move_diag},
-        {CHR_HASH(L, 'm','o','u','s','e','o','v','e','r'),  move_mouse},
-        {CHR_HASH(L, 'd','r','a','g','g','e','d'),           move_drag},
-        {CHR_HASH(L, 's','l','e','e','p'),                  move_sleep},
-        {CHR_HASH(L, 'n','o','n','e'),                       move_none},
-        {CHR_HASH(L, 'a','l','l'),                            move_all},
-    };
-    static const std::unordered_map<size_t, bool> f = {
-        {CHR_HASH(L, 'f','a','l','s','e'),    false},
-        {CHR_HASH(L, 't','r','u','e'),         true},
-        {CHR_HASH(L, 'f','i','x','e','d'),    false},
-        {CHR_HASH(L, 'm','i','r','r','o','r'), true},
-    };
     auto line = local_make_tokenizer(str);
     name = process_string(line);
     chance = process_float(line, chance);
@@ -185,7 +199,7 @@ behaviour_t::input_t::input_t(string_view_t str) {
     speed = process_float(line, speed);
     right_image = process_string(line);
     left_image = process_string(line);
-    movement = process_map(line, m, movement);
+    movement = process_movement(line, movement);
     linked_bhv = process_string(line);
     bgn_speech = process_string(line);
     end_speech = process_string(line);
@@ -200,7 +214,7 @@ behaviour_t::input_t::input_t(string_view_t str) {
     left_img_center = process_quoted_int_pair(line, left_img_center);
     prevent_loop = process_bool(line, prevent_loop);
     group = process_float(line, group);
-    mirror_target_xy = process_map(line, f, mirror_target_xy);
+    mirror_target_xy = process_mirror_target(line, mirror_target_xy);
 }
 
 static const T2IV process_duration(float min_d, float max_d) {

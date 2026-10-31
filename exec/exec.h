@@ -20,6 +20,8 @@ extern "C" {
     #define nullptr NULL
     #endif
 #endif
+#define STATIC_ASSERT(cond) \
+        __attribute__((unused)) extern int static_assertion[(cond) ? 1 : -1]
 
 /** default config directory    **/ #define DEF_OPTS "/DesktopPonies"
 /** default core config         **/ #define DEF_CORE "core.conf"

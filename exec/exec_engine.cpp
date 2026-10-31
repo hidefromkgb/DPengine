@@ -35,21 +35,38 @@
 
 
 
-decltype(engine_t::all_flags) engine_t::all_flags = {
-#define CASE(what, ...) \
-        {CHR_HASH(L, __VA_ARGS__), {get_imm_view(#what), conf_t::what}}
-    CASE(interaction,'i','n','t','e','r','a','c','t','i','o','n'),
-    CASE(randomsel,'r','a','n','d','o','m','s','e','l'), CASE(gpu, 'g','p','u'),
-    CASE(cspeech,'c','s','p','e','e','c','h'), CASE(hover,'h','o','v','e','r'),
-    CASE(topmost,'t','o','p','m','o','s','t'), CASE(exact,'e','x','a','c','t'),
-    CASE(wregion,'w','r','e','g','i','o','n'), CASE(wbgra,'w','b','g','r','a'),
-    CASE(filters,'f','i','l','t','e','r','s'), CASE(wpbo,'w','p','b','o'),
-    CASE(effects,'e','f','f','e','c','t','s'), CASE(draw,'d','r','a','w'),
-    CASE(opaque,'o','p','a','q','u','e'), CASE(speech,'s','p','e','e','c','h'),
-    CASE(update,'u','p','d','a','t','e'), CASE(copies,'c','o','p','i','e','s'),
-    CASE(show,'s','h','o','w'),
-#undef CASE
-};
+static conf_t::flags_t process_flg(tokenizer_t *line, conf_t::flags_t def) {
+    STATIC_ASSERT((conf_t::render_mask == 0x0000007F));
+    STATIC_ASSERT((conf_t::general_mask == 0x0003FF80));
+    next_token(line, get_remainder(line), 0, DEF_TSEP, DEF_QUOT);
+    auto t = get_token(line);
+    if (t.size < 2) return def;
+    switch (CHR_HASH_CL(t.str[0])) {
+        default: return def;
+        case 'c': return
+            (CHR_HASH_CL(t.str[1]) == 'o') ? conf_t::copies : conf_t::cspeech;
+        case 'd': return conf_t::draw;
+        case 'e': return
+            (CHR_HASH_CL(t.str[1]) == 'f') ? conf_t::effects : conf_t::exact;
+        case 'f': return conf_t::filters;
+        case 'g': return conf_t::gpu;
+        case 'h': return conf_t::hover;
+        case 'i': return conf_t::interaction;
+        case 'o': return conf_t::opaque;
+        case 'r': return conf_t::randomsel;
+        case 's': return
+            (CHR_HASH_CL(t.str[1]) == 'h') ? conf_t::show : conf_t::speech;
+        case 't': return conf_t::topmost;
+        case 'u': return conf_t::update;
+        case 'w':
+            switch (CHR_HASH_CL(t.str[1])) {
+                default: return def;
+                case 'b': return conf_t::wbgra;
+                case 'p': return conf_t::wpbo;
+                case 'r': return conf_t::wregion;
+            }
+    }
+}
 
 static inline ENGD *init_engd() {
     ENGD *engd = nullptr;
@@ -138,6 +155,17 @@ static string_t *vals_(string_t *str, size_t n, const int32_t *v) {
 }
 
 void engine_t::save_ini_conf() const {
+    #define CASE(what) (struct flag_t){get_imm_view(#what), conf_t::what}
+    struct flag_t { string_view_t name; conf_t::flags_t flag; };
+    static const flag_t all_flags[] = {
+        CASE(interaction), CASE(update), CASE(speech), CASE(hover), CASE(gpu),
+        CASE(randomsel), CASE(topmost), CASE(cspeech), CASE(show), CASE(draw),
+        CASE(filters), CASE(effects), CASE(copies), CASE(opaque), CASE(exact),
+        CASE(wregion), CASE(wbgra), CASE(wpbo),
+    };
+    STATIC_ASSERT((conf_t::render_mask == 0x0000007F));
+    STATIC_ASSERT((conf_t::general_mask == 0x0003FF80));
+    #undef CASE
     #define _(...) get_imm_view(((const char[]){__VA_ARGS__, 0}))
     #define hdrs(retn, name, ...) hdrs_(retn, (string_view_t) name, \
             sizeof((string_view_t[]){__VA_ARGS__}) / sizeof(string_view_t), \
@@ -159,12 +187,11 @@ void engine_t::save_ini_conf() const {
     retn = hdrs(retn, _(CFG_SPEC)); retn = vals(retn, ccur_.spec.get());
     retn = hdrs(retn, _(CFG_RGPU)); retn = vals(retn, ccur_.rgpu.get());
     render = hdrs(render, _(CFG_RNDR)); general = hdrs(general, _(CFG_FLGS));
-    for (auto &f : all_flags) {
-        assert(f.second.second & (conf_t::render_mask | conf_t::general_mask));
-        string_t **target
-                = (f.second.second & conf_t::render_mask) ? &render : &general;
-        if ((ccur_.flgs & f.second.second))
-            *target = hdrs(*target, {}, f.second.first);
+    for (size_t i = 0; i < sizeof(all_flags) / sizeof(*all_flags); i++) {
+        const flag_t *f = &all_flags[i];
+        assert(f->flag & (conf_t::render_mask | conf_t::general_mask));
+        string_t **tgt = (f->flag & conf_t::render_mask) ? &render : &general;
+        if ((ccur_.flgs & f->flag)) *tgt = hdrs(*tgt, {}, f->name);
     }
     retn = append_string(retn, get_view(render), get_view(general));
     const auto retn_view = get_view(retn);
@@ -244,14 +271,12 @@ conf_t engine_t::load_ini_conf(const conf_t &def, string_view_t cfnm) {
                 case CHR_HASH(L, CFG_RNDR):
                     render = {};
                     while (!is_empty(line))
-                        render |= process_map(line, all_flags, {}).second
-                            & conf_t::render_mask;
+                        render |= process_flg(line, {}) & conf_t::render_mask;
                     break;
                 case CHR_HASH(L, CFG_FLGS):
                     general = {};
                     while (!is_empty(line))
-                        general |= process_map(line, all_flags, {}).second
-                            & conf_t::general_mask;
+                        general |= process_flg(line, {}) & conf_t::general_mask;
                     break;
             }
         }

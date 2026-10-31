@@ -107,7 +107,7 @@ std::vector<CTRL> main_window_t::get_template(
     /* ^--- engine_t reference above!!! */ | FSB_DFLT,  1, -6,  9,  6, FC2E},
     CTRL{nullptr, here, TXT_HEAD, FCP_HORZ | FCT_SBOX,  0,  0, 41, 43, FC2E},
     };
-    static_assert(tmpl.size() - 1 == MCT__MAX);
+    STATIC_ASSERT(tmpl.size() - 1 == MCT__MAX);
     return std::vector(tmpl.begin(), tmpl.end());
 }
 
@@ -174,7 +174,7 @@ std::vector<CTRL> options_window_t::get_template(
     CTRL{nullptr, here, TXT_RELO, FCP_VERT | FCT_BUTN, 29,  0, 10,  3, FC2E},
     CTRL{nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
     };
-    static_assert(tmpl.size() - 1 == OCT__MAX);
+    STATIC_ASSERT(tmpl.size() - 1 == OCT__MAX);
     return std::vector(tmpl.begin(), tmpl.end());
 }
 

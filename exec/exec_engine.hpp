@@ -12,9 +12,6 @@ class sprite_bank_t;
 // engine data (client side)
 class engine_t : public no_copy_t {
 private:
-    static const std::unordered_map<
-        size_t, std::pair<string_view_t, conf_t::flags_t>> all_flags;
-
     ENGD *engd_; // rendering engine data
     uint32_t *seed_; // random number generator seed
     string_t *cfnm_; // main configuration file path

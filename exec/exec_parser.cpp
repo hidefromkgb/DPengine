@@ -12,11 +12,9 @@ float to_float(string_view_t line, float def) {
 }
 
 bool process_bool(tokenizer_t *line, bool def, char s, char q) {
-    static const std::unordered_map<size_t, bool> map = {
-        {CHR_HASH(L, 'f','a','l','s','e'), false},
-        {CHR_HASH(L, 't','r','u','e'),     true},
-    };
-    return process_map(line, map, def, s, q);
+    next_token(line, get_remainder(line), 0, s, q);
+    return (get_token(line).size) // [t]rue = 1 / false = 0
+         ? (CHR_HASH_CL(get_token(line).str[0]) == 't') : def;
 }
 
 float process_float(tokenizer_t *line, float def, char s, char q) {

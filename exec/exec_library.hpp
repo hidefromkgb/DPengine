@@ -200,7 +200,11 @@ public:
 
     static bhv_id_desc_t build_bhv_id_desc(const input_t &in);
 
-    ~library_t();
+    ~library_t() {
+        free_string(library_path_);
+        free_string(readable_name_);
+    }
+
     library_t(lib_id_t id, string_view_t path, const input_t &in,
             const bhv_id_map_t &bhv_id_map);
 

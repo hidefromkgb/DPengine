@@ -160,23 +160,28 @@ const behaviour_t &library_t::special_bhv_internal(
             ? random_selection<false>(ig->bhv[type], seed).get() : curr;
 }
 
-interaction_t::input_t::input_t(string_view_t str) {
+static bool process_activation(tokenizer_t *line, bool def) {
+    next_token(line, get_remainder(line), 0, DEF_TSEP, DEF_QUOT);
+    if (get_token(line).size < 2) return def;
     // TODO: is 'any' really equivalent to 'one'? check if there are
     //       relevant interactions where 'any' means '>1'
-    static const std::unordered_map<size_t, bool> activations = {
-        {CHR_HASH(L, 't','r','u','e'), true}, {CHR_HASH(L, 'a','l','l'), true},
-        {CHR_HASH(L, 'o','n','e'), false}, {CHR_HASH(L, 'a','n','y'), false},
-        {CHR_HASH(L, 'r','a','n','d','o','m'), false},
-        {CHR_HASH(L, 'f','a','l','s','e'), false},
-    };
+    switch (CHR_HASH_CL(get_token(line).str[0])) {
+        default: return def;
+        case 't': return true; // [t]rue = 1
+        // [a][l]l = 1, [a]ny = 0
+        case 'a': return (CHR_HASH_CL(get_token(line).str[1]) == 'l');
+        case 'o': case 'r': case 'f': return false;
+    } // ^--- [o]ne = 0 / [r]andom = 0 / [f]alse = 0
+}
+
+interaction_t::input_t::input_t(string_view_t str) {
     auto line = local_make_tokenizer(str);
     name = process_string(line);
     chance = process_float(line, chance);
     proximity = process_float(line, proximity);
     auto tgt_s = process_array(line);
     for (auto t : tgt_s) targets.emplace_back(make_string(t));
-    target_activation_all
-            = process_map(line, activations, target_activation_all);
+    target_activation_all = process_activation(line, target_activation_all);
     auto bhv_s = process_array(line);
     for (auto b : bhv_s) bhv.emplace_back(make_string(b));
     reactivation_delay = process_float(line, reactivation_delay);
@@ -296,18 +301,18 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
         }
         static string_t *ttycolor( // TODO: does WIN32 have something alike?
                 uint32_t fg, uint32_t bg, string_view_t text) {
-            char bstr[16];
-            size_t bsz = sprintf(bstr, "%d;%d;%d",
+            char bg_str[16];
+            size_t bg_size = sprintf(bg_str, "%d;%d;%d",
                     uint8_t(bg >> 16), uint8_t(bg >> 8), uint8_t(bg));
             if (bg == fg) return make_string(get_imm_view("\033[48;2;"),
-                                        {bsz, bstr}, get_imm_view("m"),
+                                        {bg_size, bg_str}, get_imm_view("m"),
                                         text, get_imm_view("\033[0m"));
-            char fstr[16];
-            size_t fsz = sprintf(fstr, "%d;%d;%d",
+            char fg_str[16];
+            size_t fg_size = sprintf(fg_str, "%d;%d;%d",
                     uint8_t(fg >> 16), uint8_t(fg >> 8), uint8_t(fg));
-            return make_string(get_imm_view("\033[48;2;"), {bsz, bstr},
-                        get_imm_view(";38;2;"), {fsz, fstr}, get_imm_view("m"),
-                        text, get_imm_view("\033[0m"));
+            return make_string(get_imm_view("\033[48;2;"), {bg_size, bg_str},
+                        get_imm_view(";38;2;"), {fg_size, fg_str},
+                        get_imm_view("m"), text, get_imm_view("\033[0m"));
         }
     };
     // reading the inputs, freeing temporary data
@@ -348,7 +353,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
         }
         histogram[slot] = {color, 1};
         if (2 * ++used <= mask + 1) continue; // still within half capacity?
-        static_assert(bits > 8);
+        STATIC_ASSERT(bits > 8);
         assert(false); // 256-color palettes can never get to this spot
         break;
     }
@@ -381,7 +386,7 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
     for (size_t i = bgn; i <= end; i++)
         top_clrs[i].value = hsl_t::get_luminance(top_clrs[i].color);
     #define SORT(v, i, j) if (v[i].value > v[j].value) std_swap(v[i], v[j])
-    static_assert(end == 2);
+    STATIC_ASSERT(end == 2);
     SORT(top_clrs, 0, 1);
     SORT(top_clrs, 0, 2);
     SORT(top_clrs, 1, 2);
@@ -432,8 +437,8 @@ void library_t::extract_speech_colors_worker(intptr_t data, uint64_t unused) {
             ? (hdr_view.size - lib->name().size)
             : (clr_view.size + lib->name().size + 1);
     ((char*)hdr_view.str)[hdr_view.size++] = ' '; // over the first cut '#'
-    local_string_t *colored_header = hsl_t::ttycolor(
-            lib->speech_fg_, lib->speech_bg_, hdr_view);
+    local_string_t *colored_header
+            = hsl_t::ttycolor(lib->speech_fg_, lib->speech_bg_, hdr_view);
     // ...then concatenate everything and put it to the screen
     text = append_string(text, get_view(colored_header), get_view(colors));
     printf("%s\n", get_view(text).str);
@@ -660,18 +665,6 @@ void library_t::init_special_behaviours(const build_ctx_t &ctx) {
     }
 }
 
-void library_t::dump_stats() const {
-    printf("Total behaviours: %lu (max effects: %u)\n",
-            behaviours_.size(), max_effects_);
-    for (auto &g : groups_) {
-        printf("[%d] %lu + %lu + %lu + %lu + %lu + %lu + %lu\n", g.first,
-            g.second.bhv[nonzero_prob].size(), g.second.bhv[stationary].size(),
-            g.second.bhv[moving].size(), g.second.bhv[mouseover].size(),
-            g.second.bhv[dragged].size(), g.second.bhv[sleeping].size(),
-            g.second.speeches.size());
-    }
-}
-
 void library_t::init_max_effects() {
     // compute the max number of effects the sprite belonging to their library
     // can spawn: summed as effects may outlive their behaviours
@@ -686,9 +679,19 @@ void library_t::init_max_effects() {
     }
 }
 
-library_t::~library_t() {
-    free_string(library_path_);
-    free_string(readable_name_);
+void library_t::dump_stats() const {
+    auto out = (char*)realloc(nullptr, 64 + name().size + 128 * groups_.size());
+    auto size = sprintf(out, "[%s] Total behaviours: %lu (max effects: %u)",
+            name().str, behaviours_.size(), max_effects_);
+    for (auto &g : groups_)
+        size += sprintf(out + size,
+            "\n[%d] %lu + %lu + %lu + %lu + %lu + %lu + %lu", g.first,
+            g.second.bhv[nonzero_prob].size(), g.second.bhv[stationary].size(),
+            g.second.bhv[moving].size(), g.second.bhv[mouseover].size(),
+            g.second.bhv[dragged].size(), g.second.bhv[sleeping].size(),
+            g.second.speeches.size());
+    printf("%s\n", out); // to keep potential threaded output in one piece
+    free(out);
 }
 
 library_t::library_t(lib_id_t id, string_view_t path, const input_t &in,
