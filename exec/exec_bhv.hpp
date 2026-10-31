@@ -23,12 +23,11 @@ private:
     // a 3x3 grid row by row from the top, each row padded to 4 entries, so
     // that X = ID & 3, Y = ID >> 2 (after an up-correction), see gravity();
     // X = {0, 1, 2}, Y = {0, 1, 2} so it's okay to use them as coefficients
+    // (the padding, X = 3, holds the sets of directions: ANY and NOT_CENTER)
     enum gravity_flags_t : uint8_t {
-           top_left =  0,    top,    top_right,    _top_spacer_gravity,
-        center_left =  4, center, center_right, _center_spacer_gravity,
-        bottom_left =  8, bottom, bottom_right, _bottom_spacer_gravity,
-        any = 12, not_center,
-        _max_gravity = not_center,
+           top_left = 0,    top,    top_right,        any,
+        center_left = 4, center, center_right, not_center,
+        bottom_left = 8, bottom, bottom_right,
     };
     const T2IV duration_; // u = duration, v = repeat_delay
     const bool follow_;
@@ -37,26 +36,25 @@ private:
 
     static std::vector<gravity_t> init_gravity(
             gravity_flags_t placement, gravity_flags_t centering) {
-        using gravity_table_t = std::vector<gravity_flags_t>;
-        static const std::array<gravity_table_t, _max_gravity + 1> gravity = {{
-            {   top_left}, {   top}, {   top_right}, {   _top_spacer_gravity},
-            {center_left}, {center}, {center_right}, {_center_spacer_gravity},
-            {bottom_left}, {bottom}, {bottom_right}, {_bottom_spacer_gravity},
-            {   top_left,      top,      top_right,
-             center_left,   center,   center_right,
-             bottom_left,   bottom,   bottom_right}, // any
-            {   top_left,      top,      top_right,
-             center_left,             center_right,
-             bottom_left,   bottom,   bottom_right}, // not_center
-        }};
-        auto up = [](gravity_flags_t flags) {
-            return uint8_t((8 - (flags & ~3)) | (flags & 3));
-        }; // this precomputes Y = 2 - (ID >> 2) early, making it Y = ID >> 2
+        static_assert(((1 <<    top_left) | (1 <<    top) | (1 <<    top_right)
+                     | (1 << center_left) | (1 << center) | (1 << center_right)
+                     | (1 << bottom_left) | (1 << bottom) | (1 << bottom_right))
+                     == 0x777);
+        static_assert(((1 <<    top_left) | (1 <<    top) | (1 <<    top_right)
+                     | (1 << center_left) |                 (1 << center_right)
+                     | (1 << bottom_left) | (1 << bottom) | (1 << bottom_right))
+                     == 0x757);
+        auto mask = [](gravity_flags_t flg) -> uint16_t {
+            return ((flg & 3) == 3) ? (flg == any) ? 0x777 : 0x757 : (1 << flg);
+        };
+        // this precomputes Y = 2 - (ID >> 2) early, making it Y = ID >> 2
+        auto up = [](int id) { return (uint8_t)((8 - (id & ~3)) | (id & 3)); };
         std::vector<gravity_t> retn;
-        for (auto pt : gravity[placement])
-            for (auto fx : gravity[centering])
-                retn.emplace_back(gravity_t{up(pt), up(fx)});
-        return retn;
+        for (uint16_t pt = mask(placement); pt; pt &= pt - 1)
+            for (uint16_t fx = mask(centering); fx; fx &= fx - 1)
+                retn.emplace_back(gravity_t{up(__builtin_ctz(pt)),
+                                            up(__builtin_ctz(fx))});
+        return retn; // count trailing 0 bits ---^
     }
 
 public:
