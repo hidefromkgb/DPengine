@@ -204,14 +204,41 @@ public:
     categories_t ctg_nonex = {};
     categories_t ctg_exact = {};
 
+    // the strings are copied, not shared; in the C port this logic becomes
+    // a stand-alone function to be used instead of a plain struct copy
+    conf_t() = default;
+    conf_t(const conf_t &rhs) { *this = rhs; }
+    conf_t &operator=(const conf_t &rhs) {
+        if (this != &rhs) {
+            free_string(base);
+            free_string(lang);
+            free_lang_map(&lang_map);
+            base = rhs.base;
+            lang = rhs.lang;
+            lang_map = rhs.lang_map;
+            nrun = rhs.nrun;
+            nsca = rhs.nsca;
+            ndil = rhs.ndil;
+            nspk = rhs.nspk;
+            ncdr = rhs.ncdr;
+            spec = rhs.spec;
+            rgpu = rhs.rgpu;
+            flgs = rhs.flgs;
+            ctg_nonex = rhs.ctg_nonex;
+            ctg_exact = rhs.ctg_exact;
+            base = make_string(get_view(base));
+            lang = make_string(get_view(lang));
+            for (auto &item : lang_map)
+                item.second = make_string(get_view(item.second));
+        }
+        return *this;
+    }
     ~conf_t() {
         free_string(base);
         free_string(lang);
         free_lang_map(&lang_map);
     }
     static void free_lang_map(lang_map_t *lang_map);
-    // replaces the strings with own copies, e.g. after a shallow copy
-    static void dup_strings(conf_t *conf);
     static lang_map_t get_lang_map(string_view_t file_name);
 };
 

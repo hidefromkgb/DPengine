@@ -102,7 +102,6 @@ engine_t::engine_t(string_view_t fcnf, string_view_t base,
 , area_(area)
 , tcur_{}
 , tpre_{} {
-    conf_t::dup_strings(&ccur_); // CCUR_ was copied from CINI_ shallowly
     mctl_.set_options_window(octl_.get_id()); // link options window to main
     build_library_structure(get_view(cini_.base)); // read conf, load everything
 }

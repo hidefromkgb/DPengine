@@ -349,12 +349,8 @@ intptr_t options_window_t::FC2E(CTRL *ctrl, uint32_t cmsg, intptr_t data) {
                 }
                 case OCT_FREL:
                 case OCT_FRES:
-                    free_string(w->conf_.base);
-                    free_string(w->conf_.lang);
-                    conf_t::free_lang_map(&w->conf_.lang_map);
                     w->conf_ = (ctrl - &w->get_root() == OCT_FREL)
                              ? w->ini_conf_ : w->def_conf_;
-                    conf_t::dup_strings(&w->conf_);
                     break;
                 default: assert(false); break; // no buttons except those above
             }

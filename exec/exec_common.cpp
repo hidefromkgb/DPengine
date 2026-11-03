@@ -19,13 +19,6 @@ void conf_t::free_lang_map(lang_map_t *lang_map) {
     lang_map->clear();
 }
 
-void conf_t::dup_strings(conf_t *conf) {
-    conf->base = make_string(get_view(conf->base));
-    conf->lang = make_string(get_view(conf->lang));
-    for (auto &item : conf->lang_map)
-        item.second = make_string(get_view(item.second));
-}
-
 conf_t::lang_map_t conf_t::get_lang_map(string_view_t file_name) {
     INCBIN("../exec/loc/en.lang", DefLang);
     long size = (!file_name.size) ? DefLang_end - DefLang : 0;
