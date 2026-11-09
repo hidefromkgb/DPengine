@@ -89,10 +89,14 @@ private:
             uint32_t *seed, int64_t time, T2IV area, const cast_t &cast);
     // all but NEXT_BHV_TIME_, which stays up to the caller (if not special)
     void apply_behaviour(uint32_t *seed, T2IV area, const behaviour_t &next);
-    bool move_behaviour(uint32_t *seed, int64_t time, T2IV area);
+    bool move_behaviour(
+            uint32_t *seed, int64_t time, T2IV area, T2IV cursor, float sq_cdr);
+    // negates the cursor-directed velocity axes within the dodge radius;
+    // returns whether the facing changed
+    bool avoid_cursor(T2IV cursor, float sq_cdr);
     bool follow_behaviour(uint32_t *seed, T2IV area);
-    void update_behaviour(
-            uint32_t *seed, int64_t time, T2IV area, const cast_t &cast);
+    void update_behaviour(uint32_t *seed, int64_t time, T2IV area,
+            const cast_t &cast, T2IV cursor, float sq_cdr);
 
     // special states: no expiry, no movement, no following; on leaving the
     // last one, RESUME_ is re-applied with a fresh duration and PARENT_ kept
@@ -161,6 +165,7 @@ private:
     bool effects_;
     bool speech_;
     const conf_t::spin_t &speech_chance_;
+    const conf_t::spin_t &cursor_dodge_;
     T2FV grab_; // ACTIVE_'s position relative to the cursor, if dragged
     sprite_t *active_; // the dragged or hovered character, see its flags
     sprite_t *menu_target_; // the character the local menu is for
@@ -182,7 +187,8 @@ private:
 public:
     sprite_bank_t(const selection_t &sel, uint32_t *seed, int64_t time,
             T2IV area, bool effects, bool speech,
-            const conf_t::spin_t &speech_chance);
+            const conf_t::spin_t &speech_chance,
+            const conf_t::spin_t &cursor_dodge);
 
     uint32_t capacity() const { return sprites_.size(); }
     uint32_t shown() const { return shown_; }

@@ -155,7 +155,8 @@ bool sprite_t::has_target() const {
         && ((bhv_->follow_target()) ? !!parent_ : bhv_->follow());
 }
 
-bool sprite_t::move_behaviour(uint32_t *seed, int64_t time, T2IV area) {
+bool sprite_t::move_behaviour(
+        uint32_t *seed, int64_t time, T2IV area, T2IV cursor, float sq_cdr) {
     if (time < next_move_time_) return false;
     next_move_time_ = ((time > next_move_time_ + FRM_WAIT)
                       ? time : next_move_time_) + FRM_WAIT;
@@ -163,11 +164,9 @@ bool sprite_t::move_behaviour(uint32_t *seed, int64_t time, T2IV area) {
     const auto dims = unit_->dims(get_flag(left));
     // [TODO:] player-controlled characters should stop at the area boundary
     //         instead of flipping the velocity
-    // [TODO:] dodging the cursor within NCDR px when hover is on, see DP's
-    //         ReboundToAvoidCursor(); the squared radius can be per frame
-    const bool flipped
+    const bool wall_flip
             = bound_crossed(velocity_.x, position_.x + dims.x, dims.x, area.x);
-    if (flipped) {
+    if (wall_flip) {
         position_.x += unit_->center(get_flag(left)).x
                      - unit_->center(!get_flag(left)).x;
         velocity_.x = -velocity_.x;
@@ -175,9 +174,32 @@ bool sprite_t::move_behaviour(uint32_t *seed, int64_t time, T2IV area) {
     }
     if (bound_crossed(velocity_.y, position_.y, dims.y, area.y))
         velocity_.y = -velocity_.y;
+    const bool cursor_flip = avoid_cursor(cursor, sq_cdr);
     position_.x += velocity_.x;
     position_.y += velocity_.y;
-    return flipped;
+    // the rebound may push the sprite through a wall; keep it on stage
+    const auto fdims = unit_->dims(get_flag(left));
+    position_.x = std_clamp(position_.x, 0.f, (float)area.x - fdims.x);
+    position_.y = std_clamp(position_.y, (float)fdims.y, (float)area.y);
+    return wall_flip != cursor_flip;
+}
+
+// DP's ReboundToAvoidCursor(): each axis is negated if the post-step center
+// is within the radius and moving toward the cursor on that axis
+bool sprite_t::avoid_cursor(T2IV cursor, float sq_cdr) {
+    if (!sq_cdr) return false;
+    const auto center = unit_->center(get_flag(left));
+    const auto cx = position_.x + velocity_.x + center.x - cursor.x;
+    const auto cy = position_.y + velocity_.y - center.y - cursor.y;
+    if ((cx * cx + cy * cy) >= sq_cdr) return false;
+    const auto prev_vx = velocity_.x; // also covers 'velocity_.x == 0' case
+    if ((cx < 0.f) != (velocity_.x < 0.f)) velocity_.x = -velocity_.x;
+    if ((cy < 0.f) != (velocity_.y < 0.f)) velocity_.y = -velocity_.y;
+    const bool go_left = velocity_.x < 0.f;
+    if ((velocity_.x == prev_vx) || (go_left == get_flag(left))) return false;
+    position_.x += unit_->center(get_flag(left)).x - unit_->center(go_left).x;
+    set_flag(left, go_left); // flip with the rebound
+    return true;
 }
 
 static float fast_rsqrt(float x) { // I'm a John Carmack wannabe, mmkay?
@@ -275,11 +297,11 @@ void sprite_t::init_behaviour(const library_t &lib, uint32_t *seed,
     if (!uuid_) free(); // failed to load, never placed
 }
 
-void sprite_t::update_behaviour(
-        uint32_t *seed, int64_t time, T2IV area, const cast_t &cast) {
+void sprite_t::update_behaviour(uint32_t *seed, int64_t time, T2IV area,
+        const cast_t &cast, T2IV cursor, float sq_cdr) {
     if (get_flag(effect)) return;
     const bool changed = next_behaviour(seed, time, area, cast);
-    const bool flipped = move_behaviour(seed, time, area);
+    const bool flipped = move_behaviour(seed, time, area, cursor, sq_cdr);
     depth_ = position_.y;
     advance(time, changed || flipped);
 }
@@ -384,13 +406,15 @@ bool sprite_t::parent_moved_on() const {
 
 sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
         int64_t time, T2IV area, bool effects, bool speech,
-        const conf_t::spin_t &speech_chance)
+        const conf_t::spin_t &speech_chance,
+        const conf_t::spin_t &cursor_dodge)
 : shown_(0)
 , waiting_(0)
 , area_(area)
 , effects_(effects)
 , speech_(speech)
 , speech_chance_(speech_chance)
+, cursor_dodge_(cursor_dodge)
 , grab_{}
 , active_(nullptr)
 , menu_target_(nullptr)
@@ -513,13 +537,14 @@ bool sprite_bank_t::try_recycle(uint32_t iter, uint32_t if_free,
 }
 
 void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
+    const float sq_cdr = in.hover * cursor_dodge_.get() * cursor_dodge_.get();
     const auto speech_chance
             = (uint64_t(speech_chance_.get()) << 32) / speech_chance_.max();
     handle_input(seed, time, in);
     // behaviours first, as followers need updated positions
     for (uint32_t iter = 0; iter < shown_; iter++) {
         auto &chr = *sprites_[iter];
-        chr.update_behaviour(seed, time, area_, cast_);
+        chr.update_behaviour(seed, time, area_, cast_, in.cursor, sq_cdr);
         deploy_effects(chr);
     }
     // backwards, so that swapped-in slots are already updated

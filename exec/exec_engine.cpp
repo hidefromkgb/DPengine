@@ -309,8 +309,8 @@ uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
             !!(engc.ccur_.flgs & conf_t::hover), engd}); // animating
     *data = bank.display(); // passing the updated sprites to the renderer
     if (auto chr = bank.menu_request())
-        engc.mctl_.open_local_menu(chr->name(), bank.is_asleep(*chr),
-                bank.controller(*chr));
+        engc.mctl_.open_local_menu(
+                chr->name(), bank.is_asleep(*chr), bank.controller(*chr));
 
     // SIZE is the capacity of the sprite array rather than its length: the GPU
     // renderer is built once, out of whatever the very first frame reports
@@ -336,7 +336,7 @@ void engine_t::display_loop() {
     }
     bank_ = std::make_unique<sprite_bank_t>(sel, seed_, tcur_,
                 T2IV{{area_.xdim, area_.ydim}}, ccur_.flgs & conf_t::effects,
-                ccur_.flgs & conf_t::speech, ccur_.nspk);
+                ccur_.flgs & conf_t::speech, ccur_.nspk, ccur_.ncdr);
 
     uint32_t engd_flags = 0;
     for (auto &f : render_flags)
