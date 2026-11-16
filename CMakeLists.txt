@@ -5,7 +5,6 @@ set(LIB_NAME dpe)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 
 option(BUILD_SHARED_LIBS OFF) # implicit CMake option!
 
@@ -60,11 +59,13 @@ else()
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL Release)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
     add_compile_options(-O2 ${RLS_MAKE_FLAGS})
     add_link_options(${RLS_LINK_FLAGS})
 else()
-    add_compile_options(-g -DDEV_MODE ${DBG_MAKE_FLAGS})
-    add_link_options(${DBG_LINK_FLAGS})
+    add_compile_options(-g -fsanitize=address -fno-omit-frame-pointer
+                        -DDEV_MODE ${DBG_MAKE_FLAGS})
+    add_link_options(-fsanitize=address ${DBG_LINK_FLAGS})
 endif()
 
 include_directories(core ${COMMON_INCLUDE_DIRS})
