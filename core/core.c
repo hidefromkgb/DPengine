@@ -916,8 +916,9 @@ void cEngineLoadAnimAsync(ENGD *engd, AINF *ainf, uint8_t *name,
 
 
 void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
-                        uint32_t xdim, uint32_t ydim, uint32_t flgs,
-                        uint32_t msec, intptr_t user, UFRM ufrm, UFLG uflg) {
+                        uint32_t xdim, uint32_t ydim,
+                        uint32_t flgs, uint32_t msec, intptr_t user,
+                        UFRM ufrm, UFLG uflg, UKEY ukey) {
     long mtmp;
 
     if (engd->uarr) {
@@ -939,8 +940,8 @@ void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
                 engd->flgs = uflg(engd, engd->udat, engd->flgs);
             printf("%s\n", (engd->flgs & COM_RGPU)? TXL_RGPU : TXL_RSTD);
             lRunMainLoop(engd, engd->dims.xpos, engd->dims.ypos,
-                         engd->dims.xdim, engd->dims.ydim,
-                        &engd->bptr, engd->user, engd->flgs);
+                         engd->dims.xdim, engd->dims.ydim, &engd->bptr,
+                         engd->user, engd->flgs, engd->udat, ukey);
         } while (~engd->iflg & IFL_HALT);
     }
     else

@@ -26,6 +26,8 @@ private:
     T4IV area_; // drawing area position and dimensions
     uint64_t tcur_; // current, dilation-adjusted timestamp
     uint64_t tpre_; // previous raw timestamp
+    uint64_t kchr_; // character key state
+    uint64_t kcmd_; // command key state
 
     std::unordered_map<lib_id_t, std::unique_ptr<library_t>> libs_;
 
@@ -51,6 +53,7 @@ private:
             uint64_t time, intptr_t user, uint32_t attr,
             int32_t xptr, int32_t yptr, int32_t isel);
     static uint32_t update_flags(ENGD *engd, intptr_t user, uint32_t flgs);
+    static void update_keys(intptr_t user, int8_t code);
 
     // the argument is sprite_bank_t::action_t in disguise
     void menu_handler_internal(uint32_t a);

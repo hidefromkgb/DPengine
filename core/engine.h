@@ -4,6 +4,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#define STATIC_ASSERT(cond) \
+        __attribute__((unused)) extern int static_assertion[(cond) ? 1 : -1]
 
 #define LIB_OPEN __attribute__((visibility("default")))
 
@@ -143,7 +145,59 @@ typedef struct {
 } AINF;
 #pragma pack(pop)
 
+typedef enum _KEYS {
+    KEY_CHR_NONE = 0,
 
+    KEY_TILDE     , KEY_1         , KEY_2         , KEY_3         ,
+    KEY_4         , KEY_5         , KEY_6         , KEY_7         ,
+    KEY_8         , KEY_9         , KEY_0         , KEY_HYPHEN    ,
+    KEY_EQUAL     , KEY_Q         , KEY_W         , KEY_E         ,
+    KEY_R         , KEY_T         , KEY_Y         , KEY_U         ,
+    KEY_I         , KEY_O         , KEY_P         , KEY_LBRACKET  ,
+    KEY_RBRACKET  , KEY_A         , KEY_S         , KEY_D         ,
+    KEY_F         , KEY_G         , KEY_H         , KEY_J         ,
+    KEY_K         , KEY_L         , KEY_COLON     , KEY_QUOTE     ,
+    KEY_PIPE      , KEY_Z         , KEY_X         , KEY_C         ,
+    KEY_V         , KEY_B         , KEY_N         , KEY_M         ,
+    KEY_LESS      , KEY_GREATER   , KEY_QUESTION  , KEY_NUM_DIV   ,
+    KEY_NUM_MUL   , KEY_NUM_SUB   , KEY_NUM_7     , KEY_NUM_8     ,
+    KEY_NUM_9     , KEY_NUM_4     , KEY_NUM_5     , KEY_NUM_6     ,
+    KEY_NUM_ADD   , KEY_NUM_1     , KEY_NUM_2     , KEY_NUM_3     ,
+    KEY_NUM_0     , KEY_NUM_DEL   , KEY_NUM_EQUAL ,
+
+    KEY_CHR_ALL = KEY_NUM_EQUAL,
+    KEY_CMD_NONE = 64,
+
+    KEY_ESC       , KEY_F1        , KEY_F2        , KEY_F3        ,
+    KEY_F4        , KEY_F5        , KEY_F6        , KEY_F7        ,
+    KEY_F8        , KEY_F9        , KEY_F10       , KEY_F11       ,
+    KEY_F12       , KEY_BACKSPACE , KEY_TAB       , KEY_CAPSLOCK  ,
+    KEY_ENTER     , KEY_LSHIFT    , KEY_RSHIFT    , KEY_LCTRL     ,
+    KEY_LSYSTEM   , KEY_LALT      , KEY_SPACE     , KEY_RALT      ,
+    KEY_RSYSTEM   , KEY_RMENU     , KEY_RCTRL     , KEY_PRTSCR    ,
+    KEY_SCRLOCK   , KEY_PAUSE     , KEY_INSERT    , KEY_HOME      ,
+    KEY_PAGEUP    , KEY_DELETE    , KEY_END       , KEY_PAGEDOWN  ,
+    KEY_UP        , KEY_LEFT      , KEY_DOWN      , KEY_RIGHT     ,
+    KEY_NUM_LOCK  , KEY_NUM_ENTER ,
+
+    KEY_CMD_ALL = KEY_NUM_ENTER
+} KEYS;
+
+STATIC_ASSERT((KEY_CMD_ALL - KEY_CMD_NONE < 64) && (KEY_CHR_ALL < KEY_CMD_NONE)
+           && (KEY_CHR_ALL - KEY_CHR_NONE < 64));
+
+
+
+/** _________________________________________________________________________
+    Callback function for the main program to get keypress updates. Called on
+    keypresses, and then it's the callback's job to store the state until the
+    display list gets updated. All calls are synchronous.
+    _________________________________________________________________________
+    USER: user-defined data (may be a pointer)
+    CODE: a key code from the KEYS enum; pressed if non-negative, released if
+          negative - in which case it should be decoded as -(CODE + 1)
+ **/
+typedef     void (*UKEY)(intptr_t user, int8_t code);
 
 /** _________________________________________________________________________
     Callback function for the main program to modify the display list. Called
@@ -233,11 +287,12 @@ LIB_OPEN void cEngineLoadAnimAsync(ENGD *engd, AINF *ainf,
     USER: user data pointer to be passed to the callback
     UFRM: (see UFRM typedef)
     UFLG: (see UFLG typedef) [NOT NECESSARILY NEEDED, MAY BE 0]
+    UKEY: (see UKEY typedef) [NOT NECESSARILY NEEDED, MAY BE 0]
  **/
 LIB_OPEN void cEngineRunMainLoop(ENGD *engd, int32_t xpos, int32_t ypos,
                                  uint32_t xdim, uint32_t ydim,
-                                 uint32_t flgs, uint32_t msec,
-                                 intptr_t user, UFRM ufrm, UFLG uflg);
+                                 uint32_t flgs, uint32_t msec, intptr_t user,
+                                 UFRM ufrm, UFLG uflg, UKEY ukey);
 
 #ifdef __cplusplus
 } /// extern "C"

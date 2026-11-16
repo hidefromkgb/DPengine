@@ -17,7 +17,7 @@
 #define CLS_CELL "lNSX" /** class name for list box cell **/
 #define CLS_TRAY "lNSR" /** class name for tray icon **/
 #define CLS_MENU "lNSM" /** class name for menu responder **/
-#define CLS_WNDW "lNSW" /** class name for window **/
+#define CLS_VIEW "lNSV" /** class name for window view **/
 #define CLS_TEXT "lNST" /** class name for text box **/
 #define CLS_BUTN "lNSB" /** class name for button + checkbox + radiobox **/
 #define CLS_SPIN "lNSN" /** class name for spin box **/
@@ -136,7 +136,7 @@ void OpenMenu(MENU *tmpl, id base) {
     release(base);
 }
 
-void MAC_Handler(OnMenu, NSMenu *menu) {
+static void MAC_Handler(OnMenu, NSMenu *menu) {
     MENU *mctx;
 
     if (self != menu)
@@ -147,7 +147,7 @@ void MAC_Handler(OnMenu, NSMenu *menu) {
     }
 }
 
-void MAC_Handler(OnTray) {
+static void MAC_Handler(OnTray) {
     MENU *mctx;
 
     MAC_GetIvar(self, VAR_DATA, &mctx);
@@ -622,7 +622,8 @@ void MoveControl(CTRL *ctrl, intptr_t data) {
     setFrame_((NSView*)ctrl->priv[0], rect);
 }
 
-bool MAC_Handler(OnValidate, NSString *part, NSString *retn, NSString *desc) {
+static bool MAC_Handler(
+        OnValidate, NSString *part, NSString *retn, NSString *desc) {
     void *temp;
 
     if (getObjectValue_forString_errorDescription_(self, &temp, part, desc))
@@ -631,7 +632,7 @@ bool MAC_Handler(OnValidate, NSString *part, NSString *retn, NSString *desc) {
     return false;
 }
 
-void MAC_Handler(OnSpin) {
+static void MAC_Handler(OnSpin) {
     double retn = 0.0;
     CTRL *ctrl = 0;
 
@@ -644,7 +645,7 @@ void MAC_Handler(OnSpin) {
     ctrl->fc2e(ctrl, MSG_NSET, retn);
 }
 
-void MAC_Handler(OnEdit) {
+static void MAC_Handler(OnEdit) {
     CTRL *ctrl = 0;
     double retn;
 
@@ -656,7 +657,7 @@ void MAC_Handler(OnEdit) {
     ctrl->fe2c(ctrl, MSG_NSET, retn);
 }
 
-bool MAC_Handler(OnKeys, void *ctrl, NSView *view, SEL what) {
+static bool MAC_Handler(OnKeys, void *ctrl, NSView *view, SEL what) {
     static SEL MoveUp = 0, MoveDown = 0;
 
     if (!MoveUp) {
@@ -1242,22 +1243,22 @@ void Reset(CTRL *ctrl, NSInteger irow) {
               (irow << 1) | (ctrl->fc2e(ctrl, MSG_LGST, irow) ^ 1));
 }
 
-void MAC_Handler(OnReset, NSTableView *view, void *what,
-                 NSTableColumn *icol, NSInteger irow) {
+static void MAC_Handler(OnReset, NSTableView *view, void *what,
+                        NSTableColumn *icol, NSInteger irow) {
     CTRL *ctrl = 0;
 
     MAC_GetIvar(view, VAR_DATA, &ctrl);
     Reset(ctrl, irow);
 }
 
-void MAC_Handler(OnListButton) {
+static void MAC_Handler(OnListButton) {
     CTRL **ctrl = 0;
 
     MAC_GetIvar(self, VAR_DATA, &ctrl);
     Reset(ctrl[0], (NSInteger)ctrl[1]);
 }
 
-void MAC_Handler(OnButton) {
+static void MAC_Handler(OnButton) {
     CTRL *ctrl = 0;
 
     MAC_GetIvar(self, VAR_DATA, &ctrl);
@@ -1266,13 +1267,13 @@ void MAC_Handler(OnButton) {
               (state((NSButton*)ctrl->priv[0]) == NSOnState) : 0);
 }
 
-NSCell *MAC_Handler(OnValueOld, NSTableView *view,
-                    NSTableColumn *icol, NSInteger irow) {
+static NSCell *MAC_Handler(OnValueOld, NSTableView *view,
+                           NSTableColumn *icol, NSInteger irow) {
     return (MAC_10_07_PLUS)? 0 : dataCell(icol);
 }
 
-NSCell *MAC_Handler(OnValue, NSTableView *view,
-                NSTableColumn *icol, NSInteger irow) {
+static NSCell *MAC_Handler(OnValue, NSTableView *view,
+                           NSTableColumn *icol, NSInteger irow) {
     NSCell *cell;
     CTRL *ctrl = 0;
 
@@ -1285,14 +1286,14 @@ NSCell *MAC_Handler(OnValue, NSTableView *view,
     return cell;
 }
 
-NSInteger MAC_Handler(OnRows, NSTableView *view) {
+static NSInteger MAC_Handler(OnRows, NSTableView *view) {
     CTRL *ctrl = 0;
 
     MAC_GetIvar(view, VAR_DATA, &ctrl);
     return ctrl->priv[4];
 }
 
-void MAC_Handler(OnScroll, NSNotification *nscr) {
+static void MAC_Handler(OnScroll, NSNotification *nscr) {
     CTRL *ctrl = 0;
 
     MAC_GetIvar(self, VAR_DATA, &ctrl);
@@ -1328,7 +1329,7 @@ bool IsDarkMode() {
     return CFStringFind(eapp, dark, kCFCompareCaseInsensitive).length;
 }
 
-void MAC_Handler(PBoxDraw, NSRect rect) {
+static void MAC_Handler(PBoxDraw, NSRect rect) {
     CTRL *ctrl = 0;
 
     MAC_GetIvar(self, VAR_DATA, &ctrl);
@@ -1382,7 +1383,7 @@ void MAC_Handler(PBoxDraw, NSRect rect) {
                                (NSDictionary*)ctrl->priv[5]);
 }
 
-void MAC_Handler(IBoxDraw, NSRect rect) {
+static void MAC_Handler(IBoxDraw, NSRect rect) {
     CGImageRef pict;
     NSRect area;
     AINF anim;
@@ -1406,15 +1407,15 @@ void MAC_Handler(IBoxDraw, NSRect rect) {
     CGImageRelease(pict);
 }
 
-bool MAC_Handler(OnFalse) {
+static bool MAC_Handler(OnFalse) {
     return false;
 }
 
-bool MAC_Handler(OnTrue) {
+static bool MAC_Handler(OnTrue) {
     return true;
 }
 
-bool MAC_Handler(OnClose) {
+static bool MAC_Handler(OnClose) {
     bool retn = false;
     CTRL *ctrl = 0;
 
@@ -1427,7 +1428,7 @@ bool MAC_Handler(OnClose) {
     return retn;
 }
 
-void MAC_Handler(OnSize) {
+static void MAC_Handler(OnSize) {
     CTRL *ctrl = 0;
     NSRect rect;
 
@@ -1474,7 +1475,7 @@ void rMakeControl(CTRL *ctrl, long *xoff, long *yoff) {
                     kCGBackingStoreBuffered, false);
         setLevel_(gwnd, NSMainMenuWindowLevel + 1);
 
-        ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_WNDW)));
+        ctrl->priv[7] = (intptr_t)init(alloc(MAC_LoadClass(CLS_VIEW)));
         setContentView_(gwnd, (NSView*)ctrl->priv[7]);
         setDelegate_(gwnd, (NSView*)ctrl->priv[7]);
         MAC_SetIvar((NSView*)ctrl->priv[7], VAR_DATA, ctrl);
@@ -1726,7 +1727,7 @@ int main(int argc, char *argv[]) {
                  ActionSelector(), OnTray),
         CLS_MAKE(CLS_MENU, _(NSObject),
                  ActionSelector(), OnMenu),
-        CLS_MAKE(CLS_WNDW, _(NSView),
+        CLS_MAKE(CLS_VIEW, _(NSView),
                  _(windowShouldClose_), OnClose,
                  _(windowDidResize_), OnSize, _(isFlipped), OnTrue),
         CLS_MAKE(CLS_TEXT, _(NSTextField),

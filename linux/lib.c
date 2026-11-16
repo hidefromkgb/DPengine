@@ -110,9 +110,45 @@ gboolean OnDestroy(GtkWidget *gwnd, gpointer user) {
 
 
 
-gboolean OnKeyDown(GtkWidget *gwnd, GdkEventKey *ekey, gpointer user) {
-    if (ekey->keyval == GDK_KEY_Escape)
-        OnDestroy(gwnd, user);
+gboolean OnKey(GtkWidget *gwnd, GdkEventKey *ekey, gpointer user) {
+    static const int8_t keys[128] = {
+        KEY_CHR_NONE  , KEY_CHR_NONE  , KEY_CHR_NONE  , KEY_CHR_NONE  ,
+        KEY_CHR_NONE  , KEY_LSYSTEM   , KEY_RSYSTEM   , KEY_RMENU     ,
+        KEY_CHR_NONE  , KEY_ESC       , KEY_1         , KEY_2         ,
+        KEY_3         , KEY_4         , KEY_5         , KEY_6         ,
+        KEY_7         , KEY_8         , KEY_9         , KEY_0         ,
+        KEY_HYPHEN    , KEY_EQUAL     , KEY_BACKSPACE , KEY_TAB       ,
+        KEY_Q         , KEY_W         , KEY_E         , KEY_R         ,
+        KEY_T         , KEY_Y         , KEY_U         , KEY_I         ,
+        KEY_O         , KEY_P         , KEY_LBRACKET  , KEY_RBRACKET  ,
+        KEY_ENTER     , KEY_LCTRL     , KEY_A         , KEY_S         ,
+        KEY_D         , KEY_F         , KEY_G         , KEY_H         ,
+        KEY_J         , KEY_K         , KEY_L         , KEY_COLON     ,
+        KEY_QUOTE     , KEY_TILDE     , KEY_LSHIFT    , KEY_PIPE      ,
+        KEY_Z         , KEY_X         , KEY_C         , KEY_V         ,
+        KEY_B         , KEY_N         , KEY_M         , KEY_LESS      ,
+        KEY_GREATER   , KEY_QUESTION  , KEY_RSHIFT    , KEY_NUM_MUL   ,
+        KEY_LALT      , KEY_SPACE     , KEY_CAPSLOCK  , KEY_F1        ,
+        KEY_F2        , KEY_F3        , KEY_F4        , KEY_F5        ,
+        KEY_F6        , KEY_F7        , KEY_F8        , KEY_F9        ,
+        KEY_F10       , KEY_NUM_LOCK  , KEY_SCRLOCK   , KEY_NUM_7     ,
+        KEY_NUM_8     , KEY_NUM_9     , KEY_NUM_SUB   , KEY_NUM_4     ,
+        KEY_NUM_5     , KEY_NUM_6     , KEY_NUM_ADD   , KEY_NUM_1     ,
+        KEY_NUM_2     , KEY_NUM_3     , KEY_NUM_0     , KEY_NUM_DEL   ,
+        KEY_CHR_NONE  , KEY_CHR_NONE  , KEY_CHR_NONE  , KEY_F11       ,
+        KEY_F12       , KEY_CHR_NONE  , KEY_CHR_NONE  , KEY_CHR_NONE  ,
+        KEY_CHR_NONE  , KEY_CHR_NONE  , KEY_CHR_NONE  , KEY_CHR_NONE  ,
+        KEY_NUM_ENTER , KEY_RCTRL     , KEY_NUM_DIV   , KEY_PRTSCR    ,
+        KEY_RALT      , KEY_CHR_NONE  , KEY_HOME      , KEY_UP        ,
+        KEY_PAGEUP    , KEY_LEFT      , KEY_RIGHT     , KEY_END       ,
+        KEY_DOWN      , KEY_PAGEDOWN  , KEY_INSERT    , KEY_DELETE    ,
+        KEY_CHR_NONE  , KEY_CHR_NONE  , KEY_CHR_NONE  , KEY_CHR_NONE  ,
+        KEY_CHR_NONE  , KEY_NUM_EQUAL , KEY_CHR_NONE  , KEY_PAUSE     ,
+    }; // keys[5-7] should've been keys[133-135], but got truncated at 0x7F
+    const intptr_t *data = (intptr_t*)user;
+    const int8_t code = (ekey->hardware_keycode > 135)
+                      ? KEY_CHR_NONE : keys[ekey->hardware_keycode & 0x7F];
+    ((UKEY)data[1])(data[0], (ekey->type != GDK_KEY_PRESS) ? -code - 1 : code);
     return TRUE;
 }
 
@@ -332,10 +368,11 @@ SEM_TYPE lWaitSemaphore(SEMD *wait, SEM_TYPE mask) {
 
 
 void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
-                  BGRA **bptr, intptr_t *data, uint32_t flgs) {
+        BGRA **bptr, intptr_t *data, uint32_t flgs, intptr_t user, UKEY ukey) {
     GdkGLDrawable *pGLD = 0;
     GtkWidget *gwnd;
     guint tmrf, tmrd;
+    intptr_t keys_data[2];
 
     xdim -= xpos;
     ydim -= ypos;
@@ -351,8 +388,14 @@ void lRunMainLoop(ENGD *engd, long xpos, long ypos, long xdim, long ydim,
                      G_CALLBACK(OnDestroy), engd);
     g_signal_connect(G_OBJECT(gwnd), "screen-changed",
                      G_CALLBACK(OnChange), engd);
-    g_signal_connect(G_OBJECT(gwnd), "key-press-event",
-                     G_CALLBACK(OnKeyDown), engd);
+    if (ukey) {
+        keys_data[0] = (intptr_t)user;
+        keys_data[1] = (intptr_t)ukey;
+        g_signal_connect(G_OBJECT(gwnd), "key-press-event",
+                         G_CALLBACK(OnKey), keys_data);
+        g_signal_connect(G_OBJECT(gwnd), "key-release-event",
+                         G_CALLBACK(OnKey), keys_data);
+    }
     gtk_widget_set_events(gwnd, gtk_widget_get_events(gwnd) |
                                 GDK_KEY_PRESS_MASK);
     if (~flgs & COM_RGPU) {

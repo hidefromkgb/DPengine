@@ -101,7 +101,9 @@ engine_t::engine_t(string_view_t fcnf, string_view_t base,
 , tray_(tray)
 , area_(area)
 , tcur_{}
-, tpre_{} {
+, tpre_{}
+, kchr_{}
+, kcmd_{} {
     mctl_.set_options_window(octl_.get_id()); // link options window to main
     build_library_structure(get_view(cini_.base)); // read conf, load everything
 }
@@ -285,6 +287,50 @@ conf_t engine_t::load_ini_conf(const conf_t &def, string_view_t cfnm) {
     return retn;
 }
 
+void engine_t::update_keys(intptr_t user, int8_t code) {
+    #define KEY(k) #k
+    __attribute__((unused)) static const char *key_names[] = {
+        KEY(CHR_NONE ),
+        KEY(TILDE    ), KEY(1        ), KEY(2        ), KEY(3        ),
+        KEY(4        ), KEY(5        ), KEY(6        ), KEY(7        ),
+        KEY(8        ), KEY(9        ), KEY(0        ), KEY(HYPHEN   ),
+        KEY(EQUAL    ), KEY(Q        ), KEY(W        ), KEY(E        ),
+        KEY(R        ), KEY(T        ), KEY(Y        ), KEY(U        ),
+        KEY(I        ), KEY(O        ), KEY(P        ), KEY(LBRACKET ),
+        KEY(RBRACKET ), KEY(A        ), KEY(S        ), KEY(D        ),
+        KEY(F        ), KEY(G        ), KEY(H        ), KEY(J        ),
+        KEY(K        ), KEY(L        ), KEY(COLON    ), KEY(QUOTE    ),
+        KEY(PIPE     ), KEY(Z        ), KEY(X        ), KEY(C        ),
+        KEY(V        ), KEY(B        ), KEY(N        ), KEY(M        ),
+        KEY(LESS     ), KEY(GREATER  ), KEY(QUESTION ), KEY(NUM_DIV  ),
+        KEY(NUM_MUL  ), KEY(NUM_SUB  ), KEY(NUM_7    ), KEY(NUM_8    ),
+        KEY(NUM_9    ), KEY(NUM_4    ), KEY(NUM_5    ), KEY(NUM_6    ),
+        KEY(NUM_ADD  ), KEY(NUM_1    ), KEY(NUM_2    ), KEY(NUM_3    ),
+        KEY(NUM_0    ), KEY(NUM_DEL  ), KEY(NUM_EQUAL),
+        KEY(CMD_NONE ),
+        KEY(ESC      ), KEY(F1       ), KEY(F2       ), KEY(F3       ),
+        KEY(F4       ), KEY(F5       ), KEY(F6       ), KEY(F7       ),
+        KEY(F8       ), KEY(F9       ), KEY(F10      ), KEY(F11      ),
+        KEY(F12      ), KEY(BACKSPACE), KEY(TAB      ), KEY(CAPSLOCK ),
+        KEY(ENTER    ), KEY(LSHIFT   ), KEY(RSHIFT   ), KEY(LCTRL    ),
+        KEY(LSYSTEM  ), KEY(LALT     ), KEY(SPACE    ), KEY(RALT     ),
+        KEY(RSYSTEM  ), KEY(RMENU    ), KEY(RCTRL    ), KEY(PRTSCR   ),
+        KEY(SCRLOCK  ), KEY(PAUSE    ), KEY(INSERT   ), KEY(HOME     ),
+        KEY(PAGEUP   ), KEY(DELETE   ), KEY(END      ), KEY(PAGEDOWN ),
+        KEY(UP       ), KEY(LEFT     ), KEY(DOWN     ), KEY(RIGHT    ),
+        KEY(NUM_LOCK ), KEY(NUM_ENTER),
+    };
+    #undef KEY
+    const bool down = (code >= 0);
+    if (!down) code = -(code + 1);
+    //printf("=== KEY: [%s] %s\n", key_names[code], (down) ? "down" : "up");
+    auto target = (code >= KEY_CMD_NONE) ? &((engine_t*)user)->kcmd_
+                                         : &((engine_t*)user)->kchr_;
+    if (code >= KEY_CMD_NONE) code -= KEY_CMD_NONE;
+    *target = (!down) ? (*target & ~((uint64_t)1 << code))
+                      : (*target | ((uint64_t)1 << code));
+}
+
 uint32_t engine_t::update_flags(ENGD *engd, intptr_t user, uint32_t flgs) {
     // the engine reports what it actually managed to do, which is not always
     // what it was asked for; the tray menu's checkmarks come from here
@@ -334,6 +380,7 @@ void engine_t::display_loop() {
         //rMessage("Nothing selected!", nullptr, "OK", nullptr);
         return;
     }
+    kchr_ = kcmd_ = 0;
     bank_ = std::make_unique<sprite_bank_t>(sel, seed_, tcur_,
                 T2IV{{area_.xdim, area_.ydim}}, ccur_.flgs & conf_t::effects,
                 ccur_.flgs & conf_t::speech, ccur_.nspk, ccur_.ncdr);
@@ -346,7 +393,7 @@ void engine_t::display_loop() {
     const auto icon = mctl_.prepare_tray_icon(tray_);
     cEngineRunMainLoop(engd_, area_.x, area_.y, area_.z + area_.x,
             area_.w + area_.y, engd_flags, FRM_WAIT, (intptr_t)this,
-            update_frame, update_flags);
+            update_frame, update_flags, update_keys);
     cEngineCallback(engd_, ECB_GFLG, (intptr_t)&engd_flags);
     mctl_.discard_tray_icon(icon);
 
@@ -409,6 +456,7 @@ void engine_t::control_p2_handler(MENU *item) {
 }
 
 void engine_t::options_handler(MENU *item) {
+    ((engine_t*)item->data)->octl_.toggle_visibility(true);
 }
 
 void engine_t::build_library_structure(string_view_t base) {
