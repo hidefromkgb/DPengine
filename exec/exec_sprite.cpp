@@ -6,6 +6,13 @@
 
 
 
+static bool is_pressed(int8_t code, uint64_t kchr, uint64_t kcmd) {
+    if ((code < KEY_CHR_NONE) || (code > KEY_CMD_ALL)) return false;
+    const uint64_t keys = (code >= KEY_CMD_NONE) ? kcmd : kchr;
+    if (code >= KEY_CMD_NONE) code -= KEY_CMD_NONE;
+    return !!(keys & ((uint64_t)1 << code));
+}
+
 static int bound_crossed(float move, float offs, int32_t bmin, int32_t bmax) {
     if ((move < 0.f) && (offs + move <= bmin)) return -1;
     if ((move > 0.f) && (offs + move >= bmax)) return  1;
@@ -26,7 +33,6 @@ void sprite_t::advance(int64_t time, bool reset) {
 
 bool sprite_t::next_behaviour(
         uint32_t *seed, int64_t time, T2IV area, const cast_t &cast) {
-    // [TODO:] the player-controlled states belong here
     if ((time < next_bhv_time_) || get_flag(special)) return false;
     const auto next = lib_->next_behaviour(seed, bhv_);
     assert(next);
@@ -52,6 +58,7 @@ void sprite_t::apply_behaviour(
     unit_ = (has_target()) ? &lib_->follow_override(seed, next, false) : &next;
     set_flag(enroute, false);
     set_flag(wanteffects, true); // see sprite_bank_t::deploy_effects()
+    // controlled sprites get their velocity from sprite_bank_t::update()
     velocity_ = (get_flag(special)) ? T2FV{} : bhv_->choose_velocity(seed);
     // a moving sprite faces where it goes, a static one keeps its current
     // side unless it has none yet - either way the side has to be settled
@@ -114,10 +121,12 @@ void sprite_t::set_sleep(uint32_t *seed, int64_t time, T2IV area, bool on) {
 void sprite_t::set_drag(
         uint32_t *seed, int64_t time, T2IV area, bool on, bool hover) {
     if (on == get_flag(dragged)) return;
-    if (on) { // sleeping characters keep sleeping
-        auto &d = (get_flag(asleep)) ? *bhv_ : lib_->drag_bhv(seed, base_bhv());
-        pick_special(seed, area, dragged, d);
-    } else if (!get_flag(asleep) && hover) { // as in DP
+    const bool keep_bhv = get_flag(asleep | controlled);
+    if (on) {
+        pick_special(seed, area, dragged,
+                (keep_bhv) ? *bhv_ : lib_->drag_bhv(seed, base_bhv()));
+        velocity_ = {}; // kept behaviours are not reapplied to clear velocity
+    } else if (!keep_bhv && hover) { // as in DP
         pick_special(seed, area, hovered, lib_->hover_bhv(seed, base_bhv()));
     }
     drop_special(seed, area, (on) ? hovered : dragged, time);
@@ -125,7 +134,7 @@ void sprite_t::set_drag(
 
 const behaviour_t *sprite_t::hover(
         uint32_t *seed, T2IV cursor, ENGD *engd) const {
-    if (get_flag(special)) return nullptr;
+    if (get_flag(special)) return nullptr; // unlike DP, controlled ones too
     const auto &hover_bhv = lib_->hover_bhv(seed, *bhv_);
     // HOVER_BHV has to be under the cursor too, or it flickers in and out
     const auto prev_center = unit_->center(get_flag(left));
@@ -155,6 +164,29 @@ bool sprite_t::has_target() const {
         && ((bhv_->follow_target()) ? !!parent_ : bhv_->follow());
 }
 
+void sprite_t::do_steer(uint32_t *seed, T2IV area,
+        const conf_t::keybindings_t &kb, uint64_t kchr, uint64_t kcmd) {
+    #define KEY(what) is_pressed(kb.what.get(), kchr, kcmd)
+    if (get_flag(dragged)) return; // moving with the cursor, at zero velocity
+    const T2IV dir{{KEY(r) - KEY(l), KEY(d) - KEY(u)}}; // Y goes down
+    const float MUL_BOOST = 2.f;
+    const float MUL_SPEED = (FRM_WAIT / 1000.f) * 100.f;
+    const float coef = ((KEY(b)) ? MUL_BOOST * MUL_SPEED : MUL_SPEED)
+                     * ((dir.x && dir.y) ? 0.70710678f : 1.f);
+    const bool moving = dir.x || dir.y; // ^-- 1.f / sqrt(2.f)
+    const auto &next = (moving != lib_->is_moving(*bhv_))
+                     ? (moving) ? lib_->moving_bhv(seed, *bhv_)
+                                : lib_->stationary_bhv(seed, *bhv_)
+                     : *bhv_;
+    if (&next != bhv_) { // group may have 0 behaviours of type, returning BHV_
+        apply_behaviour(seed, area, next);
+        set_flag(wanteffects, false);
+        curr_frame_ = UINT32_MAX; // restarted by the next update_behaviour()
+    }
+    velocity_ = {{coef * dir.x, coef * dir.y}}; // apply_behaviour() zeroes it
+    #undef KEY
+}
+
 bool sprite_t::move_behaviour(
         uint32_t *seed, int64_t time, T2IV area, T2IV cursor, float sq_cdr) {
     if (time < next_move_time_) return false;
@@ -162,26 +194,30 @@ bool sprite_t::move_behaviour(
                       ? time : next_move_time_) + FRM_WAIT;
     if (has_target()) return follow_behaviour(seed, area);
     const auto dims = unit_->dims(get_flag(left));
-    // [TODO:] player-controlled characters should stop at the area boundary
-    //         instead of flipping the velocity
-    const bool wall_flip
-            = bound_crossed(velocity_.x, position_.x + dims.x, dims.x, area.x);
-    if (wall_flip) {
+    // player control: no rebounds, no cursor dodging; the clamp below stops
+    // the sprite at the stage edges
+    if (!get_flag(controlled)) {
+        if (bound_crossed(velocity_.x, position_.x + dims.x, dims.x, area.x))
+            velocity_.x = -velocity_.x;
+        if (bound_crossed(velocity_.y, position_.y, dims.y, area.y))
+            velocity_.y = -velocity_.y;
+    }
+    // fix facing to match movement direction if the latter flipped upon either
+    // a rebound or the player's command; Y movement keeps the facing unlike DP
+    const bool flip_1 = velocity_.x && ((velocity_.x < 0.f) != get_flag(left));
+    if (flip_1) {
         position_.x += unit_->center(get_flag(left)).x
                      - unit_->center(!get_flag(left)).x;
-        velocity_.x = -velocity_.x;
         set_flag(left, !get_flag(left));
     }
-    if (bound_crossed(velocity_.y, position_.y, dims.y, area.y))
-        velocity_.y = -velocity_.y;
-    const bool cursor_flip = avoid_cursor(cursor, sq_cdr);
+    const bool flip_2 = !get_flag(controlled) && avoid_cursor(cursor, sq_cdr);
     position_.x += velocity_.x;
     position_.y += velocity_.y;
     // the rebound may push the sprite through a wall; keep it on stage
     const auto fdims = unit_->dims(get_flag(left));
     position_.x = std_clamp(position_.x, 0.f, (float)area.x - fdims.x);
     position_.y = std_clamp(position_.y, (float)fdims.y, (float)area.y);
-    return wall_flip != cursor_flip;
+    return flip_1 != flip_2; // two flips cancel out if both get applied
 }
 
 // DP's ReboundToAvoidCursor(): each axis is negated if the post-step center
@@ -357,7 +393,9 @@ void sprite_t::preinit_speech(sprite_t &parent, const speech_t &initial) {
 }
 
 bool sprite_t::do_speech(uint32_t *seed, int64_t time, uint64_t chance) {
-    if (!parent_moved_on()) return false; // v-- screw the type: it's an effect
+    // controlled characters never speak; see DP's SendToCustomDestination()
+    if (!parent_moved_on() || parent_->get_flag(controlled)) return false;
+    // screw the exact type: it's an effect, so it can be either special or not
     const bool was_special = set_flag(special, parent_->get_flag(special));
     // random lines need the cooldown to be over and no target to follow;
     // in special states the target is kept but ignored, see has_target()
@@ -407,7 +445,8 @@ bool sprite_t::parent_moved_on() const {
 sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
         int64_t time, T2IV area, bool effects, bool speech,
         const conf_t::spin_t &speech_chance,
-        const conf_t::spin_t &cursor_dodge)
+        const conf_t::spin_t &cursor_dodge,
+        const conf_t::keybindings_t &p1, const conf_t::keybindings_t &p2)
 : shown_(0)
 , waiting_(0)
 , area_(area)
@@ -415,6 +454,8 @@ sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
 , speech_(speech)
 , speech_chance_(speech_chance)
 , cursor_dodge_(cursor_dodge)
+, p1_{p1, nullptr}
+, p2_{p2, nullptr}
 , grab_{}
 , active_(nullptr)
 , menu_target_(nullptr)
@@ -507,7 +548,34 @@ void sprite_bank_t::toggle_sleep(
     const auto ic = find_in_map(cast_, chr.lib_->id());
     assert(!all || ic);
     sprite_t::cast_t::mapped_type one{&chr};
-    for (auto c : (all) ? *ic : one) c->set_sleep(seed, time, area_, on);
+    for (auto c : (all) ? *ic : one) {
+        c->set_sleep(seed, time, area_, on);
+        if (on && c->get_flag(sprite_t::controlled)) // release control
+            toggle_control(seed, time, *c, (c == p1_.chr) ? p1_ : p2_);
+    }
+}
+
+void sprite_bank_t::toggle_control(
+        uint32_t *seed, int64_t time, sprite_t &chr, player_t &player) {
+    const bool on = (player.chr != &chr);
+    auto &other = (&player == &p1_) ? p2_ : p1_;
+    if (player.chr)
+        player.chr->drop_special(seed, area_, sprite_t::controlled, time);
+    player.chr = (on) ? &chr : nullptr;
+    if (!on) return;
+    if (other.chr == &chr) other.chr = nullptr;
+    if (&chr == active_) { // ending its drag or hover, see set_drag()
+        chr.set_drag(seed, time, area_, false, false);
+        chr.drop_special(seed, area_, sprite_t::hovered, time);
+        active_ = nullptr;
+    }
+    // unlike hover or drag, sleep and control exclude each other
+    chr.set_sleep(seed, time, area_, false); // see toggle_sleep()
+    // reapplied in place, dropping any follow animation; menu actions come
+    // between updates, so only the effects of waking up and of the reapply
+    // are pending, both dropped as in DP's SendToCustomDestination()
+    chr.pick_special(seed, area_, sprite_t::controlled, *chr.bhv_);
+    chr.set_flag(sprite_t::wanteffects, false);
 }
 
 void sprite_bank_t::menu_action(
@@ -519,8 +587,8 @@ void sprite_bank_t::menu_action(
         case remove_all: break;
         case sleep_one: toggle_sleep(seed, time, chr, false); break;
         case sleep_all: toggle_sleep(seed, time, chr, true); break;
-        case control_p1: break;
-        case control_p2: break;
+        case control_p1: toggle_control(seed, time, chr, p1_); break;
+        case control_p2: toggle_control(seed, time, chr, p2_); break;
     }
 }
 
@@ -541,6 +609,9 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
     const auto speech_chance
             = (uint64_t(speech_chance_.get()) << 32) / speech_chance_.max();
     handle_input(seed, time, in);
+    // after the input, so that drags ended there are accounted for
+    if (p1_.chr) p1_.chr->do_steer(seed, area_, p1_.keys, in.kchr, in.kcmd);
+    if (p2_.chr) p2_.chr->do_steer(seed, area_, p2_.keys, in.kchr, in.kcmd);
     // behaviours first, as followers need updated positions
     for (uint32_t iter = 0; iter < shown_; iter++) {
         auto &chr = *sprites_[iter];

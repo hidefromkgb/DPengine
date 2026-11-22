@@ -24,8 +24,8 @@ private:
 
     enum flags_t : uint32_t {
         GEN_FLAGS(left, wanteffects, effect, speech, enroute,
-                  asleep, dragged, hovered)
-        special = asleep | dragged | hovered,
+                  asleep, dragged, hovered, controlled)
+        special = asleep | dragged | hovered | controlled,
     };
 
     const unit_t *unit_;        // what is being animated, nullptr = empty slot
@@ -98,8 +98,18 @@ private:
     void update_behaviour(uint32_t *seed, int64_t time, T2IV area,
             const cast_t &cast, T2IV cursor, float sq_cdr);
 
-    // special states: no expiry, no movement, no following; on leaving the
-    // last one, RESUME_ is re-applied with a fresh duration and PARENT_ kept
+    // DP's ManualControl(): 100 pixels per second, 200 on boost;
+    // DP's SendToCustomDestination(): a behaviour not matching the keys,
+    // moving or not, is replaced by a random one that does, neither speaking
+    // nor deploying effects; PARENT_ stays for RESUME_
+    void do_steer(uint32_t *seed, T2IV area,
+            const conf_t::keybindings_t &kb, uint64_t kchr, uint64_t kcmd);
+
+    // special states: no expiry, no following, and all but controlled cannot
+    // move; controlled makes the player responsible for moving, and VELOCITY_
+    // is set by do_steer(); controlled sprites are never asleep or hovered,
+    // and when dragged they keep their behaviour; on leaving the last special
+    // state RESUME_ is reapplied with existing PARENT_ and a fresh duration
     const behaviour_t &base_bhv() const; // RESUME_ if special
     void pick_special(uint32_t *seed, T2IV area, flags_t state,
             const behaviour_t &special_bhv);
@@ -142,6 +152,8 @@ class sprite_bank_t : public no_copy_t {
 public:
     struct input_t {
         T2IV cursor;
+        uint64_t kchr; // character keys pressed
+        uint64_t kcmd; // command keys pressed
         uint32_t attr; // UFR_ flags
         uint32_t isel; // the sprite under the cursor, > INT32_MAX if none
         bool hover; // conf_t::hover, may change mid-run
@@ -152,6 +164,10 @@ public:
     };
 
 private:
+    struct player_t {
+        const conf_t::keybindings_t &keys; // keys used to control the sprite
+        sprite_t *chr; // the sprite under player control, nullptr if none
+    };
     // lets std::make_unique() reach the private constructor
     struct slot_t : public sprite_t { slot_t() = default; };
 
@@ -166,6 +182,8 @@ private:
     bool speech_;
     const conf_t::spin_t &speech_chance_;
     const conf_t::spin_t &cursor_dodge_;
+    player_t p1_;
+    player_t p2_;
     T2FV grab_; // ACTIVE_'s position relative to the cursor, if dragged
     sprite_t *active_; // the dragged or hovered character, see its flags
     sprite_t *menu_target_; // the character the local menu is for
@@ -180,6 +198,10 @@ private:
     void handle_input(uint32_t *seed, int64_t time, const input_t &in);
     // ALL: every character of CHR's library, all set to the same state
     void toggle_sleep(uint32_t *seed, int64_t time, sprite_t &chr, bool all);
+    // as in DP, picking the same player again releases CHR, and
+    // a character has one player at most
+    void toggle_control(
+            uint32_t *seed, int64_t time, sprite_t &chr, player_t &player);
 
     // moves sprites between regions: shown / free / waiting
     static bool try_recycle(uint32_t iter, uint32_t if_free, uint32_t if_not,
@@ -188,7 +210,8 @@ public:
     sprite_bank_t(const selection_t &sel, uint32_t *seed, int64_t time,
             T2IV area, bool effects, bool speech,
             const conf_t::spin_t &speech_chance,
-            const conf_t::spin_t &cursor_dodge);
+            const conf_t::spin_t &cursor_dodge,
+            const conf_t::keybindings_t &p1, const conf_t::keybindings_t &p2);
 
     uint32_t capacity() const { return sprites_.size(); }
     uint32_t shown() const { return shown_; }
@@ -196,8 +219,10 @@ public:
     bool is_asleep(const sprite_t &chr) const {
         return chr.get_flag(sprite_t::asleep);
     }
-    // the player controlling CHR, 0 if none
-    uint32_t controller(const sprite_t &chr) const { return 0; }
+    // PLAYER: false = P1, true = P2
+    bool is_controlled(const sprite_t &chr, bool player) const {
+        return &chr == ((player) ? p2_ : p1_).chr;
+    }
     // the character right-clicked during the last update(), once per click
     const sprite_t *menu_request() {
         if (!menu_pending_) return nullptr;

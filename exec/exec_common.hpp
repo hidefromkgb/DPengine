@@ -189,6 +189,14 @@ public:
         categories_t() = default;
         categories_t(size_t ctg_id) { add(ctg_id); }
     };
+    struct keybindings_t {
+        spin_t u; // up
+        spin_t l; // left
+        spin_t d; // down
+        spin_t r; // right
+        spin_t b; // boost speed
+        spin_t a; // action
+    };
     using lang_map_t = std::unordered_map<size_t, const string_t*>;
     string_t *base = nullptr; // path to the animation base
     string_t *lang = nullptr; // name of the language file
@@ -203,6 +211,8 @@ public:
     flags_t flgs = {};
     categories_t ctg_nonex = {};
     categories_t ctg_exact = {};
+    keybindings_t p1 = {}; // keyboard controls: player 1
+    keybindings_t p2 = {}; // keyboard controls: player 2
 
     // the strings are copied, not shared; in the C port this logic becomes
     // a stand-alone function to be used instead of a plain struct copy
@@ -226,6 +236,8 @@ public:
             flgs = rhs.flgs;
             ctg_nonex = rhs.ctg_nonex;
             ctg_exact = rhs.ctg_exact;
+            p1 = rhs.p1;
+            p2 = rhs.p2;
             base = make_string(get_view(base));
             lang = make_string(get_view(lang));
             for (auto &item : lang_map)

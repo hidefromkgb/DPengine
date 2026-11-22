@@ -155,6 +155,9 @@ private:
 
     static void extract_speech_colors_worker(intptr_t data, uint64_t unused);
     unit_t &get_preview_internal() { return *behaviours_[preview_id_]; }
+    // a random behaviour of TYPE from CURR's group, CURR if none
+    const behaviour_t &typed_bhv_internal(
+            uint32_t *seed, const behaviour_t &curr, bhv_type_t type) const;
 
     // struct and methods that compartmentalize the constructor:
     struct build_ctx_t;
@@ -166,8 +169,6 @@ private:
     void init_probabilities(const build_ctx_t &ctx);
     void init_follow_groups(const build_ctx_t &ctx);
     void init_special_behaviours(const build_ctx_t &ctx);
-    const behaviour_t &special_bhv_internal(
-            uint32_t *seed, const behaviour_t &curr, bhv_type_t type) const;
     void init_max_effects();
     void dump_stats() const;
 
@@ -185,17 +186,29 @@ public:
     const speech_t *force_random_speech(
             uint32_t *seed, const behaviour_t &curr) const;
 
-    // random special behaviours of CURR's group, see init_special_behaviours()
+    // random behaviours of CURR's group, CURR if none
     const behaviour_t &sleep_bhv(
             uint32_t *seed, const behaviour_t &curr) const {
-        return special_bhv_internal(seed, curr, sleeping);
+        return typed_bhv_internal(seed, curr, sleeping);
     }
     const behaviour_t &hover_bhv(
             uint32_t *seed, const behaviour_t &curr) const {
-        return special_bhv_internal(seed, curr, mouseover);
+        return typed_bhv_internal(seed, curr, mouseover);
     }
     const behaviour_t &drag_bhv(uint32_t *seed, const behaviour_t &curr) const {
-        return special_bhv_internal(seed, curr, dragged);
+        return typed_bhv_internal(seed, curr, dragged);
+    }
+    const behaviour_t &stationary_bhv(
+            uint32_t *seed, const behaviour_t &curr) const {
+        return typed_bhv_internal(seed, curr, stationary);
+    }
+    const behaviour_t &moving_bhv(
+            uint32_t *seed, const behaviour_t &curr) const {
+        return typed_bhv_internal(seed, curr, moving);
+    }
+    // whether BHV is of the kind moving_bhv() returns
+    bool is_moving(const behaviour_t &bhv) const {
+        return bhv_id_internal_t{bhv.id()}.type == moving;
     }
 
     static bhv_id_desc_t build_bhv_id_desc(const input_t &in);

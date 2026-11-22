@@ -378,8 +378,8 @@ public:
     void discard_tray_icon(intptr_t icon);
 
     void sync_menu_flags(uint32_t flgs);
-    // PLAYER: the one controlling the character, 0 if none
-    void open_local_menu(string_view_t name, bool asleep, uint32_t player);
+    // P1, P2: whether the character is controlled by player 1 or 2
+    void open_local_menu(string_view_t name, bool asleep, bool p1, bool p2);
 
     void main_loop(uint32_t fram) {
         rInternalMainLoop(&get_root(), fram, update_previews, intptr_t(this));

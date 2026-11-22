@@ -792,7 +792,7 @@ std::vector<MENU> main_window_t::get_local_template() {
 }
 
 void main_window_t::open_local_menu(
-        string_view_t name, bool asleep, uint32_t player) {
+        string_view_t name, bool asleep, bool p1, bool p2) {
     free_string(local_menu_title_);
     local_menu_title_
             = make_string(get_imm_view("[ "), name, get_imm_view(" ]"));
@@ -802,8 +802,8 @@ void main_window_t::open_local_menu(
         bool check;
         switch (item->uuid) {
             case TXT_CSLP: check = asleep; break;
-            case TXT_TPL1: check = (player == 1); break;
-            case TXT_TPL2: check = (player == 2); break;
+            case TXT_TPL1: check = p1; break;
+            case TXT_TPL2: check = p2; break;
             default: continue;
         }
         item->flgs = (check) ? (item->flgs | MFL_VCHK)

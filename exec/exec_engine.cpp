@@ -32,12 +32,74 @@
 #define CFG_RNDR 'R','e','n','d','e','r'
 // general flags in conf_t::flgs
 #define CFG_FLGS 'F','l','a','g','s'
+// keybindings for player #1
+#define CFG_PLR1 'P','l','a','y','e','r','1','K','e','y','s'
+// keybindings for player #2
+#define CFG_PLR2 'P','l','a','y','e','r','2','K','e','y','s'
 
 
+
+static string_view_t key_name(int8_t code) {
+    #define KEY(k) get_imm_view(#k)
+    static const string_view_t key_names[] = {
+        KEY(CHR_NONE ),
+        KEY(TILDE    ), KEY(1        ), KEY(2        ), KEY(3        ),
+        KEY(4        ), KEY(5        ), KEY(6        ), KEY(7        ),
+        KEY(8        ), KEY(9        ), KEY(0        ), KEY(HYPHEN   ),
+        KEY(EQUAL    ), KEY(Q        ), KEY(W        ), KEY(E        ),
+        KEY(R        ), KEY(T        ), KEY(Y        ), KEY(U        ),
+        KEY(I        ), KEY(O        ), KEY(P        ), KEY(LBRACKET ),
+        KEY(RBRACKET ), KEY(A        ), KEY(S        ), KEY(D        ),
+        KEY(F        ), KEY(G        ), KEY(H        ), KEY(J        ),
+        KEY(K        ), KEY(L        ), KEY(COLON    ), KEY(QUOTE    ),
+        KEY(PIPE     ), KEY(Z        ), KEY(X        ), KEY(C        ),
+        KEY(V        ), KEY(B        ), KEY(N        ), KEY(M        ),
+        KEY(LESS     ), KEY(GREATER  ), KEY(QUESTION ), KEY(NUM_DIV  ),
+        KEY(NUM_MUL  ), KEY(NUM_SUB  ), KEY(NUM_7    ), KEY(NUM_8    ),
+        KEY(NUM_9    ), KEY(NUM_4    ), KEY(NUM_5    ), KEY(NUM_6    ),
+        KEY(NUM_ADD  ), KEY(NUM_1    ), KEY(NUM_2    ), KEY(NUM_3    ),
+        KEY(NUM_0    ), KEY(NUM_DEL  ), KEY(NUM_EQUAL),
+        KEY(CMD_NONE ),
+        KEY(ESC      ), KEY(F1       ), KEY(F2       ), KEY(F3       ),
+        KEY(F4       ), KEY(F5       ), KEY(F6       ), KEY(F7       ),
+        KEY(F8       ), KEY(F9       ), KEY(F10      ), KEY(F11      ),
+        KEY(F12      ), KEY(BACKSPACE), KEY(TAB      ), KEY(CAPSLOCK ),
+        KEY(ENTER    ), KEY(LSHIFT   ), KEY(RSHIFT   ), KEY(LCTRL    ),
+        KEY(LSYSTEM  ), KEY(LALT     ), KEY(SPACE    ), KEY(RALT     ),
+        KEY(RSYSTEM  ), KEY(RMENU    ), KEY(RCTRL    ), KEY(PRTSCR   ),
+        KEY(SCRLOCK  ), KEY(PAUSE    ), KEY(INSERT   ), KEY(HOME     ),
+        KEY(PAGEUP   ), KEY(DELETE   ), KEY(END      ), KEY(PAGEDOWN ),
+        KEY(UP       ), KEY(LEFT     ), KEY(DOWN     ), KEY(RIGHT    ),
+        KEY(NUM_LOCK ), KEY(NUM_ENTER),
+    };
+    #undef KEY
+    const int32_t size = sizeof(key_names) / sizeof(*key_names);
+    return key_names[((code >= 0) && (code < size)) ? code : KEY_CHR_NONE];
+}
+
+static conf_t::keybindings_t process_keybindings(
+        tokenizer_t *line, const conf_t::keybindings_t *def) {
+    conf_t::keybindings_t retn = *def;
+    conf_t::spin_t *spins[] = {
+        &retn.u, &retn.l, &retn.d, &retn.r, &retn.b, &retn.a,
+    };
+    for (size_t i = 0; i < sizeof(spins) / sizeof(*spins); i++) {
+        next_token(line, get_remainder(line), 0, DEF_TSEP, DEF_QUOT);
+        const string_view_t name = get_token(line);
+        int16_t code;
+        for (code = KEY_CHR_NONE + 1; code <= KEY_CMD_ALL; code++) {
+            string_view_t iter = key_name(code);
+            if (name.size != iter.size) continue;
+            if (!strncmp(name.str, iter.str, iter.size)) break;
+        } // quadratic O is perfectly acceptable, considering the task size
+        if (code <= KEY_CMD_ALL) spins[i]->set(code);
+    }
+    return retn;
+}
 
 static conf_t::flags_t process_flg(tokenizer_t *line, conf_t::flags_t def) {
-    STATIC_ASSERT((conf_t::render_mask == 0x0000007F));
-    STATIC_ASSERT((conf_t::general_mask == 0x0003FF80));
+    STATIC_ASSERT(conf_t::render_mask == 0x0000007F);
+    STATIC_ASSERT(conf_t::general_mask == 0x0003FF80);
     next_token(line, get_remainder(line), 0, DEF_TSEP, DEF_QUOT);
     auto t = get_token(line);
     if (t.size < 2) return def;
@@ -136,6 +198,21 @@ conf_t engine_t::get_def_conf(string_view_t base) {
     retn.ncdr = conf_t::spin_t(  0,    0,  1000);
     retn.spec = conf_t::spin_t(  0, -100,   100);
     retn.rgpu = conf_t::spin_t(  0,    0, 30000);
+
+    retn.p1.u = conf_t::spin_t(KEY_W,      KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p1.l = conf_t::spin_t(KEY_A,      KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p1.d = conf_t::spin_t(KEY_S,      KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p1.r = conf_t::spin_t(KEY_D,      KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p1.b = conf_t::spin_t(KEY_LSHIFT, KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p1.a = conf_t::spin_t(KEY_LALT,   KEY_CHR_NONE, KEY_CMD_ALL);
+
+    retn.p2.u = conf_t::spin_t(KEY_UP,     KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p2.l = conf_t::spin_t(KEY_LEFT,   KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p2.d = conf_t::spin_t(KEY_DOWN,   KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p2.r = conf_t::spin_t(KEY_RIGHT,  KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p2.b = conf_t::spin_t(KEY_RSHIFT, KEY_CHR_NONE, KEY_CMD_ALL);
+    retn.p2.a = conf_t::spin_t(KEY_RCTRL,  KEY_CHR_NONE, KEY_CMD_ALL);
+
     return retn;
 }
 
@@ -164,8 +241,8 @@ void engine_t::save_ini_conf() const {
         CASE(filters), CASE(effects), CASE(copies), CASE(opaque), CASE(exact),
         CASE(wregion), CASE(wbgra), CASE(wpbo),
     };
-    STATIC_ASSERT((conf_t::render_mask == 0x0000007F));
-    STATIC_ASSERT((conf_t::general_mask == 0x0003FF80));
+    STATIC_ASSERT(conf_t::render_mask == 0x0000007F);
+    STATIC_ASSERT(conf_t::general_mask == 0x0003FF80);
     #undef CASE
     #define _(...) get_imm_view(((const char[]){__VA_ARGS__, 0}))
     #define hdrs(retn, name, ...) hdrs_(retn, (string_view_t) name, \
@@ -187,6 +264,12 @@ void engine_t::save_ini_conf() const {
     retn = hdrs(retn, _(CFG_PCDR)); retn = vals(retn, ccur_.ncdr.get());
     retn = hdrs(retn, _(CFG_SPEC)); retn = vals(retn, ccur_.spec.get());
     retn = hdrs(retn, _(CFG_RGPU)); retn = vals(retn, ccur_.rgpu.get());
+    #define KEY(i, what) key_name(ccur_.p##i.what.get())
+    retn = hdrs(retn, _(CFG_PLR1),
+            KEY(1, u), KEY(1, l), KEY(1, d), KEY(1, r), KEY(1, b), KEY(1, a));
+    retn = hdrs(retn, _(CFG_PLR2),
+            KEY(2, u), KEY(2, l), KEY(2, d), KEY(2, r), KEY(2, b), KEY(2, a));
+    #undef KEY
     render = hdrs(render, _(CFG_RNDR)); general = hdrs(general, _(CFG_FLGS));
     for (size_t i = 0; i < sizeof(all_flags) / sizeof(*all_flags); i++) {
         const flag_t *f = &all_flags[i];
@@ -269,6 +352,12 @@ conf_t engine_t::load_ini_conf(const conf_t &def, string_view_t cfnm) {
                 case CHR_HASH(L, CFG_RGPU):
                     retn.rgpu = process_spin(line, def.rgpu);
                     break;
+                case CHR_HASH(L, CFG_PLR1):
+                    retn.p1 = process_keybindings(line, &def.p1);
+                    break;
+                case CHR_HASH(L, CFG_PLR2):
+                    retn.p2 = process_keybindings(line, &def.p2);
+                    break;
                 case CHR_HASH(L, CFG_RNDR):
                     render = {};
                     while (!is_empty(line))
@@ -288,42 +377,9 @@ conf_t engine_t::load_ini_conf(const conf_t &def, string_view_t cfnm) {
 }
 
 void engine_t::update_keys(intptr_t user, int8_t code) {
-    #define KEY(k) #k
-    __attribute__((unused)) static const char *key_names[] = {
-        KEY(CHR_NONE ),
-        KEY(TILDE    ), KEY(1        ), KEY(2        ), KEY(3        ),
-        KEY(4        ), KEY(5        ), KEY(6        ), KEY(7        ),
-        KEY(8        ), KEY(9        ), KEY(0        ), KEY(HYPHEN   ),
-        KEY(EQUAL    ), KEY(Q        ), KEY(W        ), KEY(E        ),
-        KEY(R        ), KEY(T        ), KEY(Y        ), KEY(U        ),
-        KEY(I        ), KEY(O        ), KEY(P        ), KEY(LBRACKET ),
-        KEY(RBRACKET ), KEY(A        ), KEY(S        ), KEY(D        ),
-        KEY(F        ), KEY(G        ), KEY(H        ), KEY(J        ),
-        KEY(K        ), KEY(L        ), KEY(COLON    ), KEY(QUOTE    ),
-        KEY(PIPE     ), KEY(Z        ), KEY(X        ), KEY(C        ),
-        KEY(V        ), KEY(B        ), KEY(N        ), KEY(M        ),
-        KEY(LESS     ), KEY(GREATER  ), KEY(QUESTION ), KEY(NUM_DIV  ),
-        KEY(NUM_MUL  ), KEY(NUM_SUB  ), KEY(NUM_7    ), KEY(NUM_8    ),
-        KEY(NUM_9    ), KEY(NUM_4    ), KEY(NUM_5    ), KEY(NUM_6    ),
-        KEY(NUM_ADD  ), KEY(NUM_1    ), KEY(NUM_2    ), KEY(NUM_3    ),
-        KEY(NUM_0    ), KEY(NUM_DEL  ), KEY(NUM_EQUAL),
-        KEY(CMD_NONE ),
-        KEY(ESC      ), KEY(F1       ), KEY(F2       ), KEY(F3       ),
-        KEY(F4       ), KEY(F5       ), KEY(F6       ), KEY(F7       ),
-        KEY(F8       ), KEY(F9       ), KEY(F10      ), KEY(F11      ),
-        KEY(F12      ), KEY(BACKSPACE), KEY(TAB      ), KEY(CAPSLOCK ),
-        KEY(ENTER    ), KEY(LSHIFT   ), KEY(RSHIFT   ), KEY(LCTRL    ),
-        KEY(LSYSTEM  ), KEY(LALT     ), KEY(SPACE    ), KEY(RALT     ),
-        KEY(RSYSTEM  ), KEY(RMENU    ), KEY(RCTRL    ), KEY(PRTSCR   ),
-        KEY(SCRLOCK  ), KEY(PAUSE    ), KEY(INSERT   ), KEY(HOME     ),
-        KEY(PAGEUP   ), KEY(DELETE   ), KEY(END      ), KEY(PAGEDOWN ),
-        KEY(UP       ), KEY(LEFT     ), KEY(DOWN     ), KEY(RIGHT    ),
-        KEY(NUM_LOCK ), KEY(NUM_ENTER),
-    };
-    #undef KEY
     const bool down = (code >= 0);
     if (!down) code = -(code + 1);
-    //printf("=== KEY: [%s] %s\n", key_names[code], (down) ? "down" : "up");
+    //printf("=== KEY: [%s] %s\n", key_name(code).str, (down) ? "down" : "up");
     auto target = (code >= KEY_CMD_NONE) ? &((engine_t*)user)->kcmd_
                                          : &((engine_t*)user)->kchr_;
     if (code >= KEY_CMD_NONE) code -= KEY_CMD_NONE;
@@ -351,12 +407,14 @@ uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
     engc.tcur_ += (uint64_t)engc.tacc_;
     engc.tacc_ -= (uint64_t)engc.tacc_;
 
-    bank.update(engc.seed_, engc.tcur_, {{{xptr, yptr}}, attr, (uint32_t)isel,
-            !!(engc.ccur_.flgs & conf_t::hover), engd}); // animating
+    // animating the sprites
+    bank.update(engc.seed_, engc.tcur_, {{{xptr, yptr}}, engc.kchr_, engc.kcmd_,
+            attr, (uint32_t)isel, !!(engc.ccur_.flgs & conf_t::hover), engd});
     *data = bank.display(); // passing the updated sprites to the renderer
     if (auto chr = bank.menu_request())
-        engc.mctl_.open_local_menu(
-                chr->name(), bank.is_asleep(*chr), bank.controller(*chr));
+        engc.mctl_.open_local_menu(chr->name(), bank.is_asleep(*chr),
+                bank.is_controlled(*chr, false),
+                bank.is_controlled(*chr, true));
 
     // SIZE is the capacity of the sprite array rather than its length: the GPU
     // renderer is built once, out of whatever the very first frame reports
@@ -383,7 +441,8 @@ void engine_t::display_loop() {
     kchr_ = kcmd_ = 0;
     bank_ = std::make_unique<sprite_bank_t>(sel, seed_, tcur_,
                 T2IV{{area_.xdim, area_.ydim}}, ccur_.flgs & conf_t::effects,
-                ccur_.flgs & conf_t::speech, ccur_.nspk, ccur_.ncdr);
+                ccur_.flgs & conf_t::speech, ccur_.nspk, ccur_.ncdr,
+                ccur_.p1, ccur_.p2);
 
     uint32_t engd_flags = 0;
     for (auto &f : render_flags)

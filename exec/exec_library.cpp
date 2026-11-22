@@ -130,9 +130,7 @@ const unit_t &library_t::follow_override(
     if (iid.group < 0) // custom, unless rejected by init_follow_groups()
         if (auto ig = find_in_map(groups_, iid.group))
             return ig->bhv[mode][0].get();
-    auto ig = find_in_map(groups_, bhv_id_internal_t{bhv.id()}.group);
-    return (ig && !ig->bhv[mode].empty())
-            ? random_selection<false>(ig->bhv[mode], seed).get() : bhv;
+    return typed_bhv_internal(seed, bhv, mode);
 }
 
 const speech_t *library_t::transition_speech(uint32_t *seed, uint64_t chance,
@@ -152,10 +150,12 @@ const speech_t *library_t::force_random_speech(
             ? &random_selection<false>(ig->speeches, seed).get() : nullptr;
 }
 
-const behaviour_t &library_t::special_bhv_internal(
+const behaviour_t &library_t::typed_bhv_internal(
         uint32_t *seed, const behaviour_t &curr, bhv_type_t type) const {
     auto ig = find_in_map(groups_, bhv_id_internal_t{curr.id()}.group);
-    assert(ig && !ig->bhv[type].empty()); // see init_special_behaviours()
+    // special lists are never empty, see init_special_behaviours()
+    assert(ig && ((type == moving) || (type == stationary)
+                                   || !ig->bhv[type].empty()));
     return (ig && !ig->bhv[type].empty())
             ? random_selection<false>(ig->bhv[type], seed).get() : curr;
 }
