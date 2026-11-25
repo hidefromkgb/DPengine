@@ -53,10 +53,10 @@ effect_t::effect_t(const input_t &in, string_view_t path)
 , gravity_{init_gravity(in.placement_right, in.centering_right),
            init_gravity(in.placement_left, in.centering_left)} {
     if (path.size) {
-        local_string_t *right
-                = make_string(path, ILV_DSEP, get_view(in.right_image));
-        local_string_t *left
-                = make_string(path, ILV_DSEP, get_view(in.left_image));
+        local_string_t *right = make_string(
+                path, get_imm_view(DEF_DSEP), get_view(in.right_image));
+        local_string_t *left = make_string(
+                path, get_imm_view(DEF_DSEP), get_view(in.left_image));
         prepare_source(false, get_view(right));
         prepare_source(true, get_view(left));
     }
@@ -242,10 +242,10 @@ behaviour_t::behaviour_t(const input_t &in, bhv_id_t id,
 , effects_(process_effects(path, fx))
 , follow_(follow_tgt || in.target_xy.x || in.target_xy.y) {
     if (path.size) {
-        local_string_t *right
-                = make_string(path, ILV_DSEP, get_view(in.right_image));
-        local_string_t *left
-                = make_string(path, ILV_DSEP, get_view(in.left_image));
+        local_string_t *right = make_string(
+                path, get_imm_view(DEF_DSEP), get_view(in.right_image));
+        local_string_t *left = make_string(
+                path, get_imm_view(DEF_DSEP), get_view(in.left_image));
         prepare_source(false, get_view(right));
         prepare_source(true, get_view(left));
     }

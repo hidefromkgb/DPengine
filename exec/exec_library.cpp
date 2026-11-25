@@ -29,7 +29,7 @@ bhv_id_desc_t library_t::build_bhv_id_desc(const input_t &in) {
 library_t::input_t::input_t(string_view_t base, string_view_t dir) {
     long size = 0;
     local_string_t *config = make_string(
-            base, ILV_DSEP, dir, get_imm_view(DEF_DSEP DEF_CONF));
+            base, get_imm_view(DEF_DSEP), dir, get_imm_view(DEF_DSEP DEF_CONF));
     if (auto file = rLoadFile(get_view(config).str, &size)) {
         name = make_string(dir);
         auto line = local_make_tokenizer({});

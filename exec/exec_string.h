@@ -80,8 +80,6 @@ string_view_t get_view(const string_t *str);
 
 #define local_string_t __attribute__((cleanup(free_string_internal_))) string_t
 
-#define ILV_DSEP get_imm_view(DEF_DSEP) /* immutable string-literal view */
-
 
 
 // MODE: 'N' as is, 'L' ASCII to lowercase, 'U' ASCII to uppercase

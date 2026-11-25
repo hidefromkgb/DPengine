@@ -565,8 +565,8 @@ void engine_t::build_library_structure(string_view_t base) {
         // initialize the libraries
         printf("%s\n", get_view(i.name).str);
         const lib_id_t hash = str_hash(i.name, 'L');
-        local_string_t *full
-                = make_string(get_view(path), ILV_DSEP, get_view(i.name));
+        local_string_t *full = make_string(
+                get_view(path), get_imm_view(DEF_DSEP), get_view(i.name));
         libs_.emplace(hash, std::make_unique<library_t>(
                     hash, get_view(full), i, bhv_id_map));
         // process follow targets (nothing to do beside report missing ones)
