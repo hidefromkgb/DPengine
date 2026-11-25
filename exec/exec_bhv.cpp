@@ -269,24 +269,20 @@ T2FV behaviour_t::choose_velocity(uint32_t *seed) const {
     T2FV retn{{0.f, 0.f}};
     if (move & move_all) {
         const auto prng = RNG_Load(seed);
-        //          vvvv--- move_all selector; bit 5 also for move_{hv,dh,dv}
-        //    ...BA9876543210 (bits of prng)
-        // !Y ---^^^    ^^^^^--- cos_sin_lut index, [0; 32)
-        //  !X ---''--- flip the quadrant for full range
+        // ...vv vvvvvvvv--- selector for move_{all,hv,dh,dv}
+        // ...10 76543210 76543210 (bytes of prng, split into bits)
+        //          !Y ---^||^^^^^--- cos_sin_lut index, [0; 32)
+        //           !X ---''--- flip the quadrant for full range
         const auto hv = move & move_hv;
+        const auto sm = prng >> 8;
         switch (move & move_all) {
             case move_all:
-                switch (prng & 0x1E0) {
-                    case 0x000: case 0x020: case 0x040: case 0x060: case 0x080:
-                        move = move_horz; break;
-                    case 0x0A0: case 0x0C0: case 0x0E0: case 0x100: case 0x120:
-                        move = move_vert; break;
-                    default: move = move_diag; break; // 6 cases, not 5; is ok
-                }
-                break;
-            case move_hv: move = (prng & 0x020) ? move_horz : move_vert; break;
-            case move_dh: move = (prng & 0x020) ? move_diag : move_horz; break;
-            case move_dv: move = (prng & 0x020) ? move_diag : move_vert; break;
+                move = (sm > 0x555555) ? (sm <= 0xAAAAAA)
+                     ? move_horz : move_vert : move_diag;
+                break; // ^--- probability difference negligible, ~179 ppb
+            case move_hv: move = (sm > 0x7FFFFF) ? move_horz : move_vert; break;
+            case move_dh: move = (sm > 0x7FFFFF) ? move_diag : move_horz; break;
+            case move_dv: move = (sm > 0x7FFFFF) ? move_diag : move_vert; break;
             default: move &= move_all; break;
         }
         if (move != move_diag) {
@@ -295,20 +291,20 @@ T2FV behaviour_t::choose_velocity(uint32_t *seed) const {
             // how the angles were meant to be computed, see DP tech doc:
             // - hv=move_none: pure diagonal movement, [15; 75]
             // - hv=move_hv:   used to be move_all so pure diag here, [15; 75]
-            // - hv=move_horz: used to be move_dh, [15; 45]
             // - hv=move_vert: used to be move_dv, [45; 75]
+            // - hv=move_horz: used to be move_dh, [15; 45]
             // how the angles are actually computed:
             // - the LUT contains 32 values: [14; 45], (prng % m) -> (prng & m)
             // - 14 degrees not that different from 15, no one will notice
             // - if the full range is needed, 1 extra bit flips (x,y) -> (y,x)
             // - that way, the full range is [14; 76] and 45 is 2x as probable
             retn = cos_sin_lut[prng & 0x1F];
-            if (((prng & 0x200) && ((hv == move_none) || (hv == move_hv)))
+            if ((((hv == move_none) || (hv == move_hv)) && (prng & 0x20))
                     || (hv == move_vert))
                 std_swap(retn.x, retn.y);
         }
-        retn.x *= (prng & 0x400) ? -movement_speed_ : movement_speed_;
-        retn.y *= (prng & 0x800) ? -movement_speed_ : movement_speed_;
+        retn.x *= (prng & 0x40) ? -movement_speed_ : movement_speed_;
+        retn.y *= (prng & 0x80) ? -movement_speed_ : movement_speed_;
     }
     return retn;
 }
