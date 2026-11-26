@@ -156,7 +156,7 @@ sprite_t *sprite_t::pick_target(
     assert(lib_->id() != bhv.follow_target()); // illegal to follow own library
     // [TODO:] DP tech doc allows self-follows but the DP base has 0 such cases
     //         (might be worth considering to prohibit on import?)
-    return (*ic)[RNG_LoadBounded(seed, ic->size())];
+    return ic->sprites[RNG_LoadBounded(seed, ic->size)];
 }
 
 bool sprite_t::has_target() const {
@@ -442,13 +442,31 @@ bool sprite_t::parent_moved_on() const {
     return parent_->bhv_ != bhv_;
 }
 
+uint32_t sprite_bank_t::get_capacity(
+        const selection_t &sel, bool fx, bool spk) {
+    uint32_t retn = 0;
+    for (auto &s : sel)
+        retn += s.count * (((fx) ? s.lib->max_effects() + 1 : 1)
+                        + ((spk && s.lib->first_speech()) ? 1 : 0));
+    return retn;
+}
+
+sprite_bank_t::~sprite_bank_t() {
+    for (auto &c : cast_) free(c.second.sprites);
+    for (size_t iter = capacity_; iter; free(sprites_[--iter])) {}
+    free(sprites_);
+    free(display_);
+    free(elem_);
+}
+
 sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
         int64_t time, T2IV area, bool effects, bool speech,
         const conf_t::spin_t &speech_chance,
         const conf_t::spin_t &cursor_dodge,
         const conf_t::keybindings_t &p1, const conf_t::keybindings_t &p2)
-: shown_(0)
-, waiting_(0)
+: capacity_(get_capacity(sel, effects, speech))
+, waiting_(capacity_)
+, shown_(0)
 , area_(area)
 , effects_(effects)
 , speech_(speech)
@@ -461,39 +479,51 @@ sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
 , menu_target_(nullptr)
 , menu_pending_(false)
 , buttons_(0) {
+    sprites_ = (typeof(sprites_))realloc(
+                    nullptr, capacity_ * sizeof(*sprites_));
+    display_ = (typeof(display_))realloc(
+                    nullptr, capacity_ * sizeof(*display_));
+    elem_ = (typeof(elem_))realloc(
+                    nullptr, (area_.y + 1) * 4 * sizeof(*elem_));
+    for (uint32_t iter = (area_.y + 1) * 4; iter; elem_[--iter] = nullptr) {}
+    for (uint32_t iter = 0; iter < capacity_; iter++)
+        sprites_[iter] = (typeof(*sprites_))realloc(nullptr, sizeof(sprite_t));
     for (auto &s : sel) {
-        auto &lib = *s.lib;
-        waiting_ += s.count * (1 + ((effects_) ? lib.max_effects() : 0)
-                                 + ((speech_ && lib.first_speech()) ? 1 : 0));
-    }
-    sprites_.reserve(waiting_);
-    for (uint32_t iter = 0; iter < waiting_; iter++)
-        sprites_.emplace_back(std::make_unique<slot_t>());
-    display_.reserve(waiting_);
-    for (auto &s : sel)
+        auto &curr = cast_[s.lib->id()];
+        curr.size = 0;
+        curr.sprites = (typeof(curr.sprites))realloc(
+                            nullptr, s.count * sizeof(*curr.sprites));
         for (uint32_t iter = 0; iter < s.count; iter++)
-            add_behaviour(*s.lib, seed, time);
-    // empty until here, so the first behaviours follow no one
-    for (uint32_t iter = 0; iter < shown_; iter++)
-        cast_[sprites_[iter]->lib_->id()].emplace_back(sprites_[iter].get());
+            if (auto bhv = add_behaviour(*s.lib, seed, time))
+                curr.sprites[curr.size++] = bhv;
+        if (!curr.size) {
+            free(curr.sprites);
+            cast_.erase(s.lib->id());
+        } else if (curr.size < s.count) {
+            curr.sprites = (typeof(curr.sprites))realloc(curr.sprites,
+                                curr.size * sizeof(*curr.sprites));
+        }
+    }
 }
 
-void sprite_bank_t::add_behaviour(
+sprite_t *sprite_bank_t::add_behaviour(
         const library_t &lib, uint32_t *seed, int64_t time) {
     assert(shown_ < waiting_);
-    auto slot = sprites_[shown_].get();
+    auto slot = sprites_[shown_];
     slot->init_behaviour(lib, seed, time, area_, cast_);
-    if (slot->is_free()) return;
+    if (slot->is_free()) return nullptr;
     shown_++;
     const auto placeholder = (speech_) ? lib.first_speech() : nullptr;
     if (placeholder && (shown_ < waiting_)) // the character's speech slot
         sprites_[--waiting_]->preinit_speech(*slot, *placeholder);
+    return slot;
 }
 
-void sprite_bank_t::add_effect(sprite_t &parent, const effect_t &fx) {
-    if (shown_ >= waiting_) return; // too bad, no more space in the pool
+sprite_t *sprite_bank_t::add_effect(sprite_t &parent, const effect_t &fx) {
+    if (shown_ >= waiting_) return nullptr; // no more space in the pool
     // initialize the bare minimum and put the effect on the wait list
     sprites_[--waiting_]->preinit_effect(parent, fx);
+    return sprites_[waiting_];
 }
 
 void sprite_bank_t::deploy_effects(sprite_t &chr) {
@@ -510,7 +540,7 @@ void sprite_bank_t::handle_input(
     const auto released = buttons_ & ~held;
     buttons_ = held;
     sprite_t *under = ((held & UFR_MOUS) && (in.isel < shown_))
-                    ? sprites_[in.isel].get() : nullptr;
+                    ? sprites_[in.isel] : nullptr;
     if (under && under->get_flag(sprite_t::effect)) // effects pick the owner
         under = under->parent_;
     if (under && (released & UFR_RBTN)) { // see menu_request()
@@ -547,8 +577,10 @@ void sprite_bank_t::toggle_sleep(
     const bool on = !chr.get_flag(sprite_t::asleep);
     const auto ic = find_in_map(cast_, chr.lib_->id());
     assert(!all || ic);
-    sprite_t::cast_t::mapped_type one{&chr};
-    for (auto c : (all) ? *ic : one) {
+    sprite_t *cs[] = {&chr};
+    const sprite_t::cast_t::mapped_type one{1, cs}, *tgt = (all) ? ic : &one;
+    for (size_t iter = tgt->size; iter; ) {
+        auto c = tgt->sprites[--iter];
         c->set_sleep(seed, time, area_, on);
         if (on && c->get_flag(sprite_t::controlled)) // release control
             toggle_control(seed, time, *c, (c == p1_.chr) ? p1_ : p2_);
@@ -593,15 +625,15 @@ void sprite_bank_t::menu_action(
 }
 
 bool sprite_bank_t::try_recycle(uint32_t iter, uint32_t if_free,
-        uint32_t if_not, std::vector<std::unique_ptr<slot_t>> &sprites) {
-    auto temp = std::move(sprites[iter]);
-    sprites[iter] = std::move(sprites[if_free]);
+        uint32_t if_not, sprite_t **sprites) {
+    auto temp = sprites[iter];
+    sprites[iter] = sprites[if_free];
     if (!temp->is_free()) {
-        sprites[if_free] = std::move(sprites[if_not]);
+        sprites[if_free] = sprites[if_not];
     } else {
         if_not = if_free;
     }
-    return !(sprites[if_not] = std::move(temp))->is_free();
+    return !(sprites[if_not] = temp)->is_free();
 }
 
 void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
@@ -632,7 +664,7 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
         if (!try_recycle(iter, --shown_, --waiting_, sprites_)) waiting_++;
     }
     // forwards, for the same reason; this deploys new effects too
-    for (uint32_t iter = waiting_; iter < sprites_.size(); iter++) {
+    for (uint32_t iter = waiting_; iter < capacity_; iter++) {
         auto &fx = *sprites_[iter];
         assert(fx.get_flag(sprite_t::effect));
         // wakes due effects: those just added and those with duration < repeat
@@ -642,10 +674,28 @@ void sprite_bank_t::update(uint32_t *seed, int64_t time, const input_t &in) {
         if ((awake || fx.is_free())
                 && try_recycle(iter, waiting_++, shown_, sprites_)) shown_++;
     }
-    using sp_t = const std::unique_ptr<slot_t>; // sorting the sprites by Y
-    std::stable_sort(sprites_.begin(), sprites_.begin() + shown_,
-            [](sp_t &a, sp_t &b) { return sprite_t::depth_sort(*a, *b); });
-    display_.clear();
-    for (uint32_t iter = 0; iter < shown_; iter++)
-        sprites_[iter]->append(display_); // building the display list
+    if (shown_ <= 1) { // do not sort if there are no sprites to sort
+        if (shown_ == 1) display_[0] = sprites_[0]->display();
+    } else {
+        // DPE's SortByY(): a stable bucket sort on DEPTH_; SORT_ is the bucket
+        // linkage, at equal depth effects precede non-effects, and off-screen
+        // depths go to the very end
+        int32_t ymax = -1;
+        for (uint32_t iter = shown_; iter; ) {
+            int32_t ycur = 0;
+            auto sp = sprites_[--iter];
+            if ((sp->depth_ >= 0) && (sp->depth_ <= 2 * area_.y)) {
+                ycur = 2 * (sp->depth_ + 1) + sp->get_flag(sprite_t::effect);
+                ymax = std_max(ymax, ycur);
+            }
+            sp->sort_ = elem_[ycur];
+            elem_[ycur] = sp;
+        }
+        for (int32_t iter = std_max(ymax, 0), next = 0; iter >= 0; iter--)
+            while (auto sp = elem_[iter]) {
+                elem_[iter] = sp->sort_;
+                display_[next] = sp->display();
+                sprites_[next++] = sp;
+            }
+    }
 }
