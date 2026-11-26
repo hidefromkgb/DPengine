@@ -3,7 +3,7 @@
 
 #include "exec_engine.hpp"
 #include "exec_library.hpp"
-#include "exec_parser.hpp"
+#include "exec_parser.h"
 #include "exec_prng.hpp"
 #include "exec_sprite.hpp"
 #include "exec_web.hpp"
@@ -288,7 +288,8 @@ void engine_t::save_ini_conf() const {
 conf_t engine_t::load_ini_conf(const conf_t &def, string_view_t cfnm) {
     auto process_spin = [](tokenizer_t *line, const conf_t::spin_t &def) {
         return conf_t::spin_t(
-                process_float(line, def.get()), def.min(), def.max());
+                process_float(line, def.get(), DEF_TSEP, DEF_QUOT),
+                def.min(), def.max());
     };
     auto render = def.flgs & conf_t::render_mask;
     auto general = def.flgs & conf_t::general_mask;
@@ -323,8 +324,10 @@ conf_t engine_t::load_ini_conf(const conf_t &def, string_view_t cfnm) {
                 case CHR_HASH(L, CFG_RUNS): {
                     // a little hack: set min to equal the run count
                     // (see fixup_min() in constructor for more info)
-                    int16_t max = process_float(line, def.nrun.get());
-                    int16_t runs = process_float(line, def.nrun.min()) + 1;
+                    int16_t max = process_float(
+                                line, def.nrun.get(), DEF_TSEP, DEF_QUOT);
+                    int16_t runs = process_float(
+                                line, def.nrun.min(), DEF_TSEP, DEF_QUOT) + 1;
                     max = std_clamp(max, def.nrun.min(), def.nrun.max());
                     runs = std_clamp(runs, def.nrun.min(), max);
                     if ((max > def.nrun.min()) && (max == runs)) {

@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "exec_parser.hpp"
 #include "exec_web.hpp"
 #include "zip/zip_load.h"
 

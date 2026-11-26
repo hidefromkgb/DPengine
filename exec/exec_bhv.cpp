@@ -1,5 +1,5 @@
 #include "exec_bhv.hpp"
-#include "exec_parser.hpp"
+#include "exec_parser.h"
 #include "exec_prng.hpp"
 
 
@@ -32,18 +32,18 @@ effect_t::gravity_flags_t effect_t::process_gravity(
 
 effect_t::input_t::input_t(string_view_t str) {
     auto line = local_make_tokenizer(str);
-    name = process_string(line);
-    bhv = process_string(line);
-    right_image = process_string(line);
-    left_image = process_string(line);
-    duration = process_float(line, duration);
-    repeat_delay = process_float(line, repeat_delay);
+    name = process_string(line, DEF_TSEP, DEF_QUOT);
+    bhv = process_string(line, DEF_TSEP, DEF_QUOT);
+    right_image = process_string(line, DEF_TSEP, DEF_QUOT);
+    left_image = process_string(line, DEF_TSEP, DEF_QUOT);
+    duration = process_float(line, duration, DEF_TSEP, DEF_QUOT);
+    repeat_delay = process_float(line, repeat_delay, DEF_TSEP, DEF_QUOT);
     placement_right = process_gravity(line, placement_right);
     centering_right = process_gravity(line, centering_right);
     placement_left = process_gravity(line, placement_left);
     centering_left = process_gravity(line, centering_left);
-    follow = process_bool(line, follow);
-    prevent_loop = process_bool(line, prevent_loop);
+    follow = process_bool(line, follow, DEF_TSEP, DEF_QUOT);
+    prevent_loop = process_bool(line, prevent_loop, DEF_TSEP, DEF_QUOT);
 }
 
 effect_t::effect_t(const input_t &in, string_view_t path)
@@ -66,12 +66,14 @@ effect_t::effect_t(const input_t &in, string_view_t path)
 
 speech_t::input_t::input_t(string_view_t str) {
     auto line = local_make_tokenizer(str);
-    name = process_string(line);
-    text = process_string(line);
-    auto sound_files = process_array(line);
-    if (!sound_files.empty()) sound = make_string(sound_files[0]);
-    skip = process_bool(line, skip);
-    group = process_float(line, group);
+    name = process_string(line, DEF_TSEP, DEF_QUOT);
+    text = process_string(line, DEF_TSEP, DEF_QUOT);
+    string_view_t *sounds;
+    if (process_array(line, &sounds, DEF_TSEP, DEF_QUOT, DEF_ABGN, DEF_AEND))
+        sound = make_string(sounds[0]);
+    free(sounds);
+    skip = process_bool(line, skip, DEF_TSEP, DEF_QUOT);
+    group = process_float(line, group, DEF_TSEP, DEF_QUOT);
 }
 
 effect_t::input_t speech_t::convert_input(const speech_t::input_t &in) {
@@ -192,28 +194,30 @@ static bool process_mirror_target(tokenizer_t *line, bool def) {
 
 behaviour_t::input_t::input_t(string_view_t str) {
     auto line = local_make_tokenizer(str);
-    name = process_string(line);
-    chance = process_float(line, chance);
-    max_duration = process_float(line, max_duration);
-    min_duration = process_float(line, min_duration);
-    speed = process_float(line, speed);
-    right_image = process_string(line);
-    left_image = process_string(line);
+    name = process_string(line, DEF_TSEP, DEF_QUOT);
+    chance = process_float(line, chance, DEF_TSEP, DEF_QUOT);
+    max_duration = process_float(line, max_duration, DEF_TSEP, DEF_QUOT);
+    min_duration = process_float(line, min_duration, DEF_TSEP, DEF_QUOT);
+    speed = process_float(line, speed, DEF_TSEP, DEF_QUOT);
+    right_image = process_string(line, DEF_TSEP, DEF_QUOT);
+    left_image = process_string(line, DEF_TSEP, DEF_QUOT);
     movement = process_movement(line, movement);
-    linked_bhv = process_string(line);
-    bgn_speech = process_string(line);
-    end_speech = process_string(line);
-    skip = process_bool(line, skip);
-    target_xy.x = process_float(line, target_xy.x);
-    target_xy.y = process_float(line, target_xy.y);
-    follow_target = process_string(line);
-    auto_follow_img = process_bool(line, auto_follow_img);
-    follow_stop_bhv = process_string(line);
-    follow_mov_bhv = process_string(line);
-    right_img_center = process_quoted_int_pair(line, right_img_center);
-    left_img_center = process_quoted_int_pair(line, left_img_center);
-    prevent_loop = process_bool(line, prevent_loop);
-    group = process_float(line, group);
+    linked_bhv = process_string(line, DEF_TSEP, DEF_QUOT);
+    bgn_speech = process_string(line, DEF_TSEP, DEF_QUOT);
+    end_speech = process_string(line, DEF_TSEP, DEF_QUOT);
+    skip = process_bool(line, skip, DEF_TSEP, DEF_QUOT);
+    target_xy.x = process_float(line, target_xy.x, DEF_TSEP, DEF_QUOT);
+    target_xy.y = process_float(line, target_xy.y, DEF_TSEP, DEF_QUOT);
+    follow_target = process_string(line, DEF_TSEP, DEF_QUOT);
+    auto_follow_img = process_bool(line, auto_follow_img, DEF_TSEP, DEF_QUOT);
+    follow_stop_bhv = process_string(line, DEF_TSEP, DEF_QUOT);
+    follow_mov_bhv = process_string(line, DEF_TSEP, DEF_QUOT);
+    right_img_center = process_quoted_int_pair(
+                            line, right_img_center, DEF_TSEP, DEF_QUOT);
+    left_img_center = process_quoted_int_pair(
+                            line, left_img_center, DEF_TSEP, DEF_QUOT);
+    prevent_loop = process_bool(line, prevent_loop, DEF_TSEP, DEF_QUOT);
+    group = process_float(line, group, DEF_TSEP, DEF_QUOT);
     mirror_target_xy = process_mirror_target(line, mirror_target_xy);
 }
 

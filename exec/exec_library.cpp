@@ -1,7 +1,7 @@
 #include <cassert>
 
 #include "exec_library.hpp"
-#include "exec_parser.hpp"
+#include "exec_parser.h"
 
 
 
@@ -177,15 +177,22 @@ static bool process_activation(tokenizer_t *line, bool def) {
 
 interaction_t::input_t::input_t(string_view_t str) {
     auto line = local_make_tokenizer(str);
-    name = process_string(line);
-    chance = process_float(line, chance);
-    proximity = process_float(line, proximity);
-    auto tgt_s = process_array(line);
-    for (auto t : tgt_s) targets.emplace_back(make_string(t));
+    name = process_string(line, DEF_TSEP, DEF_QUOT);
+    chance = process_float(line, chance, DEF_TSEP, DEF_QUOT);
+    proximity = process_float(line, proximity, DEF_TSEP, DEF_QUOT);
+    string_view_t *temp;
+    size_t size;
+    size = process_array(line, &temp, DEF_TSEP, DEF_QUOT, DEF_ABGN, DEF_AEND);
+    for (size_t iter = 0; iter < size; iter++)
+        targets.emplace_back(make_string(temp[iter]));
+    free(temp);
     target_activation_all = process_activation(line, target_activation_all);
-    auto bhv_s = process_array(line);
-    for (auto b : bhv_s) bhv.emplace_back(make_string(b));
-    reactivation_delay = process_float(line, reactivation_delay);
+    size = process_array(line, &temp, DEF_TSEP, DEF_QUOT, DEF_ABGN, DEF_AEND);
+    for (size_t iter = 0; iter < size; iter++)
+        bhv.emplace_back(make_string(temp[iter]));
+    free(temp);
+    reactivation_delay
+            = process_float(line, reactivation_delay, DEF_TSEP, DEF_QUOT);
 }
 
 interaction_t::interaction_t(const input_t &in, string_view_t lib_name,
