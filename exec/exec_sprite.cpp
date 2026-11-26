@@ -462,17 +462,17 @@ sprite_bank_t::sprite_bank_t(const selection_t &sel, uint32_t *seed,
 , menu_pending_(false)
 , buttons_(0) {
     for (auto &s : sel) {
-        auto &lib = s.first.get();
-        waiting_ += s.second * (1 + ((effects_) ? lib.max_effects() : 0)
-                                  + ((speech_ && lib.first_speech()) ? 1 : 0));
+        auto &lib = *s.lib;
+        waiting_ += s.count * (1 + ((effects_) ? lib.max_effects() : 0)
+                                 + ((speech_ && lib.first_speech()) ? 1 : 0));
     }
     sprites_.reserve(waiting_);
     for (uint32_t iter = 0; iter < waiting_; iter++)
         sprites_.emplace_back(std::make_unique<slot_t>());
     display_.reserve(waiting_);
     for (auto &s : sel)
-        for (uint32_t iter = 0; iter < s.second; iter++)
-            add_behaviour(s.first, seed, time);
+        for (uint32_t iter = 0; iter < s.count; iter++)
+            add_behaviour(*s.lib, seed, time);
     // empty until here, so the first behaviours follow no one
     for (uint32_t iter = 0; iter < shown_; iter++)
         cast_[sprites_[iter]->lib_->id()].emplace_back(sprites_[iter].get());

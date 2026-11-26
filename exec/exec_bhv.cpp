@@ -255,11 +255,14 @@ behaviour_t::behaviour_t(const input_t &in, bhv_id_t id,
     set_loop(true, !in.prevent_loop);
 }
 
-static constexpr std::array<T2FV, 32> get_cos_sin_lut() {
-    constexpr float DTR_CONV = M_PI / 180.f;
-    std::array<T2FV, 32> retn = {};
+struct cos_sin_lut_t { T2FV data[32]; };
+
+static const cos_sin_lut_t get_cos_sin_lut() {
+    const float DTR_CONV = M_PI / 180.f;
+    cos_sin_lut_t retn;
     for (auto a = 14; a <= 45; a++)
-        retn[a - 14] = T2FV{{std::cos(DTR_CONV * a), std::sin(DTR_CONV * a)}};
+        retn.data[a - 14]
+                = (T2FV){{std::cos(DTR_CONV * a), std::sin(DTR_CONV * a)}};
     return retn;
 }
 
@@ -298,7 +301,7 @@ T2FV behaviour_t::choose_velocity(uint32_t *seed) const {
             // - 14 degrees not that different from 15, no one will notice
             // - if the full range is needed, 1 extra bit flips (x,y) -> (y,x)
             // - that way, the full range is [14; 76] and 45 is 2x as probable
-            retn = cos_sin_lut[prng & 0x1F];
+            retn = cos_sin_lut.data[prng & 0x1F];
             if ((((hv == move_none) || (hv == move_hv)) && (prng & 0x20))
                     || (hv == move_vert))
                 std_swap(retn.x, retn.y);

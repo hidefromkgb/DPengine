@@ -128,7 +128,7 @@ private:
     };
     struct group_t {
         weighted_rng_t nonzero_weights;
-        std::array<ref_vec_t<behaviour_t>, bhv_type_t::max_ + 1> bhv;
+        ref_vec_t<behaviour_t> bhv[bhv_type_t::max_ + 1];
         ref_vec_t<speech_t> speeches; // random ones, this group's and group 0's
 
         void append(const group_t &rhs) {

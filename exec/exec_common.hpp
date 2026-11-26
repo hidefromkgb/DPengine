@@ -19,8 +19,8 @@ class library_t;
 struct gravity_t { uint8_t pt:4; uint8_t fx:4; };
 using lib_id_t = size_t; // [TODO:] consider phasing lib_id_t out
 using bhv_id_t = uint32_t;
-using selection_t =
-        std::vector<std::pair<std::reference_wrapper<library_t>, uint32_t>>;
+struct sel_id_t { library_t *lib; uint32_t count; };
+using selection_t = std::vector<sel_id_t>;
 enum {
 /*  framerate limiter in msec    */ FRM_WAIT = 40,
 };
@@ -151,9 +151,10 @@ public:
     class categories_t {
     private:
         using type_t = uint64_t;
+        struct ctg_id_t { size_t slot, flag; };
         std::vector<type_t> data_;
 
-        static inline std::pair<size_t, size_t> convert_ctg_id(size_t ctg_id) {
+        static inline ctg_id_t convert_ctg_id(size_t ctg_id) {
             constexpr auto digits = std::numeric_limits<type_t>::digits;
             return {ctg_id / digits, ctg_id % digits};
         }
@@ -161,14 +162,14 @@ public:
     public:
         void add(size_t ctg_id) {
             const auto idx = convert_ctg_id(ctg_id);
-            for (size_t i = data_.size(); i <= idx.first; i++)
+            for (size_t i = data_.size(); i <= idx.slot; i++)
                 data_.emplace_back(0);
-            data_[idx.first] |= (type_t(1) << idx.second);
+            data_[idx.slot] |= ((type_t)1 << idx.flag);
         }
         void remove(size_t ctg_id) {
             const auto idx = convert_ctg_id(ctg_id);
-            if (idx.first < data_.size())
-                data_[idx.first] &= ~(type_t(1) << idx.second);
+            if (idx.slot < data_.size())
+                data_[idx.slot] &= ~((type_t)1 << idx.flag);
         }
         bool match(const categories_t &rhs, bool all_at_once) const {
             bool retn = all_at_once;

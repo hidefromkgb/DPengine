@@ -84,98 +84,98 @@ std::vector<CTRL> main_window_t::get_template(
         engine_t &engcref, const conf_t &conf) {
     auto engc = (intptr_t)&engcref;
     auto here = (intptr_t)this;
-    std::array tmpl = {
-    CTRL{nullptr, here, TXT_CAPT, FSW_SIZE | FCT_WNDW,  1,  1,  1,  1, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::filters),
+    CTRL tmpl[] = {
+        {nullptr, here, TXT_CAPT, FSW_SIZE | FCT_WNDW,  1,  1,  1,  1, FC2E},
+        {nullptr, intptr_t(conf_t::filters),
                         TXT_FLTR,            FCT_CBOX,  0,  0, 19,  2, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::exact),
+        {nullptr, intptr_t(conf_t::exact),
                         TXT_EXAC, FCP_VERT | FCT_CBOX,  0,  0, 19,  2, FC2E},
-    CTRL{nullptr, here, TXT_OGRP, FCP_VERT | FCT_LIST,  0,  0, 19, 16, FC2E},
-    CTRL{nullptr, here, TXT_SGRP, FCP_VERT | FCT_TEXT,  0,  1, 19,  2, FC2E},
-    CTRL{nullptr, intptr_t(&conf.spec),
+        {nullptr, here, TXT_OGRP, FCP_VERT | FCT_LIST,  0,  0, 19, 16, FC2E},
+        {nullptr, here, TXT_SGRP, FCP_VERT | FCT_TEXT,  0,  1, 19,  2, FC2E},
+        {nullptr, intptr_t(&conf.spec),
                         TXT_SPEC, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2E},
-    CTRL{nullptr, here, TXT_BADD, FCP_BOTH | FCT_BUTN,  1, -3,  9,  3, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::randomsel),
+        {nullptr, here, TXT_BADD, FCP_BOTH | FCT_BUTN,  1, -3,  9,  3, FC2E},
+        {nullptr, intptr_t(conf_t::randomsel),
              TXT_SRND, FSX_LEFT | FCP_VERT | FCT_CBOX,  0,  1, 19,  2, FC2E},
-    CTRL{nullptr, intptr_t(&conf.rgpu),
+        {nullptr, intptr_t(&conf.rgpu),
                         TXT_RGPU, FCP_VERT | FCT_SPIN,  0,  0,  9,  3, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::copies),
+        {nullptr, intptr_t(conf_t::copies),
                         TXT_BDUP, FCP_BOTH | FCT_CBOX,  1, -3,  9,  3, FC2E},
-    CTRL{nullptr, here, TXT_SELE, FCP_VERT | FCT_PBAR,  0,  1, 19,  3, FC2E},
-    CTRL{nullptr,    0, TXT_OPTS, FCP_VERT | FCT_BUTN,  0,  1,  9,  6, FC2E},
-    CTRL{nullptr, engc, TXT_GOGO, FCP_BOTH | FCT_BUTN
-    /* ^--- engine_t reference above!!! */ | FSB_DFLT,  1, -6,  9,  6, FC2E},
-    CTRL{nullptr, here, TXT_HEAD, FCP_HORZ | FCT_SBOX,  0,  0, 41, 43, FC2E},
+        {nullptr, here, TXT_SELE, FCP_VERT | FCT_PBAR,  0,  1, 19,  3, FC2E},
+        {nullptr,    0, TXT_OPTS, FCP_VERT | FCT_BUTN,  0,  1,  9,  6, FC2E},
+        {nullptr, engc, TXT_GOGO, FCP_BOTH | FCT_BUTN
+        /* ^-- engine_t reference above */ | FSB_DFLT,  1, -6,  9,  6, FC2E},
+        {nullptr, here, TXT_HEAD, FCP_HORZ | FCT_SBOX,  0,  0, 41, 43, FC2E},
     };
-    STATIC_ASSERT(tmpl.size() - 1 == MCT__MAX);
-    return std::vector(tmpl.begin(), tmpl.end());
+    STATIC_ASSERT(MCT__MAX + 1 == sizeof(tmpl) / sizeof(*tmpl));
+    return std::vector(tmpl, tmpl + sizeof(tmpl) / sizeof(*tmpl));
 }
 
 std::vector<CTRL> options_window_t::get_template(
         CTRL *prevptr, const conf_t &conf) {
     auto here = (intptr_t)this;
-    std::array tmpl = {
-    CTRL{prevptr, here, TXT_OPTS,            FCT_WNDW,  1,  1,  1,  1, FC2E},
+    CTRL tmpl[] = {
+        {prevptr, here, TXT_OPTS,            FCT_WNDW,  1,  1,  1,  1, FC2E},
 
-    CTRL{nullptr, intptr_t(conf_t::update),
+        {nullptr, intptr_t(conf_t::update),
                         TXT_UONR,            FCT_CBOX,  0,  0, 18,  2, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::topmost),
+        {nullptr, intptr_t(conf_t::topmost),
                         TXT_ETOP, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::effects),
+        {nullptr, intptr_t(conf_t::effects),
                         TXT_EEFF, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::interaction),
+        {nullptr, intptr_t(conf_t::interaction),
                         TXT_EINT, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::speech),
+        {nullptr, intptr_t(conf_t::speech),
                         TXT_ESPK, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::cspeech),
+        {nullptr, intptr_t(conf_t::cspeech),
                         TXT_ECLR, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
-    CTRL{nullptr, intptr_t(conf_t::hover),
+        {nullptr, intptr_t(conf_t::hover),
                         TXT_ERCH, FCP_VERT | FCT_CBOX,  0,  0, 18,  2, FC2E},
 
-    CTRL{nullptr, intptr_t(&conf.nrun),
+        {nullptr, intptr_t(&conf.nrun),
                         TXT_RUNS,            FCT_SPIN, 19,  0,  8,  3, FC2E},
-    CTRL{nullptr, here, TXT_RUNS, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
-    CTRL{nullptr, intptr_t(&conf.nsca),
+        {nullptr, here, TXT_RUNS, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+        {nullptr, intptr_t(&conf.nsca),
                         TXT_SCAL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
-    CTRL{nullptr, here, TXT_SCAL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
-    CTRL{nullptr, intptr_t(&conf.ndil),
+        {nullptr, here, TXT_SCAL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+        {nullptr, intptr_t(&conf.ndil),
                         TXT_TDIL, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
-    CTRL{nullptr, here, TXT_TDIL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
-    CTRL{nullptr, intptr_t(&conf.nspk),
+        {nullptr, here, TXT_TDIL, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+        {nullptr, intptr_t(&conf.nspk),
                         TXT_RSPK, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
-    CTRL{nullptr, here, TXT_RSPK, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
-    CTRL{nullptr, intptr_t(&conf.ncdr),
+        {nullptr, here, TXT_RSPK, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+        {nullptr, intptr_t(&conf.ncdr),
                         TXT_PCDR, FCP_VERT | FCT_SPIN, 19,  0,  8,  3, FC2E},
-    CTRL{nullptr, here, TXT_PCDR, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
+        {nullptr, here, TXT_PCDR, FCP_BOTH | FCT_TEXT,  0, -3, 22,  3, FC2E},
 
-    CTRL{nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
                                            | FST_SUNK,  0,  1, 49, -2, FC2E},
 
-    CTRL{nullptr, here, TXT_LGUI, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2E},
-    CTRL{nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2E},
-    CTRL{nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
-    CTRL{nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
-    CTRL{nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
+        {nullptr, here, TXT_LGUI, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2E},
+        {nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
                                            | FST_CNTR,  0,  0, 49,  2, FC2E},
 
-    CTRL{nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
                                            | FST_SUNK,  0,  1, 49, -2, FC2E},
 
-    CTRL{nullptr, here, TXT_BDIR, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2E},
-    CTRL{nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2E},
-    CTRL{nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
-    CTRL{nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
-    CTRL{nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
+        {nullptr, here, TXT_BDIR, FCP_VERT | FCT_TEXT,  0,  0, 18,  3, FC2E},
+        {nullptr, here, TXT_CHOO, FCP_BOTH | FCT_BUTN,  1, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_RELO, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_DFLT, FCP_VERT | FCT_TEXT
                                            | FST_CNTR,  0,  0, 49,  2, FC2E},
 
-    CTRL{nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
+        {nullptr, here, TXT_OPTS, FCP_VERT | FCT_TEXT
                                            | FST_SUNK,  0,  1, 49, -2, FC2E},
 
-    CTRL{nullptr, here, TXT_RELO, FCP_VERT | FCT_BUTN, 29,  0, 10,  3, FC2E},
-    CTRL{nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
+        {nullptr, here, TXT_RELO, FCP_VERT | FCT_BUTN, 29,  0, 10,  3, FC2E},
+        {nullptr, here, TXT_RESE, FCP_BOTH | FCT_BUTN,  0, -3, 10,  3, FC2E},
     };
-    STATIC_ASSERT(tmpl.size() - 1 == OCT__MAX);
-    return std::vector(tmpl.begin(), tmpl.end());
+    STATIC_ASSERT(OCT__MAX + 1 == sizeof(tmpl) / sizeof(*tmpl));
+    return std::vector(tmpl, tmpl + sizeof(tmpl) / sizeof(*tmpl));
 }
 
 window_t::window_t(std::vector<CTRL> controls) : visible_(false) {
@@ -378,7 +378,7 @@ selection_t main_window_t::collect_selection(uint32_t *seed) const {
     selection_t retn;
     for (size_t iter = 0; iter < previews_.size(); iter++)
         if (auto count = previews_[iter]->count() + rand_count[iter])
-            retn.emplace_back(previews_[iter]->library(), count);
+            retn.emplace_back((sel_id_t){&previews_[iter]->library(), count});
     return retn;
 }
 

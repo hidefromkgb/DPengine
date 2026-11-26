@@ -72,8 +72,8 @@ enum {ECB_INIT, ECB_GUSR, ECB_GFLG, ECB_SFLG,
       ECB_DRAW, ECB_TEST, ECB_LOAD, ECB_QUIT};
 enum {ELA_DISK, ELA_LOAD, ELA_AINF};
 
-enum {COM_RGPU = 1 << 31, COM_DRAW = 1 << 30,
-      COM_SHOW = 1 << 29, COM_OPAQ = 1 << 28,
+enum {COM_RGPU = 1u << 31, COM_DRAW = 1u << 30,
+      COM_SHOW = 1u << 29, COM_OPAQ = 1u << 28,
       COM_DDDD = COM_RGPU /** deferred flags mask **/};
 
 enum {WIN_IBGR = 1 << 0, WIN_IPBO = 1 << 1, WIN_IRGN = 1 << 2};

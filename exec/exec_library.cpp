@@ -6,12 +6,13 @@
 
 
 bhv_id_desc_t library_t::build_bhv_id_desc(const input_t &in) {
-    std::unordered_map<int, std::array<int, bhv_type_t::max_ + 1>> bhv_grp;
+    struct count_t { int data[bhv_type_t::max_ + 1]; };
+    std::unordered_map<int, count_t> bhv_grp;
     bhv_id_desc_t retn;
     for (auto &b : in.behaviours) {
         bhv_id_internal_t iid{init_bhv_id(b.movement, b.group)};
         if (!find_in_map(bhv_grp, iid.group)) bhv_grp[iid.group] = {};
-        iid.index += bhv_grp[iid.group][iid.type]++;
+        iid.index += bhv_grp[iid.group].data[iid.type]++;
         retn.v.emplace_back(iid._);
         auto b_view = get_view(b.name);
         auto in_view = get_view(in.name);

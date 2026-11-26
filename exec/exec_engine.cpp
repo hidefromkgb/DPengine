@@ -175,12 +175,12 @@ bool engine_t::load_selection(const selection_t &sel, bool show_progress) {
     cEngineCallback(engd_, ECB_LOAD, ~0); // interrupt to load more animations
     const auto text_fn = mctl_.text_fn();
     for (size_t iter = 0; iter < sel.size(); iter++) {
-        sel[iter].first.get().load(engd_, ccur_.flgs & conf_t::speech,
+        sel[iter].lib->load(engd_, ccur_.flgs & conf_t::speech,
                 ccur_.flgs & conf_t::cspeech, text_fn);
         if (show_progress) mctl_.set_progress_load(iter + 1, sel.size());
     }
     cEngineCallback(engd_, ECB_LOAD, 0); // wait for the loading to complete
-    for (auto &s : sel) s.first.get().finalize();
+    for (auto &s : sel) s.lib->finalize();
     return true;
 }
 
@@ -425,7 +425,7 @@ uint32_t engine_t::update_frame(ENGD *engd, T4FV **data, uint32_t *size,
 }
 
 void engine_t::display_loop() {
-    static const std::pair<conf_t::flags_t, uint32_t> render_flags[] = {
+    static const struct { conf_t::flags_t cf; uint32_t ef; } render_flags[] = {
         {conf_t::gpu,    COM_RGPU}, {conf_t::wbgra,   WIN_IBGR},
         {conf_t::draw,   COM_DRAW}, {conf_t::wpbo,    WIN_IPBO},
         {conf_t::show,   COM_SHOW}, {conf_t::wregion, WIN_IRGN},
@@ -446,7 +446,7 @@ void engine_t::display_loop() {
 
     uint32_t engd_flags = 0;
     for (auto &f : render_flags)
-        if (ccur_.flgs & f.first) engd_flags |= f.second;
+        if (ccur_.flgs & f.cf) engd_flags |= f.ef;
 
     tpre_ = 0;
     const auto icon = mctl_.prepare_tray_icon(tray_);
@@ -458,7 +458,7 @@ void engine_t::display_loop() {
 
     ccur_.flgs &= ~conf_t::render_mask;
     for (auto &f : render_flags)
-        if (engd_flags & f.second) ccur_.flgs |= f.first;
+        if (engd_flags & f.ef) ccur_.flgs |= f.cf;
 
     bank_.reset();
 }
@@ -519,10 +519,11 @@ void engine_t::options_handler(MENU *item) {
 }
 
 void engine_t::build_library_structure(string_view_t base) {
-    size_t last_category = 0;
-    std::vector<std::pair<lib_id_t, conf_t::categories_t>> ctg;
+    struct ctg_id_t { lib_id_t lib_id; conf_t::categories_t ctg_id; };
+    std::vector<ctg_id_t> ctg;
     std::unordered_map<size_t, size_t> ctg_map;
     bhv_id_map_t bhv_id_map;
+    size_t last_category = 0;
 
     std::vector<library_t::input_t> ins;
     local_string_t *path = make_string(
@@ -559,7 +560,8 @@ void engine_t::build_library_structure(string_view_t base) {
                 mctl_.add_category(get_view(c));
             }
         }
-        ctg.emplace_back(str_hash(i.name, 'L'), std::move(all_categories));
+        ctg.emplace_back((ctg_id_t){str_hash(i.name, 'L'),
+                                    std::move(all_categories)});
     }
     for (auto &i : ins) {
         // initialize the libraries
@@ -580,8 +582,8 @@ void engine_t::build_library_structure(string_view_t base) {
     // order the libraries by name
     using ctg_val_t = const decltype(ctg)::value_type;
     auto names = [&](ctg_val_t &a, ctg_val_t &b) {
-        auto _a = (*find_in_map(libs_, a.first))->name();
-        auto _b = (*find_in_map(libs_, b.first))->name();
+        auto _a = (*find_in_map(libs_, a.lib_id))->name();
+        auto _b = (*find_in_map(libs_, b.lib_id))->name();
         return strncmp(_a.str, _b.str, std_max(_a.size, _b.size)) < 0;
     };
     std::stable_sort(ctg.begin(), ctg.end(), names);
@@ -591,9 +593,9 @@ void engine_t::build_library_structure(string_view_t base) {
     RUN_FC2E(*(CTRL*)mctl_.get_id(), MSG__TXT, 0); // relocalize
     for (size_t ctg_idx = 0; ctg_idx < ctg.size(); ctg_idx++) {
         auto &c = ctg[ctg_idx];
-        auto &il = *find_in_map(libs_, c.first);
+        auto &il = *find_in_map(libs_, c.lib_id);
         mctl_.init_preview(
-                il->load_preview(engd_), std::move(c.second), il->name(), *il);
+                il->load_preview(engd_), std::move(c.ctg_id), il->name(), *il);
         mctl_.set_progress_load(ctg_idx + 1, ctg.size());
     }
 }
