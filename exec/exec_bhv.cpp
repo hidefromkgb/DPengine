@@ -1,11 +1,11 @@
 #include "exec_bhv.hpp"
 #include "exec_parser.h"
-#include "exec_prng.hpp"
+#include "exec_prng.h"
 
 
 
 gravity_t effect_t::select_gravity(bool left, uint32_t *seed) const {
-    return random_selection<false>(gravity_[left], seed);
+    return gravity_[left][RNG_LoadBounded(seed, gravity_[left].size())];
 }
 
 effect_t::gravity_flags_t effect_t::process_gravity(

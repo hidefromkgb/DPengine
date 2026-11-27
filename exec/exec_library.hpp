@@ -5,7 +5,6 @@
 
 #include "exec_bhv.hpp"
 #include "exec_common.hpp"
-#include "exec_prng.hpp"
 
 
 
@@ -126,11 +125,39 @@ private:
             int32_t group:14;
         };
     };
-    struct group_t {
-        weighted_rng_t nonzero_weights;
-        ref_vec_t<behaviour_t> bhv[bhv_type_t::max_ + 1];
+    class group_t {
+    private:
+        uint32_t *rngw = nullptr;
         ref_vec_t<speech_t> speeches; // random ones, this group's and group 0's
+        ref_vec_t<behaviour_t> bhv[bhv_type_t::max_ + 1];
 
+    public:
+        ~group_t();
+        group_t() = default;
+        group_t(const group_t &) = delete; // implicit copies double-free RNGW
+        group_t &operator=(const group_t &) = delete;
+        group_t(group_t &&rhs) { *this = std::move(rhs); }
+        group_t &operator=(group_t &&rhs);
+        size_t bhv_size(bhv_type_t type) const { return bhv[type].size(); }
+        size_t speech_size() const { return speeches.size(); }
+        const behaviour_t *random_bhv(uint32_t *seed, bhv_type_t type) const;
+        const speech_t *random_speech(uint32_t *seed) const;
+        const behaviour_t *get_bhv(bhv_id_t id) const {
+            bhv_id_internal_t iid{id};
+            if (iid.index - 1u >= bhv[iid.type].size()) return nullptr;
+            return &bhv[iid.type][iid.index - 1u].get();
+        }
+        void add_weights(const std::vector<uint32_t> &weights);
+        void add_fallbacks(const ref_vec_t<behaviour_t> &fb) {
+            // as in DP: dedicated drag, else dedicated sleep (hence before its
+            // fallback), else the final mouseover list (hence after fallback)
+            if (bhv[dragged].empty()) bhv[dragged] = bhv[sleeping];
+            if (bhv[sleeping].empty()) bhv[sleeping] = fb;
+            if (bhv[mouseover].empty()) bhv[mouseover] = fb;
+            if (bhv[dragged].empty()) bhv[dragged] = bhv[mouseover];
+        }
+        void add_bhv(bhv_id_t id, const behaviour_t &b);
+        void add_speech(const speech_t &s) { speeches.emplace_back(s); }
         void append(const group_t &rhs) {
             for (size_t i = 0; i <= bhv_type_t::max_; i++)
                 bhv[i].insert(

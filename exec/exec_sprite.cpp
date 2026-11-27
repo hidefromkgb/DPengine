@@ -2,6 +2,7 @@
 #include <cassert>
 
 #include "exec_library.hpp"
+#include "exec_prng.h"
 #include "exec_sprite.hpp"
 
 

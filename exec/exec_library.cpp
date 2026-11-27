@@ -2,8 +2,48 @@
 
 #include "exec_library.hpp"
 #include "exec_parser.h"
+#include "exec_prng.h"
 
 
+
+library_t::group_t::~group_t() {
+    RNG_FreeWeighted(&rngw);
+}
+
+library_t::group_t &library_t::group_t::operator=(group_t &&rhs) {
+    RNG_FreeWeighted(&rngw);
+    std_swap(rngw, rhs.rngw);
+    speeches = std::move(rhs.speeches);
+    for (size_t iter = sizeof(bhv) / sizeof(*bhv); iter; iter--)
+        bhv[iter - 1] = std::move(rhs.bhv[iter - 1]);
+    return *this;
+}
+
+const behaviour_t *library_t::group_t::random_bhv(
+        uint32_t *seed, bhv_type_t type) const {
+    if (bhv[type].empty()) return nullptr;
+    if (type != nonzero_prob)
+        return &bhv[type][RNG_LoadBounded(seed, bhv[type].size())].get();
+    assert(rngw);
+    return &bhv[type][RNG_LoadWeighted(rngw, seed)].get();
+}
+
+const speech_t *library_t::group_t::random_speech(uint32_t *seed) const {
+    if (speeches.empty()) return nullptr;
+    return &speeches[RNG_LoadBounded(seed, speeches.size())].get();
+}
+
+void library_t::group_t::add_weights(const std::vector<uint32_t> &weights) {
+    assert(bhv[nonzero_prob].size() == weights.size());
+    if (rngw) RNG_FreeWeighted(&rngw);
+    rngw = RNG_MakeWeighted(weights.size(), weights.data());
+}
+
+void library_t::group_t::add_bhv(bhv_id_t id, const behaviour_t &b) {
+    bhv_id_internal_t iid{id};
+    bhv[iid.type].emplace_back(b);
+    assert(iid.index == bhv[iid.type].size());
+}
 
 bhv_id_desc_t library_t::build_bhv_id_desc(const input_t &in) {
     struct count_t { int data[bhv_type_t::max_ + 1]; };
@@ -91,18 +131,15 @@ bhv_id_t library_t::init_bhv_id(movement_flags_t move, int16_t grp) {
 }
 
 const behaviour_t *library_t::get(bhv_id_t id) const {
-    bhv_id_internal_t iid = {id};
-    if (!iid.index) return nullptr;
-    auto ig = find_in_map(groups_, iid.group);
-    return (ig && (iid.index <= ig->bhv[iid.type].size()))
-            ? &ig->bhv[iid.type][iid.index - 1].get()
-            : nullptr;
+    if (auto ig = find_in_map(groups_, bhv_id_internal_t{id}.group))
+        return ig->get_bhv(id);
+    return nullptr;
 }
 
 const behaviour_t *library_t::next_behaviour(
         uint32_t *seed, const behaviour_t *curr) const {
     auto check_has_nzp = [](const group_t *grp) {
-        return (grp && !grp->bhv[nonzero_prob].empty()) ? grp : nullptr;
+        return (grp && grp->bhv_size(nonzero_prob)) ? grp : nullptr;
     };
     if (curr && curr->linked_id()) return get(curr->linked_id());
 
@@ -120,18 +157,17 @@ const behaviour_t *library_t::next_behaviour(
         assert(false);
         return {};
     }
-    return &weighted_random_selection<false>(
-            grp->bhv[nonzero_prob], grp->nonzero_weights, seed).get();
+    return grp->random_bhv(seed, nonzero_prob);
 }
 
 const unit_t &library_t::follow_override(
         uint32_t *seed, const behaviour_t &bhv, bool move) const {
-    const auto mode = (move) ? moving : stationary;
+    const auto type = (move) ? moving : stationary;
     const bhv_id_internal_t iid = {bhv.follow_grp_id()};
     if (iid.group < 0) // custom, unless rejected by init_follow_groups()
         if (auto ig = find_in_map(groups_, iid.group))
-            return ig->bhv[mode][0].get();
-    return typed_bhv_internal(seed, bhv, mode);
+            return *ig->get_bhv(bhv_id_internal_t{.index = 1, .type = type}._);
+    return typed_bhv_internal(seed, bhv, type);
 }
 
 const speech_t *library_t::transition_speech(uint32_t *seed, uint64_t chance,
@@ -147,18 +183,14 @@ const speech_t *library_t::transition_speech(uint32_t *seed, uint64_t chance,
 const speech_t *library_t::force_random_speech(
         uint32_t *seed, const behaviour_t &curr) const {
     auto ig = find_in_map(groups_, bhv_id_internal_t{curr.id()}.group);
-    return (ig && !ig->speeches.empty())
-            ? &random_selection<false>(ig->speeches, seed).get() : nullptr;
+    return (ig) ? ig->random_speech(seed) : nullptr;
 }
 
 const behaviour_t &library_t::typed_bhv_internal(
         uint32_t *seed, const behaviour_t &curr, bhv_type_t type) const {
+    const behaviour_t *bhv;
     auto ig = find_in_map(groups_, bhv_id_internal_t{curr.id()}.group);
-    // special lists are never empty, see init_special_behaviours()
-    assert(ig && ((type == moving) || (type == stationary)
-                                   || !ig->bhv[type].empty()));
-    return (ig && !ig->bhv[type].empty())
-            ? random_selection<false>(ig->bhv[type], seed).get() : curr;
+    return (ig && (bhv = ig->random_bhv(seed, type))) ? *bhv : curr;
 }
 
 static bool process_activation(tokenizer_t *line, bool def) {
@@ -575,9 +607,8 @@ void library_t::create_behaviours(build_ctx_t &ctx) {
                     linked_iid._, follow_grp_iid._, (ix) ? *ix : fx_null,
                     (ib) ? *ib : nullptr, (ie) ? *ie : nullptr,
                     str_hash(b.follow_target, 'L'), get_view(library_path_)));
-        groups_[iid.group].bhv[iid.type].emplace_back(*behaviours_.back());
+        groups_[iid.group].add_bhv(iid._, *behaviours_.back());
         ctx.bhv_by_name.emplace(b_hash, behaviours_.back().get());
-        assert(iid.index == groups_[iid.group].bhv[iid.type].size());
     }
 }
 
@@ -585,10 +616,9 @@ void library_t::init_random_speeches(const build_ctx_t &ctx) {
     auto i0 = find_in_map(ctx.spk_by_group, 0);
     for (auto &g : groups_) {
         if (auto ig = find_in_map(ctx.spk_by_group, g.first))
-            g.second.speeches = *ig;
+            for (auto &speech : *ig) g.second.add_speech(speech);
         if (i0 && (g.first != 0))
-            g.second.speeches.insert(
-                    g.second.speeches.end(), i0->begin(), i0->end());
+            for (auto &speech : *i0) g.second.add_speech(speech);
     }
 }
 
@@ -600,7 +630,9 @@ void library_t::init_probabilities(const build_ctx_t &ctx) {
         if ((!b.skip) && (b.chance > 0.f)) {
             prob_by_group[b.group].emplace_back(
                     10000.f * std_clamp(b.chance, 0.f, 1.f));
-            groups_[b.group].bhv[nonzero_prob].emplace_back(*behaviours_[i]);
+            const uint32_t index = groups_[b.group].bhv_size(nonzero_prob) + 1;
+            const bhv_id_internal_t iid{.index = index, .type = nonzero_prob};
+            groups_[b.group].add_bhv(iid._, *behaviours_[i]);
         }
     }
     // adding behaviours from group 0 (GroupAny) to all other groups
@@ -612,25 +644,24 @@ void library_t::init_probabilities(const build_ctx_t &ctx) {
                 groups_[p.first].append(*ig);
             }
     // initializing probabilities for the alias method
-    for (auto &p : prob_by_group) {
-        assert(groups_[p.first].bhv[nonzero_prob].size() == p.second.size());
-        groups_[p.first].nonzero_weights = weighted_rng_t(p.second);
-    }
+    for (auto &p : prob_by_group)
+        groups_[p.first].add_weights(p.second);
 }
 
 void library_t::init_follow_groups(const build_ctx_t &ctx) {
+    using bhv_int_t = bhv_id_internal_t;
     for (size_t i = 0; i < ctx.in.behaviours.size(); i++)
         if (get_view(ctx.in.behaviours[i].follow_target).size
                 && !ctx.in.behaviours[i].auto_follow_img) {
             group_t grp;
             auto fs_hash = str_hash(ctx.in.behaviours[i].follow_stop_bhv, 'L');
             if (auto is = find_in_map(ctx.bhv_by_name, fs_hash))
-                grp.bhv[stationary].emplace_back(**is);
+                grp.add_bhv(bhv_int_t{.index = 1, .type = stationary}._, **is);
             auto fm_hash = str_hash(ctx.in.behaviours[i].follow_mov_bhv, 'L');
             if (auto im = find_in_map(ctx.bhv_by_name, fm_hash))
-                grp.bhv[moving].emplace_back(**im);
+                grp.add_bhv(bhv_int_t{.index = 1, .type = moving}._, **im);
 
-            if (!grp.bhv[moving].empty() && !grp.bhv[stationary].empty()) {
+            if (grp.bhv_size(moving) && grp.bhv_size(stationary)) {
                 groups_[-int16_t(i)] = std::move(grp);
             } else {
                 printf("[%s] WARNING, invalid custom follow behaviours in "
@@ -656,20 +687,16 @@ void library_t::init_special_behaviours(const build_ctx_t &ctx) {
     }
     // only the lists left without dedicated behaviours get fallbacks
     for (auto &g : groups_) {
-        if (g.first < 0) continue; // custom follow groups
-        auto &bhv = g.second.bhv;
-        auto fallback = [&](ref_vec_t<behaviour_t> &list) {
-            if (!list.empty()) return;
-            if (auto ii = find_in_map(idle, g.first)) list = *ii;
-            else if (auto ii = find_in_map(idle, 0)) list = *ii;
-            else list.emplace_back(*behaviours_[slowest]);
-        };
-        // as in DP: dedicated drag, else dedicated sleep (hence before its
-        // fallback), else the final mouseover list (hence after its fallback)
-        if (bhv[dragged].empty()) bhv[dragged] = bhv[sleeping];
-        fallback(bhv[sleeping]);
-        fallback(bhv[mouseover]);
-        if (bhv[dragged].empty()) bhv[dragged] = bhv[mouseover];
+        if (g.first < 0) continue; // skip custom follow groups
+        ref_vec_t<behaviour_t> fallbacks;
+        if (auto ii = find_in_map(idle, g.first)) {
+            fallbacks = *ii;
+        } else if (auto ii = find_in_map(idle, 0)) {
+            fallbacks = *ii;
+        } else {
+            fallbacks.emplace_back(*behaviours_[slowest]);
+        }
+        g.second.add_fallbacks(fallbacks);
     }
 }
 
@@ -694,10 +721,10 @@ void library_t::dump_stats() const {
     for (auto &g : groups_)
         size += sprintf(out + size,
             "\n[%d] %lu + %lu + %lu + %lu + %lu + %lu + %lu", g.first,
-            g.second.bhv[nonzero_prob].size(), g.second.bhv[stationary].size(),
-            g.second.bhv[moving].size(), g.second.bhv[mouseover].size(),
-            g.second.bhv[dragged].size(), g.second.bhv[sleeping].size(),
-            g.second.speeches.size());
+            g.second.bhv_size(nonzero_prob), g.second.bhv_size(stationary),
+            g.second.bhv_size(moving), g.second.bhv_size(mouseover),
+            g.second.bhv_size(dragged), g.second.bhv_size(sleeping),
+            g.second.speech_size());
     printf("%s\n", out); // to keep potential threaded output in one piece
     free(out);
 }

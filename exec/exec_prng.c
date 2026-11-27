@@ -1,6 +1,7 @@
-#include <cstdlib>
+#include <assert.h>
+#include <stdlib.h>
 
-#include "exec_prng.hpp"
+#include "exec_prng.h"
 
 
 
@@ -9,7 +10,7 @@
 void RNG_Free(uint32_t **seed) {
     if (!seed || !*seed) return;
     free(*seed);
-    *seed = 0;
+    *seed = NULL;
 }
 
 uint32_t *RNG_Make(uint32_t init) {
@@ -49,13 +50,13 @@ uint32_t RNG_LoadBounded(uint32_t *seed, uint32_t upper) {
 // preparation time (once, at initialization) and O(1) per draw, via the Alias
 // Method; for more information see https://en.wikipedia.org/wiki/Alias_method
 
-static void RNG_FreeWeighted(uint32_t **rngw) { // identical to RNG_Free()
+void RNG_FreeWeighted(uint32_t **rngw) { // identical to RNG_Free()
     if (!rngw || !*rngw) return;
     free(*rngw);
-    *rngw = 0;
+    *rngw = NULL;
 }
 
-static uint32_t *RNG_MakeWeighted(uint32_t w_size, const uint32_t *weights) {
+uint32_t *RNG_MakeWeighted(uint32_t w_size, const uint32_t *weights) {
     if (w_size && !weights) return NULL;
     // slot count == item count: item #i owns slot #i, occupying a fraction of
     // it that equals THRESHOLD / (1 << 32) and reserving the rest for #ALIAS,
@@ -114,7 +115,7 @@ static uint32_t *RNG_MakeWeighted(uint32_t w_size, const uint32_t *weights) {
     return rngw; // TODO: maybe allow FULL > UINT32_MAX and just rescale it?
 }
 
-static uint32_t RNG_LoadWeighted(const uint32_t *rngw, uint32_t *seed) {
+uint32_t RNG_LoadWeighted(const uint32_t *rngw, uint32_t *seed) {
     // no NULL check for RNGW; we die like men.
     // one 32x32->64 multiplication splits the seed: the high half picks a slot
     // and the low half is weighed against THRESHOLD to pick one of its 2 items
@@ -122,17 +123,4 @@ static uint32_t RNG_LoadWeighted(const uint32_t *rngw, uint32_t *seed) {
     uint64_t both = (uint64_t)RNG_Load(seed) * rngw[0]; // == RNG_Load() * size
     uint32_t slot = (uint32_t)(both >> 32);
     return ((uint32_t)both >= rngw[slot * 2 + 1]) ? rngw[slot * 2 + 2] : slot;
-}
-
-
-
-weighted_rng_t::weighted_rng_t(const std::vector<uint32_t> &weights)
-: data_(RNG_MakeWeighted(weights.size(), weights.data())) {}
-
-weighted_rng_t::~weighted_rng_t() { RNG_FreeWeighted(&data_); }
-
-size_t weighted_rng_t::size() const { return (data_) ? data_[0] : 0; }
-
-uint32_t weighted_rng_t::random_selection(uint32_t *seed) const {
-    return RNG_LoadWeighted(data_, seed);
 }

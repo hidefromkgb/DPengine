@@ -4,7 +4,7 @@
 #include "exec_engine.hpp"
 #include "exec_library.hpp"
 #include "exec_parser.h"
-#include "exec_prng.hpp"
+#include "exec_prng.h"
 #include "exec_sprite.hpp"
 #include "exec_web.hpp"
 

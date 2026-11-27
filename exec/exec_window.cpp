@@ -1,7 +1,7 @@
 #include <cassert>
 
 #include "exec_engine.hpp"
-#include "exec_prng.hpp"
+#include "exec_prng.h"
 #include "exec_window.hpp"
 
 
