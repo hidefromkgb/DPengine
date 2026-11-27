@@ -193,6 +193,7 @@ private:
     // unlike DP, entering special states deploys their effects too
     void deploy_effects(sprite_t &chr);
     void handle_input(uint32_t *seed, int64_t time, const input_t &in);
+    void remove_sprite(sprite_t &chr, bool all);
     // ALL: every character of CHR's library, all set to the same state
     void toggle_sleep(uint32_t *seed, int64_t time, sprite_t &chr, bool all);
     // as in DP, picking the same player again releases CHR, and

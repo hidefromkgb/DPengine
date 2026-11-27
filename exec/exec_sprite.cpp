@@ -573,6 +573,59 @@ void sprite_bank_t::handle_input(
                     seed, area_, sprite_t::hovered, *hover_bhv);
 }
 
+void sprite_bank_t::remove_sprite(sprite_t &chr, bool all) {
+    const auto lib = chr.lib_; // .LIB_ can stay valid after free(), but still
+    do { // unlinking player control, hover, and menu
+        const auto ic = find_in_map(cast_, lib->id());
+        assert(ic);
+        sprite_t *cs[] = {&chr};
+        const sprite_t::cast_t::mapped_type one{1, cs};
+        const sprite_t::cast_t::mapped_type *tgt = (all) ? ic : &one;
+        for (size_t iter = tgt->size; iter; iter--) {
+            if (tgt->sprites[iter - 1] == p1_.chr) p1_.chr = nullptr;
+            if (tgt->sprites[iter - 1] == p2_.chr) p2_.chr = nullptr;
+            if (tgt->sprites[iter - 1] == active_) active_ = nullptr;
+            if (tgt->sprites[iter - 1] == menu_target_) menu_target_ = nullptr;
+        }
+    } while (false);
+    auto is_tgt = [&](const sprite_t *sp) {
+        if (!sp) return false;
+        if (sp->get_flag(sprite_t::effect)) sp = sp->parent_;
+        return (all) ? (sp->lib_ == lib) : (sp == &chr);
+    };
+    auto recycle = [&](uint32_t iter, bool side) {
+        if (!is_tgt(sprites_[iter])) return false;
+        sprites_[iter]->free();
+        bool gone = !try_recycle(
+                iter, (side) ? waiting_++ : --shown_, UINT32_MAX, sprites_);
+        assert_and_discard(gone, gone);
+        return true;
+    };
+    // all three loops below go in directions compatible with try_recycle()
+    for (uint32_t iter = waiting_; iter < capacity_; iter++)
+        recycle(iter, true); // waiting effects first
+    for (uint32_t iter = shown_; iter; iter--)
+        if (sprites_[iter - 1]->get_flag(sprite_t::effect))
+            recycle(iter - 1, false); // active effects second
+    for (uint32_t iter = shown_; iter; iter--)
+        if (!sprites_[iter - 1]->get_flag(sprite_t::effect) // behaviours third
+        &&  !recycle(iter - 1, false) && is_tgt(sprites_[iter - 1]->parent_))
+            sprites_[iter - 1]->parent_ = nullptr; // unlinking follow targets
+    // now amending the cast itself
+    auto &cast = cast_[lib->id()];
+    if (all) cast.size = 0;
+    for (size_t iter = cast.size; iter; iter--)
+        if ((cast.sprites[iter - 1] == &chr) && --cast.size) {
+            cast.sprites[iter - 1] = cast.sprites[cast.size];
+            cast.sprites = (typeof(cast.sprites))realloc(
+                            cast.sprites, cast.size * sizeof(*cast.sprites));
+            break;
+        }
+    if (cast.size) return;
+    free(cast.sprites);
+    cast_.erase(lib->id());
+}
+
 void sprite_bank_t::toggle_sleep(
         uint32_t *seed, int64_t time, sprite_t &chr, bool all) {
     const bool on = !chr.get_flag(sprite_t::asleep);
@@ -611,17 +664,15 @@ void sprite_bank_t::toggle_control(
     chr.set_flag(sprite_t::wanteffects, false);
 }
 
-void sprite_bank_t::menu_action(
-        uint32_t *seed, int64_t time, action_t action) {
-    if (!menu_target_) return;
-    auto &chr = *menu_target_;
+void sprite_bank_t::menu_action(uint32_t *seed, int64_t time, action_t action) {
+    if (!menu_target_ || menu_target_->is_free()) return;
     switch (action) {
-        case remove_one: break;
-        case remove_all: break;
-        case sleep_one: toggle_sleep(seed, time, chr, false); break;
-        case sleep_all: toggle_sleep(seed, time, chr, true); break;
-        case control_p1: toggle_control(seed, time, chr, p1_); break;
-        case control_p2: toggle_control(seed, time, chr, p2_); break;
+        case remove_one: remove_sprite(*menu_target_, false); break;
+        case remove_all: remove_sprite(*menu_target_, true); break;
+        case sleep_one: toggle_sleep(seed, time, *menu_target_, false); break;
+        case sleep_all: toggle_sleep(seed, time, *menu_target_, true); break;
+        case control_p1: toggle_control(seed, time, *menu_target_, p1_); break;
+        case control_p2: toggle_control(seed, time, *menu_target_, p2_); break;
     }
 }
 

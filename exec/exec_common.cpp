@@ -8,7 +8,19 @@
 //       and resolution are set, then everything is deterministic and these
 //       output logs can be validated by comparing them to a reference log.
 
-// TODO: more menu items, including the per-OS submenu
+// [in no particular order:]
+// TODO: revive the Win32 backend, test on 98SE and XPSP2
+// TODO: test on a real Mac (+ARM?), make sure binary isn't broken (issues/1)
+// TODO: port ./exec to C11 + GNU extensions; screw MSVC, this is bat country
+// TODO: tabs in Options: tab #1 += keys, tab #2 = rendering and screens
+// TODO: per-OS submenu (maybe move to tab #2 and gray out if unavailable?)
+// TODO: configuration profiles + keeping category search pattern in profile
+// TODO: interactions
+// TODO: screensaver mode
+// TODO: audio for speeches
+// TODO: threaded sprite processing
+// TODO: games: Hoofball (in DP), Pong (in DP), Snake, Arkanoid, SpaceInvaders
+//              (maybe something else as well - e.g. SameGame or 3-in-a-row?)
 
 
 
